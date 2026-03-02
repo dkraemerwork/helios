@@ -1,0 +1,4 @@
+[test]
+include = ["**/*.test.ts", "**/*.spec.ts", "**/*Test.ts"]
+timeout = 30000
+bail = false

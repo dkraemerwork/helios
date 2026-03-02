@@ -1347,6 +1347,8 @@ usersCfg.getMapStoreConfig()
 config.addMapConfig(usersCfg);
 ```
 
+**STATUS: ✅ Complete — 15 tests green (2026-03-02)**
+
 **GATE-CHECK labels:** `mongodb-mapstore`, `mongodb-config`
 
 ---
