@@ -634,6 +634,8 @@ All 2,271 existing tests must remain green (no existing code changed).
 
 **GATE-CHECK labels:** `mapstore-writethrough`, `mapstore-writebehind`
 
+**STATUS: ✅ Complete — 46 tests green (2026-03-02)**
+
 ---
 
 ## Block 12.A3 — IMap Async Migration + MapProxy Wiring + Integration Tests
