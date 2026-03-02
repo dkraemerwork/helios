@@ -3523,16 +3523,18 @@ IMap to persist data to external stores (write-through or write-behind) and load
 
 Depends on: Phase 8 (near-cache wiring complete), Phase 7.4 (full IMap interface).
 
-### Phase Overview
+### Block Overview
 
-| Sub-phase | What | New Tests |
-|-----------|------|-----------|
-| **Phase A: MapStore SPI (Core)** | Public interfaces (`MapStore`, `MapLoader`, `MapLoaderLifecycleSupport`), internal `MapDataStore` abstraction, `WriteThroughStore`, `WriteBehindStore` (queue + processor + worker), `MapStoreContext`, IMap async migration, MapProxy wiring | ~55 |
-| **Phase B: packages/s3/** | `S3MapStore` — S3-backed MapStore using `@aws-sdk/client-s3` | ~12 |
-| **Phase C: packages/mongodb/** | `MongoMapStore` — MongoDB-backed MapStore using `mongodb` driver | ~12 |
-| **Phase D: packages/turso/** | `TursoMapStore` — Turso/libSQL-backed MapStore using `@libsql/client` | ~14 |
+| Block | What | New Tests |
+|-------|------|-----------|
+| **Block 12.A1** | `MapStoreConfig`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` | ~17 |
+| **Block 12.A2** | `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + retry), `StoreWorker` (background timer), `WriteBehindStore`, `MapStoreContext` | ~33 |
+| **Block 12.A3** | IMap async migration (11 methods → `Promise`), migration script, `MapProxy` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` update, `MapContainerService` store lifecycle, integration tests | ~5 new + all existing green |
+| **Block 12.B** | `packages/s3/` — `S3MapStore` using `@aws-sdk/client-s3` | ~12 |
+| **Block 12.C** | `packages/mongodb/` — `MongoMapStore` using `mongodb` driver | ~12 |
+| **Block 12.D** | `packages/turso/` — `TursoMapStore` using `@libsql/client` (in-memory SQLite tests) | ~14 |
 
-Phase A must complete first. Phases B/C/D are independent of each other.
+Blocks A1 → A2 → A3 are strictly sequential. Blocks B/C/D are independent of each other (all require only A3 complete).
 
 ### Key Design Decisions
 
@@ -3707,7 +3709,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — 17 tests ✅
 - [x] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — 13 tests ✅
 - [x] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — 7 tests ✅
-- [ ] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — ~8 tests
+- [x] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — 8 tests ✅
 - [ ] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — ~15 tests
 - [ ] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — ~10 tests
 - [ ] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — ~6 tests
@@ -3738,11 +3740,16 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green
 
 ### Phase 12 — MapStore SPI + Extension Packages (~93 tests) ← **CURRENT**
-- [ ] **Phase A: MapStore SPI (Core)** — public interfaces, MapDataStore, WriteThroughStore, WriteBehindStore, MapStoreContext, IMap async migration — ~55 tests
-- [ ] **Phase B: packages/s3/** — S3MapStore (`@aws-sdk/client-s3`) — ~12 tests
-- [ ] **Phase C: packages/mongodb/** — MongoMapStore (`mongodb` driver) — ~12 tests
-- [ ] **Phase D: packages/turso/** — TursoMapStore (`@libsql/client`) — ~14 tests
-- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~93 new tests green
+
+> Implementation spec: `plans/MAPSTORE_EXTENSION_PLAN.md` — read it before executing any Block 12.X.
+
+- [ ] **Block 12.A1** — `MapStoreConfig`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` — ~17 tests
+- [ ] **Block 12.A2** — `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + 3x retry + single-entry fallback), `StoreWorker` (setInterval, flush-on-shutdown), `WriteBehindStore`, `MapStoreContext` (factory + lifecycle + EAGER initial load) — ~33 tests
+- [ ] **Block 12.A3** — IMap async migration: run `scripts/async-imap-migration.sh`, update `IMap.ts` (11 methods → `Promise`), async `MapProxy`, lazy `MapDataStore` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` signature update, `MapContainerService` store lifecycle, integration tests — all ~2,271 existing + ~5 new green
+- [ ] **Block 12.B** — `packages/s3/` (`@helios/s3`): `S3MapStore` + `S3Config`, mock-S3-client tests, workspace wiring — ~12 tests
+- [ ] **Block 12.C** — `packages/mongodb/` (`@helios/mongodb`): `MongoMapStore` + `MongoConfig`, mock-collection tests, workspace wiring — ~12 tests
+- [ ] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig`, real in-memory SQLite tests (`:memory:`), workspace wiring — ~14 tests
+- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~93 new tests green, all existing tests still green
 
 ---
 
@@ -3801,4 +3808,4 @@ bun run build
 
 ---
 
-*Plan v9.1 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests)*
+*Plan v9.2 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~93 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D)*

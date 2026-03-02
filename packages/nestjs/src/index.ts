@@ -87,3 +87,7 @@ export {
     NEST_AWARE_METADATA_KEY,
 } from './context/NestAware';
 export { NestManagedContext } from './context/NestManagedContext';
+
+// ── Health (@nestjs/terminus) ──────────────────────────────────────────────
+export { HeliosHealthIndicator } from './health/HeliosHealthIndicator';
+export { HeliosHealthModule } from './health/HeliosHealthModule';
