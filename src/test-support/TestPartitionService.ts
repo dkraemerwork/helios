@@ -1,0 +1,36 @@
+/**
+ * Minimal partition service stub for unit tests.
+ *
+ * All 271 partitions are considered locally owned. Partition assignment uses
+ * the standard Hazelcast formula: abs(key.getPartitionHash()) % partitionCount.
+ *
+ * Port of the test-support pattern from Java integration tests.
+ */
+import type { Data } from '@helios/internal/serialization/Data';
+
+export const PARTITION_COUNT = 271;
+
+export class TestPartitionService {
+    getPartitionCount(): number {
+        return PARTITION_COUNT;
+    }
+
+    getPartitionId(key: Data | object): number {
+        const hash = this._partitionHash(key);
+        const mod = hash % PARTITION_COUNT;
+        return mod < 0 ? mod + PARTITION_COUNT : mod;
+    }
+
+    isPartitionLocallyOwned(_partitionId: number): boolean {
+        return true;
+    }
+
+    private _partitionHash(key: Data | object): number {
+        // If key is a Data, use its partition hash (matches Java behaviour).
+        if (key != null && typeof key === 'object' && 'getPartitionHash' in key) {
+            return (key as Data).getPartitionHash();
+        }
+        // Fallback: simple identity hash for plain objects.
+        return 0;
+    }
+}

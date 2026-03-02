@@ -1,0 +1,109 @@
+/**
+ * Port of {@code com.hazelcast.map.impl.query.QueryResult}.
+ *
+ * Represents a result of a query execution as an iterable collection of rows.
+ */
+import type { PartitionIdSet } from '@helios/internal/util/collection/PartitionIdSet';
+import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
+import type { LocalMapStatsImpl } from '@helios/internal/monitor/impl/LocalMapStatsImpl';
+import { IterationType } from '@helios/internal/util/IterationType';
+import { QueryResultRow } from '@helios/map/impl/query/QueryResultRow';
+import { QueryResultSizeExceededException } from '@helios/map/QueryResultSizeExceededException';
+
+export class QueryResult implements Iterable<QueryResultRow> {
+    private _rows: QueryResultRow[] = [];
+    private _partitionIds: PartitionIdSet | null = null;
+
+    private readonly _iterationType: IterationType;
+    private readonly _resultLimit: number;
+    private readonly _orderAndLimitExpected: boolean;
+    private readonly _mapStats: LocalMapStatsImpl | null;
+
+    private _resultSize = 0;
+
+    /** No-arg constructor for deserialization. */
+    constructor();
+    constructor(
+        iterationType: IterationType,
+        resultLimit: number,
+        orderAndLimitExpected: boolean,
+        mapStats?: LocalMapStatsImpl | null,
+    );
+    constructor(
+        iterationType?: IterationType,
+        resultLimit?: number,
+        orderAndLimitExpected?: boolean,
+        mapStats?: LocalMapStatsImpl | null,
+    ) {
+        this._iterationType = iterationType ?? IterationType.ENTRY;
+        this._resultLimit = resultLimit ?? Number.MAX_SAFE_INTEGER;
+        this._orderAndLimitExpected = orderAndLimitExpected ?? false;
+        this._mapStats = mapStats ?? null;
+    }
+
+    // ── for testing ──────────────────────────────────────────────────────────
+
+    getIterationType(): IterationType { return this._iterationType; }
+
+    // ── Iterable ─────────────────────────────────────────────────────────────
+
+    [Symbol.iterator](): Iterator<QueryResultRow> {
+        return this._rows[Symbol.iterator]();
+    }
+
+    // ── public API ──────────────────────────────────────────────────────────
+
+    size(): number { return this._rows.length; }
+
+    isEmpty(): boolean { return this._rows.length === 0; }
+
+    addRow(row: QueryResultRow): void {
+        this._rows.push(row);
+    }
+
+    /** Add a QueryableEntry, enforcing the result size limit. */
+    add(entry: QueryableEntry): void {
+        if (++this._resultSize > this._resultLimit) {
+            this._mapStats?.incrementQueryResultSizeExceededCount();
+            throw new QueryResultSizeExceededException();
+        }
+        this._rows.push(this._convertEntryToRow(entry));
+    }
+
+    createSubResult(): QueryResult {
+        return new QueryResult(this._iterationType, this._resultLimit, this._orderAndLimitExpected, this._mapStats);
+    }
+
+    completeConstruction(partitionIds: PartitionIdSet): void {
+        this._partitionIds = partitionIds;
+    }
+
+    getPartitionIds(): PartitionIdSet | null { return this._partitionIds; }
+
+    setPartitionIds(partitionIds: PartitionIdSet): void {
+        this._partitionIds = partitionIds;
+    }
+
+    combine(result: QueryResult): void {
+        const other = result.getPartitionIds();
+        if (other === null) return;
+        if (this._partitionIds === null) {
+            this._partitionIds = new (other.constructor as new (src: PartitionIdSet) => PartitionIdSet)(other);
+        } else {
+            this._partitionIds.addAll(other);
+        }
+        this._rows = [...this._rows, ...result._rows];
+    }
+
+    getRows(): QueryResultRow[] { return this._rows; }
+
+    private _convertEntryToRow(entry: QueryableEntry): QueryResultRow {
+        const key = this._iterationType === IterationType.KEY || this._iterationType === IterationType.ENTRY
+            ? (entry.getKey() as import('@helios/internal/serialization/Data').Data ?? null)
+            : null;
+        const value = this._iterationType === IterationType.VALUE || this._iterationType === IterationType.ENTRY
+            ? (entry.getValue() as import('@helios/internal/serialization/Data').Data ?? null)
+            : null;
+        return new QueryResultRow(key, value);
+    }
+}

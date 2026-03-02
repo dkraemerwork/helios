@@ -1,0 +1,18 @@
+{
+  "name": "helios-demo-app",
+  "version": "1.0.0",
+  "description": "Distributed Helios demo — two instances with TCP replication and near-cache",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/app.ts",
+    "start:node1": "bun run src/app.ts --name node1 --tcp-port 5701 --http-port 3001",
+    "start:node2": "bun run src/app.ts --name node2 --tcp-port 5702 --http-port 3002 --peer localhost:5701",
+    "test": "bun test",
+    "demo": "bash demo.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "beta"
+  }
+}

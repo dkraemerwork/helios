@@ -1,0 +1,45 @@
+{
+  // TypeScript 6.0-ready configuration.
+  // Key TS 6.0 changes accounted for:
+  //   - baseUrl REMOVED (deprecated in TS 6.0; paths now use explicit "./src/" prefix)
+  //   - target / lib bumped to ES2025 (TS 6.0 new default; adds Temporal, RegExp.escape, Map.getOrInsert)
+  //   - strict: true  (now the TS 6.0 default — explicit for clarity)
+  //   - module: ESNext (now the TS 6.0 default)
+  //   - moduleResolution: bundler  (node10 is deprecated in TS 6.0; bundler is the Bun-correct choice)
+  //   - types: ["bun-types"]  (explicit list required — TS 6.0 defaults types to [])
+  //   - esModuleInterop: true  (setting it false is now an error in TS 6.0)
+  //   - rootDir: "."  (now the TS 6.0 explicit default; no longer inferred from source paths)
+  //   - stableTypeOrdering: true  (opt-in — aligns union ordering with TS 7.0 native port)
+  "compilerOptions": {
+    "target": "ES2025",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2025"],
+
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedSideEffectImports": true,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // baseUrl intentionally omitted (deprecated in TS 6.0).
+    // All path aliases use explicit relative prefixes below.
+    "paths": {
+      "@helios/*": ["./src/*"]
+    },
+
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": true,
+    "sourceMap": true,
+
+    // Explicit list required under TS 6.0 (old default of "all @types/*" is gone).
+    // bun-types covers both Bun globals and Node-compatible APIs.
+    "types": ["bun-types"]
+  },
+  "include": ["src/**/*", "test/**/*", "test-support/**/*", "scripts/**/*"],
+  "exclude": ["dist", "node_modules"]
+}

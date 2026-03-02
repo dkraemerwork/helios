@@ -1,0 +1,82 @@
+/**
+ * Port of {@code com.hazelcast.client.impl.protocol.codec.custom.MemberInfoCodec}.
+ *
+ * Wire format:
+ *   BEGIN_FRAME
+ *   initial frame: uuid(17) + liteMember(1)
+ *   AddressCodec
+ *   MapCodec (attributes: Map<string,string>)
+ *   MemberVersionCodec
+ *   BEGIN_FRAME (addressMap list begin)
+ *   for each entry: EndpointQualifierCodec + AddressCodec
+ *   END_FRAME (addressMap list end)
+ *   END_FRAME
+ */
+import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
+import { MemberInfo } from '@helios/cluster/MemberInfo';
+import { AddressCodec } from './AddressCodec';
+import { MemberVersionCodec } from './MemberVersionCodec';
+import { EndpointQualifierCodec } from './EndpointQualifierCodec';
+import { MapCodec } from '../builtin/MapCodec';
+import { CodecUtil } from '../builtin/CodecUtil';
+import { FixedSizeTypesCodec, UUID_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
+import { EndpointQualifier } from '@helios/instance/EndpointQualifier';
+import { Address } from '@helios/cluster/Address';
+
+const UUID_OFFSET = 0;
+const LITE_MEMBER_OFFSET = UUID_OFFSET + UUID_SIZE_IN_BYTES; // 17
+const INITIAL_FRAME_SIZE = LITE_MEMBER_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 18
+
+export class MemberInfoCodec {
+    private constructor() {}
+
+    static encode(clientMessage: ClientMessage, memberInfo: MemberInfo): void {
+        clientMessage.add(ClientMessage.Frame.createStaticFrame(ClientMessage.BEGIN_DATA_STRUCTURE_FLAG));
+
+        const buf = Buffer.allocUnsafe(INITIAL_FRAME_SIZE);
+        FixedSizeTypesCodec.encodeUUID(buf, UUID_OFFSET, memberInfo.uuid);
+        FixedSizeTypesCodec.encodeBoolean(buf, LITE_MEMBER_OFFSET, memberInfo.liteMember);
+        clientMessage.add(new ClientMessage.Frame(buf));
+
+        AddressCodec.encode(clientMessage, memberInfo.address);
+        MapCodec.encode(clientMessage, memberInfo.attributes.size > 0 ? memberInfo.attributes : null);
+        MemberVersionCodec.encode(clientMessage, memberInfo.version);
+
+        // addressMap as list of (EndpointQualifier, Address) pairs
+        clientMessage.add(ClientMessage.Frame.createStaticFrame(ClientMessage.BEGIN_DATA_STRUCTURE_FLAG));
+        for (const [eq, addr] of memberInfo.addressMap) {
+            EndpointQualifierCodec.encode(clientMessage, eq);
+            AddressCodec.encode(clientMessage, addr);
+        }
+        clientMessage.add(ClientMessage.Frame.createStaticFrame(ClientMessage.END_DATA_STRUCTURE_FLAG));
+
+        clientMessage.add(ClientMessage.Frame.createStaticFrame(ClientMessage.END_DATA_STRUCTURE_FLAG));
+    }
+
+    static decode(iterator: ClientMessage.ForwardFrameIterator): MemberInfo {
+        // consume BEGIN
+        iterator.next();
+        const initialFrame = iterator.next();
+        const uuid = FixedSizeTypesCodec.decodeUUID(initialFrame.content, UUID_OFFSET) ?? '';
+        const liteMember = FixedSizeTypesCodec.decodeBoolean(initialFrame.content, LITE_MEMBER_OFFSET);
+
+        const address = AddressCodec.decode(iterator);
+        const attributes = MapCodec.decode(iterator);
+        const version = MemberVersionCodec.decode(iterator);
+
+        // decode addressMap
+        const addressMap = new Map<EndpointQualifier, Address>();
+        // consume BEGIN of addressMap list
+        iterator.next();
+        while (iterator.peekNext() !== null && !iterator.peekNext()!.isEndFrame()) {
+            const eq = EndpointQualifierCodec.decode(iterator);
+            const addr = AddressCodec.decode(iterator);
+            addressMap.set(eq, addr);
+        }
+        // consume END of addressMap list
+        iterator.next();
+
+        CodecUtil.fastForwardToEndFrame(iterator);
+        return new MemberInfo(address, uuid, attributes, liteMember, version, addressMap);
+    }
+}

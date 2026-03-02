@@ -1,0 +1,62 @@
+{
+  "name": "@helios/core",
+  "version": "1.0.0",
+  "description": "Helios core — TypeScript/Bun port of Hazelcast distributed in-memory platform",
+  "private": false,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/src/server/HeliosServer.js",
+      "types": "./dist/src/server/HeliosServer.d.ts"
+    },
+    "./*": {
+      "import": "./dist/src/*.js",
+      "types": "./dist/src/*.d.ts"
+    }
+  },
+  "files": [
+    "dist/src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun run tsc --project tsconfig.build.json",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:one": "bun test --test-name-pattern",
+    "typecheck": "bun run tsc --noEmit",
+    "convert": "bun run scripts/convert-java-tests.ts",
+    "prepublish": "bun run build"
+  },
+  "keywords": [
+    "hazelcast",
+    "distributed",
+    "in-memory",
+    "cache",
+    "map",
+    "grid",
+    "bun",
+    "nestjs",
+    "typescript"
+  ],
+  "author": "Helios Contributors",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@nestjs/common": "^11.1.14",
+    "@nestjs/core": "^11.1.14",
+    "@nestjs/cache-manager": "^3.1.0",
+    "@nestjs/testing": "^11.1.14",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "cache-manager": "^7.2.8"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^25.3.3",
+    "typescript": "beta"
+  }
+}

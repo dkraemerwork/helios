@@ -1,0 +1,61 @@
+{
+  "name": "@helios/nestjs",
+  "version": "1.0.0",
+  "description": "Helios NestJS integration — @Module, @Injectable, cache, transactions, DI",
+  "private": false,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    },
+    "./*": {
+      "import": "./dist/src/*.js",
+      "types": "./dist/src/*.d.ts"
+    }
+  },
+  "files": [
+    "dist/src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun run tsc --project tsconfig.build.json",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "typecheck": "bun run tsc --noEmit",
+    "prepublish": "bun run build"
+  },
+  "keywords": [
+    "hazelcast",
+    "helios",
+    "nestjs",
+    "distributed",
+    "in-memory",
+    "cache",
+    "transaction",
+    "typescript",
+    "bun"
+  ],
+  "author": "Helios Contributors",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@helios/core": "workspace:*",
+    "@nestjs/common": "^11.1.14",
+    "@nestjs/core": "^11.1.14",
+    "@nestjs/cache-manager": "^3.1.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "cache-manager": "^7.2.8"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.14",
+    "@types/bun": "latest",
+    "@types/node": "^25.3.3",
+    "typescript": "beta"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0"
+  }
+}

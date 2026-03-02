@@ -1,0 +1,12 @@
+[test]
+# Match both Java-convention *Test.ts files and standard *.test.ts files
+include = ["**/*.test.ts", "**/*.spec.ts", "**/*Test.ts"]
+
+# Preload reflect-metadata for NestJS decorator support
+preload = ["reflect-metadata"]
+
+# Timeout per test (ms)
+timeout = 30000
+
+# Show full diff on failure
+bail = false
