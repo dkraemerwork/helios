@@ -1,5 +1,6 @@
 /**
  * Helios Smoke Test — bun:test version
+ * Block 12.A3: Updated to use async IMap methods.
  *
  * Validates that a single-node Helios instance can:
  *   - Create and use IMap (put, get, remove, putIfAbsent, putAll, getAll)
@@ -26,98 +27,98 @@ describe('Helios Smoke Test', () => {
     });
 
     describe('IMap', () => {
-        it('should put and get values', () => {
+        it('should put and get values', async () => {
             const map = hz.getMap<string, { name: string; age: number }>('users');
 
-            map.put('user-1', { name: 'Alice', age: 30 });
-            map.put('user-2', { name: 'Bob', age: 25 });
+            await map.put('user-1', { name: 'Alice', age: 30 });
+            await map.put('user-2', { name: 'Bob', age: 25 });
 
-            const alice = map.get('user-1');
+            const alice = await map.get('user-1');
             expect(alice).not.toBeNull();
             expect(alice!.name).toBe('Alice');
             expect(alice!.age).toBe(30);
 
-            const bob = map.get('user-2');
+            const bob = await map.get('user-2');
             expect(bob).not.toBeNull();
             expect(bob!.name).toBe('Bob');
         });
 
-        it('should return null for missing keys', () => {
+        it('should return null for missing keys', async () => {
             const map = hz.getMap<string, string>('missing-test');
-            expect(map.get('no-such-key')).toBeNull();
+            expect(await map.get('no-such-key')).toBeNull();
         });
 
-        it('should report correct size', () => {
+        it('should report correct size', async () => {
             const map = hz.getMap<string, number>('size-test');
             expect(map.size()).toBe(0);
             expect(map.isEmpty()).toBe(true);
 
-            map.put('a', 1);
-            map.put('b', 2);
+            await map.put('a', 1);
+            await map.put('b', 2);
             expect(map.size()).toBe(2);
             expect(map.isEmpty()).toBe(false);
         });
 
-        it('should support containsKey', () => {
+        it('should support containsKey', async () => {
             const map = hz.getMap<string, number>('contains-test');
-            map.put('x', 42);
+            await map.put('x', 42);
             expect(map.containsKey('x')).toBe(true);
             expect(map.containsKey('y')).toBe(false);
         });
 
-        it('should support putIfAbsent', () => {
+        it('should support putIfAbsent', async () => {
             const map = hz.getMap<string, string>('putifabsent-test');
 
-            const r1 = map.putIfAbsent('k', 'first');
+            const r1 = await map.putIfAbsent('k', 'first');
             expect(r1).toBeNull(); // new key → null
 
-            const r2 = map.putIfAbsent('k', 'second');
+            const r2 = await map.putIfAbsent('k', 'second');
             expect(r2).toBe('first'); // existing → returns old value
 
-            expect(map.get('k')).toBe('first'); // unchanged
+            expect(await map.get('k')).toBe('first'); // unchanged
         });
 
-        it('should return old value on put', () => {
+        it('should return old value on put', async () => {
             const map = hz.getMap<string, string>('replace-test');
-            const old1 = map.put('k', 'v1');
+            const old1 = await map.put('k', 'v1');
             expect(old1).toBeNull();
 
-            const old2 = map.put('k', 'v2');
+            const old2 = await map.put('k', 'v2');
             expect(old2).toBe('v1');
         });
 
-        it('should support remove', () => {
+        it('should support remove', async () => {
             const map = hz.getMap<string, string>('remove-test');
-            map.put('k', 'v');
+            await map.put('k', 'v');
 
-            const removed = map.remove('k');
+            const removed = await map.remove('k');
             expect(removed).toBe('v');
             expect(map.containsKey('k')).toBe(false);
-            expect(map.remove('k')).toBeNull(); // already gone
+            expect(await map.remove('k')).toBeNull(); // already gone
         });
 
-        it('should support putAll and getAll', () => {
+        it('should support putAll and getAll', async () => {
             const map = hz.getMap<string, number>('batch-test');
-            map.putAll([
+            await map.putAll([
                 ['a', 1],
                 ['b', 2],
                 ['c', 3],
             ]);
 
-            const results = map.getAll(['a', 'b', 'c', 'missing']);
+            const results = await map.getAll(['a', 'b', 'c', 'missing']);
             expect(results.get('a')).toBe(1);
             expect(results.get('b')).toBe(2);
             expect(results.get('c')).toBe(3);
             expect(results.get('missing')).toBeNull();
         });
 
-        it('should support clear', () => {
+        it('should support clear', async () => {
             const map = hz.getMap<string, string>('clear-test');
-            map.put('a', '1');
-            map.put('b', '2');
+            await map.put('a', '1');
+            await map.put('b', '2');
             expect(map.size()).toBe(2);
 
-            map.clear();
+            await map.clear();
             expect(map.size()).toBe(0);
             expect(map.isEmpty()).toBe(true);
         });

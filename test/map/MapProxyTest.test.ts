@@ -1,5 +1,6 @@
 /**
  * Block 7.4 — MapProxy full IMap contract tests.
+ * Block 12.A3: Updated to use async IMap methods.
  *
  * Tests: predicate queries, aggregation, entry listeners, locking, async ops,
  * and all new IMap methods added in Block 7.4.
@@ -66,54 +67,54 @@ describe('MapProxy — base operations', () => {
         expect(map.getName()).toBe('test');
     });
 
-    test('put/get round-trip', () => {
-        expect(map.put('a', 1)).toBeNull();
-        expect(map.get('a')).toBe(1);
+    test('put/get round-trip', async () => {
+        expect(await map.put('a', 1)).toBeNull();
+        expect(await map.get('a')).toBe(1);
     });
 
-    test('put returns old value on update', () => {
-        map.put('a', 1);
-        expect(map.put('a', 2)).toBe(1);
+    test('put returns old value on update', async () => {
+        await map.put('a', 1);
+        expect(await map.put('a', 2)).toBe(1);
     });
 
-    test('get returns null for missing key', () => {
-        expect(map.get('missing')).toBeNull();
+    test('get returns null for missing key', async () => {
+        expect(await map.get('missing')).toBeNull();
     });
 
-    test('remove returns old value', () => {
-        map.put('a', 1);
-        expect(map.remove('a')).toBe(1);
-        expect(map.get('a')).toBeNull();
+    test('remove returns old value', async () => {
+        await map.put('a', 1);
+        expect(await map.remove('a')).toBe(1);
+        expect(await map.get('a')).toBeNull();
     });
 
-    test('containsKey', () => {
-        map.put('a', 1);
+    test('containsKey', async () => {
+        await map.put('a', 1);
         expect(map.containsKey('a')).toBe(true);
         expect(map.containsKey('b')).toBe(false);
     });
 
-    test('size and isEmpty', () => {
+    test('size and isEmpty', async () => {
         expect(map.isEmpty()).toBe(true);
-        map.put('a', 1);
+        await map.put('a', 1);
         expect(map.size()).toBe(1);
         expect(map.isEmpty()).toBe(false);
     });
 
-    test('clear empties the map', () => {
-        map.put('a', 1);
-        map.clear();
+    test('clear empties the map', async () => {
+        await map.put('a', 1);
+        await map.clear();
         expect(map.size()).toBe(0);
     });
 
-    test('putIfAbsent', () => {
-        expect(map.putIfAbsent('a', 1)).toBeNull();
-        expect(map.putIfAbsent('a', 99)).toBe(1);
-        expect(map.get('a')).toBe(1);
+    test('putIfAbsent', async () => {
+        expect(await map.putIfAbsent('a', 1)).toBeNull();
+        expect(await map.putIfAbsent('a', 99)).toBe(1);
+        expect(await map.get('a')).toBe(1);
     });
 
-    test('putAll and getAll', () => {
-        map.putAll([['a', 1], ['b', 2]]);
-        const result = map.getAll(['a', 'b', 'c']);
+    test('putAll and getAll', async () => {
+        await map.putAll([['a', 1], ['b', 2]]);
+        const result = await map.getAll(['a', 'b', 'c']);
         expect(result.get('a')).toBe(1);
         expect(result.get('b')).toBe(2);
         expect(result.get('c')).toBeNull();
@@ -125,69 +126,69 @@ describe('MapProxy — new ops (set, delete, containsValue, replace)', () => {
 
     beforeEach(() => { map = makeProxy(); });
 
-    test('set puts without returning old value', () => {
-        map.set('a', 10);
-        expect(map.get('a')).toBe(10);
+    test('set puts without returning old value', async () => {
+        await map.set('a', 10);
+        expect(await map.get('a')).toBe(10);
     });
 
-    test('set overwrites existing entry', () => {
-        map.put('a', 5);
-        map.set('a', 10);
-        expect(map.get('a')).toBe(10);
+    test('set overwrites existing entry', async () => {
+        await map.put('a', 5);
+        await map.set('a', 10);
+        expect(await map.get('a')).toBe(10);
     });
 
-    test('delete removes entry', () => {
-        map.put('a', 1);
-        map.delete('a');
+    test('delete removes entry', async () => {
+        await map.put('a', 1);
+        await map.delete('a');
         expect(map.containsKey('a')).toBe(false);
     });
 
-    test('delete on missing key is a no-op', () => {
-        expect(() => map.delete('missing')).not.toThrow();
+    test('delete on missing key is a no-op', async () => {
+        await expect(map.delete('missing')).resolves.toBeUndefined();
     });
 
-    test('containsValue returns true when value exists', () => {
-        map.put('a', 42);
+    test('containsValue returns true when value exists', async () => {
+        await map.put('a', 42);
         expect(map.containsValue(42)).toBe(true);
     });
 
-    test('containsValue returns false when value absent', () => {
-        map.put('a', 1);
+    test('containsValue returns false when value absent', async () => {
+        await map.put('a', 1);
         expect(map.containsValue(99)).toBe(false);
     });
 
-    test('replace returns previous value', () => {
-        map.put('a', 1);
-        expect(map.replace('a', 2)).toBe(1);
-        expect(map.get('a')).toBe(2);
+    test('replace returns previous value', async () => {
+        await map.put('a', 1);
+        expect(await map.replace('a', 2)).toBe(1);
+        expect(await map.get('a')).toBe(2);
     });
 
-    test('replace on missing key returns null and makes no change', () => {
-        expect(map.replace('missing', 1)).toBeNull();
+    test('replace on missing key returns null and makes no change', async () => {
+        expect(await map.replace('missing', 1)).toBeNull();
         expect(map.containsKey('missing')).toBe(false);
     });
 
-    test('replaceIfSame replaces when old value matches', () => {
-        map.put('a', 1);
-        expect(map.replaceIfSame('a', 1, 99)).toBe(true);
-        expect(map.get('a')).toBe(99);
+    test('replaceIfSame replaces when old value matches', async () => {
+        await map.put('a', 1);
+        expect(await map.replaceIfSame('a', 1, 99)).toBe(true);
+        expect(await map.get('a')).toBe(99);
     });
 
-    test('replaceIfSame does not replace when old value does not match', () => {
-        map.put('a', 1);
-        expect(map.replaceIfSame('a', 99, 5)).toBe(false);
-        expect(map.get('a')).toBe(1);
+    test('replaceIfSame does not replace when old value does not match', async () => {
+        await map.put('a', 1);
+        expect(await map.replaceIfSame('a', 99, 5)).toBe(false);
+        expect(await map.get('a')).toBe(1);
     });
 });
 
 describe('MapProxy — keySet / values / entrySet', () => {
     let map: IMap<string, number>;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         map = makeProxy();
-        map.put('a', 1);
-        map.put('b', 2);
-        map.put('c', 3);
+        await map.put('a', 1);
+        await map.put('b', 2);
+        await map.put('c', 3);
     });
 
     test('keySet() returns all keys', () => {
@@ -240,11 +241,11 @@ describe('MapProxy — keySet / values / entrySet', () => {
 describe('MapProxy — aggregation', () => {
     let map: IMap<string, number>;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         map = makeProxy();
-        map.put('a', 10);
-        map.put('b', 20);
-        map.put('c', 30);
+        await map.put('a', 10);
+        await map.put('b', 20);
+        await map.put('c', 30);
     });
 
     test('aggregate sums all values', () => {
@@ -257,8 +258,8 @@ describe('MapProxy — aggregation', () => {
         expect(total).toBe(20);
     });
 
-    test('aggregate on empty map returns identity', () => {
-        map.clear();
+    test('aggregate on empty map returns identity', async () => {
+        await map.clear();
         expect(map.aggregate(new SumAggregator())).toBe(0);
     });
 });
@@ -272,53 +273,53 @@ describe('MapProxy — entry listeners', () => {
         events.length = 0;
     });
 
-    test('addEntryListener fires entryAdded on first put', () => {
+    test('addEntryListener fires entryAdded on first put', async () => {
         const listener: EntryListener<string, number> = {
             entryAdded(e) { events.push(`added:${e.getKey()}=${e.getValue()}`); },
         };
         map.addEntryListener(listener, true);
-        map.put('x', 1);
+        await map.put('x', 1);
         expect(events).toEqual(['added:x=1']);
     });
 
-    test('addEntryListener fires entryUpdated on second put', () => {
+    test('addEntryListener fires entryUpdated on second put', async () => {
         const listener: EntryListener<string, number> = {
             entryUpdated(e) { events.push(`updated:${e.getKey()}=${e.getValue()}`); },
         };
         map.addEntryListener(listener, true);
-        map.put('x', 1);
-        map.put('x', 2);
+        await map.put('x', 1);
+        await map.put('x', 2);
         expect(events).toEqual(['updated:x=2']);
     });
 
-    test('addEntryListener fires entryRemoved on remove', () => {
+    test('addEntryListener fires entryRemoved on remove', async () => {
         const listener: EntryListener<string, number> = {
             entryRemoved(e) { events.push(`removed:${e.getKey()}`); },
         };
-        map.put('x', 1);
+        await map.put('x', 1);
         map.addEntryListener(listener, false);
-        map.remove('x');
+        await map.remove('x');
         expect(events).toEqual(['removed:x']);
     });
 
-    test('addEntryListener fires mapCleared on clear', () => {
+    test('addEntryListener fires mapCleared on clear', async () => {
         const listener: EntryListener<string, number> = {
             mapCleared() { events.push('cleared'); },
         };
-        map.put('x', 1);
+        await map.put('x', 1);
         map.addEntryListener(listener);
-        map.clear();
+        await map.clear();
         expect(events).toEqual(['cleared']);
     });
 
-    test('removeEntryListener stops listener from receiving events', () => {
+    test('removeEntryListener stops listener from receiving events', async () => {
         const listener: EntryListener<string, number> = {
             entryAdded(_e) { events.push('added'); },
         };
         const id = map.addEntryListener(listener, true);
         const removed = map.removeEntryListener(id);
         expect(removed).toBe(true);
-        map.put('x', 1);
+        await map.put('x', 1);
         expect(events).toEqual([]);
     });
 
@@ -326,19 +327,19 @@ describe('MapProxy — entry listeners', () => {
         expect(map.removeEntryListener('nonexistent')).toBe(false);
     });
 
-    test('includeValue=false sends null value in event', () => {
+    test('includeValue=false sends null value in event', async () => {
         const listener: EntryListener<string, number> = {
             entryAdded(e) { events.push(String(e.getValue())); },
         };
         map.addEntryListener(listener, false);
-        map.put('x', 42);
+        await map.put('x', 42);
         expect(events).toEqual(['null']);
     });
 
-    test('multiple listeners are all notified', () => {
+    test('multiple listeners are all notified', async () => {
         map.addEntryListener({ entryAdded(_e) { events.push('L1'); } }, false);
         map.addEntryListener({ entryAdded(_e) { events.push('L2'); } }, false);
-        map.put('x', 1);
+        await map.put('x', 1);
         expect(events).toContain('L1');
         expect(events).toContain('L2');
     });
@@ -391,12 +392,12 @@ describe('MapProxy — async operations', () => {
 
     test('getAsync resolves to value or null', async () => {
         expect(await map.getAsync('a')).toBeNull();
-        map.put('a', 5);
+        await map.put('a', 5);
         expect(await map.getAsync('a')).toBe(5);
     });
 
     test('removeAsync resolves to old value or null', async () => {
-        map.put('a', 7);
+        await map.put('a', 7);
         expect(await map.removeAsync('a')).toBe(7);
         expect(await map.removeAsync('a')).toBeNull();
     });

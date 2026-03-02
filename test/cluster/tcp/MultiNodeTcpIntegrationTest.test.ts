@@ -1,5 +1,6 @@
 /**
  * Block 7.5 — Multi-node TCP integration test.
+ * Block 12.A3: Updated to use async IMap methods.
  *
  * Proves two real Helios instances can communicate over TCP using
  * Bun.listen / Bun.connect via the TcpClusterTransport:
@@ -18,9 +19,9 @@ import type { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImp
 const BASE_PORT = 15780;
 
 /** Wait (poll) until `predicate()` returns true or timeout is reached. */
-async function waitUntil(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
+async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs = 3000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
-    while (!predicate()) {
+    while (!(await predicate())) {
         if (Date.now() >= deadline) {
             throw new Error(`waitUntil: timed out after ${timeoutMs} ms`);
         }
@@ -81,12 +82,12 @@ describe('Multi-node TCP integration', () => {
         await waitForPeers(nodeA, 1);
 
         const mapB = nodeB.getMap<string, string>('shared');
-        mapB.put('hello', 'world');
+        await mapB.put('hello', 'world');
 
         // Allow replication to propagate
-        await waitUntil(() => nodeA.getMap<string, string>('shared').get('hello') === 'world');
+        await waitUntil(async () => (await nodeA.getMap<string, string>('shared').get('hello')) === 'world');
 
-        expect(nodeA.getMap<string, string>('shared').get('hello')).toBe('world');
+        expect(await nodeA.getMap<string, string>('shared').get('hello')).toBe('world');
     });
 
     it('nodeA_put_replicates_to_nodeB', async () => {
@@ -96,11 +97,11 @@ describe('Multi-node TCP integration', () => {
         await waitForPeers(nodeA, 1);
 
         const mapA = nodeA.getMap<string, string>('shared');
-        mapA.put('foo', 'bar');
+        await mapA.put('foo', 'bar');
 
-        await waitUntil(() => nodeB.getMap<string, string>('shared').get('foo') === 'bar');
+        await waitUntil(async () => (await nodeB.getMap<string, string>('shared').get('foo')) === 'bar');
 
-        expect(nodeB.getMap<string, string>('shared').get('foo')).toBe('bar');
+        expect(await nodeB.getMap<string, string>('shared').get('foo')).toBe('bar');
     });
 
     it('remove_propagates_to_peer', async () => {
@@ -110,14 +111,14 @@ describe('Multi-node TCP integration', () => {
         await waitForPeers(nodeA, 1);
 
         // Put on A, verify B sees it
-        nodeA.getMap<string, string>('shared').put('k', 'v');
-        await waitUntil(() => nodeB.getMap<string, string>('shared').get('k') === 'v');
+        await nodeA.getMap<string, string>('shared').put('k', 'v');
+        await waitUntil(async () => (await nodeB.getMap<string, string>('shared').get('k')) === 'v');
 
         // Remove on A, verify B loses it
-        nodeA.getMap<string, string>('shared').remove('k');
-        await waitUntil(() => nodeB.getMap<string, string>('shared').get('k') === null);
+        await nodeA.getMap<string, string>('shared').remove('k');
+        await waitUntil(async () => (await nodeB.getMap<string, string>('shared').get('k')) === null);
 
-        expect(nodeB.getMap<string, string>('shared').get('k')).toBeNull();
+        expect(await nodeB.getMap<string, string>('shared').get('k')).toBeNull();
     });
 
     it('entry_listener_fires_for_remote_put', async () => {
@@ -134,8 +135,8 @@ describe('Multi-node TCP integration', () => {
 
         // B puts two entries
         const mapB = nodeB.getMap<string, string>('listen-map');
-        mapB.put('x', '1');
-        mapB.put('y', '2');
+        await mapB.put('x', '1');
+        await mapB.put('y', '2');
 
         await waitUntil(() => received.length >= 2);
 
@@ -150,8 +151,8 @@ describe('Multi-node TCP integration', () => {
         await waitForPeers(nodeA, 1);
 
         // Seed a value via A
-        nodeA.getMap<string, string>('inv-map').put('key', 'v1');
-        await waitUntil(() => nodeB.getMap<string, string>('inv-map').get('key') === 'v1');
+        await nodeA.getMap<string, string>('inv-map').put('key', 'v1');
+        await waitUntil(async () => (await nodeB.getMap<string, string>('inv-map').get('key')) === 'v1');
 
         // Collect INVALIDATE notifications on B's transport
         const invalidated: Array<{ mapName: string; key: unknown }> = [];
@@ -160,14 +161,14 @@ describe('Multi-node TCP integration', () => {
         });
 
         // A updates the value — should trigger INVALIDATE on B
-        nodeA.getMap<string, string>('inv-map').put('key', 'v2');
+        await nodeA.getMap<string, string>('inv-map').put('key', 'v2');
 
         await waitUntil(() => invalidated.some(e => e.mapName === 'inv-map'));
 
         expect(invalidated.some(e => e.mapName === 'inv-map')).toBe(true);
         // After invalidation + replication, B should see the fresh value
-        await waitUntil(() => nodeB.getMap<string, string>('inv-map').get('key') === 'v2');
-        expect(nodeB.getMap<string, string>('inv-map').get('key')).toBe('v2');
+        await waitUntil(async () => (await nodeB.getMap<string, string>('inv-map').get('key')) === 'v2');
+        expect(await nodeB.getMap<string, string>('inv-map').get('key')).toBe('v2');
     });
 
     it('bidirectional_put_and_update', async () => {
@@ -180,18 +181,18 @@ describe('Multi-node TCP integration', () => {
         const mapB = nodeB.getMap<string, string>('bidir');
 
         // A puts
-        mapA.put('a', '1');
-        await waitUntil(() => mapB.get('a') === '1');
-        expect(mapB.get('a')).toBe('1');
+        await mapA.put('a', '1');
+        await waitUntil(async () => (await mapB.get('a')) === '1');
+        expect(await mapB.get('a')).toBe('1');
 
         // B puts
-        mapB.put('b', '2');
-        await waitUntil(() => mapA.get('b') === '2');
-        expect(mapA.get('b')).toBe('2');
+        await mapB.put('b', '2');
+        await waitUntil(async () => (await mapA.get('b')) === '2');
+        expect(await mapA.get('b')).toBe('2');
 
         // A updates B's entry
-        mapA.put('b', '3');
-        await waitUntil(() => mapB.get('b') === '3');
-        expect(mapB.get('b')).toBe('3');
+        await mapA.put('b', '3');
+        await waitUntil(async () => (await mapB.get('b')) === '3');
+        expect(await mapB.get('b')).toBe('3');
     });
 });

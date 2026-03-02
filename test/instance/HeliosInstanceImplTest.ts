@@ -79,11 +79,11 @@ describe('HeliosInstanceImpl', () => {
     // ── IMap ────────────────────────────────────────────────────────────────
 
     describe('IMap', () => {
-        it('should create and use a map', () => {
+        it('should create and use a map', async () => {
             const map = hz.getMap<string, string>('test-map');
             expect(map).toBeDefined();
-            map.put('k', 'v');
-            expect(map.get('k')).toBe('v');
+            await map.put('k', 'v');
+            expect(await map.get('k')).toBe('v');
         });
 
         it('should return the same instance for the same name', () => {
@@ -98,10 +98,10 @@ describe('HeliosInstanceImpl', () => {
             expect(hz.getMap('my-map').getName()).toBe('my-map');
         });
 
-        it('should handle complex objects round-trip', () => {
+        it('should handle complex objects round-trip', async () => {
             const map = hz.getMap<string, { x: number }>('complex-map');
-            map.put('key', { x: 42 });
-            expect(map.get('key')).toEqual({ x: 42 });
+            await map.put('key', { x: 42 });
+            expect(await map.get('key')).toEqual({ x: 42 });
         });
     });
 

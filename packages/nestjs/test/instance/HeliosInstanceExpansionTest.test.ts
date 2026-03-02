@@ -67,10 +67,10 @@ describe('Block 7.3 — HeliosInstance interface expansion', () => {
     // ── IMap via interface ──────────────────────────────────────────────────
 
     describe('getMap() via HeliosInstance', () => {
-        it('should return an IMap that supports put/get', () => {
+        it('should return an IMap that supports put/get', async () => {
             const map: IMap<string, string> = hz.getMap('imap-test');
-            map.put('hello', 'world');
-            expect(map.get('hello')).toBe('world');
+            await map.put('hello', 'world');
+            expect(await map.get('hello')).toBe('world');
         });
 
         it('should return the same IMap for the same name', () => {

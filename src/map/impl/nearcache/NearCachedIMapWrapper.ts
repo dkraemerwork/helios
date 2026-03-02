@@ -6,6 +6,7 @@
  * - put() / set() / remove() / delete() / clear(): invalidate near-cache
  * - putIfAbsent() / replace() / replaceIfSame() / putAll(): invalidate near-cache
  *
+ * Block 12.A3: Updated to async signatures matching the updated IMap interface.
  * Phase 8: wires DefaultNearCache into HeliosInstanceImpl.getMap().
  */
 import type { IMap } from '@helios/map/IMap';
@@ -29,14 +30,14 @@ export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
 
     // ── Near-cache-aware read path ──────────────────────────────────
 
-    get(key: K): V | null {
+    async get(key: K): Promise<V | null> {
         const cached = this._nearCache.get(key);
         if (cached === CACHED_AS_NULL) return null;
         if (cached !== NOT_CACHED) return cached as V;
 
         // Cache miss — reserve, fetch from backing store, publish
         const reservationId = this._nearCache.tryReserveForUpdate(key, null, 'READ_UPDATE');
-        const value = this._delegate.get(key);
+        const value = await this._delegate.get(key);
 
         if (reservationId !== NOT_RESERVED) {
             this._nearCache.tryPublishReserved(key, value, reservationId, false);
@@ -51,56 +52,56 @@ export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
 
     // ── Near-cache-aware write path (invalidate on mutation) ────────
 
-    put(key: K, value: V): V | null {
-        const old = this._delegate.put(key, value);
+    async put(key: K, value: V): Promise<V | null> {
+        const old = await this._delegate.put(key, value);
         this._nearCache.invalidate(key);
         return old;
     }
 
-    set(key: K, value: V): void {
-        this._delegate.set(key, value);
+    async set(key: K, value: V): Promise<void> {
+        await this._delegate.set(key, value);
         this._nearCache.invalidate(key);
     }
 
-    remove(key: K): V | null {
-        const old = this._delegate.remove(key);
+    async remove(key: K): Promise<V | null> {
+        const old = await this._delegate.remove(key);
         this._nearCache.invalidate(key);
         return old;
     }
 
-    delete(key: K): void {
-        this._delegate.delete(key);
+    async delete(key: K): Promise<void> {
+        await this._delegate.delete(key);
         this._nearCache.invalidate(key);
     }
 
-    clear(): void {
-        this._delegate.clear();
+    async clear(): Promise<void> {
+        await this._delegate.clear();
         this._nearCache.clear();
     }
 
-    putIfAbsent(key: K, value: V): V | null {
-        const old = this._delegate.putIfAbsent(key, value);
+    async putIfAbsent(key: K, value: V): Promise<V | null> {
+        const old = await this._delegate.putIfAbsent(key, value);
         this._nearCache.invalidate(key);
         return old;
     }
 
-    putAll(entries: Iterable<[K, V]>): void {
+    async putAll(entries: Iterable<[K, V]>): Promise<void> {
         // Collect entries so we can iterate twice (once for delegate, once for invalidation)
         const collected = Array.from(entries);
-        this._delegate.putAll(collected);
+        await this._delegate.putAll(collected);
         for (const [key] of collected) {
             this._nearCache.invalidate(key);
         }
     }
 
-    replace(key: K, value: V): V | null {
-        const old = this._delegate.replace(key, value);
+    async replace(key: K, value: V): Promise<V | null> {
+        const old = await this._delegate.replace(key, value);
         this._nearCache.invalidate(key);
         return old;
     }
 
-    replaceIfSame(key: K, oldValue: V, newValue: V): boolean {
-        const replaced = this._delegate.replaceIfSame(key, oldValue, newValue);
+    async replaceIfSame(key: K, oldValue: V, newValue: V): Promise<boolean> {
+        const replaced = await this._delegate.replaceIfSame(key, oldValue, newValue);
         if (replaced) {
             this._nearCache.invalidate(key);
         }
@@ -121,7 +122,7 @@ export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
     containsValue(value: V): boolean { return this._delegate.containsValue(value); }
     size(): number { return this._delegate.size(); }
     isEmpty(): boolean { return this._delegate.isEmpty(); }
-    getAll(keys: K[]): Map<K, V | null> { return this._delegate.getAll(keys); }
+    async getAll(keys: K[]): Promise<Map<K, V | null>> { return this._delegate.getAll(keys); }
 
     values(): V[];
     values(predicate: Predicate<K, V>): V[];

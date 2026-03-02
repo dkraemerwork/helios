@@ -1,5 +1,6 @@
 /**
  * Tests for Phase 8: near-cache wiring into HeliosInstanceImpl.
+ * Block 12.A3: Updated to use async IMap methods.
  *
  * Verifies:
  * - getMap() returns NearCachedIMapWrapper when MapConfig has NearCacheConfig
@@ -55,7 +56,7 @@ describe('NearCacheWiringTest', () => {
         expect(map1).toBe(map2);
     });
 
-    it('near-cache miss on first get, then hit on second get', () => {
+    it('near-cache miss on first get, then hit on second get', async () => {
         const config = new HeliosConfig('nc-wiring-4');
         const mapCfg = new MapConfig('cached-map');
         mapCfg.setNearCacheConfig(new NearCacheConfig());
@@ -64,10 +65,10 @@ describe('NearCacheWiringTest', () => {
         instance = new HeliosInstanceImpl(config);
 
         const map = instance.getMap<string, string>('cached-map');
-        map.put('k1', 'v1');
+        await map.put('k1', 'v1');
 
         // First get — near-cache miss (put invalidated, so cache is empty)
-        const v1 = map.get('k1');
+        const v1 = await map.get('k1');
         expect(v1).toBe('v1');
 
         const nc = instance.getNearCacheManager().getNearCache('cached-map');
@@ -76,13 +77,13 @@ describe('NearCacheWiringTest', () => {
         expect(statsAfterFirst.getMisses()).toBeGreaterThanOrEqual(1);
 
         // Second get — near-cache hit (value was populated on first get)
-        const v2 = map.get('k1');
+        const v2 = await map.get('k1');
         expect(v2).toBe('v1');
         const statsAfterSecond = nc!.getNearCacheStats();
         expect(statsAfterSecond.getHits()).toBeGreaterThanOrEqual(1);
     });
 
-    it('put invalidates near-cache entry', () => {
+    it('put invalidates near-cache entry', async () => {
         const config = new HeliosConfig('nc-wiring-5');
         const mapCfg = new MapConfig('cached-map');
         mapCfg.setNearCacheConfig(new NearCacheConfig());
@@ -91,18 +92,18 @@ describe('NearCacheWiringTest', () => {
         instance = new HeliosInstanceImpl(config);
 
         const map = instance.getMap<string, string>('cached-map');
-        map.put('k1', 'v1');
-        map.get('k1'); // miss → populate near-cache
-        map.get('k1'); // hit
+        await map.put('k1', 'v1');
+        await map.get('k1'); // miss → populate near-cache
+        await map.get('k1'); // hit
 
         const nc = instance.getNearCacheManager().getNearCache('cached-map')!;
         const hitsBefore = nc.getNearCacheStats().getHits();
 
         // Update value — should invalidate near-cache entry
-        map.put('k1', 'v2');
+        await map.put('k1', 'v2');
 
         // Next get should be a miss (re-fetch from store), not a hit
-        const v = map.get('k1');
+        const v = await map.get('k1');
         expect(v).toBe('v2');
 
         // Hits should NOT have increased (the get after put was a miss)
@@ -110,7 +111,7 @@ describe('NearCacheWiringTest', () => {
         expect(hitsAfter).toBe(hitsBefore);
     });
 
-    it('remove invalidates near-cache entry', () => {
+    it('remove invalidates near-cache entry', async () => {
         const config = new HeliosConfig('nc-wiring-6');
         const mapCfg = new MapConfig('cached-map');
         mapCfg.setNearCacheConfig(new NearCacheConfig());
@@ -119,18 +120,18 @@ describe('NearCacheWiringTest', () => {
         instance = new HeliosInstanceImpl(config);
 
         const map = instance.getMap<string, string>('cached-map');
-        map.put('k1', 'v1');
-        map.get('k1'); // populate cache
+        await map.put('k1', 'v1');
+        await map.get('k1'); // populate cache
 
         // Remove — should invalidate near-cache
-        map.remove('k1');
+        await map.remove('k1');
 
         // Get should return null (key removed), and should be a miss
-        const v = map.get('k1');
+        const v = await map.get('k1');
         expect(v).toBeNull();
     });
 
-    it('clear clears near-cache', () => {
+    it('clear clears near-cache', async () => {
         const config = new HeliosConfig('nc-wiring-7');
         const mapCfg = new MapConfig('cached-map');
         mapCfg.setNearCacheConfig(new NearCacheConfig());
@@ -139,15 +140,15 @@ describe('NearCacheWiringTest', () => {
         instance = new HeliosInstanceImpl(config);
 
         const map = instance.getMap<string, string>('cached-map');
-        map.put('k1', 'v1');
-        map.put('k2', 'v2');
-        map.get('k1'); // populate
-        map.get('k2'); // populate
+        await map.put('k1', 'v1');
+        await map.put('k2', 'v2');
+        await map.get('k1'); // populate
+        await map.get('k2'); // populate
 
         const nc = instance.getNearCacheManager().getNearCache('cached-map')!;
         expect(nc.size()).toBeGreaterThanOrEqual(2);
 
-        map.clear();
+        await map.clear();
         expect(nc.size()).toBe(0);
     });
 
@@ -160,7 +161,7 @@ describe('NearCacheWiringTest', () => {
         expect(mgr.listAllNearCaches().length).toBe(0);
     });
 
-    it('shutdown destroys all near-caches', () => {
+    it('shutdown destroys all near-caches', async () => {
         const config = new HeliosConfig('nc-wiring-9');
         const mapCfg = new MapConfig('cached-map');
         mapCfg.setNearCacheConfig(new NearCacheConfig());
@@ -169,8 +170,8 @@ describe('NearCacheWiringTest', () => {
         instance = new HeliosInstanceImpl(config);
 
         const map = instance.getMap<string, string>('cached-map');
-        map.put('k1', 'v1');
-        map.get('k1');
+        await map.put('k1', 'v1');
+        await map.get('k1');
 
         const mgr = instance.getNearCacheManager();
         expect(mgr.getNearCache('cached-map')).not.toBeNull();
@@ -181,7 +182,7 @@ describe('NearCacheWiringTest', () => {
         expect(mgr.listAllNearCaches().length).toBe(0);
     });
 
-    it('near-cache-wrapped map supports all IMap operations', () => {
+    it('near-cache-wrapped map supports all IMap operations', async () => {
         const config = new HeliosConfig('nc-wiring-10');
         const mapCfg = new MapConfig('full-map');
         mapCfg.setNearCacheConfig(new NearCacheConfig());
@@ -192,12 +193,12 @@ describe('NearCacheWiringTest', () => {
         const map = instance.getMap<string, number>('full-map');
 
         // put / get
-        expect(map.put('a', 1)).toBeNull();
-        expect(map.get('a')).toBe(1);
+        expect(await map.put('a', 1)).toBeNull();
+        expect(await map.get('a')).toBe(1);
 
         // set
-        map.set('b', 2);
-        expect(map.get('b')).toBe(2);
+        await map.set('b', 2);
+        expect(await map.get('b')).toBe(2);
 
         // containsKey / containsValue
         expect(map.containsKey('a')).toBe(true);
@@ -209,20 +210,20 @@ describe('NearCacheWiringTest', () => {
         expect(map.isEmpty()).toBe(false);
 
         // putIfAbsent
-        expect(map.putIfAbsent('a', 99)).toBe(1); // already exists
+        expect(await map.putIfAbsent('a', 99)).toBe(1); // already exists
 
         // replace
-        expect(map.replace('a', 10)).toBe(1);
-        expect(map.get('a')).toBe(10);
+        expect(await map.replace('a', 10)).toBe(1);
+        expect(await map.get('a')).toBe(10);
 
         // delete
-        map.delete('b');
+        await map.delete('b');
         expect(map.containsKey('b')).toBe(false);
 
         // putAll
-        map.putAll([['x', 100], ['y', 200]]);
-        expect(map.get('x')).toBe(100);
-        expect(map.get('y')).toBe(200);
+        await map.putAll([['x', 100], ['y', 200]]);
+        expect(await map.get('x')).toBe(100);
+        expect(await map.get('y')).toBe(200);
 
         // entrySet / keySet / values
         expect(map.entrySet().size).toBeGreaterThan(0);
@@ -230,7 +231,7 @@ describe('NearCacheWiringTest', () => {
         expect(map.values().length).toBeGreaterThan(0);
 
         // clear
-        map.clear();
+        await map.clear();
         expect(map.size()).toBe(0);
         expect(map.isEmpty()).toBe(true);
     });

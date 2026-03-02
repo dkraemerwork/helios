@@ -1037,6 +1037,8 @@ flow through the configured store path.
 
 **GATE-CHECK labels:** `mapstore-async-imap`, `mapstore-integration`
 
+**STATUS: ✅ Complete — 18 new tests green (2559 total, 2026-03-02)**
+
 ---
 
 ## Block 12.B — packages/s3/ (S3MapStore)

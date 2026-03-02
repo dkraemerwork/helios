@@ -1,5 +1,6 @@
 /**
  * Full IMap implementation — Block 7.4.
+ * Block 12.A3: methods made async + MapDataStore field + lazy wiring.
  *
  * Wraps a RecordStore and NodeEngine to provide a typed, user-facing
  * distributed-map proxy with:
@@ -9,6 +10,7 @@
  *   - Locking (lock / tryLock / unlock / isLocked)
  *   - Async variants (putAsync / getAsync / removeAsync)
  *   - Extended ops (set / delete / containsValue / replace / replaceIfSame)
+ *   - MapStore integration (write-through / write-behind / load-on-miss)
  *
  * Port of com.hazelcast.map.impl.proxy.MapProxyImpl (single-node subset).
  */
@@ -22,6 +24,9 @@ import type { Aggregator } from '@helios/aggregation/Aggregator';
 import type { EntryListener } from '@helios/map/EntryListener';
 import { EntryEventImpl } from '@helios/map/EntryListener';
 import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
+import type { MapDataStore } from '@helios/map/impl/mapstore/MapDataStore';
+import { EmptyMapDataStore } from '@helios/map/impl/mapstore/EmptyMapDataStore';
+import type { MapStoreConfig } from '@helios/config/MapStoreConfig';
 
 /** Registration record stored per listenerId. */
 interface ListenerEntry<K, V> {
@@ -42,16 +47,53 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Set of serialized key strings that are currently locked. */
     private readonly _locks = new Set<string>();
 
+    /** MapDataStore: wired lazily on first store-touching call. */
+    private _mapDataStore: MapDataStore<K, V> = EmptyMapDataStore.empty<K, V>();
+
+    /** MapStoreConfig for lazy wiring (null = no store configured). */
+    private _mapStoreConfig: MapStoreConfig | null = null;
+
+    /** Singleflight promise for MapDataStore initialization. */
+    private _mapStoreInitPromise: Promise<void> | null = null;
+
     constructor(
         name: string,
         store: RecordStore,
         nodeEngine: NodeEngine,
         containerService: MapContainerService,
+        mapStoreConfig?: MapStoreConfig,
     ) {
         this._name = name;
         this._store = store;
         this._nodeEngine = nodeEngine;
         this._containerService = containerService;
+        this._mapStoreConfig = mapStoreConfig ?? null;
+    }
+
+    /** Lazily initialize MapDataStore on first store-touching call (singleflight). */
+    private async _ensureMapDataStore(): Promise<void> {
+        if (this._mapDataStore.isWithStore()) return; // already wired
+        if (this._mapStoreConfig === null || !this._mapStoreConfig.isEnabled()) return; // no store
+
+        if (this._mapStoreInitPromise !== null) {
+            await this._mapStoreInitPromise;
+            return;
+        }
+
+        // Create singleflight promise
+        this._mapStoreInitPromise = (async () => {
+            const store = await this._containerService.getOrCreateMapDataStore<K, V>(
+                this._name,
+                this._mapStoreConfig!,
+            );
+            this._mapDataStore = store;
+        })();
+
+        try {
+            await this._mapStoreInitPromise;
+        } finally {
+            this._mapStoreInitPromise = null;
+        }
     }
 
     // ── Identification ────────────────────────────────────────────────────
@@ -62,11 +104,15 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     // ── Core point ops ────────────────────────────────────────────────────
 
-    put(key: K, value: V): V | null {
+    async put(key: K, value: V): Promise<V | null> {
+        await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
         const oldData = this._store.put(kd, vd, -1, -1);
         const oldValue = oldData !== null ? this._toObject<V>(oldData) : null;
+        if (this._mapDataStore.isWithStore()) {
+            await this._mapDataStore.add(key, value, Date.now());
+        }
         if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
@@ -75,11 +121,15 @@ export class MapProxy<K, V> implements IMap<K, V> {
         return oldValue;
     }
 
-    set(key: K, value: V): void {
+    async set(key: K, value: V): Promise<void> {
+        await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
         const hadOld = this._store.containsKey(kd);
         this._store.set(kd, vd, -1, -1);
+        if (this._mapDataStore.isWithStore()) {
+            await this._mapDataStore.add(key, value, Date.now());
+        }
         if (!hadOld) {
             this._fireAdded(key, value);
         } else {
@@ -87,24 +137,45 @@ export class MapProxy<K, V> implements IMap<K, V> {
         }
     }
 
-    get(key: K): V | null {
+    async get(key: K): Promise<V | null> {
+        await this._ensureMapDataStore();
         const kd = this._toData(key);
         const data = this._store.get(kd);
-        return data !== null ? this._toObject<V>(data) : null;
+        if (data !== null) {
+            return this._toObject<V>(data);
+        }
+        // load-on-miss
+        if (this._mapDataStore.isWithStore()) {
+            const loaded = await this._mapDataStore.load(key);
+            if (loaded !== null) {
+                // back-fill cache — use store.put with no TTL
+                this._store.put(kd, this._toData(loaded), -1, -1);
+                return loaded;
+            }
+        }
+        return null;
     }
 
-    remove(key: K): V | null {
+    async remove(key: K): Promise<V | null> {
+        await this._ensureMapDataStore();
         const kd = this._toData(key);
         const oldData = this._store.remove(kd);
+        if (this._mapDataStore.isWithStore()) {
+            await this._mapDataStore.remove(key, Date.now());
+        }
         if (oldData === null) return null;
         const oldValue = this._toObject<V>(oldData);
         this._fireRemoved(key, oldValue);
         return oldValue;
     }
 
-    delete(key: K): void {
+    async delete(key: K): Promise<void> {
+        await this._ensureMapDataStore();
         const kd = this._toData(key);
         const removed = this._store.delete(kd);
+        if (this._mapDataStore.isWithStore()) {
+            await this._mapDataStore.remove(key, Date.now());
+        }
         if (removed) {
             this._fireRemoved(key, null);
         }
@@ -126,48 +197,81 @@ export class MapProxy<K, V> implements IMap<K, V> {
         return this._store.isEmpty();
     }
 
-    clear(): void {
+    async clear(): Promise<void> {
+        await this._ensureMapDataStore();
         this._store.clear();
+        if (this._mapDataStore.isWithStore()) {
+            await this._mapDataStore.clear();
+        }
         this._fireCleared();
     }
 
-    putIfAbsent(key: K, value: V): V | null {
+    async putIfAbsent(key: K, value: V): Promise<V | null> {
+        await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
         const existing = this._store.putIfAbsent(kd, vd, -1, -1);
-        return existing !== null ? this._toObject<V>(existing) : null;
-    }
-
-    putAll(entries: Iterable<[K, V]>): void {
-        const dataPairs: [Data, Data][] = [];
-        for (const [k, v] of entries) {
-            dataPairs.push([this._toData(k), this._toData(v)]);
+        if (existing !== null) {
+            return this._toObject<V>(existing);
         }
-        this._store.putAll(dataPairs);
-    }
-
-    getAll(keys: K[]): Map<K, V | null> {
-        const keyDatas = keys.map(k => this._toData(k));
-        const results = this._store.getAll(keyDatas);
-        const map = new Map<K, V | null>();
-        for (let i = 0; i < keys.length; i++) {
-            const vData = results[i][1];
-            map.set(keys[i], vData !== null ? this._toObject<V>(vData) : null);
+        // key was absent — added, sync to store
+        if (this._mapDataStore.isWithStore()) {
+            await this._mapDataStore.add(key, value, Date.now());
         }
-        return map;
+        return null;
     }
 
-    replace(key: K, value: V): V | null {
+    async putAll(entries: Iterable<[K, V]>): Promise<void> {
+        await this._ensureMapDataStore();
+        const pairs: [K, V][] = Array.from(entries);
+        for (const [k, v] of pairs) {
+            this._store.put(this._toData(k), this._toData(v), -1, -1);
+        }
+        if (this._mapDataStore.isWithStore()) {
+            for (const [k, v] of pairs) {
+                await this._mapDataStore.add(k, v, Date.now());
+            }
+        }
+    }
+
+    async getAll(keys: K[]): Promise<Map<K, V | null>> {
+        await this._ensureMapDataStore();
+        const result = new Map<K, V | null>();
+        const missing: K[] = [];
+        for (const k of keys) {
+            const kd = this._toData(k);
+            const data = this._store.get(kd);
+            if (data !== null) {
+                result.set(k, this._toObject<V>(data));
+            } else {
+                missing.push(k);
+            }
+        }
+        if (missing.length > 0 && this._mapDataStore.isWithStore()) {
+            const loaded = await this._mapDataStore.loadAll(missing);
+            for (const [k, v] of loaded) {
+                result.set(k, v);
+                this._store.put(this._toData(k), this._toData(v), -1, -1);
+            }
+            for (const k of missing) {
+                if (!result.has(k)) result.set(k, null);
+            }
+        } else {
+            for (const k of missing) result.set(k, null);
+        }
+        return result;
+    }
+
+    async replace(key: K, value: V): Promise<V | null> {
         if (!this.containsKey(key)) return null;
         return this.put(key, value);
     }
 
-    replaceIfSame(key: K, oldValue: V, newValue: V): boolean {
-        const current = this.get(key);
+    async replaceIfSame(key: K, oldValue: V, newValue: V): Promise<boolean> {
+        const current = await this.get(key);
         if (current === null) return false;
-        // Use structural equality for objects, strict equality for primitives
         if (!this._equals(current, oldValue)) return false;
-        this.put(key, newValue);
+        await this.put(key, newValue);
         return true;
     }
 
@@ -271,16 +375,23 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     // ── Async variants ────────────────────────────────────────────────────
 
-    putAsync(key: K, value: V): Promise<V | null> {
-        return Promise.resolve(this.put(key, value));
+    async putAsync(key: K, value: V): Promise<V | null> {
+        return this.put(key, value);
     }
 
-    getAsync(key: K): Promise<V | null> {
-        return Promise.resolve(this.get(key));
+    async getAsync(key: K): Promise<V | null> {
+        return this.get(key);
     }
 
-    removeAsync(key: K): Promise<V | null> {
-        return Promise.resolve(this.remove(key));
+    async removeAsync(key: K): Promise<V | null> {
+        return this.remove(key);
+    }
+
+    // ── MapDataStore access ───────────────────────────────────────────────
+
+    /** Inject a MapDataStore directly (used by tests and MapContainerService). */
+    setMapDataStore(store: MapDataStore<K, V>): void {
+        this._mapDataStore = store;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────

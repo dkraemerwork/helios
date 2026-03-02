@@ -99,6 +99,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
         // Register MapContainerService
         this._mapService = new MapContainerService();
+        this._mapService.setNodeEngine(this._nodeEngine);
         this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
 
         // Near-cache manager (uses the same serialization service as the node engine)
@@ -221,6 +222,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
         for (const rm of this._replicatedMaps.values()) rm.destroy();
         this._nearCachedMaps.clear();
         this._nearCacheManager.destroyAllNearCaches();
+        // Flush all MapStore contexts (fire-and-forget; write-behind entries flushed)
+        this._mapService.flushAll().catch(() => {});
         this._maps.clear();
         this._queues.clear();
         this._lists.clear();
@@ -301,12 +304,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
         let proxy = this._maps.get(name);
         if (!proxy) {
             const store = this._mapService.getOrCreateRecordStore(name, 0);
+            const mapStoreConfig = this._config.getMapConfig(name)?.getMapStoreConfig();
             if (this._transport !== null) {
                 proxy = new NetworkedMapProxy<unknown, unknown>(
-                    name, store, this._nodeEngine, this._mapService, this._transport,
+                    name, store, this._nodeEngine, this._mapService, this._transport, mapStoreConfig,
                 );
             } else {
-                proxy = new MapProxy<unknown, unknown>(name, store, this._nodeEngine, this._mapService);
+                proxy = new MapProxy<unknown, unknown>(name, store, this._nodeEngine, this._mapService, mapStoreConfig);
             }
             this._maps.set(name, proxy);
         }

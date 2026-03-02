@@ -11,12 +11,15 @@
  *  it sets _fromRemote = true before calling the mutating method.  The overridden
  *  methods skip broadcasting while _fromRemote is true.  Since Bun is single-
  *  threaded there are no race conditions on this flag.
+ *
+ * Block 12.A3: Updated to async signatures matching IMap interface.
  */
 import { MapProxy } from '@helios/map/impl/MapProxy';
 import type { RecordStore } from '@helios/map/impl/recordstore/RecordStore';
 import type { NodeEngine } from '@helios/spi/NodeEngine';
 import type { MapContainerService } from '@helios/map/impl/MapContainerService';
 import type { TcpClusterTransport } from '@helios/cluster/tcp/TcpClusterTransport';
+import type { MapStoreConfig } from '@helios/config/MapStoreConfig';
 
 export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
     private readonly _transport: TcpClusterTransport;
@@ -29,15 +32,16 @@ export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
         nodeEngine: NodeEngine,
         containerService: MapContainerService,
         transport: TcpClusterTransport,
+        mapStoreConfig?: MapStoreConfig,
     ) {
-        super(name, store, nodeEngine, containerService);
+        super(name, store, nodeEngine, containerService, mapStoreConfig);
         this._transport = transport;
     }
 
     // ── Mutating overrides ────────────────────────────────────────────────
 
-    override put(key: K, value: V): V | null {
-        const old = super.put(key, value);
+    override async put(key: K, value: V): Promise<V | null> {
+        const old = await super.put(key, value);
         if (!this._fromRemote) {
             this._transport.broadcastPut(this.getName(), key, value);
             this._transport.broadcastInvalidate(this.getName(), key);
@@ -45,16 +49,16 @@ export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
         return old;
     }
 
-    override set(key: K, value: V): void {
-        super.set(key, value);
+    override async set(key: K, value: V): Promise<void> {
+        await super.set(key, value);
         if (!this._fromRemote) {
             this._transport.broadcastPut(this.getName(), key, value);
             this._transport.broadcastInvalidate(this.getName(), key);
         }
     }
 
-    override remove(key: K): V | null {
-        const old = super.remove(key);
+    override async remove(key: K): Promise<V | null> {
+        const old = await super.remove(key);
         if (!this._fromRemote) {
             this._transport.broadcastRemove(this.getName(), key);
             this._transport.broadcastInvalidate(this.getName(), key);
@@ -62,8 +66,8 @@ export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
         return old;
     }
 
-    override clear(): void {
-        super.clear();
+    override async clear(): Promise<void> {
+        await super.clear();
         if (!this._fromRemote) {
             this._transport.broadcastClear(this.getName());
         }
@@ -77,11 +81,11 @@ export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
      */
     applyRemotePut(key: K, value: V): void {
         this._fromRemote = true;
-        try {
-            this.put(key, value);
-        } finally {
+        // Fire-and-forget: the await is intentionally not propagated here
+        // because remote apply is called from a sync transport callback.
+        this.put(key, value).finally(() => {
             this._fromRemote = false;
-        }
+        });
     }
 
     /**
@@ -89,11 +93,9 @@ export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
      */
     applyRemoteRemove(key: K): void {
         this._fromRemote = true;
-        try {
-            this.remove(key);
-        } finally {
+        this.remove(key).finally(() => {
             this._fromRemote = false;
-        }
+        });
     }
 
     /**
@@ -101,10 +103,8 @@ export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
      */
     applyRemoteClear(): void {
         this._fromRemote = true;
-        try {
-            this.clear();
-        } finally {
+        this.clear().finally(() => {
             this._fromRemote = false;
-        }
+        });
     }
 }

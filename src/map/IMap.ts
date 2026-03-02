@@ -2,6 +2,7 @@
  * Distributed map interface.
  * Port of com.hazelcast.map.IMap.
  * Full IMap contract — Block 7.4.
+ * Block 12.A3: 11 data methods made async (Promise return types).
  */
 import type { Predicate } from '@helios/query/Predicate';
 import type { Aggregator } from '@helios/aggregation/Aggregator';
@@ -12,19 +13,19 @@ export interface IMap<K, V> {
     getName(): string;
 
     /** Associates the specified value with the key. Returns the old value or null. */
-    put(key: K, value: V): V | null;
+    put(key: K, value: V): Promise<V | null>;
 
     /** Associates the value with the key without returning the old value. */
-    set(key: K, value: V): void;
+    set(key: K, value: V): Promise<void>;
 
     /** Returns the value for the given key, or null if absent. */
-    get(key: K): V | null;
+    get(key: K): Promise<V | null>;
 
     /** Removes and returns the value for the given key, or null if absent. */
-    remove(key: K): V | null;
+    remove(key: K): Promise<V | null>;
 
     /** Removes the mapping for a key without returning the old value. */
-    delete(key: K): void;
+    delete(key: K): Promise<void>;
 
     /** Returns true if this map contains a mapping for the specified key. */
     containsKey(key: K): boolean;
@@ -39,28 +40,28 @@ export interface IMap<K, V> {
     isEmpty(): boolean;
 
     /** Removes all entries. */
-    clear(): void;
+    clear(): Promise<void>;
 
     /** If the key is not present, associates the value and returns null; else returns existing value. */
-    putIfAbsent(key: K, value: V): V | null;
+    putIfAbsent(key: K, value: V): Promise<V | null>;
 
     /** Copies all key-value pairs from the given iterable. */
-    putAll(entries: Iterable<[K, V]>): void;
+    putAll(entries: Iterable<[K, V]>): Promise<void>;
 
     /** Returns a map of key → value for all given keys. */
-    getAll(keys: K[]): Map<K, V | null>;
+    getAll(keys: K[]): Promise<Map<K, V | null>>;
 
     /**
      * Replaces the entry for the key only if it currently has a mapping.
      * Returns the previous value or null.
      */
-    replace(key: K, value: V): V | null;
+    replace(key: K, value: V): Promise<V | null>;
 
     /**
      * Replaces the value only if it currently maps to oldValue.
      * Returns true if replaced.
      */
-    replaceIfSame(key: K, oldValue: V, newValue: V): boolean;
+    replaceIfSame(key: K, oldValue: V, newValue: V): Promise<boolean>;
 
     // ── Predicate-based query methods ────────────────────────────────────────
 

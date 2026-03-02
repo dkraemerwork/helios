@@ -138,7 +138,7 @@ export class HeliosHttpServer {
                 // PUT /map/:name/:key — store value
                 if (method === 'PUT') {
                     const body = await req.json();
-                    const old = map.put(key, body);
+                    const old = await map.put(key, body);
                     return json({ key, old, stored: true });
                 }
 
@@ -151,7 +151,7 @@ export class HeliosHttpServer {
                         nearCacheHitBefore = nc.getNearCacheStats().getHits();
                     }
 
-                    const value = map.get(key);
+                    const value = await map.get(key);
 
                     let source: 'near-cache' | 'store' = 'store';
                     if (isNearCached) {
@@ -166,7 +166,7 @@ export class HeliosHttpServer {
 
                 // DELETE /map/:name/:key — remove value
                 if (method === 'DELETE') {
-                    const old = map.remove(key);
+                    const old = await map.remove(key);
                     return json({ key, old, removed: true });
                 }
 
