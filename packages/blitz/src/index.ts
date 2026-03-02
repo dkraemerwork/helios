@@ -14,3 +14,12 @@ export { BlitzError } from './errors/BlitzError.ts';
 export { NakError } from './errors/NakError.ts';
 export { DeadLetterError } from './errors/DeadLetterError.ts';
 export { PipelineError } from './errors/PipelineError.ts';
+// Block 10.1
+export { Pipeline, GeneralStage } from './Pipeline.ts';
+export { Vertex } from './Vertex.ts';
+export type { VertexType } from './Vertex.ts';
+export { Edge } from './Edge.ts';
+export { Stage } from './Stage.ts';
+export type { StageContext } from './StageContext.ts';
+export type { Source } from './source/Source.ts';
+export type { Sink } from './sink/Sink.ts';

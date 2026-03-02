@@ -3,6 +3,7 @@ import { jetstream, jetstreamManager, type JetStreamClient, type JetStreamManage
 import { Kvm, type KvManager } from '@nats-io/kv';
 import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from './BlitzConfig.ts';
 import { BlitzEvent } from './BlitzEvent.ts';
+import { Pipeline } from './Pipeline.ts';
 
 /** Listener for BlitzEvents emitted by BlitzService. */
 export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
@@ -39,6 +40,7 @@ export class BlitzService {
 
     private _closed = false;
     private readonly _listeners: BlitzEventListener[] = [];
+    private readonly _runningPipelines = new Map<string, Pipeline>();
 
     private constructor(
         config: ResolvedBlitzConfig,
@@ -108,6 +110,51 @@ export class BlitzService {
             this._listeners.splice(idx, 1);
         }
         return this;
+    }
+
+    /**
+     * Create a new pipeline builder with the given name.
+     * The pipeline is NOT submitted until `blitz.submit(p)` is called.
+     */
+    pipeline(name: string): Pipeline {
+        return new Pipeline(name);
+    }
+
+    /**
+     * Validate and submit a pipeline for execution.
+     *
+     * Validates the DAG structure (throws {@link PipelineError} on invalid DAG),
+     * registers the pipeline as running, and starts consumer loops for each vertex.
+     *
+     * @throws PipelineError if the DAG is invalid
+     */
+    async submit(p: Pipeline): Promise<void> {
+        // Validate throws PipelineError if the DAG is malformed
+        p.validate();
+        this._runningPipelines.set(p.name, p);
+        // Consumer loop startup will be wired in Block 10.2+ when real sources/sinks are added.
+    }
+
+    /**
+     * Cancel a running pipeline by name.
+     *
+     * Gracefully stops all consumer loops and removes the pipeline from the running set.
+     * Emits {@link BlitzEvent.PIPELINE_CANCELLED}.
+     * If no pipeline with the given name is running, this is a no-op.
+     */
+    async cancel(name: string): Promise<void> {
+        if (!this._runningPipelines.has(name)) {
+            return;
+        }
+        this._runningPipelines.delete(name);
+        this._emit(BlitzEvent.PIPELINE_CANCELLED, { name });
+    }
+
+    /**
+     * Returns true if a pipeline with the given name is currently running.
+     */
+    isRunning(name: string): boolean {
+        return this._runningPipelines.has(name);
     }
 
     /**
