@@ -1,12 +1,20 @@
 #!/usr/bin/env bun
 /**
- * main.ts — entry point for the @helios/nestjs example.
+ * main.ts — @helios/nestjs example entry point.
  *
- * Bootstraps a NestJS application context (no HTTP server), runs two demos:
- *   1. Near-cache demo  — cache-aside reads with hit/miss tracking via @Cacheable
- *   2. Predicate query demo — equal, greaterThan, between, and/or combinations
+ * Bootstraps a NestJS application context (no HTTP server) and runs two demos:
  *
- * Then shuts the app down cleanly.
+ *   Demo 1 — Helios near-cache (transparent, infrastructure-level)
+ *     MapConfig + NearCacheConfig is registered on the HeliosInstance.
+ *     IMap.get() reads are automatically served from the local near-cache after
+ *     the first miss. No application-layer code changes required.
+ *
+ *   Demo 2 — @Cacheable application-level caching (Spring-Cache-style)
+ *     HeliosCacheModule provides a CACHE_MANAGER. @Cacheable stores method
+ *     return values so subsequent calls with the same key skip the method.
+ *
+ *   Demo 3 — Predicate queries on a distributed IMap
+ *     Helios Predicates API: equal, greaterThan, between, and, or, keySet, entrySet.
  */
 
 import 'reflect-metadata';
@@ -19,103 +27,112 @@ import { AppModule } from './app.module';
 import { NearCacheService } from './near-cache/near-cache.service';
 import { PredicatesService } from './predicates/predicates.service';
 
-// ── 1. Create the HeliosInstance with MapConfigs ──────────────────────────────
+// ── Configure Helios ──────────────────────────────────────────────────────────
 
 const config = new HeliosConfig('nestjs-example');
 
-// 'catalog' map: near-cache enabled (60s TTL, caches local entries)
-const catalogNearCache = new NearCacheConfig('catalog')
-    .setTimeToLiveSeconds(60)
-    .setCacheLocalEntries(true);
-
-const catalogMapConfig = new MapConfig('catalog')
-    .setNearCacheConfig(catalogNearCache);
-
-// 'products' map: plain distributed map used for predicate queries
-const productsMapConfig = new MapConfig('products');
-
+// 'catalog' map: near-cache enabled with 60s TTL, caches local entries.
+// IMap.get() on this map will transparently read from the near-cache after
+// the first miss, without any change to application code.
+const catalogMapConfig = new MapConfig('catalog');
+const nearCacheConfig = new NearCacheConfig();
+nearCacheConfig.setTimeToLiveSeconds(60);
+nearCacheConfig.setCacheLocalEntries(true);
+catalogMapConfig.setNearCacheConfig(nearCacheConfig);
 config.addMapConfig(catalogMapConfig);
-config.addMapConfig(productsMapConfig);
+
+// 'products' map: plain distributed map for predicate query demo.
+config.addMapConfig(new MapConfig('products'));
 
 const heliosInstance = await Helios.newInstance(config);
 
-// ── 2. Bootstrap the NestJS application context (no HTTP) ────────────────────
+// ── Bootstrap NestJS (no HTTP) ────────────────────────────────────────────────
 
-const app = await NestFactory.createApplicationContext(AppModule.create(heliosInstance), {
-    logger: false, // suppress NestJS framework logs for clean demo output
-});
+const app = await NestFactory.createApplicationContext(
+    AppModule.create(heliosInstance),
+    { logger: false },
+);
 
-// ── 3. Near-cache demo ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  Demo 1 — Helios near-cache (transparent)
+// ─────────────────────────────────────────────────────────────────────────────
 
 console.log('\n══════════════════════════════════════════════');
-console.log('  Demo 1: Near-Cache with @Cacheable');
+console.log('  Demo 1: Helios near-cache (IMap + NearCacheConfig)');
 console.log('══════════════════════════════════════════════');
+console.log('  The "catalog" map has NearCacheConfig attached.');
+console.log('  IMap.get() is transparent — near-cache is infrastructure, not app code.\n');
 
 const nearCacheSvc = app.get(NearCacheService);
 
-// Seed the backing 'catalog' map with products
-const sampleProducts = [
+// Seed data into the distributed map
+nearCacheSvc.seed([
     { id: 'c1', name: 'Gaming Headset',  price: 79.99,  category: 'electronics' },
-    { id: 'c2', name: 'Ergonomic Chair', price: 299.00, category: 'furniture' },
-];
-nearCacheSvc.seedData(sampleProducts);
-console.log(`\n  Seeded ${sampleProducts.length} products into 'catalog' map`);
+    { id: 'c2', name: 'Ergonomic Chair', price: 299.00, category: 'furniture'   },
+]);
+console.log('  Seeded 2 products into the catalog map.');
 
-// First read — cache MISS: method is invoked, result stored in CACHE_MANAGER
-console.log('\n  --- First read (cache MISS) ---');
-const result1 = await nearCacheSvc.getProduct('c1');
-console.log(`  getProduct('c1') → ${JSON.stringify(result1)}`);
-console.log('  [MISS] Method was invoked; result stored in cache');
+// First get: near-cache MISS → fetches from backing store, populates near-cache
+const hit1 = nearCacheSvc.getFromMap('c1');
+console.log(`\n  get('c1') #1 → ${JSON.stringify(hit1)}  [near-cache MISS — loaded from store]`);
+console.log(`  Near-cache size: ${nearCacheSvc.getNearCacheSize()} entry(ies)`);
 
-// Second read — cache HIT: @Cacheable returns the cached value immediately
-console.log('\n  --- Second read (cache HIT) ---');
-const result2 = await nearCacheSvc.getProduct('c1');
-console.log(`  getProduct('c1') → ${JSON.stringify(result2)}`);
-console.log('  [HIT]  Returned from cache; method NOT invoked again');
+// Second get for same key: near-cache HIT → no backing store access
+const hit2 = nearCacheSvc.getFromMap('c1');
+console.log(`\n  get('c1') #2 → ${JSON.stringify(hit2)}  [near-cache HIT — served from local cache]`);
 
-// Different key — another MISS
-console.log('\n  --- Third read, different key (cache MISS) ---');
-const result3 = await nearCacheSvc.getProduct('c2');
-console.log(`  getProduct('c2') → ${JSON.stringify(result3)}`);
-console.log('  [MISS] New key; method invoked and result cached');
+// Different key: another MISS
+const hit3 = nearCacheSvc.getFromMap('c2');
+console.log(`\n  get('c2') #1 → ${JSON.stringify(hit3)}  [near-cache MISS — loaded from store]`);
+console.log(`  Near-cache size: ${nearCacheSvc.getNearCacheSize()} entry(ies)`);
 
-// Same key again — HIT
-console.log('\n  --- Fourth read, same key as third (cache HIT) ---');
-const result4 = await nearCacheSvc.getProduct('c2');
-console.log(`  getProduct('c2') → ${JSON.stringify(result4)}`);
-console.log('  [HIT]  Returned from cache');
+// Same key again: HIT
+const hit4 = nearCacheSvc.getFromMap('c2');
+console.log(`\n  get('c2') #2 → ${JSON.stringify(hit4)}  [near-cache HIT — served from local cache]`);
 
-// Missing key — always MISS (null not cached)
-console.log('\n  --- Fifth read, non-existent key ---');
-const result5 = await nearCacheSvc.getProduct('does-not-exist');
-console.log(`  getProduct('does-not-exist') → ${JSON.stringify(result5)}`);
-console.log('  [MISS] Key absent in map; null returned (not cached)');
+console.log(`\n  Total map.get() calls: ${nearCacheSvc.getTotalGets()}`);
 
-// Show what is stored in the CACHE_MANAGER
-const cacheManager = nearCacheSvc.getCacheManager();
-const cachedC1 = await cacheManager.get('catalog:c1');
-const cachedC2 = await cacheManager.get('catalog:c2');
-console.log('\n  CACHE_MANAGER state after demo:');
-console.log(`    catalog:c1 = ${JSON.stringify(cachedC1)}`);
-console.log(`    catalog:c2 = ${JSON.stringify(cachedC2)}`);
-
-// ── 4. Predicate query demo ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  Demo 2 — @Cacheable (application-level, Spring-Cache-style)
+// ─────────────────────────────────────────────────────────────────────────────
 
 console.log('\n══════════════════════════════════════════════');
-console.log('  Demo 2: Predicate Queries');
+console.log('  Demo 2: @Cacheable (application-level caching)');
 console.log('══════════════════════════════════════════════');
+console.log('  @Cacheable stores the method return value in CACHE_MANAGER.');
+console.log('  On a HIT the method body is skipped entirely.\n');
+
+// First call: CACHE_MANAGER miss → method runs → result stored
+const r1 = await nearCacheSvc.cachedLookup('c1');
+console.log(`  cachedLookup('c1') #1 → ${JSON.stringify(r1)}  [CACHE_MANAGER miss — method ran]`);
+
+// Second call: CACHE_MANAGER hit → method NOT called
+const r2 = await nearCacheSvc.cachedLookup('c1');
+console.log(`  cachedLookup('c1') #2 → ${JSON.stringify(r2)}  [CACHE_MANAGER hit — method skipped]`);
+
+// Evict and re-fetch
+await nearCacheSvc.evict('c1');
+const r3 = await nearCacheSvc.cachedLookup('c1');
+console.log(`  evict('c1') then cachedLookup → ${JSON.stringify(r3)}  [CACHE_MANAGER miss after eviction]`);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Demo 3 — Predicate queries
+// ─────────────────────────────────────────────────────────────────────────────
+
+console.log('\n══════════════════════════════════════════════');
+console.log('  Demo 3: Predicate queries');
+console.log('══════════════════════════════════════════════\n');
 
 const predicateSvc = app.get(PredicatesService);
 predicateSvc.seed();
 predicateSvc.runQueries();
 
-// ── 5. Shutdown ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 console.log('\n══════════════════════════════════════════════');
 console.log('  All demos complete — shutting down');
 console.log('══════════════════════════════════════════════\n');
 
 await app.close();
-
-// Prevent any lingering async operations from keeping the process alive
+heliosInstance.shutdown();
 process.exit(0);

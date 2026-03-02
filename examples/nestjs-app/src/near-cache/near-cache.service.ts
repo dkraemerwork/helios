@@ -1,22 +1,25 @@
 /**
- * NearCacheService — demonstrates cache-aside reads with a Helios near-cache.
+ * NearCacheService — demonstrates two caching patterns using @helios/nestjs.
  *
- * The service holds a reference to a "products" IMap that has a NearCacheConfig
- * attached. On the first get() the value is fetched from the map store (miss);
- * subsequent get() calls for the same key are served from the local near-cache
- * (hit), avoiding a round-trip to the backing store.
+ * ── Pattern 1: Helios near-cache (transparent, infrastructure-level) ──────────
  *
- * The @Cacheable decorator is applied on top to show the method-level caching
- * pattern familiar from Spring Cache — it uses an in-memory ICacheStore
- * (HeliosCacheModule) as its backing store.
+ *   The 'catalog' IMap has a NearCacheConfig registered on the HeliosInstance
+ *   (see main.ts). Every map.get(key) is automatically served from the local
+ *   near-cache after the first miss — no application code change required.
+ *   Call trackingGet() to see miss vs. hit counts accumulate.
+ *
+ * ── Pattern 2: @Cacheable (application-level, Spring-Cache-style) ─────────────
+ *
+ *   @Cacheable wraps a method so its return value is stored in CACHE_MANAGER
+ *   on the first call and returned directly on subsequent calls with the same key.
+ *   HeliosCacheModule wires a Helios IMap as the CACHE_MANAGER backing store.
  */
 
-import 'reflect-metadata';
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
-import { Cacheable } from '@helios/nestjs';
 import { InjectMap } from '@helios/nestjs';
+import { Cacheable, CacheEvict } from '@helios/nestjs';
 import type { IMap } from '@helios/core/map/IMap';
 
 export interface Product {
@@ -28,48 +31,82 @@ export interface Product {
 
 @Injectable()
 export class NearCacheService {
-    /** Hit/miss counters for the @Cacheable layer (method-level cache). */
-    private _hits = 0;
-    private _misses = 0;
+    // ── Pattern 1 state ───────────────────────────────────────────────────────
+    private _totalGets = 0;
 
     constructor(
-        /** CACHE_MANAGER is injected by HeliosCacheModule — the @Cacheable decorator picks it up. */
-        @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-        /** The "catalog" map is backed by a MapProxy with NearCacheConfig attached. */
+        /**
+         * 'catalog' map: has NearCacheConfig — transparent near-cache on every get().
+         * Injected via HeliosObjectExtractionModule + @InjectMap.
+         */
         @InjectMap('catalog') private readonly catalogMap: IMap<string, Product>,
+        /**
+         * CACHE_MANAGER is injected so @Cacheable can find it via findCacheOnInstance().
+         * HeliosCacheModule registers this provider with an in-memory backing store.
+         */
+        @Inject(CACHE_MANAGER) readonly cacheManager: Cache,
     ) {}
 
-    /**
-     * Cache-aside read via @Cacheable.
-     *
-     * First call: CACHE_MANAGER miss → reads from catalogMap → stores in cache.
-     * Subsequent calls with the same id: CACHE_MANAGER hit → returns immediately.
-     */
-    @Cacheable({ key: (id: string) => `catalog:${id}` })
-    async getProduct(id: string): Promise<Product | null> {
-        this._misses++;
-        return this.catalogMap.get(id);
-    }
+    // ── Pattern 1: Helios near-cache ──────────────────────────────────────────
 
-    /** Seed data into the backing map. */
-    seedData(products: Product[]): void {
+    /** Seed products directly into the distributed 'catalog' map. */
+    seed(products: Product[]): void {
         for (const p of products) {
             this.catalogMap.put(p.id, p);
         }
     }
 
-    /** Return hit/miss totals accumulated by manual tracking. */
-    getStats(): { hits: number; misses: number } {
-        return { hits: this._hits, misses: this._misses };
+    /**
+     * Read a product from the 'catalog' map.
+     *
+     * First call for a key → near-cache MISS: reads from the map store and
+     * populates the local near-cache.
+     *
+     * Subsequent calls for the same key → near-cache HIT: returns the cached
+     * copy without touching the backing store.
+     *
+     * The near-cache is fully transparent — this method just calls map.get().
+     */
+    getFromMap(id: string): Product | null {
+        this._totalGets++;
+        return this.catalogMap.get(id);
     }
 
-    /** Manually count a hit (called from the demo after verifying cache state). */
-    recordHit(): void {
-        this._hits++;
+    /** Current total number of map.get() calls (across hits and misses). */
+    getTotalGets(): number {
+        return this._totalGets;
     }
 
-    /** Expose the underlying CACHE_MANAGER for demo introspection. */
-    getCacheManager(): Cache {
-        return this.cacheManager;
+    /** Read current near-cache size from the map's near-cache store. */
+    getNearCacheSize(): number {
+        // NearCachedIMapWrapper exposes getNearCache() which has size().
+        const nc = (this.catalogMap as unknown as { getNearCache?(): { size(): number } })
+            .getNearCache?.();
+        return nc?.size() ?? 0;
     }
+
+    // ── Pattern 2: @Cacheable (application-level) ─────────────────────────────
+
+    /**
+     * Method-level cache-aside via @Cacheable.
+     *
+     * CACHE_MANAGER (backed by HeliosCacheModule) is consulted first.
+     * On a miss the method body runs and the result is stored.
+     * On a hit the method body is skipped entirely.
+     *
+     * Key is derived from the 'id' argument via the key function.
+     */
+    @Cacheable({ key: (id: string) => `catalog:${id}` })
+    async cachedLookup(id: string): Promise<Product | null> {
+        // This body only executes on a CACHE_MANAGER miss.
+        return this.catalogMap.get(id);
+    }
+
+    /** Evict a single product entry from the CACHE_MANAGER. */
+    @CacheEvict({ key: (id: string) => `catalog:${id}` })
+    async evict(_id: string): Promise<void> { /* eviction handled by decorator */ }
+
+    /** Evict all entries from the CACHE_MANAGER. */
+    @CacheEvict({ allEntries: true })
+    async evictAll(): Promise<void> { /* eviction handled by decorator */ }
 }
