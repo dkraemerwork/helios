@@ -1,0 +1,16 @@
+{
+  "name": "@helios/turso",
+  "version": "1.0.0",
+  "description": "Turso/libSQL-backed MapStore for Helios",
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": { "@libsql/client": "^0.14.0" },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "beta"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun run tsc --noEmit"
+  }
+}
