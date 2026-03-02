@@ -4425,7 +4425,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 10.3** — Stream operators (map, filter, flatMap, merge, branch, peek) — 28 tests green ✅
 - [x] **Block 10.4** — Windowing engine (tumbling, sliding, session) + NATS KV state — 32 tests green (5 skipped/NATS-integration) ✅
 - [x] **Block 10.5** — Stateful aggregations (count, sum, min, max, avg, distinct) + grouped aggregation + combiner — 34 tests green ✅
-- [ ] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — ~25 tests
+- [x] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — 25 tests green ✅
 - [ ] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager) — ~35 tests
 - [ ] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — ~20 tests
 - [ ] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — ~25 tests

@@ -69,3 +69,7 @@ export type { AvgAcc } from './aggregate/AvgAggregator.ts';
 export { DistinctAggregator } from './aggregate/DistinctAggregator.ts';
 export { AggregatingOperator, RunningAggregateOperator } from './aggregate/AggregatingOperator.ts';
 export { hashKey } from './aggregate/hashKey.ts';
+// Block 10.6 — Stream joins
+export { HashJoinOperator } from './join/HashJoinOperator.ts';
+export { WindowedJoinOperator } from './join/WindowedJoinOperator.ts';
+export type { JoinEvent, LeftEvent, RightEvent, WindowedJoinOptions } from './join/WindowedJoinOperator.ts';
