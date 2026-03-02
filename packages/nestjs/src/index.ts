@@ -97,3 +97,7 @@ export { NestManagedContext } from './context/NestManagedContext';
 // ── Health (@nestjs/terminus) ──────────────────────────────────────────────
 export { HeliosHealthIndicator } from './health/HeliosHealthIndicator';
 export { HeliosHealthModule } from './health/HeliosHealthModule';
+
+// ── Event bridge (@nestjs/event-emitter) ──────────────────────────────────
+export { HeliosEventBridge } from './events/helios-event-bridge';
+export { HeliosEventBridgeModule } from './events/helios-event-bridge.module';

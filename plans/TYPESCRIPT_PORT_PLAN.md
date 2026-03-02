@@ -2220,7 +2220,7 @@ class UserService {
 Add `registerAsync()` to both modules as a **purely additive** change.
 `register()` signatures are **unchanged** — existing callers keep working with zero edits.
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 1 (explains why `register()` is not touched)
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 1 (explains why `register()` is not touched)
 
 #### New types exported from `HeliosTransactionModule.ts`
 
@@ -2311,7 +2311,7 @@ Remove the global static `HeliosTransactionManager._current` singleton. Replace 
 a module-file-scoped `AsyncLocalStorage<HeliosTransactionManager>` that
 `HeliosTransactionModule.onModuleInit()` populates.
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issues 2 & 3 (why no deprecation shim; why throw-on-missing is required)
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issues 2 & 3 (why no deprecation shim; why throw-on-missing is required)
 
 #### Mechanism
 
@@ -2489,7 +2489,7 @@ class UserService {
 
 #### DI resolution mechanism
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 4 (why the interceptor pattern; no global registry)
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 4 (why the interceptor pattern; no global registry)
 
 The decorators themselves store **only metadata** (`Reflect.defineMetadata`) — zero execution
 logic at decoration time. All cache logic lives in `HeliosCacheInterceptor`:
@@ -2597,14 +2597,14 @@ class AuditService {
 
 `@nestjs/event-emitter` is an **optional peer dependency**.
 
-**TODO — Block 9.7** (~10 tests):
-- [ ] Implement `HeliosEventBridge` service with `bridgeMap()` / `bridgeTopic()` methods
-- [ ] Implement `HeliosEventBridgeModule`
-- [ ] Add `@nestjs/event-emitter` as optional peer dependency
-- [ ] Bridge lifecycle events (`LifecycleEvent` → `helios.lifecycle.*`)
-- [ ] Tests: map entry events, topic messages, lifecycle events via `@OnEvent`
-- [ ] GREEN
-- [ ] `git commit -m "feat(nestjs): event bridge for @nestjs/event-emitter — tests green"`
+**DONE — Block 9.7** (11 tests green ✅):
+- [x] Implement `HeliosEventBridge` service with `bridgeMap()` / `bridgeTopic()` / `bridgeLifecycle()` methods
+- [x] Implement `HeliosEventBridgeModule`
+- [x] Add `@nestjs/event-emitter` as optional peer dependency
+- [x] Bridge lifecycle events (`LifecycleEvent` → `helios.lifecycle.*`)
+- [x] Tests: map entry events, topic messages, lifecycle events via EventEmitter2; NestJS DI integration
+- [x] GREEN
+- [x] `git commit -m "feat(nestjs): event bridge for @nestjs/event-emitter — 11 tests green"`
 
 ---
 
@@ -2641,7 +2641,7 @@ export class HeliosModule extends HeliosConfigurableModule
 }
 ```
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 5 (why no backward compat transition — all importers receive the Symbol automatically)
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 5 (why no backward compat transition — all importers receive the Symbol automatically)
 
 **TODO — Block 9.8** (~6 tests):
 - [ ] Change `HELIOS_INSTANCE_TOKEN` to `Symbol('HELIOS_INSTANCE')` — one commit, no transition period; all importers receive the new value automatically since they use the constant not the literal string
@@ -2739,7 +2739,7 @@ TypeScript declarations — no shims required.
 
 ### Test infrastructure for Phase 10
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 7
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 7
 
 **Unit tests** (Blocks 10.1, 10.3 — operators in isolation): mock the `NatsConnection`
 interface. No external process needed.
@@ -2885,7 +2885,7 @@ const pipeline = blitz.pipeline('order-processing');
 await blitz.shutdown();
 ```
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issues 6 & 7 (workspace already configured; NATS test infrastructure)
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issues 6 & 7 (workspace already configured; NATS test infrastructure)
 
 **TODO — Block 10.0**:
 - [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `nats@^2`, `@helios/core`), `tsconfig.json` (paths: `@helios/core/* → ../../src/*`), `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
@@ -3645,7 +3645,7 @@ All values are JSON-serialized (`JSON.stringify`/`JSON.parse`). Keys are always 
 
 ### Block 11.6 — app/ migration + e2e REST acceptance (~8 tests)
 
-> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 9 (why delegation is wrong; clean delete + configure approach)
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 9 (why delegation is wrong; clean delete + configure approach)
 
 **Delete `app/src/http-server.ts`** entirely. `HeliosRestServer` — which starts automatically
 inside `HeliosInstanceImpl` when `restApiConfig.isEnabledAndNotEmpty()` — replaces it for
@@ -3888,7 +3888,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — 7 tests ✅
 - [x] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — 8 tests ✅
 - [x] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — 15 tests ✅
-- [ ] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — ~10 tests
+- [x] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — 11 tests ✅
 - [ ] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — ~6 tests
 - [ ] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — ~5 tests
 - [ ] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests)
@@ -3985,4 +3985,4 @@ bun run build
 
 ---
 
-*Plan v9.3 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~93 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.3: production hardening pass — see plans/PRODUCTION_HARDENING_AUDIT.md for full cross-reference*
+*Plan v9.3 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~93 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.3: production hardening pass — see plans/HELIOS_BLITZ_IMPLEMENTATION.md for full cross-reference*
