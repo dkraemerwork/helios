@@ -98,7 +98,11 @@ REPLACED (do NOT convert Java files — write TypeScript from scratch):
 
 DROPPED (never port — skip any block referencing these):
   osgi, console, auditlog, hotrestart, persistence, crdt, wan, vector,
-  durableexecutor, flakeidgen, dataconnection, extensions/
+  durableexecutor, flakeidgen, dataconnection
+
+Important scope clarification:
+  - Legacy Java `hazelcast/extensions/*` modules remain dropped.
+  - Phase 12 extension packages in this repo are IN SCOPE: `packages/s3`, `packages/mongodb`, `packages/turso`.
 
 ══════════════════════════════════════════════════════════
 YOUR STEPS — execute all in order
@@ -107,7 +111,10 @@ YOUR STEPS — execute all in order
 STEP 1 — READ THE PLAN
   Read %%PLAN%% in full.
   Go to the Master Todo List section.
-  Find the FIRST line starting with '- [ ] **Block' (not checkpoint lines).
+  If a phase header in Master Todo List is marked with '← **CURRENT**', select the first
+  '- [ ] **Block ...' under that CURRENT phase section.
+  If no CURRENT marker exists (or no unchecked block remains in that section),
+  find the FIRST line starting with '- [ ] **Block' (not checkpoint lines).
   If it already has '(BLOCKED: ...)', re-check whether the blocker is now resolved.
   Keep blocked entries in the same canonical form so they stay selectable/revisitable:
     - [ ] **Block X.Y** (BLOCKED: <reason>)
@@ -123,6 +130,11 @@ STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
     c) Where TypeScript tests go:   %%ROOT%%/test/<path>/
     d) Where TypeScript source goes: %%ROOT%%/src/<path>/
 
+  For Phase 12 blocks (`12.A1`, `12.A2`, `12.A3`, `12.B`, `12.C`, `12.D`):
+    - Read `%%ROOT%%/plans/MAPSTORE_EXTENSION_PLAN.md` as the source-of-truth spec.
+    - Treat work as TypeScript-first in this repo (no Java test conversion requirement).
+    - Keep `%%PLAN%%` and `MAPSTORE_EXTENSION_PLAN.md` terminology aligned when updating status text.
+
   For REPLACED blocks (TPC engine, cloud discovery):
     - Identify what the replacement should do (from plan description)
     - You will write TypeScript from scratch, not convert Java files
@@ -133,6 +145,11 @@ STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
     - That jest.mock/spyOn/fn must be replaced with bun:test equivalents (see below)
 
 STEP 3 — CONVERT ALL TESTS FOR THE BLOCK
+  For Phase 12 blocks:
+    - Do NOT run `scripts/convert-java-tests.ts`.
+    - Author TypeScript tests directly from `plans/MAPSTORE_EXTENSION_PLAN.md` expectations.
+    - Ensure tests compile, then run RED before implementation.
+
   For standard blocks, batch-convert using the converter:
 
     cd %%ROOT%%
@@ -170,6 +187,8 @@ STEP 5 — READ THE JAVA SOURCE
   Read every Java source file for this block.
   These are your spec. Understand every public method, exception, edge case, invariant.
   For REPLACED blocks, understand the intent, not the implementation.
+  For Phase 12 blocks, use `plans/MAPSTORE_EXTENSION_PLAN.md` + current TypeScript code as primary spec
+  (consult listed Java references only where needed for behavioral parity).
 
 STEP 6 — IMPLEMENT THE FULL TYPESCRIPT MODULE
   Create all %%ROOT%%/src/<path>/<Name>.ts files for the block.
@@ -261,6 +280,9 @@ STEP 8 — UPDATE THE PLAN
     c) Update the "Tests already ported & green" counter (add the number of tests just greened)
     d) Update the "Tests remaining" counter (subtract the same number)
 
+  For Phase 12 blocks, also keep `plans/MAPSTORE_EXTENSION_PLAN.md` status/count text in sync
+  with what was actually completed in the iteration.
+
 STEP 9 — COMMIT AND STOP
     git -C %%ROOT%% add -A
     git -C %%ROOT%% commit -m "feat(<module>): <BlockName> — <N> tests green"
@@ -282,6 +304,7 @@ RULES — non-negotiable
 - Use @helios/* import alias, NOT com/hazelcast/*.
 - Deferred blocks (SQL, Jet, CP, scheduledexecutor): mark [~] SKIPPED, move to next.
 - Dropped packages (osgi, wan, crdt, etc.): if a block references only dropped code, mark [~] DROPPED.
+- Legacy Java `hazelcast/extensions/*` is dropped, but Phase 12 repo packages (`packages/s3`, `packages/mongodb`, `packages/turso`) are valid in-scope targets.
 - Replaced blocks (tpc-engine, cloud discovery): write TypeScript from scratch, do not convert Java.
 - If a block is BLOCKED on unimplemented infrastructure: mark - [ ] **Block X.Y** (BLOCKED: reason)
   and pick the next non-blocked [ ] **Block**.

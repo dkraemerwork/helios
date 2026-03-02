@@ -136,7 +136,7 @@ NestJS works with `bun test`. The setup is already correct:
 | `durableexecutor/` | Distributed durable executor |
 | `flakeidgen/` | Replace with `crypto.randomUUID()` |
 | `dataconnection/` | Enterprise data connections |
-| `extensions/` | Kafka, Hadoop, Mongo, S3, Avro, CDC, gRPC, Kinesis, Python — out of scope |
+| `hazelcast/extensions/*` (legacy) | Legacy Java extension modules (Kafka, Hadoop, Avro, CDC, gRPC, Kinesis, Python, etc.) are out of scope; Helios Phase 12 packages (`packages/s3`, `packages/mongodb`, `packages/turso`) are explicitly in scope |
 | Build tooling (`hazelcast-archunit-rules/`, `hazelcast-build-utils/`, `checkstyle/`, `distribution/`) | Not relevant |
 
 ### Replace, don't port line-by-line — with explicit parity gates
@@ -416,6 +416,7 @@ helios/                                   # Standalone repo (this repo)
 │       │   ├── HeliosTransactionModule.ts
 │       │   ├── HeliosTransactionManager.ts
 │       │   ├── Transactional.ts          # DI-based @Transactional (Block 9.4)
+│       │   ├── TransactionExceptions.ts  # CannotCreateTransactionException (Block 9.4)
 │       │   ├── decorators/               # Block 9.2 + 9.6
 │       │   ├── health/                   # Block 9.5
 │       │   ├── events/                   # Block 9.7
@@ -2336,6 +2337,20 @@ export { _txManagerStorage };
 ```
 
 ```typescript
+// src/TransactionExceptions.ts
+/** Thrown when @Transactional() is called outside a HeliosTransactionModule context.
+ *  Indicates a misconfiguration — the module was not imported in the app module.
+ *  This is always a programmer error, never a recoverable runtime error.
+ *  NOTE: Does NOT extend BlitzError — @helios/nestjs must not depend on @helios/blitz. */
+export class CannotCreateTransactionException extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CannotCreateTransactionException';
+  }
+}
+```
+
+```typescript
 // In Transactional.ts:
 import { _txManagerStorage } from './HeliosTransactionModule';
 import { CannotCreateTransactionException } from './TransactionExceptions';
@@ -2354,6 +2369,7 @@ descriptor.value = async function (this: unknown, ...args: unknown[]) {
 ```
 
 **TODO — Block 9.4** (~6 tests):
+- [ ] Create `src/TransactionExceptions.ts` — export `CannotCreateTransactionException`
 - [ ] Remove `static _current`, `setCurrent()`, `getCurrent()` from `HeliosTransactionManager` — no deprecation shim
 - [ ] Add `_txManagerStorage: AsyncLocalStorage<HeliosTransactionManager>` at module file scope in `HeliosTransactionModule.ts`
 - [ ] `HeliosTransactionModule.onModuleInit()` calls `_txManagerStorage.enterWith(this._txMgr)`
@@ -2795,6 +2811,11 @@ packages/blitz/                              # @helios/blitz
 │   ├── Stage.ts                           # processing stage base (Block 10.1)
 │   ├── BlitzService.ts                      # top-level entry point (Block 10.0)
 │   ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0)
+│   ├── errors/                            # error hierarchy (Block 10.0)
+│   │   ├── BlitzError.ts                  # base class for all @helios/blitz errors
+│   │   ├── NakError.ts                    # operator returned an error — message will be nak'd
+│   │   ├── DeadLetterError.ts             # retries exhausted — message routed to DL stream
+│   │   └── PipelineError.ts              # pipeline-level structural error (cycle, no source, etc.)
 │   ├── codec/                             # Block 10.2
 │   │   └── BlitzCodec.ts                  # BlitzCodec<T> interface + JsonCodec/StringCodec/BytesCodec built-ins
 │   ├── source/                            # Block 10.2
@@ -2868,6 +2889,55 @@ Block 10.0 (BlitzService / BlitzConfig / NATS connection)
 
 ---
 
+### Error types (`src/errors/`)
+
+All `@helios/blitz` errors extend `BlitzError`. Operators signal recoverable failures via
+`NakError`; the fault policy (retry / dead-letter) consults this type at runtime.
+
+```typescript
+// src/errors/BlitzError.ts
+export class BlitzError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+// src/errors/NakError.ts
+/** Thrown by an operator `fn` to signal that the current message should be nak'd.
+ *  The retry policy determines whether it is redelivered or sent to the dead-letter stream. */
+export class NakError extends BlitzError {
+  constructor(
+    message: string,
+    /** Delay in ms before redelivery (0 = immediate). Overrides RetryPolicy.delayMs for this message. */
+    public readonly nakDelayMs?: number,
+    cause?: unknown,
+  ) {
+    super(message, cause);
+  }
+}
+
+// src/errors/DeadLetterError.ts
+/** Thrown when retry policy is exhausted. BlitzService routes to DeadLetterSink. */
+export class DeadLetterError extends BlitzError {
+  constructor(
+    message: string,
+    public readonly originalError: unknown,
+    public readonly deliveryCount: number,
+  ) {
+    super(message, originalError);
+  }
+}
+
+// src/errors/PipelineError.ts
+/** Structural pipeline error (cycle detected, no source, disconnected graph). */
+export class PipelineError extends BlitzError {}
+```
+
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 14 (NakError was referenced but never defined)
+
+---
+
 ### Block 10.0 — Package scaffold + NATS connection management (~10 tests)
 
 ```
@@ -2904,6 +2974,7 @@ const kvm = new Kvm(nc);
 
 **TODO — Block 10.0**:
 - [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@helios/core`), `tsconfig.json` (paths: `@helios/core/* → ../../src/*`), `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
+- [ ] Implement `src/errors/` — `BlitzError`, `NakError`, `DeadLetterError`, `PipelineError`
 - [ ] Add `nats-server` to `packages/blitz/` devDependencies (binary for integration tests — see Phase 10 test infrastructure section above)
 - [ ] Implement `BlitzConfig` (NATS URL, KV bucket prefix, stream retention defaults)
 - [ ] Implement `BlitzService.connect()` — opens NATS connection via `connect()` from `@nats-io/transport-node`; creates `js` + `jsm` via `@nats-io/jetstream`; creates `kvm` via `new Kvm(nc)` from `@nats-io/kv`
@@ -2950,7 +3021,7 @@ starts the consumer loop for each vertex.
 - [ ] Implement `Edge` (NATS subject name derived from vertex names)
 - [ ] Implement `Pipeline` fluent builder (readFrom → operator chain → writeTo)
 - [ ] Implement `Pipeline.withParallelism(n: number): this` — when set, routes events to N subject shards using `hash(groupingKey) % N`; each shard consumed by exactly one worker; without `withParallelism()` the pipeline runs as a single ordered consumer (required for correctness of grouped aggregations — see Issue 13 in `HELIOS_BLITZ_IMPLEMENTATION.md`)
-- [ ] Implement DAG validation (cycle detection, connectivity check)
+- [ ] Implement DAG validation — throws `PipelineError` on: cycle detected, no source vertex, no sink vertex, disconnected subgraph
 - [ ] Implement `blitz.submit(pipeline)` — starts all vertex consumer loops
 - [ ] Implement `blitz.cancel(pipelineName)` — graceful shutdown of all loops
 - [ ] Tests: simple linear pipeline, fork (branch), merge (fan-in), cycle detection error, submit/cancel lifecycle
@@ -2961,12 +3032,70 @@ starts the consumer loop for each vertex.
 
 ### Block 10.2 — Sources + sinks (~30 tests)
 
+#### Codec contract
+
+In NATS v3, `JSONCodec`/`StringCodec` are removed. All payloads are raw `Uint8Array`.
+`@helios/blitz` introduces a `BlitzCodec<T>` interface so every source/sink has an explicit
+wire format:
+
+```typescript
+// src/codec/BlitzCodec.ts
+export interface BlitzCodec<T> {
+  /** Deserialize raw NATS payload bytes into a typed value. */
+  decode(payload: Uint8Array): T;
+  /** Serialize a typed value to NATS payload bytes. */
+  encode(value: T): Uint8Array;
+}
+
+/** Built-in: JSON codec. encode = JSON.stringify → TextEncoder; decode = TextDecoder → JSON.parse */
+export const JsonCodec = <T>(): BlitzCodec<T> => ({
+  decode: (b) => JSON.parse(new TextDecoder().decode(b)) as T,
+  encode: (v) => new TextEncoder().encode(JSON.stringify(v)),
+});
+
+/** Built-in: raw string codec */
+export const StringCodec = (): BlitzCodec<string> => ({
+  decode: (b) => new TextDecoder().decode(b),
+  encode: (s) => new TextEncoder().encode(s),
+});
+
+/** Built-in: passthrough — payload is already Uint8Array */
+export const BytesCodec = (): BlitzCodec<Uint8Array> => ({
+  decode: (b) => b,
+  encode: (b) => b,
+});
+```
+
+The `Source<T>` interface requires a codec; messages are emitted already decoded:
+
+```typescript
+// src/source/Source.ts
+export interface Source<T> {
+  readonly codec: BlitzCodec<T>;
+  messages(): AsyncIterable<{ value: T; ack(): void; nak(delay?: number): void }>;
+}
+```
+
+Factory signatures include a codec parameter:
+
+```typescript
+NatsSource.fromSubject<Order>('orders.raw', JsonCodec<Order>())
+NatsSource.fromStream<Order>('order-stream', 'order-consumer', JsonCodec<Order>())
+```
+
+Sinks also accept a codec and encode on send:
+
+```typescript
+NatsSink.toSubject('orders.enriched', JsonCodec<EnrichedOrder>())
+NatsSink.toStream('order-stream', JsonCodec<EnrichedOrder>())
+```
+
 #### Sources
 
 | Source | Backed by | Mode |
 |---|---|---|
-| `NatsSource.fromSubject(subj)` | Core NATS push subscription | Streaming (unbounded) |
-| `NatsSource.fromStream(stream, consumer)` | JetStream durable consumer | Streaming + replayable |
+| `NatsSource.fromSubject(subj, codec)` | Core NATS push subscription | Streaming (unbounded) |
+| `NatsSource.fromStream(stream, consumer, codec)` | JetStream durable consumer | Streaming + replayable |
 | `HeliosMapSource.snapshot(map)` | Helios `IMap.entrySet()` | Batch (bounded) |
 | `HeliosTopicSource.fromTopic(topic)` | Helios `ITopic.addMessageListener` | Streaming (unbounded) |
 | `FileSource.lines(path)` | `Bun.file(path)` line iterator | Batch (bounded) |
@@ -2976,24 +3105,27 @@ starts the consumer loop for each vertex.
 
 | Sink | Backed by | Notes |
 |---|---|---|
-| `NatsSink.toSubject(subj)` | `nc.publish()` | Fire-and-forget |
-| `NatsSink.toStream(stream)` | `js.publish()` | Durable, ack-able |
+| `NatsSink.toSubject(subj, codec)` | `nc.publish()` (encodes via codec) | Fire-and-forget |
+| `NatsSink.toStream(stream, codec)` | `js.publish()` from `@nats-io/jetstream` (encodes via codec) | Durable, ack-able |
 | `HeliosMapSink.put(map)` | `IMap.put()` | Key extracted from message |
 | `HeliosTopicSink.publish(topic)` | `ITopic.publish()` | Broadcast |
 | `FileSink.appendLines(path)` | `Bun.write()` append | Batch output |
 | `LogSink.console()` | `console.log` | Debug / testing |
 
 **TODO — Block 10.2**:
-- [ ] Implement all sources above with typed `AsyncIterable<Msg>` interface
-- [ ] Implement all sinks above with typed `write(msg): Promise<void>` interface
+- [ ] Implement `BlitzCodec<T>` interface with `JsonCodec`, `StringCodec`, `BytesCodec` built-ins (`src/codec/BlitzCodec.ts`)
+- [ ] Implement all sources above; `Source<T>` interface: `readonly codec: BlitzCodec<T>` + `messages(): AsyncIterable<{ value: T; ack(); nak() }>`
+- [ ] All NATS sources accept a `codec: BlitzCodec<T>` parameter — decode raw `Uint8Array` payload on receive
+- [ ] Implement all sinks above with typed `write(value: T): Promise<void>` interface
+- [ ] All NATS sinks accept a `codec: BlitzCodec<T>` parameter — encode `T` to `Uint8Array` on send
 - [ ] NATS source: handle subject wildcards, consumer group (queue subscription) mode
 - [ ] JetStream source: durable consumer, `maxAckPending` back-pressure, sequence tracking
 - [ ] Helios sources/sinks: wire to `@helios/core` IMap / ITopic interfaces
 - [ ] FileSource: streaming line-by-line read via `Bun.file().stream()` + TextDecoderStream
 - [ ] HttpWebhookSource: `Bun.serve()` with configurable path + JSON body parsing
-- [ ] Tests: each source produces expected messages; each sink receives + records messages; round-trip source→sink
+- [ ] Tests: each source produces expected messages (decoded); each sink receives + records messages (encoded); round-trip source→sink
 - [ ] GREEN
-- [ ] `git commit -m "feat(blitz): sources + sinks — 30 tests green"`
+- [ ] `git commit -m "feat(blitz): codec contract + sources + sinks — 30 tests green"`
 
 ---
 
@@ -3009,8 +3141,10 @@ src/operator/
 └── PeekOperator.ts      # peek(fn) — observe without transforming (for debug/metrics)
 ```
 
-All operators are async-first: `fn` may return a `Promise`. Errors in `fn` surface as
-`NakError` and trigger the fault policy (retry / dead-letter).
+All operators are async-first: `fn` may return a `Promise`. Errors in `fn` that extend
+`NakError` trigger the fault policy (retry / dead-letter) — see `src/errors/NakError.ts`.
+Other errors are wrapped in a `NakError` automatically. Operators should
+`throw new NakError(...)` for recoverable errors.
 
 **TODO — Block 10.3**:
 - [ ] Implement each operator as a `Stage` subclass with `process()` method
@@ -3130,13 +3264,30 @@ Grouped aggregations (equivalent to Jet's `groupingKey`):
 // emits: Map<region, count> per window
 ```
 
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 13 (NATS queue groups have no key-affinity routing)
+
+**Grouped aggregation correctness — parallelism modes:**
+
+Grouped aggregations (`byKey`) are correct by construction in two modes only:
+
+- **Mode 1 — Single worker (default, always correct):** A pipeline with `.aggregate(agg.byKey(fn))` runs as a single consumer (not a queue group). Ordering and key-affinity are guaranteed. Throughput is limited to one node.
+
+- **Mode 2 — Parallel workers with key-partitioned subjects:** When `.withParallelism(N)` is set, the pipeline publishes each event to a deterministic subject based on the key hash:
+  ```
+  subject = `blitz.{pipelineName}.keyed.${Math.abs(hash(keyFn(event))) % N}`
+  ```
+  Worker `i` subscribes only to `blitz.{pipelineName}.keyed.i`. All events for the same key always go to the same worker. No combiner needed.
+
+**Warning:** Grouped aggregations (`byKey`) MUST NOT be used with plain NATS queue groups, as queue groups distribute messages round-robin with no key-affinity. Each worker would hold only a partial count for any given key, producing silently wrong results.
+
 **TODO — Block 10.5**:
 - [ ] Implement `Aggregator<T, A, R>` interface (matches Block 1.4 contract)
 - [ ] Implement all 6 concrete aggregators (reuse/adapt from `@helios/core` where possible)
 - [ ] Implement `AggregatingOperator`: consume closed window from `WindowOperator`, run accumulation loop, emit result
 - [ ] Implement `byKey(keyFn)` grouping variant on each aggregator
-- [ ] Implement combiner path for parallel partial aggregates (NATS queue group workers each compute partial; merge step combines)
-- [ ] Tests: each aggregator produces correct result; grouped aggregation; parallel combiner; streaming aggregation without windowing (whole-stream running total)
+- [ ] Tests: each aggregator produces correct result; grouped aggregation; streaming aggregation without windowing (whole-stream running total)
+- [ ] Test (a): single-worker grouped aggregation correctness (`byKey` with one consumer produces exact per-key counts)
+- [ ] Test (b): `withParallelism(N)` routes same-key events to the same shard across N workers — no cross-shard key splits
 - [ ] GREEN
 - [ ] `git commit -m "feat(blitz): stateful aggregations (count/sum/min/max/avg/distinct) — 30 tests green"`
 
@@ -3762,12 +3913,12 @@ Depends on: Phase 8 (near-cache wiring complete), Phase 7.4 (full IMap interface
 
 | Block | What | New Tests |
 |-------|------|-----------|
-| **Block 12.A1** | `MapStoreConfig` (with `_factory` + `_implementation`, mutually exclusive), `MapStoreFactory`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` | ~20 |
-| **Block 12.A2** | `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + retry), `StoreWorker` (background timer), `WriteBehindStore`, `MapStoreContext` (factory-first resolution: factory > impl) | ~33 |
-| **Block 12.A3** | IMap async migration (11 methods → `Promise`), migration script, `MapProxy` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` update, `MapContainerService` store lifecycle, integration tests | ~5 new + all existing green |
+| **Block 12.A1** | `MapStoreConfig` (with `_factoryImplementation` + `_implementation`, mutually exclusive), `MapStoreFactory`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` | ~22 |
+| **Block 12.A2** | `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + retry), `StoreWorker` (background timer), `WriteBehindStore`, `MapStoreContext` (factory-first resolution: factory > impl) | ~37 |
+| **Block 12.A3** | IMap async migration (11 methods → `Promise`), migration script, `MapProxy` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` update, `MapContainerService` store lifecycle, integration tests | ~12 new + all existing green |
 | **Block 12.B** | `packages/s3/` — `S3MapStore` + `S3MapStore.factory()` using `@aws-sdk/client-s3` | ~14 |
 | **Block 12.C** | `packages/mongodb/` — `MongoMapStore` + `MongoMapStore.factory()` using `mongodb` driver | ~14 |
-| **Block 12.D** | `packages/turso/` — `TursoMapStore` + `TursoMapStore.factory()` using `@libsql/client` (in-memory SQLite tests) | ~16 |
+| **Block 12.D** | `packages/turso/` — `TursoMapStore` + `TursoMapStore.factory()` using `@libsql/client` (in-memory SQLite tests) | ~18 |
 
 Blocks A1 → A2 → A3 are strictly sequential. Blocks B/C/D are independent of each other (all require only A3 complete).
 
@@ -3775,8 +3926,8 @@ Blocks A1 → A2 → A3 are strictly sequential. Blocks B/C/D are independent of
 
 - **IMap methods become async** (`put()` → `Promise<V | null>`): Required for write-through persistence. RecordStore stays sync.
 - **MapDataStore operates on deserialized K,V**: No Data-object layer for store calls.
-- **`MapStoreFactory` — the canonical multi-map integration path** (mirrors Java's `MapStoreFactory<K,V>`): A factory produces a distinct, per-map-name store instance from shared connection config (e.g. one S3 prefix per map, one Mongo collection per map, one SQLite table per map). Set via `MapStoreConfig.setFactory(factory)`. Takes priority over `setImplementation()` in `MapStoreContext.create()`. The two fields are mutually exclusive: setting one clears the other. Every extension package exposes `XxxMapStore.factory(baseConfig)` as its primary wiring API.
-- **Two integration paths per extension package**: `setImplementation(new S3MapStore(config))` for single-map wiring with full manual control; `setFactory(S3MapStore.factory(baseConfig))` for multi-map wiring where the factory scopes each store instance by map name.
+- **`MapStoreFactory` — the canonical multi-map integration path** (mirrors Java's `MapStoreFactory<K,V>`): A factory produces a distinct, per-map-name store instance from shared connection config (e.g. one S3 prefix per map, one Mongo collection per map, one SQLite table per map). Set via `MapStoreConfig.setFactoryImplementation(factory)`. Takes priority over `setImplementation()` in `MapStoreContext.create()`. The two fields (`_factoryImplementation` / `_implementation`) are mutually exclusive: setting one clears the other. Every extension package exposes `XxxMapStore.factory(baseConfig)` as its primary wiring API.
+- **Two integration paths per extension package**: `setImplementation(new S3MapStore(config))` for single-map wiring with full manual control; `setFactoryImplementation(S3MapStore.factory(baseConfig))` for multi-map wiring where the factory scopes each store instance by map name.
 - **Write-behind uses `setInterval(1000)`**: StoreWorker drains queue every 1 second.
 - **Coalescing queue**: `Map<string, DelayedEntry>` — latest write per key wins.
 - **Retry policy**: 3 retries with 1s delay, then fall back to single-entry stores.
@@ -3976,17 +4127,17 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 11.6** — `app/` migration + e2e REST acceptance (all 4 groups, real instance, fetch) — ~8 tests
 - [ ] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green
 
-### Phase 12 — MapStore SPI + Extension Packages (~93 tests) ← **CURRENT**
+### Phase 12 — MapStore SPI + Extension Packages (~117 tests) ← **CURRENT**
 
 > Implementation spec: `plans/MAPSTORE_EXTENSION_PLAN.md` — read it before executing any Block 12.X.
 
-- [ ] **Block 12.A1** — `MapStoreConfig` (add `_factory` field + `setFactory()`/`getFactory()`; `setFactory` clears `_implementation` and vice versa), `MapStoreFactory` interface (`newMapStore(mapName, properties)` — factory-first resolution, mirrors Java `MapStoreFactory`), `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` — ~20 tests
-- [ ] **Block 12.A2** — `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + 3x retry + single-entry fallback), `StoreWorker` (setInterval, flush-on-shutdown), `WriteBehindStore`, `MapStoreContext` (factory-first impl resolution: factory.newMapStore() > getImplementation(); lifecycle + EAGER initial load) — ~33 tests
-- [ ] **Block 12.A3** — IMap async migration: run `scripts/async-imap-migration.sh`, update `IMap.ts` (11 methods → `Promise`), async `MapProxy`, lazy `MapDataStore` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` signature update, `MapContainerService` store lifecycle, integration tests — all ~2,271 existing + ~5 new green
+- [ ] **Block 12.A1** — `MapStoreConfig` (add `_factoryImplementation` field + `setFactoryImplementation()`/`getFactoryImplementation()`; setting one clears the other — mutually exclusive with `_implementation`), `MapStoreFactory` interface (`newMapStore(mapName, properties)` — factory-first resolution, mirrors Java `MapStoreFactory`), `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` — ~22 tests
+- [ ] **Block 12.A2** — `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + 3x retry + single-entry fallback), `StoreWorker` (setInterval, flush-on-shutdown), `WriteBehindStore`, `MapStoreContext` (factory-first impl resolution: `getFactoryImplementation().newMapStore()` > `getImplementation()`; lifecycle + EAGER initial load) — ~37 tests
+- [ ] **Block 12.A3** — IMap async migration: run `scripts/async-imap-codemod.ts --write`, update `IMap.ts` (11 methods → `Promise`), async `MapProxy`, lazy `MapDataStore` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` signature update, `MapContainerService` store lifecycle, integration tests — all ~2,271 existing + ~12 new green
 - [ ] **Block 12.B** — `packages/s3/` (`@helios/s3`): `S3MapStore` + `S3Config` + `S3MapStore.factory(baseConfig)` (factory scopes prefix by map name), mock-S3-client tests, factory tests (2), workspace wiring — ~14 tests
 - [ ] **Block 12.C** — `packages/mongodb/` (`@helios/mongodb`): `MongoMapStore` + `MongoConfig` + `MongoMapStore.factory(baseConfig)` (factory scopes collection by map name), mock-collection tests, factory tests (2), workspace wiring — ~14 tests
-- [ ] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig` + `TursoMapStore.factory(baseConfig)` (factory scopes tableName by map name), real in-memory SQLite tests (`:memory:`), factory tests (2), workspace wiring — ~16 tests
-- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~103 new tests green, all existing tests still green
+- [ ] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig` + `TursoMapStore.factory(baseConfig)` (factory scopes tableName by map name), real in-memory SQLite tests (`:memory:`), factory tests (2), workspace wiring — ~18 tests
+- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~117 new tests green, all existing tests still green
 
 ---
 
@@ -4045,4 +4196,4 @@ bun run build
 
 ---
 
-*Plan v9.3 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~93 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.3: production hardening pass — see plans/HELIOS_BLITZ_IMPLEMENTATION.md for full cross-reference*
+*Plan v9.3 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.3: production hardening pass — see plans/HELIOS_BLITZ_IMPLEMENTATION.md for full cross-reference*
