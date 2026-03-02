@@ -1,7 +1,8 @@
 /**
  * Configuration for the Helios Blitz stream processing engine.
  *
- * Controls NATS server connection, KV bucket naming, and JetStream stream defaults.
+ * Controls NATS server connection, KV bucket naming, JetStream stream defaults,
+ * and checkpoint / fault-tolerance settings.
  */
 export interface BlitzConfig {
     /**
@@ -39,7 +40,7 @@ export interface BlitzConfig {
     readonly connectTimeoutMs?: number;
 
     /**
-     * Reconnect wait time in milliseconds.
+     * Reconnect wait time in milliseconds between reconnect attempts.
      * @default 2000
      */
     readonly reconnectWaitMs?: number;
@@ -49,6 +50,27 @@ export interface BlitzConfig {
      * @default -1
      */
     readonly maxReconnectAttempts?: number;
+
+    /**
+     * Pending outbound message limit in bytes for core NATS publishes during reconnect.
+     * The NATS client buffers outbound messages during reconnect up to this limit.
+     * @default 536870912  (512 MiB)
+     */
+    readonly natsPendingLimit?: number;
+
+    /**
+     * Number of acks between checkpoint writes (CheckpointManager).
+     * A lower value = more frequent checkpoints = less replay on restart.
+     * @default 100
+     */
+    readonly checkpointIntervalAcks?: number;
+
+    /**
+     * Time interval in milliseconds between checkpoint writes (CheckpointManager).
+     * Whichever of acks or ms fires first triggers a checkpoint.
+     * @default 5000
+     */
+    readonly checkpointIntervalMs?: number;
 }
 
 /**
@@ -68,5 +90,8 @@ export function resolveBlitzConfig(config: BlitzConfig): ResolvedBlitzConfig {
         connectTimeoutMs: config.connectTimeoutMs ?? 5000,
         reconnectWaitMs: config.reconnectWaitMs ?? 2000,
         maxReconnectAttempts: config.maxReconnectAttempts ?? -1,
+        natsPendingLimit: config.natsPendingLimit ?? 536_870_912,
+        checkpointIntervalAcks: config.checkpointIntervalAcks ?? 100,
+        checkpointIntervalMs: config.checkpointIntervalMs ?? 5000,
     };
 }

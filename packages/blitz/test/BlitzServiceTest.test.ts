@@ -5,35 +5,40 @@
  * In CI: NATS_URL=nats://localhost:4222
  * Locally: set NATS_URL to point at a running nats-server -js
  */
-if (!process.env['NATS_URL'] && !process.env['CI']) {
-    console.warn('[blitz] Skipping NATS integration tests — set NATS_URL or CI=true to run');
-    process.exit(0);
-}
-
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { BlitzService } from '../src/BlitzService.ts';
 
+const NATS_AVAILABLE = !!process.env['NATS_URL'] || !!process.env['CI'];
 const NATS_URL = process.env['NATS_URL'] ?? 'nats://localhost:4222';
 
-let natsServer: ReturnType<typeof Bun.spawn> | null = null;
+describe.skipIf(!NATS_AVAILABLE)('BlitzService — NATS integration', () => {
+    let natsServer: ReturnType<typeof Bun.spawn> | null = null;
 
-// Spawn a local nats-server if CI is set but NATS_URL not explicitly given
-if (process.env['CI'] && !process.env['NATS_URL']) {
     beforeAll(async () => {
-        natsServer = Bun.spawn(['nats-server', '-js', '-p', '4222'], {
-            stdout: 'ignore',
-            stderr: 'ignore',
-        });
-        // Give server a moment to start
-        await Bun.sleep(300);
+        if (!process.env['NATS_URL']) {
+            // CI=true but no explicit NATS_URL — spawn a local server
+            natsServer = Bun.spawn(
+                [require.resolve('nats-server/bin/nats-server'), '-js', '-p', '4222'],
+                { stdout: 'ignore', stderr: 'ignore' },
+            );
+            // Health-poll: wait until NATS accepts connections (up to 3s)
+            const { connect } = await import('@nats-io/transport-node');
+            for (let i = 0; i < 30; i++) {
+                try {
+                    const nc = await connect({ servers: 'nats://localhost:4222', timeout: 500 });
+                    await nc.close();
+                    break;
+                } catch {
+                    await Bun.sleep(100);
+                }
+            }
+        }
     });
 
     afterAll(() => {
         natsServer?.kill();
     });
-}
 
-describe('BlitzService', () => {
     describe('connect / shutdown', () => {
         it('connects to NATS server', async () => {
             const blitz = await BlitzService.connect({ servers: NATS_URL });

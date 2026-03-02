@@ -2,15 +2,21 @@ import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager, type JetStreamClient, type JetStreamManager } from '@nats-io/jetstream';
 import { Kvm, type KvManager } from '@nats-io/kv';
 import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from './BlitzConfig.ts';
+import { BlitzEvent } from './BlitzEvent.ts';
+
+/** Listener for BlitzEvents emitted by BlitzService. */
+export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
 
 /**
  * BlitzService — top-level entry point for the Helios Blitz stream processing engine.
  *
  * Owns the NATS connection lifecycle: connect, expose JetStream/KV handles, shutdown.
+ * Subscribes to `nc.status()` and emits {@link BlitzEvent}s for reconnect and error conditions.
  *
  * Usage:
  * ```typescript
  * const blitz = await BlitzService.connect({ servers: 'nats://localhost:4222' });
+ * blitz.on((event) => console.log('BlitzEvent:', event));
  * // ... use blitz.js, blitz.jsm, blitz.kvm ...
  * await blitz.shutdown();
  * ```
@@ -32,6 +38,7 @@ export class BlitzService {
     readonly kvm: KvManager;
 
     private _closed = false;
+    private readonly _listeners: BlitzEventListener[] = [];
 
     private constructor(
         config: ResolvedBlitzConfig,
@@ -45,6 +52,9 @@ export class BlitzService {
         this.js = js;
         this.jsm = jsm;
         this.kvm = kvm;
+
+        // Subscribe to NATS status events and forward as BlitzEvents.
+        this._subscribeToStatus();
     }
 
     /**
@@ -63,6 +73,7 @@ export class BlitzService {
                 ? undefined
                 : resolved.maxReconnectAttempts,
             reconnectTimeWait: resolved.reconnectWaitMs,
+            pendingLimit: resolved.natsPendingLimit,
         });
 
         const js = jetstream(nc);
@@ -80,6 +91,26 @@ export class BlitzService {
     }
 
     /**
+     * Register a listener for BlitzEvents.
+     * The listener receives the event type and an optional detail payload.
+     */
+    on(listener: BlitzEventListener): this {
+        this._listeners.push(listener);
+        return this;
+    }
+
+    /**
+     * Remove a previously registered BlitzEvent listener.
+     */
+    off(listener: BlitzEventListener): this {
+        const idx = this._listeners.indexOf(listener);
+        if (idx !== -1) {
+            this._listeners.splice(idx, 1);
+        }
+        return this;
+    }
+
+    /**
      * Gracefully drain and close the NATS connection.
      *
      * Drain ensures in-flight messages are delivered before the connection closes.
@@ -91,5 +122,34 @@ export class BlitzService {
         }
         this._closed = true;
         await this.nc.drain();
+    }
+
+    private _emit(event: BlitzEvent, detail?: unknown): void {
+        for (const listener of this._listeners) {
+            try {
+                listener(event, detail);
+            } catch {
+                // swallow listener errors — do not let them crash the service
+            }
+        }
+    }
+
+    private _subscribeToStatus(): void {
+        // nc.status() returns an async iterable of StatusEvent objects.
+        // We consume it in a detached async task so it doesn't block connect().
+        (async () => {
+            for await (const s of this.nc.status()) {
+                if (s.type === 'reconnecting') {
+                    this._emit(BlitzEvent.NATS_RECONNECTING, s);
+                } else if (s.type === 'reconnect') {
+                    this._emit(BlitzEvent.NATS_RECONNECTED, s);
+                }
+                // Other status types (disconnect, error, etc.) are not mapped
+                // to BlitzEvents at Block 10.0 — pipeline-level events are
+                // emitted by Pipeline.cancel() and individual stage operators.
+            }
+        })().catch(() => {
+            // Status iterator closes when the connection closes — swallow.
+        });
     }
 }
