@@ -10,6 +10,34 @@
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
     },
+    "./cache": {
+      "import": "./dist/src/cache.js",
+      "types": "./dist/src/cache.d.ts"
+    },
+    "./transaction": {
+      "import": "./dist/src/transaction.js",
+      "types": "./dist/src/transaction.d.ts"
+    },
+    "./health": {
+      "import": "./dist/src/health.js",
+      "types": "./dist/src/health.d.ts"
+    },
+    "./events": {
+      "import": "./dist/src/events.js",
+      "types": "./dist/src/events.d.ts"
+    },
+    "./decorators": {
+      "import": "./dist/src/decorators.js",
+      "types": "./dist/src/decorators.d.ts"
+    },
+    "./autoconfiguration": {
+      "import": "./dist/src/autoconfiguration.js",
+      "types": "./dist/src/autoconfiguration.d.ts"
+    },
+    "./context": {
+      "import": "./dist/src/context.js",
+      "types": "./dist/src/context.d.ts"
+    },
     "./*": {
       "import": "./dist/src/*.js",
       "types": "./dist/src/*.d.ts"

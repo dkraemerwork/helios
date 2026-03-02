@@ -2717,7 +2717,7 @@ for all of these:
 |---|---|
 | Durable stream source | JetStream stream + consumer (replay from any offset) |
 | At-least-once delivery | JetStream explicit `ack()` / `nak()` |
-| Distributed parallel workers | NATS queue groups (push consumer + queue subscription) |
+| Distributed parallel workers | Subject-partitioned NATS consumers (`withParallelism(N)` → hash(key) % N routing) |
 | Window / aggregation state | NATS KV Store (key-value, TTL-aware) |
 | Stream-table join (side input) | Helios `IMap` lookup + NATS KV |
 | Batch processing | JetStream bounded replay (deliver-all + `EndOfStream` detection) |
@@ -2785,18 +2785,20 @@ This ensures `bun test` at the workspace root never fails in environments withou
 
 ```
 packages/blitz/                              # @helios/blitz
-├── package.json                           # deps: nats, @helios/core
+├── package.json                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
 ├── tsconfig.json                          # paths: @helios/core/* → ../../src/*
 ├── bunfig.toml
 ├── src/
 │   ├── index.ts                           # barrel export
-│   ├── Pipeline.ts                        # fluent DAG builder (Block 10.1)
+│   ├── Pipeline.ts                        # fluent DAG builder (Block 10.1); includes withParallelism(n)
 │   ├── Vertex.ts / Edge.ts               # DAG node + edge (Block 10.1)
 │   ├── Stage.ts                           # processing stage base (Block 10.1)
 │   ├── BlitzService.ts                      # top-level entry point (Block 10.0)
 │   ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0)
+│   ├── codec/                             # Block 10.2
+│   │   └── BlitzCodec.ts                  # BlitzCodec<T> interface + JsonCodec/StringCodec/BytesCodec built-ins
 │   ├── source/                            # Block 10.2
-│   │   ├── Source.ts                      # interface
+│   │   ├── Source.ts                      # interface (requires codec: BlitzCodec<T>)
 │   │   ├── NatsSource.ts                  # read from NATS subject / JetStream stream
 │   │   ├── HeliosMapSource.ts             # Helios IMap snapshot → bounded stream
 │   │   ├── HeliosTopicSource.ts           # Helios ITopic → unbounded stream
@@ -2870,12 +2872,12 @@ Block 10.0 (BlitzService / BlitzConfig / NATS connection)
 
 ```
 packages/blitz/
-├── package.json            # @helios/blitz | deps: nats@^2, @helios/core
+├── package.json            # @helios/blitz | deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
 ├── tsconfig.json           # paths: @helios/core/* → ../../src/*
 ├── bunfig.toml             # no reflect-metadata needed
 └── src/
     ├── BlitzConfig.ts        # NATS server URL(s), stream/consumer defaults, KV bucket names
-    └── BlitzService.ts       # connect() → NatsConnection + JsClient + KvManager lifecycle
+    └── BlitzService.ts       # connect() via @nats-io/transport-node; js/jsm via @nats-io/jetstream; kvm via @nats-io/kv
 ```
 
 `BlitzService` owns the NATS connection lifecycle. It is the single entry point:
@@ -2885,13 +2887,26 @@ const pipeline = blitz.pipeline('order-processing');
 await blitz.shutdown();
 ```
 
+Internally `BlitzService.connect()` uses the v3 scoped packages:
+```typescript
+import { connect } from '@nats-io/transport-node';
+import { jetstream, jetstreamManager } from '@nats-io/jetstream';
+import { Kvm } from '@nats-io/kv';
+
+// In BlitzService.connect():
+const nc = await connect({ servers: config.servers });
+const js = jetstream(nc);
+const jsm = jetstreamManager(nc);
+const kvm = new Kvm(nc);
+```
+
 > ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issues 6 & 7 (workspace already configured; NATS test infrastructure)
 
 **TODO — Block 10.0**:
-- [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `nats@^2`, `@helios/core`), `tsconfig.json` (paths: `@helios/core/* → ../../src/*`), `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
+- [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@helios/core`), `tsconfig.json` (paths: `@helios/core/* → ../../src/*`), `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
 - [ ] Add `nats-server` to `packages/blitz/` devDependencies (binary for integration tests — see Phase 10 test infrastructure section above)
 - [ ] Implement `BlitzConfig` (NATS URL, KV bucket prefix, stream retention defaults)
-- [ ] Implement `BlitzService.connect()` — opens NATS connection, creates JetStream manager + KV manager
+- [ ] Implement `BlitzService.connect()` — opens NATS connection via `connect()` from `@nats-io/transport-node`; creates `js` + `jsm` via `@nats-io/jetstream`; creates `kvm` via `new Kvm(nc)` from `@nats-io/kv`
 - [ ] Implement `BlitzService.shutdown()` — graceful drain + close
 - [ ] Tests: connect/disconnect, config defaults, error on bad server (integration — requires NATS_URL)
 - [ ] GREEN
@@ -2914,13 +2929,16 @@ The Pipeline API mirrors Hazelcast Jet's `Pipeline` / `GeneralStage` model:
 ```typescript
 const p = blitz.pipeline('orders');
 
-p.readFrom(NatsSource.fromSubject('orders.raw'))
+p.readFrom(NatsSource.fromSubject<Order>('orders.raw', JsonCodec<Order>()))
  .map(order => ({ ...order, total: order.qty * order.price }))
  .filter(order => order.total > 100)
- .writeTo(NatsSink.toSubject('orders.enriched'));
+ .writeTo(NatsSink.toSubject('orders.enriched', JsonCodec<EnrichedOrder>()));
 
 await blitz.submit(p);
 ```
+
+`JsonCodec<T>()` is from `@helios/blitz/codec` — it decodes the raw `Uint8Array` NATS payload
+into `T` on receive and encodes `T` back to `Uint8Array` on send (see Block 10.2 codec spec).
 
 Internally, each `.map()` / `.filter()` / `.writeTo()` call appends a `Vertex` and
 wires an `Edge` (backed by an intermediate NATS subject) between consecutive vertices.
@@ -2931,6 +2949,7 @@ starts the consumer loop for each vertex.
 - [ ] Implement `Vertex` (name, stage ref, in-edges, out-edges)
 - [ ] Implement `Edge` (NATS subject name derived from vertex names)
 - [ ] Implement `Pipeline` fluent builder (readFrom → operator chain → writeTo)
+- [ ] Implement `Pipeline.withParallelism(n: number): this` — when set, routes events to N subject shards using `hash(groupingKey) % N`; each shard consumed by exactly one worker; without `withParallelism()` the pipeline runs as a single ordered consumer (required for correctness of grouped aggregations — see Issue 13 in `HELIOS_BLITZ_IMPLEMENTATION.md`)
 - [ ] Implement DAG validation (cycle detection, connectivity check)
 - [ ] Implement `blitz.submit(pipeline)` — starts all vertex consumer loops
 - [ ] Implement `blitz.cancel(pipelineName)` — graceful shutdown of all loops
@@ -3015,12 +3034,48 @@ src/window/
 ├── TumblingWindowPolicy.ts   # size = duration; windows never overlap
 ├── SlidingWindowPolicy.ts    # size = duration, slide = duration; windows overlap
 ├── SessionWindowPolicy.ts    # gap = duration; new window after inactivity
-├── WindowState.ts            # NATS KV bucket per pipeline: key=windowKey, value=accumulator[]
+├── WindowState.ts            # NATS KV bucket per pipeline (`blitz.{pipelineName}.windows`): typed put/get/delete/list; TTL = safety backstop only; explicit delete() after window close
 └── WindowOperator.ts         # buffers events per window key; emits on close trigger
 ```
 
 Window state is stored in the **NATS KV Store** — this makes window state durable across
 process restarts (fault tolerance for free).
+
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 12 (NATS KV TTL is per-bucket, not per-key)
+
+**`WindowState` design — explicit deletion + bucket TTL backstop:**
+
+`WindowState` uses one NATS KV bucket per pipeline (name: `blitz.{pipelineName}.windows`).
+
+TTL is set at bucket level to `maxWindowDuration * 3` as a safety backstop only —
+primary cleanup is explicit deletion after window close:
+
+```
+Lifecycle contract (enforced by WindowOperator):
+  1. On event:        kv.put(windowKey, serialize(accumulator))
+  2. On window CLOSE: kv.delete(windowKey) AFTER emitting the result.
+                      If emit fails (downstream error), kv.delete is NOT called —
+                      window remains for retry.
+  3. Bucket TTL (safety backstop): windowPolicy.maxDurationMs * 3.
+                      Default: TumblingWindow → size*3, SlidingWindow → size*3,
+                               SessionWindow → gapMs*6.
+                      Catches leaked state from crashes between emit and delete.
+  4. WindowState interface: put(key, acc), get(key), delete(key), list() — all typed.
+```
+
+`WindowState` interface:
+```typescript
+interface WindowState<A> {
+    put(key: WindowKey, accumulator: A): Promise<void>;
+    get(key: WindowKey): Promise<A | null>;
+    delete(key: WindowKey): Promise<void>;   // called explicitly after every successful window emit
+    list(): Promise<WindowKey[]>;
+}
+```
+
+`WindowOperator` after emitting a closed window's result calls `windowState.delete(windowKey)`.
+Deletion failure is logged but does not block pipeline progress — the bucket TTL backstop
+will clean it up.
 
 Window close trigger strategies:
 - **Event-time watermark**: downstream message with `ts >= windowEnd + allowedLateness`
@@ -3039,9 +3094,12 @@ p.readFrom(NatsSource.fromStream('clickstream'))
 - [ ] Implement `TumblingWindowPolicy` (non-overlapping, fixed-duration)
 - [ ] Implement `SlidingWindowPolicy` (overlapping, size + slide)
 - [ ] Implement `SessionWindowPolicy` (gap-based; extend or close on inactivity)
-- [ ] Implement `WindowState` backed by NATS KV (create bucket, get/set/delete window accumulator)
-- [ ] Implement `WindowOperator`: route each event to its window key(s) in KV; close + emit on trigger; handle late arrivals up to `allowedLateness`
+- [ ] Implement `WindowState<A>` backed by NATS KV: `put(key, acc)`, `get(key)`, `delete(key)`, `list()` — all typed; bucket name `blitz.{pipelineName}.windows`
+- [ ] `WindowState.delete(key)` called explicitly after every successful window emit
+- [ ] Bucket TTL set to `windowPolicy.maxDurationMs * 3` at bucket creation (safety backstop only — primary cleanup is explicit delete)
+- [ ] Implement `WindowOperator`: route each event to its window key(s) in KV; close + emit on trigger; call `windowState.delete(windowKey)` after emit succeeds; handle late arrivals up to `allowedLateness`
 - [ ] Tests: tumbling window groups and emits correctly; sliding window emits overlapping results; session window extends on activity; late arrivals respected; KV state survives restart
+- [ ] Test: closed windows are deleted from KV after emit; leaked window keys are evicted by bucket TTL
 - [ ] GREEN
 - [ ] `git commit -m "feat(blitz): windowing engine (tumbling/sliding/session) + NATS KV state — 35 tests green"`
 
@@ -3704,12 +3762,12 @@ Depends on: Phase 8 (near-cache wiring complete), Phase 7.4 (full IMap interface
 
 | Block | What | New Tests |
 |-------|------|-----------|
-| **Block 12.A1** | `MapStoreConfig`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` | ~17 |
-| **Block 12.A2** | `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + retry), `StoreWorker` (background timer), `WriteBehindStore`, `MapStoreContext` | ~33 |
+| **Block 12.A1** | `MapStoreConfig` (with `_factory` + `_implementation`, mutually exclusive), `MapStoreFactory`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` | ~20 |
+| **Block 12.A2** | `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + retry), `StoreWorker` (background timer), `WriteBehindStore`, `MapStoreContext` (factory-first resolution: factory > impl) | ~33 |
 | **Block 12.A3** | IMap async migration (11 methods → `Promise`), migration script, `MapProxy` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` update, `MapContainerService` store lifecycle, integration tests | ~5 new + all existing green |
-| **Block 12.B** | `packages/s3/` — `S3MapStore` using `@aws-sdk/client-s3` | ~12 |
-| **Block 12.C** | `packages/mongodb/` — `MongoMapStore` using `mongodb` driver | ~12 |
-| **Block 12.D** | `packages/turso/` — `TursoMapStore` using `@libsql/client` (in-memory SQLite tests) | ~14 |
+| **Block 12.B** | `packages/s3/` — `S3MapStore` + `S3MapStore.factory()` using `@aws-sdk/client-s3` | ~14 |
+| **Block 12.C** | `packages/mongodb/` — `MongoMapStore` + `MongoMapStore.factory()` using `mongodb` driver | ~14 |
+| **Block 12.D** | `packages/turso/` — `TursoMapStore` + `TursoMapStore.factory()` using `@libsql/client` (in-memory SQLite tests) | ~16 |
 
 Blocks A1 → A2 → A3 are strictly sequential. Blocks B/C/D are independent of each other (all require only A3 complete).
 
@@ -3717,6 +3775,8 @@ Blocks A1 → A2 → A3 are strictly sequential. Blocks B/C/D are independent of
 
 - **IMap methods become async** (`put()` → `Promise<V | null>`): Required for write-through persistence. RecordStore stays sync.
 - **MapDataStore operates on deserialized K,V**: No Data-object layer for store calls.
+- **`MapStoreFactory` — the canonical multi-map integration path** (mirrors Java's `MapStoreFactory<K,V>`): A factory produces a distinct, per-map-name store instance from shared connection config (e.g. one S3 prefix per map, one Mongo collection per map, one SQLite table per map). Set via `MapStoreConfig.setFactory(factory)`. Takes priority over `setImplementation()` in `MapStoreContext.create()`. The two fields are mutually exclusive: setting one clears the other. Every extension package exposes `XxxMapStore.factory(baseConfig)` as its primary wiring API.
+- **Two integration paths per extension package**: `setImplementation(new S3MapStore(config))` for single-map wiring with full manual control; `setFactory(S3MapStore.factory(baseConfig))` for multi-map wiring where the factory scopes each store instance by map name.
 - **Write-behind uses `setInterval(1000)`**: StoreWorker drains queue every 1 second.
 - **Coalescing queue**: `Map<string, DelayedEntry>` — latest write per key wins.
 - **Retry policy**: 3 retries with 1s delay, then fall back to single-entry stores.
@@ -3890,8 +3950,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — 15 tests ✅
 - [x] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — 11 tests ✅
 - [x] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — 9 tests ✅
-- [ ] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — ~5 tests
-- [ ] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests)
+- [x] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — 57 tests ✅
+- [x] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests) ✅
 
 ### Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~280 tests)
 - [ ] **Block 10.0** — Package scaffold (`packages/blitz/`) + BlitzService NATS connection lifecycle — ~10 tests
@@ -3920,13 +3980,13 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 
 > Implementation spec: `plans/MAPSTORE_EXTENSION_PLAN.md` — read it before executing any Block 12.X.
 
-- [ ] **Block 12.A1** — `MapStoreConfig`, `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` — ~17 tests
-- [ ] **Block 12.A2** — `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + 3x retry + single-entry fallback), `StoreWorker` (setInterval, flush-on-shutdown), `WriteBehindStore`, `MapStoreContext` (factory + lifecycle + EAGER initial load) — ~33 tests
+- [ ] **Block 12.A1** — `MapStoreConfig` (add `_factory` field + `setFactory()`/`getFactory()`; `setFactory` clears `_implementation` and vice versa), `MapStoreFactory` interface (`newMapStore(mapName, properties)` — factory-first resolution, mirrors Java `MapStoreFactory`), `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` — ~20 tests
+- [ ] **Block 12.A2** — `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + 3x retry + single-entry fallback), `StoreWorker` (setInterval, flush-on-shutdown), `WriteBehindStore`, `MapStoreContext` (factory-first impl resolution: factory.newMapStore() > getImplementation(); lifecycle + EAGER initial load) — ~33 tests
 - [ ] **Block 12.A3** — IMap async migration: run `scripts/async-imap-migration.sh`, update `IMap.ts` (11 methods → `Promise`), async `MapProxy`, lazy `MapDataStore` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` signature update, `MapContainerService` store lifecycle, integration tests — all ~2,271 existing + ~5 new green
-- [ ] **Block 12.B** — `packages/s3/` (`@helios/s3`): `S3MapStore` + `S3Config`, mock-S3-client tests, workspace wiring — ~12 tests
-- [ ] **Block 12.C** — `packages/mongodb/` (`@helios/mongodb`): `MongoMapStore` + `MongoConfig`, mock-collection tests, workspace wiring — ~12 tests
-- [ ] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig`, real in-memory SQLite tests (`:memory:`), workspace wiring — ~14 tests
-- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~93 new tests green, all existing tests still green
+- [ ] **Block 12.B** — `packages/s3/` (`@helios/s3`): `S3MapStore` + `S3Config` + `S3MapStore.factory(baseConfig)` (factory scopes prefix by map name), mock-S3-client tests, factory tests (2), workspace wiring — ~14 tests
+- [ ] **Block 12.C** — `packages/mongodb/` (`@helios/mongodb`): `MongoMapStore` + `MongoConfig` + `MongoMapStore.factory(baseConfig)` (factory scopes collection by map name), mock-collection tests, factory tests (2), workspace wiring — ~14 tests
+- [ ] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig` + `TursoMapStore.factory(baseConfig)` (factory scopes tableName by map name), real in-memory SQLite tests (`:memory:`), factory tests (2), workspace wiring — ~16 tests
+- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~103 new tests green, all existing tests still green
 
 ---
 
