@@ -21,5 +21,21 @@ export type { VertexType } from './Vertex.ts';
 export { Edge } from './Edge.ts';
 export { Stage } from './Stage.ts';
 export type { StageContext } from './StageContext.ts';
-export type { Source } from './source/Source.ts';
+export type { Source, SourceMessage } from './source/Source.ts';
 export type { Sink } from './sink/Sink.ts';
+// Block 10.2 — Codecs
+export type { BlitzCodec } from './codec/BlitzCodec.ts';
+export { JsonCodec, StringCodec, BytesCodec } from './codec/BlitzCodec.ts';
+// Block 10.2 — Sources
+export { NatsSource } from './source/NatsSource.ts';
+export { HeliosMapSource } from './source/HeliosMapSource.ts';
+export type { MapEntry } from './source/HeliosMapSource.ts';
+export { HeliosTopicSource } from './source/HeliosTopicSource.ts';
+export { FileSource } from './source/FileSource.ts';
+export { HttpWebhookSource } from './source/HttpWebhookSource.ts';
+// Block 10.2 — Sinks
+export { NatsSink } from './sink/NatsSink.ts';
+export { HeliosMapSink } from './sink/HeliosMapSink.ts';
+export { HeliosTopicSink } from './sink/HeliosTopicSink.ts';
+export { FileSink } from './sink/FileSink.ts';
+export { LogSink } from './sink/LogSink.ts';

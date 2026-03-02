@@ -20,11 +20,21 @@ import { BlitzService } from '../src/BlitzService.ts';
 // ---------------------------------------------------------------------------
 
 function makeSource<T>(name: string): Source<T> {
-  return { name };
+  return {
+    name,
+    codec: {
+      encode: (v: T) => new TextEncoder().encode(JSON.stringify(v)),
+      decode: (b: Uint8Array) => JSON.parse(new TextDecoder().decode(b)) as T,
+    },
+    messages: async function* () {},
+  };
 }
 
 function makeSink<T>(name: string): Sink<T> {
-  return { name };
+  return {
+    name,
+    write: async (_v: T) => {},
+  };
 }
 
 // ---------------------------------------------------------------------------

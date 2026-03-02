@@ -1,12 +1,12 @@
 /**
- * Marker interface for Blitz pipeline sinks.
+ * Blitz pipeline sink — writes typed values from the pipeline to an external system.
  *
- * A Sink writes typed events from the pipeline to an external system.
- * Concrete implementations (NatsSink, HeliosMapSink, FileSink, etc.) are
- * provided in Block 10.2 — this interface defines the minimum contract required
- * by the Pipeline DAG builder.
+ * Concrete implementations: NatsSink, HeliosMapSink, HeliosTopicSink,
+ * FileSink, LogSink.
  */
 export interface Sink<T> {
-  /** Human-readable name for this sink (used to derive vertex/edge names). */
+  /** Human-readable name (used to derive DAG vertex names). */
   readonly name: string;
+  /** Write a single value to the external system. Must be idempotent where possible. */
+  write(value: T): Promise<void>;
 }
