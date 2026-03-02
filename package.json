@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Helios core — TypeScript/Bun port of Hazelcast distributed in-memory platform",
   "private": false,
-  "workspaces": ["packages/nestjs", "packages/blitz"],
+  "workspaces": ["packages/nestjs", "packages/blitz", "packages/s3"],
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {

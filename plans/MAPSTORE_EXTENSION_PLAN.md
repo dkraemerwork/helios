@@ -1204,6 +1204,8 @@ config.addMapConfig(usersCfg);
 
 **GATE-CHECK labels:** `s3-mapstore`, `s3-config`
 
+**STATUS: ✅ Complete — 14 tests green (2026-03-02)**
+
 ---
 
 ## Block 12.C — packages/mongodb/ (MongoMapStore)
