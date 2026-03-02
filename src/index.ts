@@ -47,6 +47,10 @@ export { NetworkedMapProxy } from '@helios/map/impl/NetworkedMapProxy';
 export type { EntryListener } from '@helios/map/EntryListener';
 export type { EntryProcessor } from '@helios/map/EntryProcessor';
 export { QueryResultSizeExceededException } from '@helios/map/QueryResultSizeExceededException';
+export type { MapLoader } from '@helios/map/MapLoader';
+export type { MapStore } from '@helios/map/MapStore';
+export type { MapLoaderLifecycleSupport } from '@helios/map/MapLoaderLifecycleSupport';
+export type { MapStoreFactory } from '@helios/map/MapStoreFactory';
 
 // ── Collections ───────────────────────────────────────────────────────────────
 export type { ICollection } from '@helios/collection/ICollection';

@@ -90,6 +90,7 @@ export class MapStoreConfig {
 
     setImplementation(implementation: unknown): this {
         this._implementation = implementation;
+        this._factoryImplementation = null; // mutual exclusivity: setting impl clears factory
         return this;
     }
 
@@ -99,6 +100,7 @@ export class MapStoreConfig {
 
     setFactoryImplementation(factoryImplementation: unknown): this {
         this._factoryImplementation = factoryImplementation;
+        this._implementation = null; // mutual exclusivity: setting factory clears direct impl
         return this;
     }
 
