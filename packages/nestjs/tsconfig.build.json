@@ -5,7 +5,11 @@
     "rootDir": "src",
     "declaration": true,
     "sourceMap": true,
-    "removeComments": false
+    "removeComments": false,
+    "paths": {
+      "@helios/core/*": ["../../dist/src/*"],
+      "@helios/*": ["../../dist/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules", "test"]

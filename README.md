@@ -2,7 +2,7 @@
 
 **Helios** is a TypeScript/Bun port of [Hazelcast](https://hazelcast.com/) — a distributed in-memory data platform.
 
-This project is currently in alpha and do not recommend production use.
+This project is currently in alpha and I do not recommend production use.
 
 Built from scratch in TypeScript targeting Bun and ES2025.
 

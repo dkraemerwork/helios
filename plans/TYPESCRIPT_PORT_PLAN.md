@@ -2714,7 +2714,7 @@ Subpath exports in `packages/nestjs/package.json`:
 
 ---
 
-## Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~280 tests)
+## Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~295 tests)
 
 Goal: deliver a `@helios/blitz` package that provides ~80%+ feature parity with Hazelcast
 Jet (`jet/` — 520 Java source files) using **NATS JetStream** as the durable streaming
@@ -2761,56 +2761,72 @@ TypeScript declarations — no shims required.
 interface. No external process needed.
 
 **Integration tests** (Blocks 10.0, 10.2, 10.4, 10.5, 10.7, 10.8, 10.10): require a real
-NATS server with JetStream enabled. Use `beforeAll`/`afterAll` in each test file:
+NATS server with JetStream enabled.
+
+All integration test files wrap their tests in `describe.skipIf(!NATS_AVAILABLE)` where
+`NATS_AVAILABLE = !!process.env.NATS_URL || !!process.env.CI`. This shows as SKIP in
+`bun test` output and is visible in the done gate count — skipped tests are never invisible.
+
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 17 (process.exit(0) skip guard silently drops tests from bun test output)
 
 ```typescript
-import { beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 
-let natsServer: ReturnType<typeof Bun.spawn>;
+const NATS_AVAILABLE = !!process.env.NATS_URL || !!process.env.CI;
 
-beforeAll(() => {
-    natsServer = Bun.spawn(['nats-server', '-js', '-p', '4222'], {
-        stdout: 'ignore', stderr: 'ignore',
-    });
-    // Give the server a moment to start
-    return Bun.sleep(200);
-});
+describe.skipIf(!NATS_AVAILABLE)('BlitzService — NATS integration', () => {
+  let natsServer: ReturnType<typeof Bun.spawn>;
 
-afterAll(() => {
-    natsServer.kill();
+  beforeAll(async () => {
+    natsServer = Bun.spawn(
+      [require.resolve('nats-server/bin/nats-server'), '-js', '-p', '4222'],
+      { stdout: 'ignore', stderr: 'ignore' },
+    );
+    // Health poll — wait until NATS accepts connections (up to 3s)
+    const { connect } = await import('@nats-io/transport-node');
+    for (let i = 0; i < 30; i++) {
+      try { const nc = await connect({ servers: 'nats://localhost:4222' }); await nc.close(); break; }
+      catch { await Bun.sleep(100); }
+    }
+  });
+
+  afterAll(() => { natsServer.kill(); });
+
+  // tests go here
 });
 ```
+
+`describe.skipIf(condition)` and `it.skipIf(condition)` are built into `bun:test`. They show
+as SKIP in output, are counted in test results, and the done gate can verify skip count vs
+expected. This ensures `bun test` at the workspace root never silently drops integration tests.
+CI sets `NATS_URL=nats://localhost:4222` or `CI=true`.
 
 The `nats-server` binary (~20 MB, single static binary) is added to `packages/blitz/`
 `devDependencies` via the [`nats-server` npm package](https://www.npmjs.com/package/nats-server)
 which wraps the binary. Document setup in `CONTRIBUTING.md`.
 
-**NATS_URL skip guard** — every integration test file must include:
-
-```typescript
-if (!process.env.NATS_URL && !process.env.CI) {
-    console.warn('[blitz] Skipping NATS integration tests — set NATS_URL or CI=true to run');
-    process.exit(0);
-}
-```
-
-This ensures `bun test` at the workspace root never fails in environments without NATS
-(developer laptops without the binary, etc.). CI sets `NATS_URL=nats://localhost:4222`.
+> **CONTRIBUTING.md note (binary PATH):** The `nats-server` npm package installs the binary
+> to `node_modules/nats-server/bin/nats-server`. Tests reference it via
+> `require.resolve('nats-server/bin/nats-server')`. Do not rely on `nats-server` being in
+> `PATH` — the resolved path from `node_modules` is the only reliable reference.
 
 ### Package layout
 
 ```
 packages/blitz/                              # @helios/blitz
 ├── package.json                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
+│                                          # peerDeps (optional): @nestjs/common@^11, @nestjs/core@^11
+│                                          # devDeps: nats-server (binary), bun-types, typescript
 ├── tsconfig.json                          # paths: @helios/core/* → ../../src/*
 ├── bunfig.toml
 ├── src/
-│   ├── index.ts                           # barrel export
+│   ├── index.ts                           # barrel export (does NOT re-export src/nestjs/)
 │   ├── Pipeline.ts                        # fluent DAG builder (Block 10.1); includes withParallelism(n)
 │   ├── Vertex.ts / Edge.ts               # DAG node + edge (Block 10.1)
 │   ├── Stage.ts                           # processing stage base (Block 10.1)
 │   ├── BlitzService.ts                      # top-level entry point (Block 10.0)
-│   ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0)
+│       ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0); includes checkpointIntervalAcks (default 100) + checkpointIntervalMs (default 5000); includes maxReconnectAttempts, reconnectTimeWaitMs, connectTimeoutMs, natsPendingLimit
+│   ├── BlitzEvent.ts                      # enum: NATS_RECONNECTING, NATS_RECONNECTED, PIPELINE_ERROR, PIPELINE_CANCELLED (Block 10.0)
 │   ├── errors/                            # error hierarchy (Block 10.0)
 │   │   ├── BlitzError.ts                  # base class for all @helios/blitz errors
 │   │   ├── NakError.ts                    # operator returned an error — message will be nak'd
@@ -2865,12 +2881,36 @@ packages/blitz/                              # @helios/blitz
 │   ├── batch/                             # Block 10.8
 │   │   ├── BatchPipeline.ts               # bounded variant of Pipeline
 │   │   └── EndOfStreamDetector.ts         # detects JetStream stream end for batch mode
-│   └── nestjs/                            # Block 10.9
+│   └── nestjs/                            # Block 10.9 — exported via @helios/blitz/nestjs subpath
+│       ├── index.ts                         # barrel export for nestjs submodule
 │       ├── HeliosBlitzModule.ts             # @Module() forRoot() / forRootAsync()
 │       ├── HeliosBlitzService.ts            # @Injectable() wrapping BlitzService
 │       └── InjectBlitz.decorator.ts         # @InjectBlitz()
 └── test/
 ```
+
+`package.json` exports field includes a `@helios/blitz/nestjs` subpath:
+
+```json
+{
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    },
+    "@helios/blitz/nestjs": {
+      "import": "./dist/src/nestjs/index.js",
+      "types": "./dist/src/nestjs/index.d.ts"
+    }
+  }
+}
+```
+
+The `src/nestjs/` submodule is **NOT** re-exported from `src/index.ts`. Applications that
+use `@helios/blitz` for pure stream processing without NestJS do not need `@nestjs/common`
+or `@nestjs/core`. Those packages are declared as **optional peer dependencies** only.
+
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 16 (NestJS packages absent from package.json; NestJS submodule leaking through main barrel)
 
 ### Dependency graph (within Phase 10)
 
@@ -2942,9 +2982,12 @@ export class PipelineError extends BlitzError {}
 
 ```
 packages/blitz/
-├── package.json            # @helios/blitz | deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
+├── package.json            # @helios/blitz
+│                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
+│                           # peerDeps (optional): @nestjs/common@^11, @nestjs/core@^11
+│                           # devDeps: nats-server (binary), bun-types, typescript
 ├── tsconfig.json           # paths: @helios/core/* → ../../src/*
-├── bunfig.toml             # no reflect-metadata needed
+├── bunfig.toml             # no reflect-metadata needed (NestJS submodule exported separately)
 └── src/
     ├── BlitzConfig.ts        # NATS server URL(s), stream/consumer defaults, KV bucket names
     └── BlitzService.ts       # connect() via @nats-io/transport-node; js/jsm via @nats-io/jetstream; kvm via @nats-io/kv
@@ -2972,14 +3015,55 @@ const kvm = new Kvm(nc);
 
 > ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issues 6 & 7 (workspace already configured; NATS test infrastructure)
 
+#### NATS reconnect behavior
+
+`BlitzService` configures the NATS connection with explicit reconnect settings:
+
+```typescript
+const nc = await connect({
+  servers: config.servers,
+  maxReconnectAttempts: config.maxReconnectAttempts ?? -1,  // -1 = infinite
+  reconnectTimeWait: config.reconnectTimeWaitMs ?? 2_000,   // 2s between attempts
+  timeout: config.connectTimeoutMs ?? 10_000,               // 10s initial connect
+});
+```
+
+During a NATS reconnect window:
+1. **JetStream consumers**: NATS client buffers incoming messages internally and delivers
+   them after reconnect. No pipeline messages are lost. Consumer message delivery pauses
+   and resumes automatically.
+2. **JetStream publishes** (NatsSink.toStream): publish calls during reconnect throw a
+   `NatsError`. `BlitzService` catches this and wraps it as a `NakError`, triggering the
+   standard retry/DL policy for the upstream message.
+3. **Core NATS publishes** (NatsSink.toSubject): the NATS client buffers outbound messages
+   during reconnect (up to `pendingLimit`). Configure `pendingLimit` explicitly via
+   `BlitzConfig.natsPendingLimit` (default: 512 MB) to bound memory usage.
+4. **KV operations** (CheckpointManager, WindowState): KV operations during reconnect throw.
+   `WindowState.put()` failures are retried 3 times with 500ms backoff before propagating
+   as a `NakError`. `CheckpointManager.write()` failures are swallowed and logged — a missed
+   checkpoint means slightly more replay on next restart, not data loss.
+5. **Status monitoring**: `BlitzService` subscribes to `nc.status()` and emits a
+   `BlitzEvent.NATS_RECONNECTING` / `BlitzEvent.NATS_RECONNECTED` event so application code
+   can react (e.g., log, alert, pause submission of new pipelines).
+
+Add `maxReconnectAttempts`, `reconnectTimeWaitMs`, `connectTimeoutMs`, `natsPendingLimit` to `BlitzConfig.ts` spec.
+
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 18 (NATS reconnect behavior gaps)
+
 **TODO — Block 10.0**:
-- [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@helios/core`), `tsconfig.json` (paths: `@helios/core/* → ../../src/*`), `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
+- [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@helios/core`; peerDeps optional: `@nestjs/common@^11`, `@nestjs/core@^11`; exports: `"."` + `"@helios/blitz/nestjs"`), `tsconfig.json`, `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
 - [ ] Implement `src/errors/` — `BlitzError`, `NakError`, `DeadLetterError`, `PipelineError`
 - [ ] Add `nats-server` to `packages/blitz/` devDependencies (binary for integration tests — see Phase 10 test infrastructure section above)
 - [ ] Implement `BlitzConfig` (NATS URL, KV bucket prefix, stream retention defaults)
 - [ ] Implement `BlitzService.connect()` — opens NATS connection via `connect()` from `@nats-io/transport-node`; creates `js` + `jsm` via `@nats-io/jetstream`; creates `kvm` via `new Kvm(nc)` from `@nats-io/kv`
+- [ ] Configure NATS connection with explicit reconnect settings (`maxReconnectAttempts`, `reconnectTimeWaitMs`, `connectTimeoutMs`)
+- [ ] Implement `BlitzEvent` enum: `NATS_RECONNECTING`, `NATS_RECONNECTED`, `PIPELINE_ERROR`, `PIPELINE_CANCELLED`
+- [ ] Subscribe to `nc.status()` in `BlitzService`; emit `BlitzEvent`s on reconnect/error
 - [ ] Implement `BlitzService.shutdown()` — graceful drain + close
+- [ ] Verify `nats-server` npm package binary path via `require.resolve('nats-server/bin/nats-server')` in test setup — document in `packages/blitz/README.md`
 - [ ] Tests: connect/disconnect, config defaults, error on bad server (integration — requires NATS_URL)
+- [ ] Test: KV write during reconnect is retried 3× then propagates as `NakError`
+- [ ] Test: `BlitzEvent.NATS_RECONNECTING` fires during connection loss
 - [ ] GREEN
 - [ ] `git commit -m "feat(blitz): package scaffold + BlitzService NATS connection — 10 tests green"`
 
@@ -3105,11 +3189,11 @@ NatsSink.toStream('order-stream', JsonCodec<EnrichedOrder>())
 
 | Sink | Backed by | Notes |
 |---|---|---|
-| `NatsSink.toSubject(subj, codec)` | `nc.publish()` (encodes via codec) | Fire-and-forget |
-| `NatsSink.toStream(stream, codec)` | `js.publish()` from `@nats-io/jetstream` (encodes via codec) | Durable, ack-able |
-| `HeliosMapSink.put(map)` | `IMap.put()` | Key extracted from message |
-| `HeliosTopicSink.publish(topic)` | `ITopic.publish()` | Broadcast |
-| `FileSink.appendLines(path)` | `Bun.write()` append | Batch output |
+| `NatsSink.toSubject(subj, codec)` | `nc.publish()` (encodes via codec) | at-most-once publish; retry on failure wraps as NakError |
+| `NatsSink.toStream(stream, codec)` | `js.publish()` from `@nats-io/jetstream` (encodes via codec) | durable; ack-based; retry on publish timeout |
+| `HeliosMapSink.put(map)` | `IMap.put()` | idempotent: IMap.put() overwrites; safe to retry |
+| `HeliosTopicSink.publish(topic)` | `ITopic.publish()` | at-most-once broadcast; retry on failure wraps as NakError |
+| `FileSink.appendLines(path)` | `Bun.write()` append | NOT idempotent: retry will append duplicate lines. Use only in batch mode with exactly-once semantics or implement dedup. |
 | `LogSink.console()` | `console.log` | Debug / testing |
 
 **TODO — Block 10.2**:
@@ -3360,15 +3444,112 @@ All JetStream-backed stages use `AckPolicy.EXPLICIT` by default. On operator err
 per pipeline/consumer to NATS KV. On restart, the consumer seeks to the checkpoint
 sequence instead of replaying from the beginning.
 
+#### CheckpointManager specification
+
+Checkpoint granularity: **per JetStream consumer** (one checkpoint key per pipeline/consumer pair).
+
+Default checkpoint triggers (both apply simultaneously — whichever fires first):
+- **Every 100 consecutive ack'd messages** (N = 100)
+- **Every 5 seconds** (T = 5 000 ms)
+
+Both defaults are configurable via `BlitzConfig.checkpointIntervalAcks` and
+`BlitzConfig.checkpointIntervalMs`.
+
+KV key format: `checkpoint.{pipelineName}.{consumerName}`
+KV value format: `{ sequence: number; ts: number; windowKeys: string[] }`
+
+`windowKeys` stores the set of open window keys at checkpoint time. On restart:
+1. Read checkpoint from KV → get `sequence` and `windowKeys`.
+2. Seek JetStream consumer to `sequence + 1`.
+3. For each `windowKey` in `windowKeys`: the NATS KV window state bucket already contains
+   the partial accumulator — WindowOperator resumes accumulating from it.
+4. Messages between `checkpoint.sequence + 1` and the next window-close event are 
+   replayed — they are re-accumulated into the existing partial accumulator.
+   This is safe because accumulators are additive (count += 1, sum += x).
+   For non-additive aggregations, the window accumulator stores raw events (not 
+   derived state) so replay is exact.
+
+Mid-window crash replay scope: At most `N` messages (default 100) are replayed per
+consumer. This is the checkpoint granularity. A window that closes every 500 events
+and a checkpoint every 100 events means at most 100 events are re-processed on restart.
+
+IMPORTANT: The replay produces at-most-once window emissions (the window emit + delete
+did not happen for the replayed messages, so the window remains open and accumulates
+correctly). At-least-once delivery is guaranteed — no data loss.
+
+#### Sink error propagation contract
+
+Sinks are terminal stages. When a sink's `write()` method throws:
+
+1. The upstream JetStream message that triggered this pipeline execution is **nak'd**
+   with the same retry/DL policy as operator errors. The message returns to the server
+   for redelivery.
+2. The `RetryPolicy` applies to the entire stage chain (source → operators → sink)
+   as a unit. A sink failure is indistinguishable from an operator failure from the
+   fault policy's perspective.
+3. On retry, the full pipeline chain re-executes for that message: operators run again,
+   sink is called again. Operators MUST be idempotent or the retry produces duplicates
+   in intermediate state (NATS KV, IMap, etc.).
+4. After `RetryPolicy.maxRetries` exhausted: the message is routed to `DeadLetterSink`
+   with error metadata including `sinkName`, `errorMessage`, `deliveryCount`.
+5. `NatsSink.toSubject()` (fire-and-forget): publish failures are wrapped as `NakError`
+   and follow the standard retry/DL path.
+6. `NatsSink.toStream()` (durable, ack-able): if the JetStream publish ack times out or
+   fails, it is treated as a `NakError` — the upstream message is nak'd and retried.
+
+This contract means: a pipeline with N stages either succeeds atomically (all stages
+complete, upstream ack'd) or fails and retries as a unit. There is no partial success.
+
+For idempotent sinks (e.g., `HeliosMapSink.put()` which is naturally idempotent via
+IMap's put-overwrites semantics), retries are safe. For non-idempotent sinks (append
+operations), callers must implement their own dedup logic (e.g., dedup key in IMap).
+
 **TODO — Block 10.7**:
 - [ ] Implement `AckPolicy` enum and wire into JetStream source consumer loop
 - [ ] Implement `RetryPolicy` (fixed delay + exponential backoff with jitter)
 - [ ] Implement `DeadLetterSink` (create or reuse a DL JetStream stream; publish with error headers)
-- [ ] Implement `CheckpointManager` (NATS KV: read on startup, write every N acks or T ms)
+- [ ] Implement `CheckpointManager` with `N=100` (acks) and `T=5000ms` (ms) defaults; both configurable via `BlitzConfig`
+- [ ] Checkpoint KV value includes `windowKeys: string[]` — set of open window KV keys at checkpoint time
+- [ ] On restart: read checkpoint, seek consumer to `sequence+1`, restore open window accumulators from KV
 - [ ] Wire retry + DL into every JetStream-backed operator stage automatically
-- [ ] Tests: successful ack; nak triggers redeliver; exhausted retries land in DL stream; checkpoint survives restart; no data loss across simulated crash
+- [ ] Wire sink errors into the same retry/DL path as operator errors: `write()` throws → upstream message nak'd
+- [ ] Tests (35 minimum):
+  AckPolicy:
+  - [ ] EXPLICIT: successful processing → `ack()` called exactly once
+  - [ ] EXPLICIT: operator throws `NakError` → `nak()` called, not `ack()`
+  - [ ] NONE: message consumed without ack (fire-and-forget, no redelivery)
+  RetryPolicy (fixed delay):
+  - [ ] First retry: nak with fixed delay after first failure
+  - [ ] Second retry: nak with fixed delay after second failure
+  - [ ] `maxRetries=1`: second failure routes to DL (not retried a third time)
+  RetryPolicy (exponential backoff):
+  - [ ] Delay doubles each retry: 100ms, 200ms, 400ms (with jitter ±25%)
+  - [ ] Jitter is applied: delay is never exactly the base * 2^n
+  - [ ] `maxBackoffMs` cap enforced: delay never exceeds configured maximum
+  DeadLetterSink:
+  - [ ] Exhausted retries: message published to DL stream with error headers
+  - [ ] DL message headers include: `original-subject`, `error-message`, `delivery-count`
+  - [ ] DL stream is created if it does not exist (idempotent creation)
+  - [ ] DL stream is a separate named stream (not mixed with live traffic)
+  CheckpointManager (defaults: N=100, T=5000ms):
+  - [ ] Checkpoint written after 100th consecutive ack
+  - [ ] Checkpoint written after 5000ms even if <100 acks
+  - [ ] On restart: consumer seeks to `checkpoint.sequence + 1`
+  - [ ] On restart: open window keys restored from `checkpoint.windowKeys`
+  - [ ] No checkpoint KV entry on first startup → consumer starts from beginning
+  - [ ] Missed checkpoint (KV write fails) logged, does not block pipeline
+  - [ ] `checkpointIntervalAcks` configurable via `BlitzConfig`
+  - [ ] `checkpointIntervalMs` configurable via `BlitzConfig`
+  Crash simulation:
+  - [ ] Crash at message 50 of 100 → restart replays from last checkpoint (at most 50 messages)
+  - [ ] Window accumulator correct after restart (partial accumulator in KV + replayed messages = correct total)
+  - [ ] No duplicate window emissions after restart (window not emitted before crash → emitted once after restart)
+  Sink errors (cross-ref sink error propagation spec):
+  - [ ] `HeliosMapSink` throws → upstream message nak'd → retried → success on retry
+  - [ ] `NatsSink.toStream` times out → upstream message nak'd
+  - [ ] Exhausted sink retries → message in DL with `sinkName` in error headers
 - [ ] GREEN
-- [ ] `git commit -m "feat(blitz): fault tolerance (ack/retry/dead-letter/checkpoint) — 20 tests green"`
+- [ ] `git commit -m "feat(blitz): fault tolerance (ack/retry/dead-letter/checkpoint) — 35 tests green"`
 
 ---
 
@@ -3447,12 +3628,27 @@ class OrderProcessor implements OnModuleInit {
 `HeliosBlitzModule.forRootAsync()` supports `useFactory`, `useClass`, `useExisting` via
 `ConfigurableModuleBuilder` (same pattern as Phase 9 Block 9.1).
 
+**NestJS peer dependencies:**
+
+> ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 16
+
+- `@nestjs/common@^11` and `@nestjs/core@^11` are declared as **optional peer dependencies**
+  in `packages/blitz/package.json`. They are only required when using the `src/nestjs/`
+  submodule. Applications that use `@helios/blitz` for pure stream processing without NestJS
+  do not need them.
+- `@helios/blitz` must **NOT** import from `src/nestjs/` in its main barrel `src/index.ts`.
+  The NestJS submodule is exported via a separate subpath: `@helios/blitz/nestjs`.
+- Consumers import NestJS integration as: `import { HeliosBlitzModule } from '@helios/blitz/nestjs'`
+
 **TODO — Block 10.9**:
+- [ ] Add `@nestjs/common@^11` and `@nestjs/core@^11` as optional peer dependencies in `packages/blitz/package.json`
+- [ ] Export `src/nestjs/` via `@helios/blitz/nestjs` subpath export in `packages/blitz/package.json` — NOT from main barrel `src/index.ts`
 - [ ] Set up `ConfigurableModuleBuilder` for `HeliosBlitzModule`
 - [ ] Implement `HeliosBlitzService` as an `@Injectable()` wrapping `BlitzService`
 - [ ] Implement `OnModuleDestroy` → `blitz.shutdown()` for lifecycle safety
 - [ ] Implement `@InjectBlitz()` convenience decorator
 - [ ] Tests: `forRoot()` sync registration; `forRootAsync()` with `useFactory`; `@InjectBlitz()` resolves service; module destroy calls shutdown; pipeline survives module restart
+- [ ] Verify `src/index.ts` does NOT import or re-export anything from `src/nestjs/`
 - [ ] GREEN
 - [ ] `git commit -m "feat(blitz): @helios/blitz NestJS module integration — 25 tests green"`
 
@@ -4104,7 +4300,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — 57 tests ✅
 - [x] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests) ✅
 
-### Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~280 tests)
+### Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~295 tests)
 - [ ] **Block 10.0** — Package scaffold (`packages/blitz/`) + BlitzService NATS connection lifecycle — ~10 tests
 - [ ] **Block 10.1** — Pipeline / DAG builder API (Vertex, Edge, submit, cancel, DAG validation) — ~20 tests
 - [ ] **Block 10.2** — Sources + sinks (NatsSource, NatsSink, HeliosMapSource/Sink, HeliosTopicSource/Sink, FileSource/Sink, HttpWebhookSource, LogSink) — ~30 tests
@@ -4112,11 +4308,11 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 10.4** — Windowing engine (tumbling, sliding, session) + NATS KV state — ~35 tests
 - [ ] **Block 10.5** — Stateful aggregations (count, sum, min, max, avg, distinct) + grouped aggregation + combiner — ~30 tests
 - [ ] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — ~25 tests
-- [ ] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager) — ~20 tests
+- [ ] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager) — ~35 tests
 - [ ] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — ~20 tests
 - [ ] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — ~25 tests
 - [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
-- [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~280 tests green
+- [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~295 tests green
 
 ### Phase 11 — Built-in REST API (~56 tests)
 - [ ] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — ~12 tests
@@ -4196,4 +4392,4 @@ bun run build
 
 ---
 
-*Plan v9.3 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.3: production hardening pass — see plans/HELIOS_BLITZ_IMPLEMENTATION.md for full cross-reference*
+*Plan v9.4 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.4: Phase 10 gap-fixes — NATS reconnect behavior (Issue 18), nats-server binary PATH (Gap 2), Block 10.7 test count raised to 35 (Issue 19) — see plans/HELIOS_BLITZ_IMPLEMENTATION.md for full cross-reference*

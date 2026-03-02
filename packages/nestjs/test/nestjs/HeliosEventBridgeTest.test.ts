@@ -4,8 +4,7 @@
  */
 import { describe, it, expect, mock } from 'bun:test';
 import { Test } from '@nestjs/testing';
-import { EventEmitter2 } from 'eventemitter2';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { HeliosModule } from '../../src/HeliosModule';
 import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
 import { HeliosEventBridge } from '../../src/events/helios-event-bridge';

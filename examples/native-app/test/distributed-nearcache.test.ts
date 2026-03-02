@@ -9,11 +9,11 @@
  *   5. GET on instance B → near-cache MISS again (re-fetched fresh data)
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { Helios } from '@helios/Helios';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import type { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
+import { Helios } from '../../../src/Helios';
+import { HeliosConfig } from '../../../src/config/HeliosConfig';
+import { MapConfig } from '../../../src/config/MapConfig';
+import { NearCacheConfig } from '../../../src/config/NearCacheConfig';
+import type { HeliosInstanceImpl } from '../../../src/instance/impl/HeliosInstanceImpl';
 import { HeliosHttpServer } from '../src/http-server';
 
 // Use high ports to avoid conflicts

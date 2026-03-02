@@ -3,3 +3,10 @@ dist/
 .DS_Store
 .idea/
 *.tsbuildinfo
+*.tgz
+
+# Prevent accidental in-place TypeScript emits in source tree
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map

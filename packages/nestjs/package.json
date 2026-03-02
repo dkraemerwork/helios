@@ -48,11 +48,13 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun run tsc --project tsconfig.build.json",
+    "build": "bun run build:core && bun run tsc --project tsconfig.build.json",
+    "build:core": "bun run --cwd ../.. build",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "bun run tsc --noEmit",
-    "prepublish": "bun run build"
+    "prepublish": "bun run build",
+    "prepack": "bun run build"
   },
   "keywords": [
     "hazelcast",
@@ -68,7 +70,6 @@
   "author": "Helios Contributors",
   "license": "Apache-2.0",
   "dependencies": {
-    "@helios/core": "file:../..",
     "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.1.14",
     "@nestjs/core": "^11.1.14",
@@ -79,12 +80,14 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@helios/core": "file:../..",
     "@nestjs/testing": "^11.1.14",
     "@types/bun": "latest",
     "@types/node": "^25.3.3",
     "typescript": "beta"
   },
   "peerDependencies": {
+    "@helios/core": "^1.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0"
   }

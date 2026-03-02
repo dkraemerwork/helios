@@ -158,7 +158,7 @@ export class HeliosCacheModule {
         // --- build the options provider -----------------------------------------
         let optionsProviders: Provider[];
         let injectTokens: (string | symbol | Function)[];
-        let factory: (...args: unknown[]) => HeliosCacheModuleOptions | Promise<HeliosCacheModuleOptions>;
+        let factory: (...args: any[]) => HeliosCacheModuleOptions | Promise<HeliosCacheModuleOptions>;
 
         if (options.useClass) {
             // Create the factory class as a provider, then inject it
@@ -166,11 +166,17 @@ export class HeliosCacheModule {
                 { provide: HELIOS_CACHE_OPTIONS_FACTORY_TOKEN, useClass: options.useClass },
             ];
             injectTokens = [HELIOS_CACHE_OPTIONS_FACTORY_TOKEN];
-            factory = async (f: HeliosCacheModuleOptionsFactory) => f.createHeliosCacheOptions();
+            factory = async (...args: any[]) => {
+                const [f] = args as [HeliosCacheModuleOptionsFactory];
+                return f.createHeliosCacheOptions();
+            };
         } else if (options.useExisting !== undefined) {
             optionsProviders = [];
             injectTokens = [options.useExisting as string | symbol];
-            factory = async (f: HeliosCacheModuleOptionsFactory) => f.createHeliosCacheOptions();
+            factory = async (...args: any[]) => {
+                const [f] = args as [HeliosCacheModuleOptionsFactory];
+                return f.createHeliosCacheOptions();
+            };
         } else {
             // useFactory (default)
             optionsProviders = [];
@@ -195,7 +201,7 @@ export class HeliosCacheModule {
 
         const cacheModule = CacheModule.registerAsync({
             imports: allImports,
-            useFactory: async (...args: unknown[]) => {
+            useFactory: async (...args: any[]) => {
                 const opts = await factory(...args);
                 return buildCacheModuleOpts(opts);
             },

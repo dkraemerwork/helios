@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2 } from 'eventemitter2';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { HeliosInstance } from '@helios/core/core/HeliosInstance';
+import type { EntryEvent } from '@helios/core/map/EntryListener';
+import type { Message } from '@helios/core/topic/Message';
 import type { LifecycleEvent } from '@helios/core/instance/lifecycle/LifecycleEvent';
 import { InjectHelios } from '../decorators/inject-helios.decorator';
 
@@ -27,10 +29,10 @@ export class HeliosEventBridge {
     bridgeMap(mapName: string): void {
         const map = this.helios.getMap(mapName);
         map.addEntryListener({
-            entryAdded:   (e) => this.eventEmitter.emit(`helios.map.${mapName}.added`, e),
-            entryUpdated: (e) => this.eventEmitter.emit(`helios.map.${mapName}.updated`, e),
-            entryRemoved: (e) => this.eventEmitter.emit(`helios.map.${mapName}.removed`, e),
-            entryEvicted: (e) => this.eventEmitter.emit(`helios.map.${mapName}.evicted`, e),
+            entryAdded:   (e: EntryEvent<unknown, unknown>) => this.eventEmitter.emit(`helios.map.${mapName}.added`, e),
+            entryUpdated: (e: EntryEvent<unknown, unknown>) => this.eventEmitter.emit(`helios.map.${mapName}.updated`, e),
+            entryRemoved: (e: EntryEvent<unknown, unknown>) => this.eventEmitter.emit(`helios.map.${mapName}.removed`, e),
+            entryEvicted: (e: EntryEvent<unknown, unknown>) => this.eventEmitter.emit(`helios.map.${mapName}.evicted`, e),
         });
     }
 
@@ -40,7 +42,7 @@ export class HeliosEventBridge {
      */
     bridgeTopic(topicName: string): void {
         const topic = this.helios.getTopic(topicName);
-        topic.addMessageListener((msg) =>
+        topic.addMessageListener((msg: Message<unknown>) =>
             this.eventEmitter.emit(`helios.topic.${topicName}`, msg),
         );
     }
