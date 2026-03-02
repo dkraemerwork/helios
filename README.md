@@ -1,76 +1,105 @@
 # Helios
 
-**Helios** is a TypeScript/Bun port of [Hazelcast](https://hazelcast.com/) — a distributed in-memory data platform.
-
-This project is currently in alpha and I do not recommend production use.
-
-Built from scratch in TypeScript targeting Bun and ES2025.
+**Helios** is a distributed in-memory data platform built from scratch in TypeScript for Bun and ES2025. Inspired by [Hazelcast](https://hazelcast.com/) — production-grade, zero JVM dependency.
 
 ---
 
-## Feature Status
+## Packages
 
-### Working Now
-
-| Feature | Status | Tests |
+| Package | Description | Status |
 |---|---|---|
-| **IMap** — distributed key-value map | Full CRUD, putIfAbsent, getAll/putAll, entry processors, partition-wide ops | 77 |
-| **Predicate Queries** — filter map entries | equal, notEqual, greaterThan, lessThan, between, like, ilike, regex, in, and, or, not | 61 |
-| **Aggregations** — count, sum, avg, min, max, distinct | All aggregator types with BigDecimal/BigInteger/Double/Integer/Long variants | 90 |
-| **Near-Cache** — client-side read cache | TTL, LRU/LFU eviction, size limits, invalidation (single + batch), preloader, repair | 180+ |
-| **Near-Cache TCP Invalidation** — cross-node cache coherence | PUT on node A invalidates near-cache on node B via TCP | 10 |
-| **IQueue / ISet / IList** — distributed collections | Full Java Collection-equivalent API | 149 |
-| **ITopic** — pub/sub messaging | Publish, subscribe, message listeners | included |
-| **MultiMap** — one key, many values | put, get, remove, containsKey, keySet, values, entrySet | included |
-| **ReplicatedMap** — fully replicated map | Lazy replication with vector clock conflict resolution | included |
-| **Ringbuffer** — fixed-capacity circular buffer | Add, readOne, readMany, TTL expiry, overflow policies | 42 |
-| **Cache (JCache)** — javax.cache compatible | CacheRecordStore, eviction checker, deferred values | 51 |
-| **Transactions** — ACID across data structures | ONE_PHASE + TWO_PHASE commit, TransactionLog, TransactionManager | 44 |
-| **Security** — credentials + permissions | Password/token credentials, permission collection with wildcard matching | 57 |
-| **Binary Serialization** — zero-copy wire format | HeapData, ByteArrayObjectDataInput/Output, DataSerializableHeader | 134 |
-| **Client Protocol** — binary client codec layer | ClientMessage encode/decode, frame splitting, codec infrastructure | 80+ |
-| **TCP Clustering** — multi-node communication | Peer-to-peer TCP transport, data replication, cluster join | 6 |
-| **NestJS Integration** — DI module for NestJS apps | HeliosModule, HeliosCacheModule, HeliosTransactionModule, @Transactional | 141 |
-| **Standalone Server** — run headless from CLI | `bun run helios-server.ts --port 5701` | 36 |
-| **HTTP Demo App** — REST API over Helios | Map CRUD, near-cache stats, predicate queries via HTTP | 25 |
-| **HyperLogLog** — cardinality estimation | Dense + sparse representation, merge support | 19 |
-| **JSON Parser** — custom zero-dep parser/writer | Full JSON spec, pretty print, streaming writer | 380 |
-| **Config Model** — typed configuration | MapConfig, NearCacheConfig, NetworkConfig, JoinConfig, EvictionConfig, TcpIpConfig | 72 |
+| **`@helios/core`** | Distributed data structures, clustering, serialization, near-cache | Shipped |
+| **`@helios/nestjs`** | First-class NestJS 11 integration with modern DI patterns | Shipped |
+| **`@helios/blitz`** | NATS JetStream-backed stream & batch processing engine | Planned |
+| **`@helios/s3`** | S3-backed MapStore for IMap persistence | Planned |
+| **`@helios/mongodb`** | MongoDB-backed MapStore for IMap persistence | Planned |
+| **`@helios/turso`** | Turso/SQLite-backed MapStore for IMap persistence | Planned |
 
-### Planned (Phase 9 — NestJS Package Modernization)
+---
+
+## `@helios/core`
 
 | Feature | Description |
 |---|---|
-| `ConfigurableModuleBuilder` | Replace hand-rolled `forRoot()`/`forRootAsync()` with NestJS builder pattern |
-| `@InjectHelios()` / `@InjectMap()` | Convenience decorators for DI injection of Helios instances and data structures |
-| `registerAsync` | Async factory support for HeliosCacheModule and HeliosTransactionModule |
-| DI-based `@Transactional` | Remove static singleton, resolve via NestJS dependency injection |
-| `HeliosHealthIndicator` | Health check integration for `@nestjs/terminus` |
-| `@Cacheable` / `@CacheEvict` / `@CachePut` | Method-level cache decorators (Spring Cache equivalent) |
-| Event Bridge | Bridge Helios map/topic/lifecycle events to `@nestjs/event-emitter` |
-| Symbol-based tokens | Replace string tokens with Symbol injection tokens + `OnModuleDestroy` hooks |
-| `@helios/nestjs` package | Extract NestJS code to separate `packages/nestjs/` with subpath exports |
+| **IMap** | Distributed key-value map — CRUD, putIfAbsent, getAll/putAll, entry processors, partition-wide ops, predicate queries, aggregations |
+| **Near-Cache** | Client-side read cache — TTL, LRU/LFU eviction, size limits, single + batch invalidation, preloader, anti-entropy repair, TCP cross-node invalidation |
+| **Predicate Queries** | Filter map entries — equal, notEqual, greaterThan, lessThan, between, like, ilike, regex, in, and, or, not |
+| **Aggregations** | count, sum, avg, min, max, distinct — all types with BigDecimal/BigInteger/Double/Integer/Long variants |
+| **IQueue / ISet / IList** | Distributed collections with full Collection-equivalent API |
+| **ITopic** | Pub/sub messaging with message listeners |
+| **MultiMap** | One key, many values |
+| **ReplicatedMap** | Fully replicated map with vector clock conflict resolution |
+| **Ringbuffer** | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies |
+| **Cache (JCache)** | CacheRecordStore, eviction checker, deferred values |
+| **Transactions** | ACID across data structures — ONE_PHASE + TWO_PHASE commit |
+| **Security** | Password/token credentials, permission collection with wildcard matching |
+| **Binary Serialization** | Zero-copy wire format — HeapData, DataSerializable, Portable, GenericRecord |
+| **Client Protocol** | Binary client codec layer — ClientMessage encode/decode, frame splitting |
+| **TCP Clustering** | Peer-to-peer TCP transport, data replication, cluster join |
+| **HyperLogLog** | Cardinality estimation — dense + sparse representation, merge support |
+| **Config Model** | Typed configuration — MapConfig, NearCacheConfig, NetworkConfig, JoinConfig, EvictionConfig |
+| **Standalone Server** | Run headless from CLI — `bun run helios-server.ts --port 5701` |
 
-### Deferred (v1.5 / v2)
+## `@helios/nestjs`
 
-| Feature | Version | Reason |
-|---|---|---|
-| SQL Engine | v2 | Requires porting Apache Calcite (~500k lines) |
-| Jet Stream Processing | v1.5 | DAG-based stream engine, complex but tractable |
-| CP Subsystem (Raft) | v2 | Strong consistency via Raft consensus |
-| Scheduled Executor | v2 | Distributed scheduled task execution |
+| Feature | Description |
+|---|---|
+| **HeliosModule** | `forRoot()` / `forRootAsync()` via `ConfigurableModuleBuilder` — supports `useFactory`, `useClass`, `useExisting` |
+| **`@InjectHelios()`** | Convenience decorator for injecting `HeliosInstance` |
+| **`@InjectMap()` / `@InjectQueue()` / `@InjectTopic()`** | Typed injection of individual data structures by name |
+| **`@Cacheable` / `@CacheEvict` / `@CachePut`** | Method-level cache decorators (Spring Cache equivalent) |
+| **`@Transactional`** | DI-based transaction decorator — resolves via `AsyncLocalStorage`, no static singleton |
+| **`registerAsync`** | Async factory support for `HeliosCacheModule` and `HeliosTransactionModule` |
+| **HeliosHealthIndicator** | Health check integration for `@nestjs/terminus` |
+| **Event Bridge** | Bridge Helios map/topic/lifecycle events to `@nestjs/event-emitter` |
+| **Lifecycle Safety** | `OnModuleDestroy` → `instance.shutdown()` — no leaked connections |
+| **Symbol Tokens** | Collision-safe `Symbol()` injection tokens |
 
-### Not Porting
+## `@helios/blitz` (Planned)
+
+NATS JetStream-backed stream and batch processing engine — replaces Hazelcast Jet with a TypeScript-idiomatic pipeline API.
+
+| Feature | Description |
+|---|---|
+| **Pipeline API** | Fluent DAG builder — source, map, filter, flatMap, merge, branch, sink |
+| **Windowing** | Tumbling, sliding, and session windows with NATS KV-backed state |
+| **Aggregations** | count, sum, min, max, avg, distinct — windowed and grouped |
+| **Stream Joins** | Hash join (stream-table via IMap) + windowed stream-stream join |
+| **Fault Tolerance** | At-least-once delivery, configurable retry, dead-letter routing, checkpoint/restart |
+| **Batch Mode** | Bounded pipelines with `BatchResult` — file, IMap snapshot, JetStream replay |
+| **Sources** | NATS subject, JetStream stream, Helios IMap/ITopic, file, HTTP webhook |
+| **Sinks** | NATS subject/stream, Helios IMap/ITopic, file |
+| **NestJS Module** | `HeliosBlitzModule.forRoot()` / `forRootAsync()` + `@InjectBlitz()` |
+
+## Planned Extensions
+
+| Package | Description |
+|---|---|
+| **Built-in REST API** | K8s health probes, cluster info, IMap CRUD, IQueue ops — via `Bun.serve()`, zero dependencies |
+| **MapStore SPI** | Pluggable persistence layer for IMap — write-through, write-behind with batching and retry |
+| **`@helios/s3`** | S3-backed MapStore with per-map key prefix scoping |
+| **`@helios/mongodb`** | MongoDB-backed MapStore with per-map collection scoping |
+| **`@helios/turso`** | Turso/LibSQL-backed MapStore with per-map table scoping |
+
+## Deferred to v2
+
+| Feature | Reason |
+|---|---|
+| SQL Engine | Requires porting Apache Calcite (~500k lines) |
+| CP Subsystem (Raft) | Strong consistency via Raft consensus |
+| Scheduled Executor | Distributed scheduled task execution |
+
+## Not Porting
 
 OSGi, WAN replication, CRDT, vector search, durable executor, flake ID generator,
-data connections, Kafka/Hadoop/MongoDB/S3 extensions, audit log, hot restart, persistence.
+data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise).
 
 ---
 
 ## Quick Start
 
 ```typescript
-import { Helios } from 'helios';
+import { Helios } from '@helios/core';
 
 const hz = Helios.newInstance();
 const map = hz.getMap<string, number>('my-map');
@@ -84,7 +113,7 @@ hz.shutdown();
 ## Multi-Node TCP Cluster
 
 ```typescript
-import { Helios, HeliosConfig, NetworkConfig, TcpIpConfig } from 'helios';
+import { Helios, HeliosConfig, NetworkConfig, TcpIpConfig } from '@helios/core';
 
 const cfg = new HeliosConfig();
 cfg.setInstanceName('node-1');
@@ -104,7 +133,7 @@ const hz = Helios.newInstance(cfg);
 ## Near-Cache
 
 ```typescript
-import { Helios, HeliosConfig, MapConfig, NearCacheConfig } from 'helios';
+import { Helios, HeliosConfig, MapConfig, NearCacheConfig } from '@helios/core';
 
 const cfg = new HeliosConfig();
 const mapCfg = new MapConfig();
@@ -128,14 +157,13 @@ map.get('k');           // near-cache HIT (served from local cache)
 ## Predicate Queries
 
 ```typescript
-import { Predicates } from 'helios';
+import { Predicates } from '@helios/core';
 
 const map = hz.getMap<string, { name: string; age: number; dept: string }>('employees');
 
 // Simple predicates
 const engineers = map.values(Predicates.equal('dept', 'Engineering'));
 const seniors = map.values(Predicates.greaterThan('age', 30));
-const midRange = map.values(Predicates.between('age', 25, 40));
 
 // Compound predicates
 const seniorEngineers = map.values(
@@ -147,7 +175,6 @@ const seniorEngineers = map.values(
 
 // Pattern matching
 const aNames = map.values(Predicates.like('name', 'A%'));
-const regex = map.values(Predicates.regex('name', '^[A-D].*$'));
 ```
 
 ---
@@ -155,16 +182,36 @@ const regex = map.values(Predicates.regex('name', '^[A-D].*$'));
 ## NestJS Integration
 
 ```typescript
-import { Module } from '@nestjs/common';
-import { HeliosModule, HeliosCacheModule } from 'helios';
+import { Module, Injectable } from '@nestjs/common';
+import { HeliosModule, HeliosCacheModule, InjectHelios, InjectMap, Cacheable } from '@helios/nestjs';
 
 @Module({
   imports: [
-    HeliosModule.forRoot({ instanceName: 'nestjs-helios' }),
-    HeliosCacheModule.register({ ttl: 60_000 }),
+    HeliosModule.forRootAsync({
+      useFactory: (config: ConfigService) => ({
+        config: new HeliosConfig(config.get('HELIOS_NAME')),
+      }),
+      inject: [ConfigService],
+    }),
+    HeliosCacheModule.registerAsync({
+      useFactory: () => ({ ttl: 60_000 }),
+    }),
   ],
 })
 export class AppModule {}
+
+@Injectable()
+class UserService {
+  constructor(
+    @InjectHelios() private readonly helios: HeliosInstance,
+    @InjectMap('users') private readonly users: IMap<string, User>,
+  ) {}
+
+  @Cacheable({ mapName: 'users', key: (id: string) => `user:${id}` })
+  async getUser(id: string): Promise<User> {
+    return this.db.findUser(id); // only called on cache miss
+  }
+}
 ```
 
 ---
@@ -184,8 +231,6 @@ bun run app/src/app.ts --name node2 --tcp-port 5702 --http-port 3002 --peer loca
 bash app/demo.sh
 ```
 
-The demo shows: data replication, near-cache hit/miss/invalidation, and predicate queries over HTTP.
-
 ---
 
 ## Standalone Server
@@ -202,11 +247,8 @@ bun run helios-server.ts --port 5701
 git clone <repo-url>
 cd helios
 bun install
-bun test           # 2,271 tests
-bun run tsc --noEmit  # typecheck
-
-# Demo app
-cd app && bun install && bun test  # 25 tests
+bun test                # ~2,471 tests
+bun run tsc --noEmit    # typecheck
 ```
 
 ---
@@ -215,14 +257,15 @@ cd app && bun install && bun test  # 25 tests
 
 ```
 helios/
-├── src/           # Core library (482 source files)
-├── test/          # Tests (227 test files, 2,271 tests)
-├── app/           # Demo app (HTTP + near-cache + predicates, 25 tests)
+├── src/             # @helios/core library
+├── test/            # Core tests (~2,271 tests)
 ├── packages/
-│   └── nestjs/    # @helios/nestjs NestJS integration (141 tests)
-├── scripts/       # Java-to-TypeScript test converter
-├── examples/      # Smoke test example
-└── plans/         # Porting plan and roadmap
+│   ├── nestjs/      # @helios/nestjs NestJS integration (~175 tests)
+│   └── blitz/       # @helios/blitz stream processing (planned)
+├── app/             # Demo app (HTTP + near-cache + predicates, 25 tests)
+├── scripts/         # Build and test tooling
+├── examples/        # Smoke test example
+└── plans/           # Implementation plans and roadmap
 ```
 
 ---
@@ -231,7 +274,7 @@ helios/
 
 - **Bun** 1.x
 - **TypeScript** 6.0 beta (ES2025 target)
-- **NestJS** 11.x (for DI integration)
+- **NestJS** 11.x (for `@helios/nestjs`)
 
 ---
 
