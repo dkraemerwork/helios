@@ -3646,15 +3646,15 @@ const result = await blitz.batch('etl-job')
 console.log(`Processed ${result.recordsOut} records in ${result.durationMs}ms`);
 ```
 
-**TODO — Block 10.8**:
-- [ ] Implement `EndOfStreamDetector` (count expected vs ack'd; idle timeout fallback)
-- [ ] Implement `BatchPipeline.run()` → `Promise<BatchResult>` with auto-shutdown
-- [ ] Implement `BatchResult` (recordsIn, recordsOut, errorCount, durationMs, errors[])
-- [ ] Wire `HeliosMapSource.snapshot()` and `FileSource.lines()` end-of-stream signals
-- [ ] Wire JetStream `deliverAll` consumer to EOS detector
-- [ ] Tests: batch runs to completion; BatchResult counts match; error in map captured in result; partial failure with retry; clean shutdown after completion
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): batch processing mode (bounded pipelines) — 20 tests green"`
+**DONE — Block 10.8** ✅:
+- [x] Implement `EndOfStreamDetector` (count expected vs ack'd; idle timeout fallback)
+- [x] Implement `BatchGeneralStage.writeTo()` → `Promise<BatchResult>` with auto-shutdown
+- [x] Implement `BatchResult` (recordsIn, recordsOut, errorCount, durationMs, errors[])
+- [x] Wire `HeliosMapSource.snapshot()` and `FileSource.lines()` end-of-stream signals (natural iterator exhaustion)
+- [x] Wire JetStream `deliverAll` consumer to EOS detector (EndOfStreamDetector idle-timeout mode)
+- [x] Tests: batch runs to completion; BatchResult counts match; error in map captured in result; partial failure with retry; clean shutdown after completion
+- [x] GREEN — 20 tests
+- [x] `git commit -m "feat(blitz): Block 10.8 — batch processing mode (bounded pipelines) — 20 tests green"`
 
 ---
 
@@ -4392,7 +4392,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 10.5** — Stateful aggregations (count, sum, min, max, avg, distinct) + grouped aggregation + combiner — 34 tests green ✅
 - [x] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — 25 tests green ✅
 - [x] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager, FaultHandler) — 44 tests green ✅
-- [ ] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — ~20 tests
+- [x] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — 20 tests green ✅
 - [ ] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — ~25 tests
 - [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
 - [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~295 tests green
@@ -4475,4 +4475,4 @@ bun run build
 
 ---
 
-*Plan v9.9 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 12.A1+A2+A3+B+C+D complete — 24+46+18+14+15+18=135 new tests green (2592 total) | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.9: Block 10.3 — @helios/blitz stream operators (map/filter/flatMap/merge/branch/peek), 28 tests green*
+*Plan v9.9 — updated 2026-03-03 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 12.A1+A2+A3+B+C+D complete — 24+46+18+14+15+18=135 new tests green (2592 total) | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.9: Block 10.8 — @helios/blitz batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult), 20 tests green*

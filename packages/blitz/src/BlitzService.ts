@@ -4,6 +4,7 @@ import { Kvm, type KvManager } from '@nats-io/kv';
 import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from './BlitzConfig.ts';
 import { BlitzEvent } from './BlitzEvent.ts';
 import { Pipeline } from './Pipeline.ts';
+import { BatchPipeline } from './batch/BatchPipeline.ts';
 
 /** Listener for BlitzEvents emitted by BlitzService. */
 export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
@@ -118,6 +119,24 @@ export class BlitzService {
      */
     pipeline(name: string): Pipeline {
         return new Pipeline(name);
+    }
+
+    /**
+     * Create a new bounded batch pipeline with the given name.
+     *
+     * A batch pipeline reads from a finite source (e.g. `FileSource.lines()`,
+     * `HeliosMapSource.snapshot()`), processes records through operators, and
+     * returns a `Promise<BatchResult>` when the source is exhausted.
+     *
+     * ```typescript
+     * const result = await blitz.batch('etl-job')
+     *   .readFrom(FileSource.lines('/data/input.ndjson'))
+     *   .map(line => JSON.parse(line))
+     *   .writeTo(HeliosMapSink.put(activeUsersMap));
+     * ```
+     */
+    batch(name: string): BatchPipeline {
+        return new BatchPipeline(name);
     }
 
     /**

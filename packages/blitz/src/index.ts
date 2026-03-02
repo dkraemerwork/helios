@@ -83,3 +83,8 @@ export { CheckpointManager } from './fault/CheckpointManager.ts';
 export type { CheckpointStore, CheckpointData, CheckpointManagerOptions } from './fault/CheckpointManager.ts';
 export { FaultHandler } from './fault/FaultHandler.ts';
 export type { FaultMessage, FaultHandlerOptions } from './fault/FaultHandler.ts';
+// Block 10.8 — Batch processing mode
+export type { BatchResult } from './batch/BatchResult.ts';
+export { EndOfStreamDetector } from './batch/EndOfStreamDetector.ts';
+export type { EndOfStreamDetectorOptions } from './batch/EndOfStreamDetector.ts';
+export { BatchPipeline, BatchGeneralStage } from './batch/BatchPipeline.ts';
