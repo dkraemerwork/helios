@@ -51,6 +51,25 @@ export {
     type HeliosBoot4ObjectExtractionOptions,
 } from './autoconfiguration/HeliosBoot4ObjectExtractionModule';
 
+// ── Convenience injection decorators ──────────────────────────────────────
+export { InjectHelios } from './decorators/inject-helios.decorator';
+export {
+    InjectMap,
+    InjectQueue,
+    InjectTopic,
+    InjectList,
+    InjectSet,
+    InjectMultiMap,
+    InjectReplicatedMap,
+    getMapToken,
+    getQueueToken,
+    getTopicToken,
+    getListToken,
+    getSetToken,
+    getMultiMapToken,
+    getReplicatedMapToken,
+} from './decorators/inject-distributed-object.decorator';
+
 // ── Context ────────────────────────────────────────────────────────────────
 export {
     NestAware,

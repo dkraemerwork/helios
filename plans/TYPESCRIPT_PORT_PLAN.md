@@ -504,7 +504,7 @@ HeliosInstance + all services
 
 [Phase 10 — depends on Phase 7 (HeliosInstanceImpl + IMap/ITopic) + Phase 9 (Bun workspace)]
 @helios/core IMap/ITopic + nats npm package
-  └─► 10.0 JetService (NATS connection lifecycle)
+  └─► 10.0 BlitzService (NATS connection lifecycle)
         └─► 10.1 Pipeline/DAG builder (Vertex, Edge, submit/cancel)
               ├─► 10.2 sources + sinks (parallel with 10.3)
               └─► 10.3 stream operators (parallel with 10.2)
@@ -513,7 +513,7 @@ HeliosInstance + all services
                                 └─► 10.6 stream joins (hash join + windowed join)
                     └─► 10.7 fault tolerance (AckPolicy, retry, DL, checkpoint)
                           └─► 10.8 batch processing mode
-                          └─► 10.9 NestJS module (@helios/jet)
+                          └─► 10.9 NestJS module (@helios/blitz)
                                 └─► 10.10 e2e acceptance + feature parity gate
 ```
 
@@ -1662,7 +1662,7 @@ Release-blocking criteria:
 Goal: first-class NestJS integration. Port `hazelcast-spring/` (31 src, 130 tests) +
 `hazelcast-spring-boot-autoconfiguration/hazelcast-spring-boot4/` (2 src, 11 tests).
 
-SQL, Jet, and CP are deferred to v2 — see Deferred section.
+SQL and CP are deferred to v2 — Blitz (stream processing) is implemented in Phase 10. See Deferred section.
 
 Blocks 6.1–6.4 are parallelizable within this phase.
 
@@ -2186,15 +2186,14 @@ class UserService {
 }
 ```
 
-**TODO — Block 9.2** (~12 tests):
-- [ ] Implement `@InjectHelios()` decorator
-- [ ] Implement `@InjectMap(name)`, `@InjectQueue(name)`, `@InjectTopic(name)`,
+**TODO — Block 9.2** (~12 tests): ✅ DONE — 17 tests green
+- [x] Implement `@InjectHelios()` decorator
+- [x] Implement `@InjectMap(name)`, `@InjectQueue(name)`, `@InjectTopic(name)`,
       `@InjectList(name)`, `@InjectSet(name)`, `@InjectMultiMap(name)` decorators
-- [ ] Implement `getMapToken`, `getQueueToken`, etc. helper functions
-- [ ] Wire `HeliosObjectExtractionModule` to use generated tokens from decorator helpers
-- [ ] Tests: inject each data structure type via decorator in a test module
-- [ ] GREEN
-- [ ] `git commit -m "feat(nestjs): @InjectHelios + @InjectMap/Queue/Topic decorators — tests green"`
+- [x] Implement `getMapToken`, `getQueueToken`, etc. helper functions
+- [x] Wire `HeliosObjectExtractionModule` to use generated tokens from decorator helpers
+- [x] Tests: inject each data structure type via decorator in a test module
+- [x] GREEN
 
 ---
 
@@ -2569,9 +2568,9 @@ Subpath exports in `packages/nestjs/package.json`:
 
 ---
 
-## Phase 10 — Helios Jet: NATS-Backed Stream & Batch Processing Engine (~280 tests)
+## Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~280 tests)
 
-Goal: deliver a `@helios/jet` package that provides ~80%+ feature parity with Hazelcast
+Goal: deliver a `@helios/blitz` package that provides ~80%+ feature parity with Hazelcast
 Jet (`jet/` — 520 Java source files) using **NATS JetStream** as the durable streaming
 backbone. We do not port the Java DAG engine line-by-line. We build a TypeScript-idiomatic
 pipeline API on top of NATS primitives that preserves the same programming model and
@@ -2611,7 +2610,7 @@ TypeScript declarations — no shims required.
 ### Package layout
 
 ```
-packages/jet/                              # @helios/jet
+packages/blitz/                              # @helios/blitz
 ├── package.json                           # deps: nats, @helios/core
 ├── tsconfig.json                          # paths: @helios/core/* → ../../src/*
 ├── bunfig.toml
@@ -2620,8 +2619,8 @@ packages/jet/                              # @helios/jet
 │   ├── Pipeline.ts                        # fluent DAG builder (Block 10.1)
 │   ├── Vertex.ts / Edge.ts               # DAG node + edge (Block 10.1)
 │   ├── Stage.ts                           # processing stage base (Block 10.1)
-│   ├── JetService.ts                      # top-level entry point (Block 10.0)
-│   ├── JetConfig.ts                       # NATS connection + pipeline config (Block 10.0)
+│   ├── BlitzService.ts                      # top-level entry point (Block 10.0)
+│   ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0)
 │   ├── source/                            # Block 10.2
 │   │   ├── Source.ts                      # interface
 │   │   ├── NatsSource.ts                  # read from NATS subject / JetStream stream
@@ -2670,16 +2669,16 @@ packages/jet/                              # @helios/jet
 │   │   ├── BatchPipeline.ts               # bounded variant of Pipeline
 │   │   └── EndOfStreamDetector.ts         # detects JetStream stream end for batch mode
 │   └── nestjs/                            # Block 10.9
-│       ├── HeliosJetModule.ts             # @Module() forRoot() / forRootAsync()
-│       ├── HeliosJetService.ts            # @Injectable() wrapping JetService
-│       └── InjectJet.decorator.ts         # @InjectJet()
+│       ├── HeliosBlitzModule.ts             # @Module() forRoot() / forRootAsync()
+│       ├── HeliosBlitzService.ts            # @Injectable() wrapping BlitzService
+│       └── InjectBlitz.decorator.ts         # @InjectBlitz()
 └── test/
 ```
 
 ### Dependency graph (within Phase 10)
 
 ```
-Block 10.0 (JetService / JetConfig / NATS connection)
+Block 10.0 (BlitzService / BlitzConfig / NATS connection)
   └─► Block 10.1 (Pipeline / Vertex / Edge / Stage builder)
         ├─► Block 10.2 (sources + sinks — parallel)
         └─► Block 10.3 (stream operators — parallel with 10.2)
@@ -2696,30 +2695,30 @@ Block 10.0 (JetService / JetConfig / NATS connection)
 ### Block 10.0 — Package scaffold + NATS connection management (~10 tests)
 
 ```
-packages/jet/
-├── package.json            # @helios/jet | deps: nats@^2, @helios/core
+packages/blitz/
+├── package.json            # @helios/blitz | deps: nats@^2, @helios/core
 ├── tsconfig.json           # paths: @helios/core/* → ../../src/*
 ├── bunfig.toml             # no reflect-metadata needed
 └── src/
-    ├── JetConfig.ts        # NATS server URL(s), stream/consumer defaults, KV bucket names
-    └── JetService.ts       # connect() → NatsConnection + JsClient + KvManager lifecycle
+    ├── BlitzConfig.ts        # NATS server URL(s), stream/consumer defaults, KV bucket names
+    └── BlitzService.ts       # connect() → NatsConnection + JsClient + KvManager lifecycle
 ```
 
-`JetService` owns the NATS connection lifecycle. It is the single entry point:
+`BlitzService` owns the NATS connection lifecycle. It is the single entry point:
 ```typescript
-const jet = await JetService.connect({ servers: 'nats://localhost:4222' });
-const pipeline = jet.pipeline('order-processing');
-await jet.shutdown();
+const blitz = await BlitzService.connect({ servers: 'nats://localhost:4222' });
+const pipeline = blitz.pipeline('order-processing');
+await blitz.shutdown();
 ```
 
 **TODO — Block 10.0**:
-- [ ] Set up `packages/jet/` workspace (package.json, tsconfig.json, bunfig.toml)
-- [ ] Implement `JetConfig` (NATS URL, KV bucket prefix, stream retention defaults)
-- [ ] Implement `JetService.connect()` — opens NATS connection, creates JetStream manager + KV manager
-- [ ] Implement `JetService.shutdown()` — graceful drain + close
+- [ ] Set up `packages/blitz/` workspace (package.json, tsconfig.json, bunfig.toml)
+- [ ] Implement `BlitzConfig` (NATS URL, KV bucket prefix, stream retention defaults)
+- [ ] Implement `BlitzService.connect()` — opens NATS connection, creates JetStream manager + KV manager
+- [ ] Implement `BlitzService.shutdown()` — graceful drain + close
 - [ ] Tests: connect/disconnect, config defaults, error on bad server, reconnect behavior
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): package scaffold + JetService NATS connection — 10 tests green"`
+- [ ] `git commit -m "feat(blitz): package scaffold + BlitzService NATS connection — 10 tests green"`
 
 ---
 
@@ -2736,19 +2735,19 @@ src/
 The Pipeline API mirrors Hazelcast Jet's `Pipeline` / `GeneralStage` model:
 
 ```typescript
-const p = jet.pipeline('orders');
+const p = blitz.pipeline('orders');
 
 p.readFrom(NatsSource.fromSubject('orders.raw'))
  .map(order => ({ ...order, total: order.qty * order.price }))
  .filter(order => order.total > 100)
  .writeTo(NatsSink.toSubject('orders.enriched'));
 
-await jet.submit(p);
+await blitz.submit(p);
 ```
 
 Internally, each `.map()` / `.filter()` / `.writeTo()` call appends a `Vertex` and
 wires an `Edge` (backed by an intermediate NATS subject) between consecutive vertices.
-`jet.submit(p)` validates the DAG (no cycles, exactly one source, at least one sink) and
+`blitz.submit(p)` validates the DAG (no cycles, exactly one source, at least one sink) and
 starts the consumer loop for each vertex.
 
 **TODO — Block 10.1**:
@@ -2756,11 +2755,11 @@ starts the consumer loop for each vertex.
 - [ ] Implement `Edge` (NATS subject name derived from vertex names)
 - [ ] Implement `Pipeline` fluent builder (readFrom → operator chain → writeTo)
 - [ ] Implement DAG validation (cycle detection, connectivity check)
-- [ ] Implement `jet.submit(pipeline)` — starts all vertex consumer loops
-- [ ] Implement `jet.cancel(pipelineName)` — graceful shutdown of all loops
+- [ ] Implement `blitz.submit(pipeline)` — starts all vertex consumer loops
+- [ ] Implement `blitz.cancel(pipelineName)` — graceful shutdown of all loops
 - [ ] Tests: simple linear pipeline, fork (branch), merge (fan-in), cycle detection error, submit/cancel lifecycle
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): Pipeline/DAG builder + submit/cancel — 20 tests green"`
+- [ ] `git commit -m "feat(blitz): Pipeline/DAG builder + submit/cancel — 20 tests green"`
 
 ---
 
@@ -2798,7 +2797,7 @@ starts the consumer loop for each vertex.
 - [ ] HttpWebhookSource: `Bun.serve()` with configurable path + JSON body parsing
 - [ ] Tests: each source produces expected messages; each sink receives + records messages; round-trip source→sink
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): sources + sinks — 30 tests green"`
+- [ ] `git commit -m "feat(blitz): sources + sinks — 30 tests green"`
 
 ---
 
@@ -2827,7 +2826,7 @@ All operators are async-first: `fn` may return a `Promise`. Errors in `fn` surfa
 - [ ] `PeekOperator`: call side-effect fn, re-emit message unchanged
 - [ ] Tests: each operator in isolation; chain of operators; async fn; error in fn triggers nak
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): stream operators (map/filter/flatMap/merge/branch/peek) — 25 tests green"`
+- [ ] `git commit -m "feat(blitz): stream operators (map/filter/flatMap/merge/branch/peek) — 25 tests green"`
 
 ---
 
@@ -2867,7 +2866,7 @@ p.readFrom(NatsSource.fromStream('clickstream'))
 - [ ] Implement `WindowOperator`: route each event to its window key(s) in KV; close + emit on trigger; handle late arrivals up to `allowedLateness`
 - [ ] Tests: tumbling window groups and emits correctly; sliding window emits overlapping results; session window extends on activity; late arrivals respected; KV state survives restart
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): windowing engine (tumbling/sliding/session) + NATS KV state — 35 tests green"`
+- [ ] `git commit -m "feat(blitz): windowing engine (tumbling/sliding/session) + NATS KV state — 35 tests green"`
 
 ---
 
@@ -2904,7 +2903,7 @@ Grouped aggregations (equivalent to Jet's `groupingKey`):
 - [ ] Implement combiner path for parallel partial aggregates (NATS queue group workers each compute partial; merge step combines)
 - [ ] Tests: each aggregator produces correct result; grouped aggregation; parallel combiner; streaming aggregation without windowing (whole-stream running total)
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): stateful aggregations (count/sum/min/max/avg/distinct) — 30 tests green"`
+- [ ] `git commit -m "feat(blitz): stateful aggregations (count/sum/min/max/avg/distinct) — 30 tests green"`
 
 ---
 
@@ -2951,7 +2950,7 @@ Window state for both sides is stored in NATS KV.
 - [ ] Handle null / missing table entries gracefully (left-outer join behavior by default)
 - [ ] Tests: hash join enriches events; hash join handles missing key (null side); windowed join matches within window; windowed join does not match across windows; late arrivals respected
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): stream joins (hash join + windowed stream-stream join) — 25 tests green"`
+- [ ] `git commit -m "feat(blitz): stream joins (hash join + windowed stream-stream join) — 25 tests green"`
 
 ---
 
@@ -2983,7 +2982,7 @@ sequence instead of replaying from the beginning.
 - [ ] Wire retry + DL into every JetStream-backed operator stage automatically
 - [ ] Tests: successful ack; nak triggers redeliver; exhausted retries land in DL stream; checkpoint survives restart; no data loss across simulated crash
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): fault tolerance (ack/retry/dead-letter/checkpoint) — 20 tests green"`
+- [ ] `git commit -m "feat(blitz): fault tolerance (ack/retry/dead-letter/checkpoint) — 20 tests green"`
 
 ---
 
@@ -3004,7 +3003,7 @@ On end-of-stream, `BatchPipeline.run()` returns a `Promise<BatchResult>` with re
 error counts, and duration. All pipeline resources are automatically cleaned up.
 
 ```typescript
-const result = await jet.batch('etl-job')
+const result = await blitz.batch('etl-job')
   .readFrom(FileSource.lines('/data/input.ndjson'))
   .map(line => JSON.parse(line))
   .filter(record => record.status === 'active')
@@ -3021,17 +3020,17 @@ console.log(`Processed ${result.recordsOut} records in ${result.durationMs}ms`);
 - [ ] Wire JetStream `deliverAll` consumer to EOS detector
 - [ ] Tests: batch runs to completion; BatchResult counts match; error in map captured in result; partial failure with retry; clean shutdown after completion
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): batch processing mode (bounded pipelines) — 20 tests green"`
+- [ ] `git commit -m "feat(blitz): batch processing mode (bounded pipelines) — 20 tests green"`
 
 ---
 
-### Block 10.9 — NestJS integration (`@helios/jet` module) (~25 tests)
+### Block 10.9 — NestJS integration (`@helios/blitz` module) (~25 tests)
 
 ```
 src/nestjs/
-├── HeliosJetModule.ts       # @Global() DynamicModule with forRoot() / forRootAsync()
-├── HeliosJetService.ts      # @Injectable() wrapper around JetService
-└── InjectJet.decorator.ts   # @InjectJet() parameter decorator
+├── HeliosBlitzModule.ts       # @Global() DynamicModule with forRoot() / forRootAsync()
+├── HeliosBlitzService.ts      # @Injectable() wrapper around BlitzService
+└── InjectBlitz.decorator.ts   # @InjectBlitz() parameter decorator
 ```
 
 ```typescript
@@ -3039,7 +3038,7 @@ src/nestjs/
 @Module({
   imports: [
     HeliosModule.forRoot({ config }),
-    HeliosJetModule.forRoot({ servers: 'nats://localhost:4222' }),
+    HeliosBlitzModule.forRoot({ servers: 'nats://localhost:4222' }),
   ],
 })
 export class AppModule {}
@@ -3047,40 +3046,40 @@ export class AppModule {}
 // Consumer
 @Injectable()
 class OrderProcessor implements OnModuleInit {
-  constructor(@InjectJet() private readonly jet: JetService) {}
+  constructor(@InjectBlitz() private readonly blitz: BlitzService) {}
 
   async onModuleInit() {
-    const p = this.jet.pipeline('order-pipeline');
+    const p = this.blitz.pipeline('order-pipeline');
     p.readFrom(NatsSource.fromSubject('orders'))
      .map(this.enrich.bind(this))
      .writeTo(HeliosMapSink.put(this.ordersMap, o => o.id));
-    await this.jet.submit(p);
+    await this.blitz.submit(p);
   }
 }
 ```
 
-`HeliosJetModule.forRootAsync()` supports `useFactory`, `useClass`, `useExisting` via
+`HeliosBlitzModule.forRootAsync()` supports `useFactory`, `useClass`, `useExisting` via
 `ConfigurableModuleBuilder` (same pattern as Phase 9 Block 9.1).
 
 **TODO — Block 10.9**:
-- [ ] Set up `ConfigurableModuleBuilder` for `HeliosJetModule`
-- [ ] Implement `HeliosJetService` as an `@Injectable()` wrapping `JetService`
-- [ ] Implement `OnModuleDestroy` → `jet.shutdown()` for lifecycle safety
-- [ ] Implement `@InjectJet()` convenience decorator
-- [ ] Tests: `forRoot()` sync registration; `forRootAsync()` with `useFactory`; `@InjectJet()` resolves service; module destroy calls shutdown; pipeline survives module restart
+- [ ] Set up `ConfigurableModuleBuilder` for `HeliosBlitzModule`
+- [ ] Implement `HeliosBlitzService` as an `@Injectable()` wrapping `BlitzService`
+- [ ] Implement `OnModuleDestroy` → `blitz.shutdown()` for lifecycle safety
+- [ ] Implement `@InjectBlitz()` convenience decorator
+- [ ] Tests: `forRoot()` sync registration; `forRootAsync()` with `useFactory`; `@InjectBlitz()` resolves service; module destroy calls shutdown; pipeline survives module restart
 - [ ] GREEN
-- [ ] `git commit -m "feat(jet): @helios/jet NestJS module integration — 25 tests green"`
+- [ ] `git commit -m "feat(blitz): @helios/blitz NestJS module integration — 25 tests green"`
 
 ---
 
 ### Block 10.10 — End-to-end acceptance + feature parity gate (~20 tests)
 
-This block validates that the assembled `@helios/jet` package meets the 80%+ parity
+This block validates that the assembled `@helios/blitz` package meets the 80%+ parity
 contract with Hazelcast Jet. Each test scenario maps to a Hazelcast Jet integration test.
 
 Required scenarios:
 
-| Hazelcast Jet test class | Helios Jet equivalent scenario |
+| Hazelcast Jet test class | Helios Blitz equivalent scenario |
 |---|---|
 | `PipelineTest` | Multi-stage pipeline with source → map → filter → sink |
 | `WindowAggregationTest` | Tumbling window + count aggregation over NATS stream |
@@ -3093,7 +3092,7 @@ Required scenarios:
 | `DeadLetterTest` | Exhausted retries route to DL stream |
 | `CheckpointRestartTest` | Pipeline restart resumes from checkpoint, not from beginning |
 
-**Feature parity gate** (blocks release of `@helios/jet` v1.0):
+**Feature parity gate** (blocks release of `@helios/blitz` v1.0):
 
 | Feature | Required |
 |---|---|
@@ -3111,13 +3110,13 @@ Required scenarios:
 **TODO — Block 10.10**:
 - [ ] Write all 10 acceptance scenarios above
 - [ ] Run feature parity gate — all scenarios must pass
-- [ ] Verify `bun publish --dry-run` succeeds for `packages/jet/`
+- [ ] Verify `bun publish --dry-run` succeeds for `packages/blitz/`
 - [ ] GREEN
-- [ ] `git commit -m "test(jet): e2e acceptance + feature parity gate — @helios/jet v1.0"`
+- [ ] `git commit -m "test(blitz): e2e acceptance + feature parity gate — @helios/blitz v1.0"`
 
 ---
 
-**Phase 10 done gate**: `@helios/jet` v1.0 is a standalone, publishable Bun/TypeScript
+**Phase 10 done gate**: `@helios/blitz` v1.0 is a standalone, publishable Bun/TypeScript
 stream and batch processing library with:
 - Fluent DAG pipeline builder API (Hazelcast Jet `Pipeline` model)
 - NATS JetStream as durable transport backbone
@@ -3129,7 +3128,7 @@ stream and batch processing library with:
 - Batch processing mode (bounded pipelines with `BatchResult`)
 - 6 built-in sources (NATS, JetStream, HeliosMap, HeliosTopic, File, HttpWebhook)
 - 5 built-in sinks (NATS, JetStream, HeliosMap, HeliosTopic, File)
-- `@helios/jet` NestJS module with `forRoot`/`forRootAsync` + `@InjectJet()` decorator
+- `@helios/blitz` NestJS module with `forRoot`/`forRootAsync` + `@InjectBlitz()` decorator
 - ~80% feature parity with Hazelcast Jet, zero JVM dependency
 
 ---
@@ -3170,7 +3169,7 @@ query planner, or a purpose-built TS SQL engine). Do not port Calcite.
 
 ### Jet (`jet/` — 520 source files)
 
-> **No longer deferred** — implemented in **Phase 10** as `@helios/jet`, a NATS JetStream-backed
+> **No longer deferred** — implemented in **Phase 10** as `@helios/blitz`, a NATS JetStream-backed
 > stream and batch processing engine with ~80% Hazelcast Jet feature parity. We do not port
 > the Java DAG engine line-by-line; instead we build a TypeScript-idiomatic pipeline API on
 > top of NATS JetStream + KV Store. See Phase 10 for the full plan.
@@ -3293,7 +3292,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 ### Phase 9 — `@helios/nestjs` Package Extraction + Modern NestJS Library Patterns
 - [x] **Block 9.0** — Package extraction: Bun workspace, @helios/core rename, @helios/nestjs extraction — 168 tests ✅ (2157 core + 168 nestjs)
 - [x] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — 10 tests ✅
-- [ ] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — ~12 tests
+- [x] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — 17 tests ✅
 - [ ] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — ~10 tests
 - [ ] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — ~6 tests
 - [ ] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — ~8 tests
@@ -3303,8 +3302,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — ~5 tests
 - [ ] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests)
 
-### Phase 10 — Helios Jet: NATS-Backed Stream & Batch Processing Engine (~280 tests)
-- [ ] **Block 10.0** — Package scaffold (`packages/jet/`) + JetService NATS connection lifecycle — ~10 tests
+### Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~280 tests)
+- [ ] **Block 10.0** — Package scaffold (`packages/blitz/`) + BlitzService NATS connection lifecycle — ~10 tests
 - [ ] **Block 10.1** — Pipeline / DAG builder API (Vertex, Edge, submit, cancel, DAG validation) — ~20 tests
 - [ ] **Block 10.2** — Sources + sinks (NatsSource, NatsSink, HeliosMapSource/Sink, HeliosTopicSource/Sink, FileSource/Sink, HttpWebhookSource, LogSink) — ~30 tests
 - [ ] **Block 10.3** — Stream operators (map, filter, flatMap, merge, branch, peek) — ~25 tests
@@ -3313,9 +3312,9 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — ~25 tests
 - [ ] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager) — ~20 tests
 - [ ] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — ~20 tests
-- [ ] **Block 10.9** — NestJS module (`HeliosJetModule`, `HeliosJetService`, `@InjectJet()`) — ~25 tests
+- [ ] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — ~25 tests
 - [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
-- [ ] **Phase 10 checkpoint**: `@helios/jet` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~280 tests green
+- [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~280 tests green
 
 ---
 
@@ -3374,4 +3373,4 @@ bun run build
 
 ---
 
-*Plan v7.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/jet NATS-backed stream & batch processing engine (~280 tests)*
+*Plan v7.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests)*
