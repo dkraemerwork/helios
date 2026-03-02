@@ -3,9 +3,15 @@
  *
  * Port of {@code org.springframework.transaction.annotation.Transactional}.
  *
- * Wraps an annotated method in a Helios transaction managed by
- * {@link HeliosTransactionManager}. The globally registered manager
- * (via {@link HeliosTransactionManager.setCurrent}) is used at call time.
+ * Wraps an annotated method in a Helios transaction. The manager is resolved
+ * with DI-first priority:
+ *   1. If `this` has a property holding a {@link HeliosTransactionManager}
+ *      instance (injected via NestJS constructor injection), that manager is used.
+ *   2. Otherwise falls back to the globally registered manager
+ *      ({@link HeliosTransactionManager.getCurrent}).
+ *
+ * This allows multiple independent modules/instances to each have their own
+ * transaction manager without global-singleton interference.
  *
  * Supports:
  *   - \@Transactional()              — REQUIRED propagation, manager default timeout
@@ -14,6 +20,28 @@
  */
 
 import { HeliosTransactionManager, type TransactionalRunOptions } from './HeliosTransactionManager';
+
+// ---------------------------------------------------------------------------
+// DI-based manager resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans own enumerable properties of `instance` for an injected
+ * {@link HeliosTransactionManager}. Returns the first one found, or `null`.
+ *
+ * This enables DI-based resolution: if a NestJS service declares
+ * `constructor(private readonly txMgr: HeliosTransactionManager)`,
+ * the `@Transactional()` decorator picks up that injected manager
+ * rather than the global static singleton.
+ */
+function findManagerOnInstance(instance: unknown): HeliosTransactionManager | null {
+    if (instance == null || typeof instance !== 'object') return null;
+    for (const key of Object.keys(instance as object)) {
+        const val = (instance as Record<string, unknown>)[key];
+        if (val instanceof HeliosTransactionManager) return val;
+    }
+    return null;
+}
 
 // ---------------------------------------------------------------------------
 // Propagation enum
@@ -56,9 +84,10 @@ export function Transactional(options?: TransactionalOptions): MethodDecorator {
         const originalMethod = descriptor.value as (...args: unknown[]) => unknown;
 
         descriptor.value = async function (this: unknown, ...args: unknown[]): Promise<unknown> {
-            const mgr = HeliosTransactionManager.getCurrent();
+            // DI-first: prefer an injected manager on `this` over the global static.
+            const mgr = findManagerOnInstance(this) ?? HeliosTransactionManager.getCurrent();
             if (!mgr) {
-                // No manager registered — execute without transaction wrapping.
+                // No manager available — execute without transaction wrapping.
                 // This should not happen in a properly configured NestJS module.
                 return originalMethod.apply(this, args);
             }

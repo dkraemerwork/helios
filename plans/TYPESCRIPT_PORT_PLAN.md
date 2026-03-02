@@ -3513,6 +3513,38 @@ exercises every enabled group end-to-end via `fetch()`.
 
 ---
 
+## Phase 12 — MapStore SPI + Extension Packages (S3, MongoDB, Turso)
+
+Goal: Add MapStore/MapLoader runtime support to Helios core, then build three backend
+extension packages (`packages/s3/`, `packages/mongodb/`, `packages/turso/`). This enables
+IMap to persist data to external stores (write-through or write-behind) and load-on-miss.
+
+**Full plan:** See `plans/MAPSTORE_EXTENSION_PLAN.md` for complete implementation details.
+
+Depends on: Phase 8 (near-cache wiring complete), Phase 7.4 (full IMap interface).
+
+### Phase Overview
+
+| Sub-phase | What | New Tests |
+|-----------|------|-----------|
+| **Phase A: MapStore SPI (Core)** | Public interfaces (`MapStore`, `MapLoader`, `MapLoaderLifecycleSupport`), internal `MapDataStore` abstraction, `WriteThroughStore`, `WriteBehindStore` (queue + processor + worker), `MapStoreContext`, IMap async migration, MapProxy wiring | ~55 |
+| **Phase B: packages/s3/** | `S3MapStore` — S3-backed MapStore using `@aws-sdk/client-s3` | ~12 |
+| **Phase C: packages/mongodb/** | `MongoMapStore` — MongoDB-backed MapStore using `mongodb` driver | ~12 |
+| **Phase D: packages/turso/** | `TursoMapStore` — Turso/libSQL-backed MapStore using `@libsql/client` | ~14 |
+
+Phase A must complete first. Phases B/C/D are independent of each other.
+
+### Key Design Decisions
+
+- **IMap methods become async** (`put()` → `Promise<V | null>`): Required for write-through persistence. RecordStore stays sync.
+- **MapDataStore operates on deserialized K,V**: No Data-object layer for store calls.
+- **Write-behind uses `setInterval(1000)`**: StoreWorker drains queue every 1 second.
+- **Coalescing queue**: `Map<string, DelayedEntry>` — latest write per key wins.
+- **Retry policy**: 3 retries with 1s delay, then fall back to single-entry stores.
+- **Extension packages depend only on public interfaces**, not internal classes.
+
+---
+
 ## Cloud Discovery Replacement
 
 The Java aws/azure/gcp/kubernetes packages (~61 source files total) use `HttpURLConnection`
@@ -3674,7 +3706,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — 10 tests ✅
 - [x] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — 17 tests ✅
 - [x] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — 13 tests ✅
-- [ ] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — ~6 tests
+- [x] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — 7 tests ✅
 - [ ] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — ~8 tests
 - [ ] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — ~15 tests
 - [ ] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — ~10 tests
@@ -3704,6 +3736,13 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — ~10 tests
 - [ ] **Block 11.6** — `app/` migration + e2e REST acceptance (all 4 groups, real instance, fetch) — ~8 tests
 - [ ] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green
+
+### Phase 12 — MapStore SPI + Extension Packages (~93 tests) ← **CURRENT**
+- [ ] **Phase A: MapStore SPI (Core)** — public interfaces, MapDataStore, WriteThroughStore, WriteBehindStore, MapStoreContext, IMap async migration — ~55 tests
+- [ ] **Phase B: packages/s3/** — S3MapStore (`@aws-sdk/client-s3`) — ~12 tests
+- [ ] **Phase C: packages/mongodb/** — MongoMapStore (`mongodb` driver) — ~12 tests
+- [ ] **Phase D: packages/turso/** — TursoMapStore (`@libsql/client`) — ~14 tests
+- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~93 new tests green
 
 ---
 
@@ -3762,4 +3801,4 @@ bun run build
 
 ---
 
-*Plan v8.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests)*
+*Plan v9.1 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests)*
