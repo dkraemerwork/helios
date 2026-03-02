@@ -9,7 +9,7 @@
  */
 
 // ── Core module ───────────────────────────────────────────────────────────
-export { HeliosModule, type HeliosModuleAsyncOptions } from './HeliosModule';
+export { HeliosModule, type HeliosModuleAsyncOptions, type HeliosInstanceFactory } from './HeliosModule';
 export { HELIOS_INSTANCE_TOKEN } from './HeliosInstanceDefinition';
 
 // ── Cache ──────────────────────────────────────────────────────────────────

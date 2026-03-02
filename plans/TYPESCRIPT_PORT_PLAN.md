@@ -501,6 +501,20 @@ HeliosInstance + all services
               └─► 9.6 @Cacheable/@CacheEvict decorators (depends on 9.3)
               └─► 9.7 event bridge (depends on 9.2)
                     └─► 9.9 final polish + publish
+
+[Phase 10 — depends on Phase 7 (HeliosInstanceImpl + IMap/ITopic) + Phase 9 (Bun workspace)]
+@helios/core IMap/ITopic + nats npm package
+  └─► 10.0 JetService (NATS connection lifecycle)
+        └─► 10.1 Pipeline/DAG builder (Vertex, Edge, submit/cancel)
+              ├─► 10.2 sources + sinks (parallel with 10.3)
+              └─► 10.3 stream operators (parallel with 10.2)
+                    └─► 10.4 windowing engine + NATS KV state
+                          └─► 10.5 stateful aggregations + grouped combiner
+                                └─► 10.6 stream joins (hash join + windowed join)
+                    └─► 10.7 fault tolerance (AckPolicy, retry, DL, checkpoint)
+                          └─► 10.8 batch processing mode
+                          └─► 10.9 NestJS module (@helios/jet)
+                                └─► 10.10 e2e acceptance + feature parity gate
 ```
 
 ---
@@ -2127,15 +2141,13 @@ HeliosModule.forRootAsync({
 HeliosModule.forRootAsync({ useClass: HeliosConfigFactory })
 ```
 
-**TODO — Block 9.1** (~8 tests):
-- [ ] Create `src/helios-module.definition.ts` with `ConfigurableModuleBuilder`
-- [ ] Rewrite `HeliosModule` to extend generated `ConfigurableModuleClass`
-- [ ] Add internal factory provider that resolves `HeliosInstance` from options
-- [ ] Provide `HeliosInstance` under both `HELIOS_INSTANCE_TOKEN` (compat) and class token
-- [ ] Implement `OnModuleDestroy` → `instance.shutdown()` for lifecycle safety
-- [ ] Update existing tests + add new tests for `useClass`, `useExisting`, `imports`
-- [ ] GREEN
-- [ ] `git commit -m "feat(nestjs): ConfigurableModuleBuilder for HeliosModule — tests green"`
+**TODO — Block 9.1** (~8 tests): ✅ DONE — 10 tests green
+- [x] Add `HeliosInstanceFactory` interface (useClass pattern)
+- [x] Extend `HeliosModuleAsyncOptions` with `useClass`, `useExisting`, `imports`
+- [x] Implement `forRootAsync` branches for useClass/useExisting/useFactory
+- [x] Add `OnModuleDestroy` lifecycle safety (instance.shutdown())
+- [x] 10 tests green (useClass x3, useExisting x2, imports x1, structural x4)
+- [x] GREEN
 
 ---
 
@@ -2557,6 +2569,571 @@ Subpath exports in `packages/nestjs/package.json`:
 
 ---
 
+## Phase 10 — Helios Jet: NATS-Backed Stream & Batch Processing Engine (~280 tests)
+
+Goal: deliver a `@helios/jet` package that provides ~80%+ feature parity with Hazelcast
+Jet (`jet/` — 520 Java source files) using **NATS JetStream** as the durable streaming
+backbone. We do not port the Java DAG engine line-by-line. We build a TypeScript-idiomatic
+pipeline API on top of NATS primitives that preserves the same programming model and
+behavioural contracts.
+
+### Why NATS JetStream
+
+Hazelcast Jet is a distributed stream processing engine. Its core primitives are:
+DAG-based pipelines, durable sources/sinks, windowing, stateful aggregations, and
+fault-tolerant at-least-once delivery. NATS JetStream covers the infrastructure layer
+for all of these:
+
+| Hazelcast Jet concept | NATS JetStream equivalent |
+|---|---|
+| Durable stream source | JetStream stream + consumer (replay from any offset) |
+| At-least-once delivery | JetStream explicit `ack()` / `nak()` |
+| Distributed parallel workers | NATS queue groups (push consumer + queue subscription) |
+| Window / aggregation state | NATS KV Store (key-value, TTL-aware) |
+| Stream-table join (side input) | Helios `IMap` lookup + NATS KV |
+| Batch processing | JetStream bounded replay (deliver-all + `EndOfStream` detection) |
+| Back-pressure | NATS pull consumer + `maxAckPending` |
+| Dead-letter / retry | JetStream `maxDeliverCount` + `deliverSubject` |
+
+The `nats` npm package (`nats.js` monorepo) has **native Bun support** and full
+TypeScript declarations — no shims required.
+
+### What is NOT in scope (deferred to v2)
+
+- **Exactly-once semantics**: NATS JetStream is at-least-once. Idempotent sinks
+  (dedup key in Helios IMap) are the recommended pattern. True exactly-once requires
+  a two-phase commit protocol and is deferred.
+- **SQL over streams**: depends on the SQL engine (deferred to v2 with `hazelcast-sql/`).
+- **Co-located compute**: NATS is a separate process from Helios nodes. Native in-IMDG
+  computation (Jet's IMap journal source running inside the data node) is deferred.
+- **Jet Management Center / metrics UI**: out of scope for v1.
+
+### Package layout
+
+```
+packages/jet/                              # @helios/jet
+├── package.json                           # deps: nats, @helios/core
+├── tsconfig.json                          # paths: @helios/core/* → ../../src/*
+├── bunfig.toml
+├── src/
+│   ├── index.ts                           # barrel export
+│   ├── Pipeline.ts                        # fluent DAG builder (Block 10.1)
+│   ├── Vertex.ts / Edge.ts               # DAG node + edge (Block 10.1)
+│   ├── Stage.ts                           # processing stage base (Block 10.1)
+│   ├── JetService.ts                      # top-level entry point (Block 10.0)
+│   ├── JetConfig.ts                       # NATS connection + pipeline config (Block 10.0)
+│   ├── source/                            # Block 10.2
+│   │   ├── Source.ts                      # interface
+│   │   ├── NatsSource.ts                  # read from NATS subject / JetStream stream
+│   │   ├── HeliosMapSource.ts             # Helios IMap snapshot → bounded stream
+│   │   ├── HeliosTopicSource.ts           # Helios ITopic → unbounded stream
+│   │   ├── FileSource.ts                  # line-by-line file reader (batch)
+│   │   └── HttpWebhookSource.ts           # Bun.serve() based inbound HTTP events
+│   ├── sink/                              # Block 10.2
+│   │   ├── Sink.ts                        # interface
+│   │   ├── NatsSink.ts                    # publish to NATS subject / JetStream
+│   │   ├── HeliosMapSink.ts               # write to Helios IMap
+│   │   ├── HeliosTopicSink.ts             # publish to Helios ITopic
+│   │   └── FileSink.ts                    # write lines to file (batch)
+│   ├── operator/                          # Block 10.3
+│   │   ├── MapOperator.ts                 # transform T → R
+│   │   ├── FilterOperator.ts              # predicate filter
+│   │   ├── FlatMapOperator.ts             # T → R[]
+│   │   ├── MergeOperator.ts               # fan-in multiple stages
+│   │   ├── BranchOperator.ts              # fan-out by predicate
+│   │   └── PeekOperator.ts                # side-effect observe (debug)
+│   ├── window/                            # Block 10.4
+│   │   ├── WindowPolicy.ts                # interface
+│   │   ├── TumblingWindowPolicy.ts        # fixed non-overlapping windows
+│   │   ├── SlidingWindowPolicy.ts         # overlapping windows (size + slide)
+│   │   ├── SessionWindowPolicy.ts         # inactivity-gap based windows
+│   │   ├── WindowState.ts                 # NATS KV-backed window accumulator
+│   │   └── WindowOperator.ts              # applies policy + emits completed windows
+│   ├── aggregate/                         # Block 10.5
+│   │   ├── Aggregator.ts                  # interface: accumulate + combine + export
+│   │   ├── CountAggregator.ts
+│   │   ├── SumAggregator.ts
+│   │   ├── MinAggregator.ts
+│   │   ├── MaxAggregator.ts
+│   │   ├── AvgAggregator.ts
+│   │   ├── DistinctAggregator.ts
+│   │   └── AggregatingOperator.ts         # wires WindowOperator + Aggregator
+│   ├── join/                              # Block 10.6
+│   │   ├── HashJoinOperator.ts            # stream-table join (Helios IMap side input)
+│   │   └── WindowedJoinOperator.ts        # stream-stream join within window
+│   ├── fault/                             # Block 10.7
+│   │   ├── AckPolicy.ts                   # explicit / none
+│   │   ├── RetryPolicy.ts                 # maxRetries + backoff
+│   │   ├── DeadLetterSink.ts              # route failed messages to DL stream
+│   │   └── CheckpointManager.ts           # NATS KV-backed consumer sequence checkpoints
+│   ├── batch/                             # Block 10.8
+│   │   ├── BatchPipeline.ts               # bounded variant of Pipeline
+│   │   └── EndOfStreamDetector.ts         # detects JetStream stream end for batch mode
+│   └── nestjs/                            # Block 10.9
+│       ├── HeliosJetModule.ts             # @Module() forRoot() / forRootAsync()
+│       ├── HeliosJetService.ts            # @Injectable() wrapping JetService
+│       └── InjectJet.decorator.ts         # @InjectJet()
+└── test/
+```
+
+### Dependency graph (within Phase 10)
+
+```
+Block 10.0 (JetService / JetConfig / NATS connection)
+  └─► Block 10.1 (Pipeline / Vertex / Edge / Stage builder)
+        ├─► Block 10.2 (sources + sinks — parallel)
+        └─► Block 10.3 (stream operators — parallel with 10.2)
+              ├─► Block 10.4 (windowing — needs operators + NATS KV)
+              │     └─► Block 10.5 (aggregations — needs windows)
+              │           └─► Block 10.6 (joins — needs aggregations + IMap)
+              └─► Block 10.7 (fault tolerance — wraps operators/sources/sinks)
+                    ├─► Block 10.8 (batch mode — needs fault + sources)
+                    └─► Block 10.9 (NestJS module — depends on all above)
+```
+
+---
+
+### Block 10.0 — Package scaffold + NATS connection management (~10 tests)
+
+```
+packages/jet/
+├── package.json            # @helios/jet | deps: nats@^2, @helios/core
+├── tsconfig.json           # paths: @helios/core/* → ../../src/*
+├── bunfig.toml             # no reflect-metadata needed
+└── src/
+    ├── JetConfig.ts        # NATS server URL(s), stream/consumer defaults, KV bucket names
+    └── JetService.ts       # connect() → NatsConnection + JsClient + KvManager lifecycle
+```
+
+`JetService` owns the NATS connection lifecycle. It is the single entry point:
+```typescript
+const jet = await JetService.connect({ servers: 'nats://localhost:4222' });
+const pipeline = jet.pipeline('order-processing');
+await jet.shutdown();
+```
+
+**TODO — Block 10.0**:
+- [ ] Set up `packages/jet/` workspace (package.json, tsconfig.json, bunfig.toml)
+- [ ] Implement `JetConfig` (NATS URL, KV bucket prefix, stream retention defaults)
+- [ ] Implement `JetService.connect()` — opens NATS connection, creates JetStream manager + KV manager
+- [ ] Implement `JetService.shutdown()` — graceful drain + close
+- [ ] Tests: connect/disconnect, config defaults, error on bad server, reconnect behavior
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): package scaffold + JetService NATS connection — 10 tests green"`
+
+---
+
+### Block 10.1 — Pipeline / DAG builder API (~20 tests)
+
+```
+src/
+├── Pipeline.ts     # fluent builder: source → operator chain → sink
+├── Vertex.ts       # DAG node (wraps source / operator / sink)
+├── Edge.ts         # directed edge between vertices (NATS subject as the wire)
+└── Stage.ts        # abstract: process(msg) → void | msg | msg[]
+```
+
+The Pipeline API mirrors Hazelcast Jet's `Pipeline` / `GeneralStage` model:
+
+```typescript
+const p = jet.pipeline('orders');
+
+p.readFrom(NatsSource.fromSubject('orders.raw'))
+ .map(order => ({ ...order, total: order.qty * order.price }))
+ .filter(order => order.total > 100)
+ .writeTo(NatsSink.toSubject('orders.enriched'));
+
+await jet.submit(p);
+```
+
+Internally, each `.map()` / `.filter()` / `.writeTo()` call appends a `Vertex` and
+wires an `Edge` (backed by an intermediate NATS subject) between consecutive vertices.
+`jet.submit(p)` validates the DAG (no cycles, exactly one source, at least one sink) and
+starts the consumer loop for each vertex.
+
+**TODO — Block 10.1**:
+- [ ] Implement `Vertex` (name, stage ref, in-edges, out-edges)
+- [ ] Implement `Edge` (NATS subject name derived from vertex names)
+- [ ] Implement `Pipeline` fluent builder (readFrom → operator chain → writeTo)
+- [ ] Implement DAG validation (cycle detection, connectivity check)
+- [ ] Implement `jet.submit(pipeline)` — starts all vertex consumer loops
+- [ ] Implement `jet.cancel(pipelineName)` — graceful shutdown of all loops
+- [ ] Tests: simple linear pipeline, fork (branch), merge (fan-in), cycle detection error, submit/cancel lifecycle
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): Pipeline/DAG builder + submit/cancel — 20 tests green"`
+
+---
+
+### Block 10.2 — Sources + sinks (~30 tests)
+
+#### Sources
+
+| Source | Backed by | Mode |
+|---|---|---|
+| `NatsSource.fromSubject(subj)` | Core NATS push subscription | Streaming (unbounded) |
+| `NatsSource.fromStream(stream, consumer)` | JetStream durable consumer | Streaming + replayable |
+| `HeliosMapSource.snapshot(map)` | Helios `IMap.entrySet()` | Batch (bounded) |
+| `HeliosTopicSource.fromTopic(topic)` | Helios `ITopic.addMessageListener` | Streaming (unbounded) |
+| `FileSource.lines(path)` | `Bun.file(path)` line iterator | Batch (bounded) |
+| `HttpWebhookSource.listen(port, path)` | `Bun.serve()` | Streaming (unbounded) |
+
+#### Sinks
+
+| Sink | Backed by | Notes |
+|---|---|---|
+| `NatsSink.toSubject(subj)` | `nc.publish()` | Fire-and-forget |
+| `NatsSink.toStream(stream)` | `js.publish()` | Durable, ack-able |
+| `HeliosMapSink.put(map)` | `IMap.put()` | Key extracted from message |
+| `HeliosTopicSink.publish(topic)` | `ITopic.publish()` | Broadcast |
+| `FileSink.appendLines(path)` | `Bun.write()` append | Batch output |
+| `LogSink.console()` | `console.log` | Debug / testing |
+
+**TODO — Block 10.2**:
+- [ ] Implement all sources above with typed `AsyncIterable<Msg>` interface
+- [ ] Implement all sinks above with typed `write(msg): Promise<void>` interface
+- [ ] NATS source: handle subject wildcards, consumer group (queue subscription) mode
+- [ ] JetStream source: durable consumer, `maxAckPending` back-pressure, sequence tracking
+- [ ] Helios sources/sinks: wire to `@helios/core` IMap / ITopic interfaces
+- [ ] FileSource: streaming line-by-line read via `Bun.file().stream()` + TextDecoderStream
+- [ ] HttpWebhookSource: `Bun.serve()` with configurable path + JSON body parsing
+- [ ] Tests: each source produces expected messages; each sink receives + records messages; round-trip source→sink
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): sources + sinks — 30 tests green"`
+
+---
+
+### Block 10.3 — Stream operators (~25 tests)
+
+```
+src/operator/
+├── MapOperator.ts       # map<T, R>(fn: (t: T) => R | Promise<R>)
+├── FilterOperator.ts    # filter<T>(pred: (t: T) => boolean | Promise<boolean>)
+├── FlatMapOperator.ts   # flatMap<T, R>(fn: (t: T) => R[] | AsyncIterable<R>)
+├── MergeOperator.ts     # merge(...stages) — fan-in, round-robin or first-come
+├── BranchOperator.ts    # branch(pred) → [trueBranch, falseBranch]
+└── PeekOperator.ts      # peek(fn) — observe without transforming (for debug/metrics)
+```
+
+All operators are async-first: `fn` may return a `Promise`. Errors in `fn` surface as
+`NakError` and trigger the fault policy (retry / dead-letter).
+
+**TODO — Block 10.3**:
+- [ ] Implement each operator as a `Stage` subclass with `process()` method
+- [ ] `MapOperator`: sync + async fn, error propagation
+- [ ] `FilterOperator`: sync + async predicate, pass-through on `true`
+- [ ] `FlatMapOperator`: sync array + async generator output, one-to-many expansion
+- [ ] `MergeOperator`: subscribe to N upstream NATS subjects, emit on any
+- [ ] `BranchOperator`: evaluate predicate, route to one of two downstream subjects
+- [ ] `PeekOperator`: call side-effect fn, re-emit message unchanged
+- [ ] Tests: each operator in isolation; chain of operators; async fn; error in fn triggers nak
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): stream operators (map/filter/flatMap/merge/branch/peek) — 25 tests green"`
+
+---
+
+### Block 10.4 — Windowing engine (~35 tests)
+
+```
+src/window/
+├── WindowPolicy.ts           # interface: assignWindows(eventTime) → WindowKey[]
+├── TumblingWindowPolicy.ts   # size = duration; windows never overlap
+├── SlidingWindowPolicy.ts    # size = duration, slide = duration; windows overlap
+├── SessionWindowPolicy.ts    # gap = duration; new window after inactivity
+├── WindowState.ts            # NATS KV bucket per pipeline: key=windowKey, value=accumulator[]
+└── WindowOperator.ts         # buffers events per window key; emits on close trigger
+```
+
+Window state is stored in the **NATS KV Store** — this makes window state durable across
+process restarts (fault tolerance for free).
+
+Window close trigger strategies:
+- **Event-time watermark**: downstream message with `ts >= windowEnd + allowedLateness`
+- **Processing-time timer**: `setTimeout` fires at `now + (windowEnd - eventTime)` ±jitter
+- **Count trigger**: window closes when it accumulates N events (tumbling only)
+
+```typescript
+p.readFrom(NatsSource.fromStream('clickstream'))
+ .window(TumblingWindowPolicy.of({ size: 60_000 }))   // 1-minute tumbling windows
+ .aggregate(CountAggregator.byKey(click => click.userId))
+ .writeTo(NatsSink.toSubject('click-counts-per-minute'));
+```
+
+**TODO — Block 10.4**:
+- [ ] Implement `WindowPolicy` interface (`assignWindows(eventTime: number): WindowKey[]`)
+- [ ] Implement `TumblingWindowPolicy` (non-overlapping, fixed-duration)
+- [ ] Implement `SlidingWindowPolicy` (overlapping, size + slide)
+- [ ] Implement `SessionWindowPolicy` (gap-based; extend or close on inactivity)
+- [ ] Implement `WindowState` backed by NATS KV (create bucket, get/set/delete window accumulator)
+- [ ] Implement `WindowOperator`: route each event to its window key(s) in KV; close + emit on trigger; handle late arrivals up to `allowedLateness`
+- [ ] Tests: tumbling window groups and emits correctly; sliding window emits overlapping results; session window extends on activity; late arrivals respected; KV state survives restart
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): windowing engine (tumbling/sliding/session) + NATS KV state — 35 tests green"`
+
+---
+
+### Block 10.5 — Stateful aggregations (~30 tests)
+
+```
+src/aggregate/
+├── Aggregator.ts             # interface: create() → A; accumulate(acc, item) → A; combine(a, b) → A; export(acc) → R
+├── CountAggregator.ts        # count events [optionally grouped by key]
+├── SumAggregator.ts          # sum numeric field
+├── MinAggregator.ts          # minimum value
+├── MaxAggregator.ts          # maximum value
+├── AvgAggregator.ts          # running average (sum + count accumulators)
+├── DistinctAggregator.ts     # distinct values (Set accumulator)
+└── AggregatingOperator.ts    # consumes WindowOperator output; applies Aggregator; emits result
+```
+
+Aggregators follow the same interface as Phase 1 Block 1.4 (`src/aggregation/`). They are
+**reused here** — `AggregatingOperator` adapts them to the streaming context. No duplicate
+implementations.
+
+Grouped aggregations (equivalent to Jet's `groupingKey`):
+
+```typescript
+.aggregate(CountAggregator.byKey(event => event.region))
+// emits: Map<region, count> per window
+```
+
+**TODO — Block 10.5**:
+- [ ] Implement `Aggregator<T, A, R>` interface (matches Block 1.4 contract)
+- [ ] Implement all 6 concrete aggregators (reuse/adapt from `@helios/core` where possible)
+- [ ] Implement `AggregatingOperator`: consume closed window from `WindowOperator`, run accumulation loop, emit result
+- [ ] Implement `byKey(keyFn)` grouping variant on each aggregator
+- [ ] Implement combiner path for parallel partial aggregates (NATS queue group workers each compute partial; merge step combines)
+- [ ] Tests: each aggregator produces correct result; grouped aggregation; parallel combiner; streaming aggregation without windowing (whole-stream running total)
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): stateful aggregations (count/sum/min/max/avg/distinct) — 30 tests green"`
+
+---
+
+### Block 10.6 — Stream joins (~25 tests)
+
+```
+src/join/
+├── HashJoinOperator.ts      # stream-table join: enrich stream events from Helios IMap side input
+└── WindowedJoinOperator.ts  # stream-stream join: match events from two streams within same window
+```
+
+#### Stream-table join (hash join)
+
+The enrichment pattern: for every event in stream A, look up a matching record from
+Helios `IMap` (the "table" side). This is the most common join in practice.
+
+```typescript
+const enriched = p.readFrom(NatsSource.fromSubject('orders'))
+  .hashJoin(
+    HeliosMapSource.asLookup(orderDetailsMap, order => order.productId),
+    (order, details) => ({ ...order, category: details?.category ?? 'unknown' })
+  );
+```
+
+#### Stream-stream join (windowed join)
+
+Match events from two NATS streams that fall within the same window:
+
+```typescript
+const joined = p.readFrom(NatsSource.fromStream('clicks'))
+  .windowedJoin(
+    NatsSource.fromStream('purchases'),
+    TumblingWindowPolicy.of({ size: 60_000 }),
+    (click, purchase) => click.userId === purchase.userId,
+    (click, purchase) => ({ click, purchase })
+  );
+```
+
+Window state for both sides is stored in NATS KV.
+
+**TODO — Block 10.6**:
+- [ ] Implement `HashJoinOperator`: for each incoming event, perform `IMap.get(keyFn(event))`; apply merge fn; emit enriched event
+- [ ] Implement `WindowedJoinOperator`: buffer left + right events per window key in NATS KV; on window close, cross-join with predicate; emit matched pairs
+- [ ] Handle null / missing table entries gracefully (left-outer join behavior by default)
+- [ ] Tests: hash join enriches events; hash join handles missing key (null side); windowed join matches within window; windowed join does not match across windows; late arrivals respected
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): stream joins (hash join + windowed stream-stream join) — 25 tests green"`
+
+---
+
+### Block 10.7 — Fault tolerance + retry + dead-letter (~20 tests)
+
+```
+src/fault/
+├── AckPolicy.ts           # EXPLICIT (ack on success, nak on error) | NONE (fire-and-forget)
+├── RetryPolicy.ts         # maxRetries + backoff strategy (fixed / exponential)
+├── DeadLetterSink.ts      # route exhausted messages to a DL NATS subject/stream
+└── CheckpointManager.ts   # NATS KV-backed: persist last-processed sequence per consumer
+```
+
+All JetStream-backed stages use `AckPolicy.EXPLICIT` by default. On operator error:
+1. `nak()` the NATS message (returns it to the server for redelivery)
+2. After `RetryPolicy.maxRetries` exhausted, `nak()` with `delay = 0` to trigger `maxDeliverCount`
+3. JetStream moves exhausted messages to the configured dead-letter stream
+4. `DeadLetterSink` records failed messages with error metadata for inspection
+
+`CheckpointManager` periodically persists the highest consecutive ack'd sequence number
+per pipeline/consumer to NATS KV. On restart, the consumer seeks to the checkpoint
+sequence instead of replaying from the beginning.
+
+**TODO — Block 10.7**:
+- [ ] Implement `AckPolicy` enum and wire into JetStream source consumer loop
+- [ ] Implement `RetryPolicy` (fixed delay + exponential backoff with jitter)
+- [ ] Implement `DeadLetterSink` (create or reuse a DL JetStream stream; publish with error headers)
+- [ ] Implement `CheckpointManager` (NATS KV: read on startup, write every N acks or T ms)
+- [ ] Wire retry + DL into every JetStream-backed operator stage automatically
+- [ ] Tests: successful ack; nak triggers redeliver; exhausted retries land in DL stream; checkpoint survives restart; no data loss across simulated crash
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): fault tolerance (ack/retry/dead-letter/checkpoint) — 20 tests green"`
+
+---
+
+### Block 10.8 — Batch processing mode (~20 tests)
+
+```
+src/batch/
+├── BatchPipeline.ts          # bounded variant: auto-detects end of stream, then shuts down
+└── EndOfStreamDetector.ts    # monitors JetStream consumer; fires when last message ack'd + no new msgs for T ms
+```
+
+Batch mode wraps the same Pipeline API but the source is bounded:
+- `HeliosMapSource.snapshot(map)` — reads all entries, signals end-of-stream
+- `FileSource.lines(path)` — reads to EOF, signals end-of-stream
+- `NatsSource.fromStream(stream, { deliverAll: true })` — replay all historical messages, signals EOS
+
+On end-of-stream, `BatchPipeline.run()` returns a `Promise<BatchResult>` with record counts,
+error counts, and duration. All pipeline resources are automatically cleaned up.
+
+```typescript
+const result = await jet.batch('etl-job')
+  .readFrom(FileSource.lines('/data/input.ndjson'))
+  .map(line => JSON.parse(line))
+  .filter(record => record.status === 'active')
+  .writeTo(HeliosMapSink.put(activeUsersMap, r => r.id));
+
+console.log(`Processed ${result.recordsOut} records in ${result.durationMs}ms`);
+```
+
+**TODO — Block 10.8**:
+- [ ] Implement `EndOfStreamDetector` (count expected vs ack'd; idle timeout fallback)
+- [ ] Implement `BatchPipeline.run()` → `Promise<BatchResult>` with auto-shutdown
+- [ ] Implement `BatchResult` (recordsIn, recordsOut, errorCount, durationMs, errors[])
+- [ ] Wire `HeliosMapSource.snapshot()` and `FileSource.lines()` end-of-stream signals
+- [ ] Wire JetStream `deliverAll` consumer to EOS detector
+- [ ] Tests: batch runs to completion; BatchResult counts match; error in map captured in result; partial failure with retry; clean shutdown after completion
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): batch processing mode (bounded pipelines) — 20 tests green"`
+
+---
+
+### Block 10.9 — NestJS integration (`@helios/jet` module) (~25 tests)
+
+```
+src/nestjs/
+├── HeliosJetModule.ts       # @Global() DynamicModule with forRoot() / forRootAsync()
+├── HeliosJetService.ts      # @Injectable() wrapper around JetService
+└── InjectJet.decorator.ts   # @InjectJet() parameter decorator
+```
+
+```typescript
+// App module
+@Module({
+  imports: [
+    HeliosModule.forRoot({ config }),
+    HeliosJetModule.forRoot({ servers: 'nats://localhost:4222' }),
+  ],
+})
+export class AppModule {}
+
+// Consumer
+@Injectable()
+class OrderProcessor implements OnModuleInit {
+  constructor(@InjectJet() private readonly jet: JetService) {}
+
+  async onModuleInit() {
+    const p = this.jet.pipeline('order-pipeline');
+    p.readFrom(NatsSource.fromSubject('orders'))
+     .map(this.enrich.bind(this))
+     .writeTo(HeliosMapSink.put(this.ordersMap, o => o.id));
+    await this.jet.submit(p);
+  }
+}
+```
+
+`HeliosJetModule.forRootAsync()` supports `useFactory`, `useClass`, `useExisting` via
+`ConfigurableModuleBuilder` (same pattern as Phase 9 Block 9.1).
+
+**TODO — Block 10.9**:
+- [ ] Set up `ConfigurableModuleBuilder` for `HeliosJetModule`
+- [ ] Implement `HeliosJetService` as an `@Injectable()` wrapping `JetService`
+- [ ] Implement `OnModuleDestroy` → `jet.shutdown()` for lifecycle safety
+- [ ] Implement `@InjectJet()` convenience decorator
+- [ ] Tests: `forRoot()` sync registration; `forRootAsync()` with `useFactory`; `@InjectJet()` resolves service; module destroy calls shutdown; pipeline survives module restart
+- [ ] GREEN
+- [ ] `git commit -m "feat(jet): @helios/jet NestJS module integration — 25 tests green"`
+
+---
+
+### Block 10.10 — End-to-end acceptance + feature parity gate (~20 tests)
+
+This block validates that the assembled `@helios/jet` package meets the 80%+ parity
+contract with Hazelcast Jet. Each test scenario maps to a Hazelcast Jet integration test.
+
+Required scenarios:
+
+| Hazelcast Jet test class | Helios Jet equivalent scenario |
+|---|---|
+| `PipelineTest` | Multi-stage pipeline with source → map → filter → sink |
+| `WindowAggregationTest` | Tumbling window + count aggregation over NATS stream |
+| `SlidingWindowTest` | Sliding window producing overlapping results |
+| `SessionWindowTest` | Session window closes on inactivity gap |
+| `HashJoinTest` | Enrich stream events from Helios IMap lookup |
+| `StreamStreamJoinTest` | Match events from two NATS streams within window |
+| `FaultToleranceTest` | Operator crash → retry → recovery without data loss |
+| `BatchJobTest` | FileSource → transform → HeliosMapSink completes with correct count |
+| `DeadLetterTest` | Exhausted retries route to DL stream |
+| `CheckpointRestartTest` | Pipeline restart resumes from checkpoint, not from beginning |
+
+**Feature parity gate** (blocks release of `@helios/jet` v1.0):
+
+| Feature | Required |
+|---|---|
+| Linear pipeline (source → ops → sink) | ✅ |
+| Tumbling + sliding + session windows | ✅ |
+| All 6 built-in aggregators | ✅ |
+| Hash join (stream-table) | ✅ |
+| Windowed join (stream-stream) | ✅ |
+| Fault tolerance (at-least-once, retry, DL) | ✅ |
+| Batch mode (bounded pipeline) | ✅ |
+| Checkpoint/restart | ✅ |
+| NestJS module integration | ✅ |
+| Bun-native (zero Node.js shims) | ✅ |
+
+**TODO — Block 10.10**:
+- [ ] Write all 10 acceptance scenarios above
+- [ ] Run feature parity gate — all scenarios must pass
+- [ ] Verify `bun publish --dry-run` succeeds for `packages/jet/`
+- [ ] GREEN
+- [ ] `git commit -m "test(jet): e2e acceptance + feature parity gate — @helios/jet v1.0"`
+
+---
+
+**Phase 10 done gate**: `@helios/jet` v1.0 is a standalone, publishable Bun/TypeScript
+stream and batch processing library with:
+- Fluent DAG pipeline builder API (Hazelcast Jet `Pipeline` model)
+- NATS JetStream as durable transport backbone
+- Tumbling, sliding, and session windowing with NATS KV state
+- 6 built-in aggregators (count, sum, min, max, avg, distinct) + custom aggregator interface
+- Stream-table join (hash join via Helios IMap) + stream-stream join (windowed)
+- At-least-once fault tolerance with configurable retry + dead-letter routing
+- Checkpoint/restart via NATS KV sequence tracking
+- Batch processing mode (bounded pipelines with `BatchResult`)
+- 6 built-in sources (NATS, JetStream, HeliosMap, HeliosTopic, File, HttpWebhook)
+- 5 built-in sinks (NATS, JetStream, HeliosMap, HeliosTopic, File)
+- `@helios/jet` NestJS module with `forRoot`/`forRootAsync` + `@InjectJet()` decorator
+- ~80% feature parity with Hazelcast Jet, zero JVM dependency
+
+---
+
 ## Cloud Discovery Replacement
 
 The Java aws/azure/gcp/kubernetes packages (~61 source files total) use `HttpURLConnection`
@@ -2593,9 +3170,13 @@ query planner, or a purpose-built TS SQL engine). Do not port Calcite.
 
 ### Jet (`jet/` — 520 source files)
 
-Hazelcast Jet is a distributed stream processing engine with a DAG execution model.
-It is complex but more self-contained than SQL. Defer to v1.5 after core is stable.
-Jet also depends on the SQL engine for the SQL-over-streams feature.
+> **No longer deferred** — implemented in **Phase 10** as `@helios/jet`, a NATS JetStream-backed
+> stream and batch processing engine with ~80% Hazelcast Jet feature parity. We do not port
+> the Java DAG engine line-by-line; instead we build a TypeScript-idiomatic pipeline API on
+> top of NATS JetStream + KV Store. See Phase 10 for the full plan.
+>
+> The one Jet sub-feature that remains deferred is **SQL-over-streams**, which depends on
+> the SQL engine (`hazelcast-sql/`) and is still deferred to v2 with it.
 
 ### CP Subsystem (`cp/` — 66 source files)
 
@@ -2711,7 +3292,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 
 ### Phase 9 — `@helios/nestjs` Package Extraction + Modern NestJS Library Patterns
 - [x] **Block 9.0** — Package extraction: Bun workspace, @helios/core rename, @helios/nestjs extraction — 168 tests ✅ (2157 core + 168 nestjs)
-- [ ] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — ~8 tests
+- [x] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — 10 tests ✅
 - [ ] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — ~12 tests
 - [ ] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — ~10 tests
 - [ ] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — ~6 tests
@@ -2721,6 +3302,20 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — ~6 tests
 - [ ] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — ~5 tests
 - [ ] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests)
+
+### Phase 10 — Helios Jet: NATS-Backed Stream & Batch Processing Engine (~280 tests)
+- [ ] **Block 10.0** — Package scaffold (`packages/jet/`) + JetService NATS connection lifecycle — ~10 tests
+- [ ] **Block 10.1** — Pipeline / DAG builder API (Vertex, Edge, submit, cancel, DAG validation) — ~20 tests
+- [ ] **Block 10.2** — Sources + sinks (NatsSource, NatsSink, HeliosMapSource/Sink, HeliosTopicSource/Sink, FileSource/Sink, HttpWebhookSource, LogSink) — ~30 tests
+- [ ] **Block 10.3** — Stream operators (map, filter, flatMap, merge, branch, peek) — ~25 tests
+- [ ] **Block 10.4** — Windowing engine (tumbling, sliding, session) + NATS KV state — ~35 tests
+- [ ] **Block 10.5** — Stateful aggregations (count, sum, min, max, avg, distinct) + grouped aggregation + combiner — ~30 tests
+- [ ] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — ~25 tests
+- [ ] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager) — ~20 tests
+- [ ] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — ~20 tests
+- [ ] **Block 10.9** — NestJS module (`HeliosJetModule`, `HeliosJetService`, `@InjectJet()`) — ~25 tests
+- [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
+- [ ] **Phase 10 checkpoint**: `@helios/jet` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~280 tests green
 
 ---
 
@@ -2779,4 +3374,4 @@ bun run build
 
 ---
 
-*Plan v6.1 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns*
+*Plan v7.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/jet NATS-backed stream & batch processing engine (~280 tests)*
