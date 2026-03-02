@@ -15,9 +15,11 @@
     "emitDecoratorMetadata": true,
 
     "paths": {
-      "@helios/core/*": ["../../src/*"],
+      "@helios/core": ["../../src/index.ts"],
+      "@helios/core/*": ["../../src/core/*", "../../src/*"],
       "@helios/nestjs": ["../../packages/nestjs/src/index.ts"],
-      "@helios/nestjs/*": ["../../packages/nestjs/src/*"]
+      "@helios/nestjs/*": ["../../packages/nestjs/src/*"],
+      "@helios/*": ["../../src/*"]
     },
 
     "types": ["bun"]
