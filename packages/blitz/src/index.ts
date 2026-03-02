@@ -46,3 +46,15 @@ export { FlatMapOperator } from './operator/FlatMapOperator.ts';
 export { MergeOperator } from './operator/MergeOperator.ts';
 export { BranchOperator } from './operator/BranchOperator.ts';
 export { PeekOperator } from './operator/PeekOperator.ts';
+// Block 10.4 — Windowing engine
+export type { WindowKey, WindowPolicy } from './window/WindowPolicy.ts';
+export { TumblingWindowPolicy } from './window/TumblingWindowPolicy.ts';
+export type { TumblingWindowOptions } from './window/TumblingWindowPolicy.ts';
+export { SlidingWindowPolicy } from './window/SlidingWindowPolicy.ts';
+export type { SlidingWindowOptions } from './window/SlidingWindowPolicy.ts';
+export { SessionWindowPolicy } from './window/SessionWindowPolicy.ts';
+export type { SessionWindowOptions } from './window/SessionWindowPolicy.ts';
+export type { WindowState } from './window/WindowState.ts';
+export { InMemoryWindowState, NatsKvWindowState } from './window/WindowState.ts';
+export { WindowOperator } from './window/WindowOperator.ts';
+export type { WindowOperatorOptions } from './window/WindowOperator.ts';
