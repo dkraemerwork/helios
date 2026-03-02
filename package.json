@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Helios core — TypeScript/Bun port of Hazelcast distributed in-memory platform",
   "private": false,
+  "workspaces": ["packages/nestjs"],
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
@@ -45,15 +46,7 @@
   ],
   "author": "Helios Contributors",
   "license": "Apache-2.0",
-  "dependencies": {
-    "@nestjs/common": "^11.1.14",
-    "@nestjs/core": "^11.1.14",
-    "@nestjs/cache-manager": "^3.1.0",
-    "@nestjs/testing": "^11.1.14",
-    "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2",
-    "cache-manager": "^7.2.8"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^25.3.3",

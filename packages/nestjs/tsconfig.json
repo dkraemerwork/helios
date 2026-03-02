@@ -15,16 +15,12 @@
     "emitDecoratorMetadata": true,
 
     "paths": {
-      "@helios/core/*": ["../../src/*"],
-      "@helios/nestjs/*": ["./src/*"]
+      "@helios/core/*": ["../../src/core/*", "../../src/*"],
+      "@helios/nestjs/*": ["./src/*"],
+      "@helios/*": ["../../src/*"]
     },
 
-    "outDir": "dist",
-    "rootDir": ".",
-    "declaration": true,
-    "sourceMap": true,
-
-    "types": ["bun-types"]
+    "types": ["bun"]
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["dist", "node_modules"]

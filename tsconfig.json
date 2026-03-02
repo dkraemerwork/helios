@@ -38,7 +38,7 @@
 
     // Explicit list required under TS 6.0 (old default of "all @types/*" is gone).
     // bun-types covers both Bun globals and Node-compatible APIs.
-    "types": ["bun-types"]
+    "types": ["bun"]
   },
   "include": ["src/**/*", "test/**/*", "test-support/**/*", "scripts/**/*"],
   "exclude": ["dist", "node_modules"]

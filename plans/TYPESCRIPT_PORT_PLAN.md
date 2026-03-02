@@ -5,7 +5,8 @@
 ## What Is Helios
 
 Helios is a production TypeScript/Bun/NestJS port of Hazelcast — a distributed in-memory
-data platform. The Java source lives at the repo root. The TypeScript target is `ts-port/`.
+data platform. The Java source (read-only spec) lives in `../helios-1/` (the original
+Hazelcast monorepo). This repo (`helios/`) is the standalone TypeScript project.
 
 **Goal**: A production-ready, end-to-end running Helios — not a 1:1 academic port of every
 Hazelcast file. We port what is required for production. Everything else is deferred or
@@ -331,12 +332,12 @@ Path alias: `@helios/*` → `./src/*` (tsconfig paths)
 ## Project Structure
 
 ```
-package.json                              # Bun workspace root (Phase 9)
-
-ts-port/                                  # @helios/core (renamed from helios in Phase 9)
-├── package.json                          # @helios/core, Bun, TS beta (no NestJS deps)
+helios/                                   # Standalone repo (this repo)
+├── package.json                          # @helios/core, Bun, TS beta
 ├── tsconfig.json                         # ES2025, bundler, strict, decorators
-├── bunfig.toml                           # test patterns (no reflect-metadata)
+├── bunfig.toml                           # test patterns, reflect-metadata preload
+├── helios-server.ts                      # standalone server entrypoint
+├── loop.sh                               # TDD automation loop
 │
 ├── scripts/
 │   └── convert-java-tests.ts             # Java→TS converter — run with bun
@@ -376,7 +377,7 @@ ts-port/                                  # @helios/core (renamed from helios in
 │   │   └── ClientConnectionManager.ts
 │   ├── discovery/
 │   │   └── HeliosDiscovery.ts            # Phase 3 — replaces aws/azure/gcp/k8s
-│   └── nestjs/                           # Phase 6 — NestJS integration (extracted to ts-port-nestjs/ in Phase 9)
+│   └── nestjs/                           # Phase 6 — NestJS integration (extracted to packages/nestjs/ in Phase 9)
 │       ├── HeliosModule.ts
 │       ├── HeliosCacheModule.ts
 │       ├── HeliosTransactionModule.ts
@@ -387,50 +388,49 @@ ts-port/                                  # @helios/core (renamed from helios in
 │
 ├── test/                                 # Converted bun tests — mirrors src/
 │
-└── test-support/                         # Lightweight test infrastructure
-    ├── TestHeliosInstance.ts             # Phase 3 — single-node in-process
-    ├── TestNodeEngine.ts                 # Phase 3 — NodeEngine stub
-    ├── TestPartitionService.ts           # Phase 3 — 271 partitions, all local
-    └── TestClusterRegistry.ts           # Phase 4 — multi-node in-memory registry
+├── test-support/                         # Lightweight test infrastructure
+│   ├── TestHeliosInstance.ts             # Phase 3 — single-node in-process
+│   ├── TestNodeEngine.ts                 # Phase 3 — NodeEngine stub
+│   ├── TestPartitionService.ts           # Phase 3 — 271 partitions, all local
+│   └── TestClusterRegistry.ts            # Phase 4 — multi-node in-memory registry
+│
+├── packages/
+│   └── nestjs/                           # @helios/nestjs (Phase 9)
+│       ├── package.json                  # @helios/nestjs, deps: @helios/core + NestJS 11
+│       ├── tsconfig.json                 # ES2025, paths: @helios/core/* → ../../src/*
+│       ├── bunfig.toml                   # preload: reflect-metadata
+│       ├── src/
+│       │   ├── index.ts                  # barrel export
+│       │   ├── helios-module.definition.ts  # ConfigurableModuleBuilder (Block 9.1)
+│       │   ├── HeliosModule.ts           # extends ConfigurableModuleClass
+│       │   ├── HeliosCacheModule.ts
+│       │   ├── HeliosTransactionModule.ts
+│       │   ├── HeliosTransactionManager.ts
+│       │   ├── Transactional.ts          # DI-based @Transactional (Block 9.4)
+│       │   ├── decorators/               # Block 9.2 + 9.6
+│       │   ├── health/                   # Block 9.5
+│       │   ├── events/                   # Block 9.7
+│       │   ├── autoconfiguration/
+│       │   └── context/
+│       └── test/                         # NestJS integration tests
+│
+├── app/                                  # Demo app (HTTP + near-cache + predicates)
+│   ├── package.json                      # helios-demo-app (private)
+│   ├── tsconfig.json                     # paths: @helios/* → ../src/*
+│   ├── bunfig.toml
+│   ├── demo.sh                           # curl-based demo script
+│   ├── src/app.ts
+│   ├── src/http-server.ts
+│   └── test/distributed-nearcache.test.ts
+│
+├── plans/
+│   └── TYPESCRIPT_PORT_PLAN.md           # This file
+│
+└── .opencode/plans/                      # Detailed phase plans
 
-ts-port-nestjs/                           # @helios/nestjs (Phase 9)
-├── package.json                          # @helios/nestjs, deps: @helios/core + NestJS 11
-├── tsconfig.json                         # ES2025, paths: @helios/core/* → ../ts-port/src/*
-├── bunfig.toml                           # preload: reflect-metadata
-├── src/
-│   ├── index.ts                          # barrel export
-│   ├── helios-module.definition.ts       # ConfigurableModuleBuilder (Block 9.1)
-│   ├── HeliosModule.ts                   # extends ConfigurableModuleClass
-│   ├── HeliosCacheModule.ts
-│   ├── HeliosTransactionModule.ts
-│   ├── HeliosTransactionManager.ts
-│   ├── Transactional.ts                  # DI-based @Transactional (Block 9.4)
-│   ├── decorators/                       # Block 9.2 + 9.6
-│   │   ├── inject-helios.decorator.ts
-│   │   ├── inject-map.decorator.ts
-│   │   ├── inject-queue.decorator.ts
-│   │   ├── cacheable.decorator.ts
-│   │   ├── cache-evict.decorator.ts
-│   │   └── cache-put.decorator.ts
-│   ├── health/                           # Block 9.5
-│   │   ├── helios.health.ts
-│   │   └── helios-health.module.ts
-│   ├── events/                           # Block 9.7
-│   │   ├── helios-event-bridge.ts
-│   │   └── helios-event-bridge.module.ts
-│   ├── autoconfiguration/
-│   │   ├── HeliosAutoConfigurationModule.ts
-│   │   └── HeliosBoot4ObjectExtractionModule.ts
-│   └── context/
-│       ├── NestAware.ts
-│       └── NestManagedContext.ts
-└── test/                                 # NestJS integration tests
-
-ts-port-app/                              # Demo app (Bun workspace member)
-├── package.json                          # deps: @helios/core workspace:*
-├── src/app.ts
-├── src/http-server.ts
-└── test/distributed-nearcache.test.ts
+Java source (read-only spec, separate repo):
+  ../helios-1/hazelcast/src/main/java/com/hazelcast/
+  ../helios-1/hazelcast-spring/src/main/java/
 ```
 
 ---
@@ -490,7 +490,7 @@ HeliosInstance + all services
   └─► nestjs/ (HeliosModule, HeliosCacheModule, HeliosTransactionModule, autoconfiguration)
 
 [Phase 9 — depends on Phase 6 + 8]
-@helios/core (ts-port/) + @helios/nestjs (ts-port-nestjs/) Bun workspace
+@helios/core (repo root) + @helios/nestjs (packages/nestjs/) Bun workspace
   └─► 9.0 package extraction (move files, no behavior change)
         └─► 9.1 ConfigurableModuleBuilder (parallel with 9.2, 9.8)
         └─► 9.2 @InjectHelios/@InjectMap decorators (parallel with 9.1, 9.8)
@@ -511,7 +511,7 @@ Status: Complete. Do not revisit.
 
 | Item | Status |
 |---|---|
-| `ts-port/` scaffolding (package.json, tsconfig.json, bunfig.toml) | ✅ |
+| Project scaffolding (package.json, tsconfig.json, bunfig.toml) | ✅ |
 | `scripts/convert-java-tests.ts` — Java→TS converter | ✅ |
 | Bun + NestJS deps installed | ✅ |
 | `typescript@beta` (TS 6.0) pinned | ✅ |
@@ -1958,7 +1958,7 @@ All pieces exist independently — this phase connects them.
 
 ### Block 8.1 — Wire near-cache into HeliosInstanceImpl + TCP invalidation path
 
-Modify `ts-port/src/instance/impl/HeliosInstanceImpl.ts`:
+Modify `src/instance/impl/HeliosInstanceImpl.ts`:
 1. Add `DefaultNearCacheManager` field, initialized in constructor
 2. In `getMap()`: check `this._config.getMapConfig(name)?.getNearCacheConfig()` — if present,
    create a `DefaultNearCache` via the manager and wrap the proxy with near-cache read-through
@@ -1979,7 +1979,7 @@ Modify `ts-port/src/instance/impl/HeliosInstanceImpl.ts`:
 
 ### Block 8.2 — Fix HeliosServer.getBoundPort() bug
 
-Modify `ts-port/src/server/HeliosServer.ts`:
+Modify `src/server/HeliosServer.ts`:
 - Change `_tcp` reference to `_transport` in `getBoundPort()`
 
 **DONE — Block 8.2** ✅:
@@ -2018,10 +2018,10 @@ zero NestJS dependencies.
 
 Set up Bun workspaces with root `package.json`:
 ```json
-{ "private": true, "workspaces": ["ts-port", "ts-port-nestjs", "ts-port-app"] }
+{ "private": true, "workspaces": [".", "packages/nestjs", "app"] }
 ```
 
-Rename `ts-port` package: `"name": "helios"` → `"name": "@helios/core"`.
+Rename root package: `"name": "helios"` → `"name": "@helios/core"`.
 Add wildcard subpath export: `"./*": { "import": "./dist/src/*.js", "types": "./dist/src/*.d.ts" }`.
 Remove all NestJS deps from `@helios/core`.
 
@@ -2029,9 +2029,12 @@ Remove all NestJS deps from `@helios/core`.
 
 ### Block 9.0 — Package extraction (no behavioral changes)
 
-Extract the 14 source files from `ts-port/src/nestjs/` and 11 test files from
-`ts-port/test/nestjs/` into `ts-port-nestjs/` as `@helios/nestjs`. Copy, transform
+Extract the 14 source files from `src/nestjs/` and 11 test files from
+`test/nestjs/` into `packages/nestjs/` as `@helios/nestjs`. Copy, transform
 imports, verify all 141 NestJS tests pass in the new location, then delete originals.
+
+Note: `packages/nestjs/` already exists with the initial extraction. This block
+completes the separation: removes NestJS deps from root, updates imports, verifies.
 
 Import transformation rules:
 - Intra-NestJS: `@helios/nestjs/X` → `./X` (relative within package)
@@ -2040,9 +2043,9 @@ Import transformation rules:
 - Core SPI: `@helios/spi/impl/X` → `@helios/core/spi/impl/X`
 
 ```
-ts-port-nestjs/
+packages/nestjs/
 ├── package.json            # @helios/nestjs, deps: @helios/core + NestJS
-├── tsconfig.json           # paths: @helios/core/* → ../ts-port/src/*
+├── tsconfig.json           # paths: @helios/core/* → ../../src/*
 ├── bunfig.toml             # preload: reflect-metadata
 ├── src/                    # 14 files (copied + import-transformed)
 │   ├── index.ts            # barrel export
@@ -2051,17 +2054,17 @@ ts-port-nestjs/
 ```
 
 **TODO — Block 9.0**:
-- [ ] Create root workspace `package.json`
-- [ ] Rename `ts-port` package to `@helios/core`, remove NestJS deps, add `./*` subpath export
-- [ ] Create `ts-port-nestjs/` with package.json, tsconfig, bunfig
-- [ ] Copy + transform source files (14) and test files (11)
+- [ ] Create root workspace `package.json` (or convert existing)
+- [ ] Rename root package to `@helios/core`, remove NestJS deps, add `./*` subpath export
+- [ ] Finalize `packages/nestjs/` with package.json, tsconfig, bunfig
+- [ ] Verify + transform source files (14) and test files (11)
 - [ ] Create barrel `src/index.ts`
-- [ ] Remove NestJS re-exports from `ts-port/src/index.ts`
-- [ ] Update `ts-port-app/` path aliases and imports
+- [ ] Remove NestJS re-exports from root `src/index.ts`
+- [ ] Update `app/` path aliases and imports
 - [ ] `bun install` from root, verify both packages typecheck
-- [ ] `bun test` in `ts-port-nestjs/` → 141 tests green
-- [ ] `bun test` in `ts-port/` → ~1964 tests green (no NestJS tests)
-- [ ] Delete `ts-port/src/nestjs/` and `ts-port/test/nestjs/`
+- [ ] `bun test` in `packages/nestjs/` → 141 tests green
+- [ ] `bun test` at root → ~1964 tests green (no NestJS tests)
+- [ ] Delete `src/nestjs/` and `test/nestjs/`
 - [ ] `git commit -m "refactor(nestjs): extract @helios/nestjs package — 141 tests green"`
 
 ---
@@ -2513,7 +2516,7 @@ export class HeliosModule extends HeliosConfigurableModule
 
 Finalize the `@helios/nestjs` package for publication.
 
-Subpath exports in `ts-port-nestjs/package.json`:
+Subpath exports in `packages/nestjs/package.json`:
 ```json
 {
     "exports": {
@@ -2609,7 +2612,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 ## Master Todo List
 
 ### Phase 0 — Tooling ✅
-- [x] `ts-port/` scaffolding (package.json, tsconfig.json, bunfig.toml)
+- [x] Project scaffolding (package.json, tsconfig.json, bunfig.toml)
 - [x] `scripts/convert-java-tests.ts` converter
 - [x] Bun + NestJS deps installed
 - [x] `typescript@beta` (TS 6.0) pinned
@@ -2695,19 +2698,19 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 8.2** — Fix HeliosServer.getBoundPort() bug (_tcp → _transport) ✅
 - [x] **Phase 8 checkpoint**: 2,105 tests green, getMap() returns near-cache-wrapped proxy when configured, TCP invalidation evicts near-cache entries ✅
 
-### ts-port-app — Distributed Demo Application
+### app/ — Distributed Demo Application
 - [x] **Scaffolding** — package.json, tsconfig.json (path alias @helios/*), bunfig.toml ✅
-- [x] **HTTP REST server** (`src/http-server.ts`) — Bun.serve() with map CRUD, near-cache stats, health, cluster info endpoints ✅
+- [x] **HTTP REST server** (`app/src/http-server.ts`) — Bun.serve() with map CRUD, near-cache stats, health, cluster info endpoints ✅
 - [x] **Predicate query endpoints** — POST /map/:name/query (JSON DSL), GET /map/:name/values?..., GET /map/:name/keys?... ✅
-- [x] **Main app entry** (`src/app.ts`) — CLI with --name, --tcp-port, --http-port, --peer flags ✅
+- [x] **Main app entry** (`app/src/app.ts`) — CLI with --name, --tcp-port, --http-port, --peer flags ✅
 - [x] **MapProxy._makeEntry() enhancement** — nested object property access for predicates (e.g., "age", "address.city") ✅
 - [x] **Route matching order fix** — predicate routes (query/values/keys) checked before generic /map/:name/:key ✅
 - [x] **Integration test suite** — 25 tests (13 near-cache + 12 predicate queries) ✅
-- [x] **Demo script** (`demo.sh`) — curl-based demo with near-cache + predicate query examples ✅
-- [x] **ts-port-app checkpoint**: 25 tests green, 2,105 ts-port tests still green ✅
+- [x] **Demo script** (`app/demo.sh`) — curl-based demo with near-cache + predicate query examples ✅
+- [x] **app checkpoint**: 25 tests green, 2,105 core tests still green ✅
 
 ### Phase 9 — `@helios/nestjs` Package Extraction + Modern NestJS Library Patterns
-- [ ] **Block 9.0** — Package extraction: Bun workspace, @helios/core rename, @helios/nestjs extraction — 141 tests ✅ (moved)
+- [x] **Block 9.0** — Package extraction: Bun workspace, @helios/core rename, @helios/nestjs extraction — 168 tests ✅ (2157 core + 168 nestjs)
 - [ ] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — ~8 tests
 - [ ] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — ~12 tests
 - [ ] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — ~10 tests
@@ -2745,13 +2748,14 @@ refactor(ringbuffer): extract TTL logic into RingbufferExpirationPolicy
 
 ```bash
 # Convert a module's Java tests to TypeScript stubs
+# (Java source is in the helios-1 repo — read-only spec)
 bun run scripts/convert-java-tests.ts \
-  --src ../hazelcast/src/test/java/com/hazelcast/<module> \
+  --src ../helios-1/hazelcast/src/test/java/com/hazelcast/<module> \
   --out ./test/<module>
 
 # For spring modules
 bun run scripts/convert-java-tests.ts \
-  --src ../hazelcast-spring/src/test/java \
+  --src ../helios-1/hazelcast-spring/src/test/java \
   --out ./test/nestjs
 
 # Run one test file or class
@@ -2775,4 +2779,4 @@ bun run build
 
 ---
 
-*Plan v6.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-8 complete — 2,105 tests green | Phase 9: @helios/nestjs extraction + modern patterns*
+*Plan v6.1 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns*

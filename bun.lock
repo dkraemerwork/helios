@@ -4,19 +4,33 @@
   "workspaces": {
     "": {
       "name": "hazelcast-ts-port",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^25.3.3",
+        "typescript": "beta",
+      },
+    },
+    "packages/nestjs": {
+      "name": "@helios/nestjs",
+      "version": "1.0.0",
       "dependencies": {
+        "@helios/core": "file:../..",
         "@nestjs/cache-manager": "^3.1.0",
         "@nestjs/common": "^11.1.14",
         "@nestjs/core": "^11.1.14",
-        "@nestjs/testing": "^11.1.14",
         "cache-manager": "^7.2.8",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.2",
       },
       "devDependencies": {
+        "@nestjs/testing": "^11.1.14",
         "@types/bun": "latest",
         "@types/node": "^25.3.3",
         "typescript": "beta",
+      },
+      "peerDependencies": {
+        "@nestjs/common": "^11.0.0",
+        "@nestjs/core": "^11.0.0",
       },
     },
   },
@@ -24,6 +38,10 @@
     "@borewit/text-codec": ["@borewit/text-codec@0.2.1", "", {}, "sha512-k7vvKPbf7J2fZ5klGRD9AeKfUvojuZIQ3BT5u7Jfv+puwXkUBUT5PVyMDfJZpy30CBDXGMgw7fguK/lpOMBvgw=="],
 
     "@cacheable/utils": ["@cacheable/utils@2.4.0", "", { "dependencies": { "hashery": "^1.5.0", "keyv": "^5.6.0" } }, "sha512-PeMMsqjVq+bF0WBsxFBxr/WozBJiZKY0rUojuaCoIaKnEl3Ju1wfEwS+SV1DU/cSe8fqHIPiYJFif8T3MVt4cQ=="],
+
+    "@helios/core": ["hazelcast-ts-port@root:", {}],
+
+    "@helios/nestjs": ["@helios/nestjs@workspace:packages/nestjs"],
 
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
 

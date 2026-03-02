@@ -163,21 +163,6 @@ describe('Block 7.8 — barrel exports', () => {
         expect(cred.getToken()).toEqual(token);
     });
 
-    // ── NestJS integration ────────────────────────────────────────────────────
-
-    it('exports HeliosModule', () => {
-        expect(HeliosBarrel.HeliosModule).toBeDefined();
-    });
-
-    it('exports HeliosCache', () => {
-        expect(HeliosBarrel.HeliosCache).toBeDefined();
-    });
-
-    it('exports Transactional decorator', () => {
-        expect(HeliosBarrel.Transactional).toBeDefined();
-        expect(typeof HeliosBarrel.Transactional).toBe('function');
-    });
-
     // ── Server / CLI ──────────────────────────────────────────────────────────
 
     it('exports HeliosServer', () => {
@@ -227,6 +212,6 @@ describe('Block 7.8 — package.json distribution config', () => {
     });
 
     it('has a name', () => {
-        expect((pkg as Record<string, unknown>).name).toBe('helios');
+        expect((pkg as Record<string, unknown>).name).toBe('@helios/core');
     });
 });
