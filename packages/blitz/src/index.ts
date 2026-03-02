@@ -58,3 +58,14 @@ export type { WindowState } from './window/WindowState.ts';
 export { InMemoryWindowState, NatsKvWindowState } from './window/WindowState.ts';
 export { WindowOperator } from './window/WindowOperator.ts';
 export type { WindowOperatorOptions } from './window/WindowOperator.ts';
+// Block 10.5 — Stateful aggregations
+export type { Aggregator, GroupedAggregator } from './aggregate/Aggregator.ts';
+export { CountAggregator } from './aggregate/CountAggregator.ts';
+export { SumAggregator } from './aggregate/SumAggregator.ts';
+export { MinAggregator } from './aggregate/MinAggregator.ts';
+export { MaxAggregator } from './aggregate/MaxAggregator.ts';
+export { AvgAggregator } from './aggregate/AvgAggregator.ts';
+export type { AvgAcc } from './aggregate/AvgAggregator.ts';
+export { DistinctAggregator } from './aggregate/DistinctAggregator.ts';
+export { AggregatingOperator, RunningAggregateOperator } from './aggregate/AggregatingOperator.ts';
+export { hashKey } from './aggregate/hashKey.ts';
