@@ -5,4 +5,4 @@
  * Usage:
  *   @Inject(HELIOS_INSTANCE_TOKEN) private hz: HeliosInstance
  */
-export const HELIOS_INSTANCE_TOKEN = 'HELIOS_INSTANCE' as const;
+export const HELIOS_INSTANCE_TOKEN: unique symbol = Symbol('HELIOS_INSTANCE');

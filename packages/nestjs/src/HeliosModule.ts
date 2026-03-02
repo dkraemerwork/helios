@@ -24,7 +24,9 @@ import {
     DynamicModule,
     FactoryProvider,
     Global,
+    Injectable,
     Module,
+    OnApplicationShutdown,
     OnModuleDestroy,
     Optional,
     Provider,
@@ -93,15 +95,26 @@ export interface HeliosModuleAsyncOptions {
 // Lifecycle host — shuts down the instance when the module is destroyed
 // ---------------------------------------------------------------------------
 
-@Global()
-@Module({})
-class HeliosModuleLifecycle implements OnModuleDestroy {
+@Injectable()
+export class HeliosModuleLifecycle implements OnModuleDestroy, OnApplicationShutdown {
+    private _shuttingDown = false;
+
     constructor(
         @Optional() @Inject(HELIOS_INSTANCE_TOKEN) private readonly instance: HeliosInstance | null,
     ) {}
 
     onModuleDestroy(): void {
-        this.instance?.shutdown();
+        if (!this._shuttingDown) {
+            this._shuttingDown = true;
+            this.instance?.shutdown();
+        }
+    }
+
+    onApplicationShutdown(_signal?: string): void {
+        if (!this._shuttingDown) {
+            this._shuttingDown = true;
+            this.instance?.shutdown();
+        }
     }
 }
 
@@ -125,7 +138,7 @@ export class HeliosModule {
         return {
             module: HeliosModule,
             global: true,
-            providers: [provider],
+            providers: [provider, HeliosModuleLifecycle],
             exports: [HELIOS_INSTANCE_TOKEN],
         };
     }
@@ -159,6 +172,7 @@ export class HeliosModule {
                             factory.createHeliosInstance(),
                         inject: [HELIOS_INSTANCE_FACTORY_TOKEN],
                     } satisfies FactoryProvider,
+                    HeliosModuleLifecycle,
                 ],
                 exports: [HELIOS_INSTANCE_TOKEN],
             };
@@ -177,6 +191,7 @@ export class HeliosModule {
                             factory.createHeliosInstance(),
                         inject: [options.useExisting as never],
                     } satisfies FactoryProvider,
+                    HeliosModuleLifecycle,
                 ],
                 exports: [HELIOS_INSTANCE_TOKEN],
             };
@@ -195,6 +210,7 @@ export class HeliosModule {
             providers: [
                 ...extraProviders,
                 asyncProvider,
+                HeliosModuleLifecycle,
             ],
             exports: [HELIOS_INSTANCE_TOKEN],
         };

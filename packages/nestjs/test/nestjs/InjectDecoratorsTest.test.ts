@@ -162,11 +162,10 @@ describe('@InjectHelios() decorator', () => {
     });
 
     it('@InjectHelios() token equals HELIOS_INSTANCE_TOKEN', () => {
-        // The decorator must use the canonical HELIOS_INSTANCE_TOKEN
-        // We verify this structurally: get(HELIOS_INSTANCE_TOKEN) and get(@InjectHelios)
-        // resolve to the same value in a module context.
-        // Token identity check via the well-known constant:
-        expect(HELIOS_INSTANCE_TOKEN).toBe('HELIOS_INSTANCE');
+        // The decorator must use the canonical HELIOS_INSTANCE_TOKEN (a Symbol).
+        // Verify it is a Symbol with the correct description.
+        expect(typeof HELIOS_INSTANCE_TOKEN).toBe('symbol');
+        expect(HELIOS_INSTANCE_TOKEN.description).toBe('HELIOS_INSTANCE');
     });
 });
 

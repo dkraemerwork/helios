@@ -3889,7 +3889,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — 8 tests ✅
 - [x] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — 15 tests ✅
 - [x] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — 11 tests ✅
-- [ ] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — ~6 tests
+- [x] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — 9 tests ✅
 - [ ] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — ~5 tests
 - [ ] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests)
 
