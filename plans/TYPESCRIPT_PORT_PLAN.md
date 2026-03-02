@@ -4393,7 +4393,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — 25 tests green ✅
 - [x] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager, FaultHandler) — 44 tests green ✅
 - [x] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — 20 tests green ✅
-- [ ] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — ~25 tests
+- [x] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — 27 tests green ✅
 - [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
 - [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~295 tests green
 

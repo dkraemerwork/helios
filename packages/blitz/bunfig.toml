@@ -2,7 +2,8 @@
 # Match both Java-convention *Test.ts files and standard *.test.ts files
 include = ["**/*.test.ts", "**/*.spec.ts", "**/*Test.ts"]
 
-# No reflect-metadata needed for Blitz (no NestJS decorators)
+# reflect-metadata required for NestJS decorators used in Block 10.9 (HeliosBlitzModule)
+preload = ["reflect-metadata"]
 
 # Timeout per test (ms) — longer for NATS integration tests
 timeout = 30000
