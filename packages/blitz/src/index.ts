@@ -73,3 +73,13 @@ export { hashKey } from './aggregate/hashKey.ts';
 export { HashJoinOperator } from './join/HashJoinOperator.ts';
 export { WindowedJoinOperator } from './join/WindowedJoinOperator.ts';
 export type { JoinEvent, LeftEvent, RightEvent, WindowedJoinOptions } from './join/WindowedJoinOperator.ts';
+// Block 10.7 — Fault tolerance
+export { AckPolicy } from './fault/AckPolicy.ts';
+export { RetryPolicy } from './fault/RetryPolicy.ts';
+export type { BackoffStrategy, ExponentialOptions } from './fault/RetryPolicy.ts';
+export { DeadLetterSink } from './fault/DeadLetterSink.ts';
+export type { DLPublisher, DeadLetterMessage } from './fault/DeadLetterSink.ts';
+export { CheckpointManager } from './fault/CheckpointManager.ts';
+export type { CheckpointStore, CheckpointData, CheckpointManagerOptions } from './fault/CheckpointManager.ts';
+export { FaultHandler } from './fault/FaultHandler.ts';
+export type { FaultMessage, FaultHandlerOptions } from './fault/FaultHandler.ts';
