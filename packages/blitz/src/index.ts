@@ -39,3 +39,10 @@ export { HeliosMapSink } from './sink/HeliosMapSink.ts';
 export { HeliosTopicSink } from './sink/HeliosTopicSink.ts';
 export { FileSink } from './sink/FileSink.ts';
 export { LogSink } from './sink/LogSink.ts';
+// Block 10.3 — Stream operators
+export { MapOperator } from './operator/MapOperator.ts';
+export { FilterOperator } from './operator/FilterOperator.ts';
+export { FlatMapOperator } from './operator/FlatMapOperator.ts';
+export { MergeOperator } from './operator/MergeOperator.ts';
+export { BranchOperator } from './operator/BranchOperator.ts';
+export { PeekOperator } from './operator/PeekOperator.ts';

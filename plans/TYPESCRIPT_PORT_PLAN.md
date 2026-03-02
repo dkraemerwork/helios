@@ -3301,17 +3301,17 @@ All operators are async-first: `fn` may return a `Promise`. Errors in `fn` that 
 Other errors are wrapped in a `NakError` automatically. Operators should
 `throw new NakError(...)` for recoverable errors.
 
-**TODO — Block 10.3**:
-- [ ] Implement each operator as a `Stage` subclass with `process()` method
-- [ ] `MapOperator`: sync + async fn, error propagation
-- [ ] `FilterOperator`: sync + async predicate, pass-through on `true`
-- [ ] `FlatMapOperator`: sync array + async generator output, one-to-many expansion
-- [ ] `MergeOperator`: subscribe to N upstream NATS subjects, emit on any
-- [ ] `BranchOperator`: evaluate predicate, route to one of two downstream subjects
-- [ ] `PeekOperator`: call side-effect fn, re-emit message unchanged
-- [ ] Tests: each operator in isolation; chain of operators; async fn; error in fn triggers nak
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): stream operators (map/filter/flatMap/merge/branch/peek) — 25 tests green"`
+**DONE — Block 10.3** (28 tests green):
+- [x] Implement each operator as a `Stage` subclass with `process()` method
+- [x] `MapOperator`: sync + async fn, error propagation
+- [x] `FilterOperator`: sync + async predicate, pass-through on `true`
+- [x] `FlatMapOperator`: sync array + async generator output, one-to-many expansion
+- [x] `MergeOperator`: fan-in pass-through (pipeline runtime wires multiple upstream subjects)
+- [x] `BranchOperator`: evaluate predicate, route to one of two FilterOperator branches
+- [x] `PeekOperator`: call side-effect fn, re-emit message unchanged
+- [x] Tests: each operator in isolation; chain of operators; async fn; error in fn triggers nak
+- [x] GREEN
+- [x] `git commit -m "feat(blitz): Block 10.3 — stream operators (map/filter/flatMap/merge/branch/peek) — 28 tests green"`
 
 ---
 
@@ -4422,7 +4422,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 10.0** — Package scaffold (`packages/blitz/`) + BlitzService NATS connection lifecycle — 31 tests green (11 skipped/integration) ✅
 - [x] **Block 10.1** — Pipeline / DAG builder API (Vertex, Edge, submit, cancel, DAG validation) — 22 tests green (7 skipped/integration) ✅
 - [x] **Block 10.2** — Sources + sinks (NatsSource, NatsSink, HeliosMapSource/Sink, HeliosTopicSource/Sink, FileSource/Sink, HttpWebhookSource, LogSink) — 32 tests green (3 skipped/integration) ✅
-- [ ] **Block 10.3** — Stream operators (map, filter, flatMap, merge, branch, peek) — ~25 tests
+- [x] **Block 10.3** — Stream operators (map, filter, flatMap, merge, branch, peek) — 28 tests green ✅
 - [ ] **Block 10.4** — Windowing engine (tumbling, sliding, session) + NATS KV state — ~35 tests
 - [ ] **Block 10.5** — Stateful aggregations (count, sum, min, max, avg, distinct) + grouped aggregation + combiner — ~30 tests
 - [ ] **Block 10.6** — Stream joins (hash join stream-table, windowed stream-stream join) — ~25 tests
@@ -4510,4 +4510,4 @@ bun run build
 
 ---
 
-*Plan v9.8 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 12.A1+A2+A3+B+C+D complete — 24+46+18+14+15+18=135 new tests green (2592 total) | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.8: Block 12.D — @helios/turso TursoMapStore + factory, 18 tests green*
+*Plan v9.9 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 12.A1+A2+A3+B+C+D complete — 24+46+18+14+15+18=135 new tests green (2592 total) | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.9: Block 10.3 — @helios/blitz stream operators (map/filter/flatMap/merge/branch/peek), 28 tests green*
