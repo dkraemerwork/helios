@@ -13,11 +13,21 @@ export { HeliosModule, type HeliosModuleAsyncOptions, type HeliosInstanceFactory
 export { HELIOS_INSTANCE_TOKEN } from './HeliosInstanceDefinition';
 
 // ── Cache ──────────────────────────────────────────────────────────────────
-export { HeliosCacheModule, type HeliosCacheModuleOptions } from './HeliosCacheModule';
+export {
+    HeliosCacheModule,
+    type HeliosCacheModuleOptions,
+    type HeliosCacheModuleAsyncOptions,
+    type HeliosCacheModuleOptionsFactory,
+} from './HeliosCacheModule';
 export { HeliosCache, type IHeliosCacheMap } from './HeliosCache';
 
 // ── Transaction ────────────────────────────────────────────────────────────
-export { HeliosTransactionModule } from './HeliosTransactionModule';
+export {
+    HeliosTransactionModule,
+    type HeliosTransactionModuleOptions,
+    type HeliosTransactionModuleAsyncOptions,
+    type HeliosTransactionModuleOptionsFactory,
+} from './HeliosTransactionModule';
 export {
     HeliosTransactionManager,
     type TransactionContextFactory,

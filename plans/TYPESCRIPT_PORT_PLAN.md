@@ -377,6 +377,15 @@ helios/                                   # Standalone repo (this repo)
 │   │   └── ClientConnectionManager.ts
 │   ├── discovery/
 │   │   └── HeliosDiscovery.ts            # Phase 3 — replaces aws/azure/gcp/k8s
+│   ├── rest/                             # Phase 11 — built-in REST API
+│   │   ├── RestEndpointGroup.ts          # HEALTH_CHECK | CLUSTER_READ | CLUSTER_WRITE | DATA
+│   │   ├── HeliosRestServer.ts           # Bun.serve() lifecycle wrapper
+│   │   ├── RestApiFilter.ts              # URL → group → handler; 403 if group disabled
+│   │   └── handler/
+│   │       ├── HealthCheckHandler.ts     # /hazelcast/health/* (K8s probes)
+│   │       ├── ClusterReadHandler.ts     # /hazelcast/rest/cluster, /instance
+│   │       ├── ClusterWriteHandler.ts    # log level, member shutdown
+│   │       └── DataHandler.ts           # IMap CRUD + IQueue ops
 │   └── nestjs/                           # Phase 6 — NestJS integration (extracted to packages/nestjs/ in Phase 9)
 │       ├── HeliosModule.ts
 │       ├── HeliosCacheModule.ts
@@ -515,6 +524,15 @@ HeliosInstance + all services
                           └─► 10.8 batch processing mode
                           └─► 10.9 NestJS module (@helios/blitz)
                                 └─► 10.10 e2e acceptance + feature parity gate
+
+[Phase 11 — depends on Phase 7.1 (HeliosInstanceImpl) + Phase 8.1 (near-cache wired)]
+HeliosInstanceImpl + HeliosLifecycleService
+  └─► 11.1 RestApiConfig upgrade + RestEndpointGroup enum
+        └─► 11.2 HeliosRestServer + RestApiFilter (Bun.serve() lifecycle)
+              ├─► 11.3 HEALTH_CHECK handler (K8s probes)          [parallel]
+              ├─► 11.4 CLUSTER_READ + CLUSTER_WRITE handlers       [parallel]
+              └─► 11.5 DATA handler (IMap CRUD + IQueue ops)       [parallel]
+                    └─► 11.6 app/ migration + e2e REST acceptance
 ```
 
 ---
@@ -1823,7 +1841,7 @@ const hz = await Helios.newInstance('helios-config.yml'); // file-based config
 - [ ] Implement `Helios` static factory class
 - [ ] Implement config file loading (YAML + JSON)
 - [ ] Implement config validation with clear error messages for invalid configs
-- [ ] Wire deferred-service stubs (SQL, Jet, CP, ScheduledExecutor)
+- [ ] Wire deferred-service stubs (SQL, Blitz stub until Phase 10, CP, ScheduledExecutor)
 - [ ] Tests: factory creation, config file loading, deferred-service error messages
 - [ ] GREEN
 - [ ] `git commit -m "feat(factory): Helios.newInstance() factory + config bootstrap"`
@@ -2230,12 +2248,12 @@ HeliosTransactionModule.registerAsync({
 })
 ```
 
-**TODO — Block 9.3** (~10 tests):
-- [ ] Refactor `HeliosCacheModule` with `ConfigurableModuleBuilder` or manual `registerAsync`
-- [ ] Refactor `HeliosTransactionModule` with `registerAsync` support
-- [ ] Retain backward-compat `register()` signatures
-- [ ] Tests: async registration with `useFactory` + `inject` for both modules
-- [ ] GREEN
+**DONE — Block 9.3** (13 tests green):
+- [x] Refactor `HeliosCacheModule` with manual `registerAsync` (useFactory/useClass/useExisting)
+- [x] Refactor `HeliosTransactionModule` with `registerAsync` support
+- [x] Retain backward-compat `register()` signatures
+- [x] Tests: async registration with `useFactory`, `inject`, `useClass` for both modules
+- [x] GREEN
 - [ ] `git commit -m "feat(nestjs): registerAsync for cache + transaction modules — tests green"`
 
 ---
@@ -3133,6 +3151,368 @@ stream and batch processing library with:
 
 ---
 
+## Phase 11 — Built-in REST API (Bun.serve())
+
+Goal: promote the REST API from a demo-app concern into `@helios/core` as a proper
+production feature. The REST API is the only way to operate a Helios node without a
+Hazelcast binary-protocol client — it is required for Kubernetes health probes, Docker
+health checks, CI/CD pipelines, and shell-based cluster management.
+
+Depends on: Phase 7.1 (production `HeliosInstanceImpl`), Phase 8.1 (near-cache wired
+into instance).
+
+### Why it belongs in core, not the demo app
+
+The `app/src/http-server.ts` built during Phase 7 proved the pattern works. Phase 11
+graduates it: the REST server becomes a lifecycle-managed component of `HeliosInstanceImpl`
+itself — started when `restApiConfig.isEnabled()`, stopped on `instance.shutdown()`.
+No user wiring required.
+
+### Design decisions vs Hazelcast Java
+
+| Concern | Java old (`RestApiConfig`, removed 6.0) | Java new (`RestConfig`, 5.4+) | Helios |
+|---|---|---|---|
+| Transport | HTTP multiplexed on cluster TCP port 5701 via NIO text-parser | Separate HTTP server (default port 8443) | Separate HTTP server, **`Bun.serve()`**, default port **8080** |
+| Dependency | None (reused NIO stack) | Embedded HTTP server | None — `Bun.serve()` is built in |
+| TLS | No | Full TLS (JKS, PEM) | Deferred to v2 via `Bun.serve({ tls })` |
+| Auth | None | JWT tokens, lockout, security realm | Deferred to v2 |
+| Endpoint groups | `RestEndpointGroup` enum | Same groups (deprecated name) | Same model, 4 groups relevant to v1 |
+
+The Java NIO-multiplexing hack existed because adding Jetty to a JVM cluster node was
+heavy. In Bun, `Bun.serve()` is built into the runtime — zero additional dependency,
+zero cold-start cost. We skip straight to the correct model: a dedicated HTTP listener.
+
+### Endpoint groups (v1 scope)
+
+| Group | Default | Endpoints |
+|---|---|---|
+| `HEALTH_CHECK` | **enabled** | `/hazelcast/health`, `/hazelcast/health/ready`, `/hazelcast/health/node-state`, `/hazelcast/health/cluster-state`, `/hazelcast/health/cluster-safe`, `/hazelcast/health/cluster-size` |
+| `CLUSTER_READ` | **enabled** | `/hazelcast/rest/cluster`, `/hazelcast/rest/instance` |
+| `CLUSTER_WRITE` | disabled | `GET/POST /hazelcast/rest/log-level`, `POST /hazelcast/rest/log-level/reset`, `POST /hazelcast/rest/management/cluster/memberShutdown` |
+| `DATA` | disabled | `GET/POST/DELETE /hazelcast/rest/maps/{name}/{key}`, `GET /hazelcast/rest/queues/{name}/size`, `POST /hazelcast/rest/queues/{name}`, `GET /hazelcast/rest/queues/{name}/{timeout}` |
+
+Groups `PERSISTENCE`, `WAN`, and `CP` are not implemented — they map to deferred/dropped
+features and return 501 Not Implemented if requested.
+
+### File structure
+
+```
+src/config/RestApiConfig.ts               (upgraded — add port, groups, timeout)
+
+src/rest/
+├── RestEndpointGroup.ts                  (enum: HEALTH_CHECK | CLUSTER_READ | CLUSTER_WRITE | DATA)
+├── HeliosRestServer.ts                   (Bun.serve() lifecycle — start(), stop(), getBoundPort())
+├── RestApiFilter.ts                      (URL → group → handler; 403 if group disabled)
+├── handler/
+│   ├── HealthCheckHandler.ts             (HEALTH_CHECK group — K8s probes)
+│   ├── ClusterReadHandler.ts             (CLUSTER_READ group — cluster info)
+│   ├── ClusterWriteHandler.ts            (CLUSTER_WRITE group — log level, shutdown)
+│   └── DataHandler.ts                    (DATA group — IMap CRUD + IQueue ops)
+└── index.ts                              (barrel export)
+```
+
+### Config model (upgraded RestApiConfig)
+
+```typescript
+// src/config/RestApiConfig.ts (upgraded from boolean stub)
+import { RestEndpointGroup } from '@helios/rest/RestEndpointGroup';
+
+export class RestApiConfig {
+    static readonly DEFAULT_PORT = 8080;
+    static readonly DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+
+    private _enabled: boolean = false;
+    private _port: number = RestApiConfig.DEFAULT_PORT;
+    private _requestTimeoutMs: number = RestApiConfig.DEFAULT_REQUEST_TIMEOUT_MS;
+    private _enabledGroups: Set<RestEndpointGroup> = new Set([
+        RestEndpointGroup.HEALTH_CHECK,
+        RestEndpointGroup.CLUSTER_READ,
+    ]);
+
+    isEnabled(): boolean { return this._enabled; }
+    setEnabled(enabled: boolean): this { this._enabled = enabled; return this; }
+
+    getPort(): number { return this._port; }
+    setPort(port: number): this { this._port = port; return this; }
+
+    getRequestTimeoutMs(): number { return this._requestTimeoutMs; }
+    setRequestTimeoutMs(ms: number): this { this._requestTimeoutMs = ms; return this; }
+
+    enableGroups(...groups: RestEndpointGroup[]): this {
+        for (const g of groups) this._enabledGroups.add(g);
+        return this;
+    }
+    disableGroups(...groups: RestEndpointGroup[]): this {
+        for (const g of groups) this._enabledGroups.delete(g);
+        return this;
+    }
+    enableAllGroups(): this {
+        for (const g of Object.values(RestEndpointGroup)) this._enabledGroups.add(g);
+        return this;
+    }
+    disableAllGroups(): this { this._enabledGroups.clear(); return this; }
+
+    isGroupEnabled(group: RestEndpointGroup): boolean { return this._enabledGroups.has(group); }
+    getEnabledGroups(): ReadonlySet<RestEndpointGroup> { return this._enabledGroups; }
+    isEnabledAndNotEmpty(): boolean { return this._enabled && this._enabledGroups.size > 0; }
+}
+```
+
+### HeliosRestServer skeleton
+
+```typescript
+// src/rest/HeliosRestServer.ts
+export class HeliosRestServer {
+    private _server: ReturnType<typeof Bun.serve> | null = null;
+
+    constructor(
+        private readonly instance: HeliosInstance,
+        private readonly config: RestApiConfig,
+    ) {}
+
+    start(): void {
+        const filter = new RestApiFilter(this.config, this.instance);
+        this._server = Bun.serve({
+            port: this.config.getPort(),
+            fetch: (req) => filter.dispatch(req),
+        });
+    }
+
+    stop(): void {
+        this._server?.stop(true);
+        this._server = null;
+    }
+
+    getBoundPort(): number {
+        return this._server?.port ?? -1;
+    }
+}
+```
+
+### Integration with HeliosInstanceImpl
+
+```typescript
+// In HeliosInstanceImpl.start() — add after all services are started:
+if (this._config.getNetworkConfig().getRestApiConfig().isEnabledAndNotEmpty()) {
+    this._restServer = new HeliosRestServer(
+        this,
+        this._config.getNetworkConfig().getRestApiConfig(),
+    );
+    this._restServer.start();
+}
+
+// In HeliosInstanceImpl.shutdown():
+this._restServer?.stop();
+```
+
+### Integration with standalone CLI (HeliosServer — Block 7.7)
+
+No extra wiring needed — REST is driven entirely by config and instance lifecycle.
+Add CLI ergonomics to `helios-server.ts`:
+
+```bash
+bun run helios-server.ts --rest-port 8080
+bun run helios-server.ts --rest-port 8080 --rest-groups HEALTH_CHECK,CLUSTER_READ,DATA
+```
+
+### What happens to app/src/http-server.ts
+
+After Phase 11, the demo app's custom HTTP server delegates `/hazelcast/*` paths to the
+core `HeliosRestServer` and handles only app-specific routes (predicate query DSL, near-
+cache stats display) itself. Migration is part of Block 11.6.
+
+---
+
+### Block 11.1 — RestApiConfig upgrade + RestEndpointGroup (~12 tests)
+
+Upgrade the existing `RestApiConfig` stub and introduce `RestEndpointGroup`.
+
+```
+src/config/RestApiConfig.ts     (upgrade — port, groups, timeout, full fluent API)
+src/rest/RestEndpointGroup.ts   (new — HEALTH_CHECK | CLUSTER_READ | CLUSTER_WRITE | DATA)
+```
+
+Config YAML/JSON parsers (Block 1.7) must be updated to parse the `rest-api` config block.
+
+**TODO — Block 11.1**:
+- [ ] Implement `RestEndpointGroup` enum (4 groups; default enabled: HEALTH_CHECK + CLUSTER_READ)
+- [ ] Upgrade `RestApiConfig` with port, groups, timeout, fluent API, `isEnabledAndNotEmpty()`
+- [ ] Update YAML/JSON config parsers to parse `rest-api.port` and `rest-api.enabled-groups`
+- [ ] Tests: default groups correct; enable/disable fluent API; YAML + JSON parse round-trip; port validation; `isEnabledAndNotEmpty()` logic
+- [ ] GREEN
+- [ ] `git commit -m "feat(rest): RestApiConfig upgrade + RestEndpointGroup — 12 tests green"`
+
+---
+
+### Block 11.2 — HeliosRestServer + RestApiFilter + lifecycle (~8 tests)
+
+```
+src/rest/HeliosRestServer.ts    (Bun.serve() lifecycle: start, stop, getBoundPort)
+src/rest/RestApiFilter.ts       (URL prefix → group; 403 with JSON body if group disabled)
+```
+
+Disabled-group response:
+```json
+{ "status": 403, "message": "This REST endpoint group is disabled. Enable it via RestApiConfig." }
+```
+
+Unknown paths return 404:
+```json
+{ "status": 404, "message": "Unknown REST endpoint." }
+```
+
+**TODO — Block 11.2**:
+- [ ] Implement `HeliosRestServer` (`start`/`stop`/`getBoundPort`, port from config)
+- [ ] Implement `RestApiFilter` (URL prefix → group mapping, 403 on disabled group, 404 on unknown)
+- [ ] Wire `HeliosRestServer` into `HeliosInstanceImpl` startup/shutdown sequence
+- [ ] Wire into `helios-server.ts` CLI via `--rest-port` + `--rest-groups` args
+- [ ] Tests: server starts on correct port; does not start when `isEnabled()=false`; stops cleanly; 403 for disabled group; 404 for unknown path; port accessible after start
+- [ ] GREEN
+- [ ] `git commit -m "feat(rest): HeliosRestServer + RestApiFilter lifecycle — 8 tests green"`
+
+---
+
+### Block 11.3 — HEALTH_CHECK handler (~8 tests)
+
+The primary production driver. Kubernetes liveness/readiness probes and load balancer
+health checks hit these endpoints — they must be synchronous, fast, and return
+well-formed JSON even if the cluster is degraded.
+
+```
+src/rest/handler/HealthCheckHandler.ts
+```
+
+Endpoints:
+```
+GET /hazelcast/health              → full health JSON
+GET /hazelcast/health/ready        → 200 {"status":"UP"} if ACTIVE; 503 {"status":"DOWN"} otherwise
+GET /hazelcast/health/node-state   → {"nodeState":"ACTIVE"}
+GET /hazelcast/health/cluster-state → {"clusterState":"ACTIVE"}
+GET /hazelcast/health/cluster-safe → {"clusterSafe":true}
+GET /hazelcast/health/cluster-size → {"clusterSize":1}
+```
+
+Full health response body:
+```json
+{
+  "nodeState": "ACTIVE",
+  "clusterState": "ACTIVE",
+  "clusterSafe": true,
+  "clusterSize": 1,
+  "memberVersion": "1.0.0",
+  "instanceName": "helios-node-1"
+}
+```
+
+Node state is sourced from `HeliosLifecycleService.getState()`:
+`STARTING | ACTIVE | PASSIVE | SHUTTING_DOWN | TERMINATED`
+
+**TODO — Block 11.3**:
+- [ ] Implement `HealthCheckHandler` with all 6 endpoints
+- [ ] `/hazelcast/health/ready` returns 503 when node state is not `ACTIVE`
+- [ ] All responses: `Content-Type: application/json`
+- [ ] Tests: each endpoint returns correct JSON structure; 503 when not ACTIVE; ACTIVE node returns 200; correct Content-Type header on all responses
+- [ ] GREEN
+- [ ] `git commit -m "feat(rest): HEALTH_CHECK handler (K8s probes) — 8 tests green"`
+
+---
+
+### Block 11.4 — CLUSTER_READ + CLUSTER_WRITE handlers (~10 tests)
+
+```
+src/rest/handler/ClusterReadHandler.ts
+src/rest/handler/ClusterWriteHandler.ts
+```
+
+CLUSTER_READ endpoints (enabled by default):
+```
+GET /hazelcast/rest/cluster    → {"name":"dev","state":"ACTIVE","memberCount":1}
+GET /hazelcast/rest/instance   → {"instanceName":"helios-node-1"}
+```
+
+CLUSTER_WRITE endpoints (disabled by default):
+```
+GET  /hazelcast/rest/log-level                              → {"logLevel":"INFO"}
+POST /hazelcast/rest/log-level   body: {"logLevel":"DEBUG"} → 200 OK
+POST /hazelcast/rest/log-level/reset                        → 200 OK
+POST /hazelcast/rest/management/cluster/memberShutdown      → 200 OK (async shutdown)
+```
+
+Member shutdown: send `200 OK` response **before** calling `instance.shutdown()` —
+`Promise.resolve().then(() => instance.shutdown())` so the response flushes first.
+
+**TODO — Block 11.4**:
+- [ ] Implement `ClusterReadHandler` (cluster info + instance name)
+- [ ] Implement `ClusterWriteHandler` (log level get/set/reset + member shutdown)
+- [ ] Log-level change must update the Helios logger at runtime
+- [ ] Member shutdown: send 200, then schedule `instance.shutdown()` via microtask
+- [ ] Tests: CLUSTER_READ returns correct JSON; CLUSTER_WRITE returns 403 when group disabled; log-level round-trip (set DEBUG → get → reset → get INFO); shutdown triggers lifecycle event
+- [ ] GREEN
+- [ ] `git commit -m "feat(rest): CLUSTER_READ + CLUSTER_WRITE handlers — 10 tests green"`
+
+---
+
+### Block 11.5 — DATA handler (~10 tests)
+
+```
+src/rest/handler/DataHandler.ts
+```
+
+Endpoints (disabled by default):
+```
+GET    /hazelcast/rest/maps/{name}/{key}       → 200 + JSON value | 204 No Content if key absent
+POST   /hazelcast/rest/maps/{name}/{key}       → body: JSON value → 200 OK
+DELETE /hazelcast/rest/maps/{name}/{key}       → 200 OK
+GET    /hazelcast/rest/queues/{name}/size      → {"size": 0}
+POST   /hazelcast/rest/queues/{name}           → body: JSON value → 200 OK | 503 if queue full
+GET    /hazelcast/rest/queues/{name}/{timeout} → poll (timeout in seconds) → 200 + value | 204 on timeout
+```
+
+All values are JSON-serialized (`JSON.stringify`/`JSON.parse`). Keys are always strings
+(the URL path segment). Map names and queue names are looked up via `instance.getMap(name)` /
+`instance.getQueue(name)`.
+
+**TODO — Block 11.5**:
+- [ ] Implement `DataHandler` with all map + queue endpoints above
+- [ ] Map GET: returns 204 (no body) when key is absent
+- [ ] Queue offer: returns 503 when `offer()` returns false (bounded queue full)
+- [ ] Queue poll: pass `timeout * 1000` ms to `queue.poll()`; returns 204 on timeout
+- [ ] Tests: map CRUD round-trip; 204 on absent key; 403 when DATA group disabled; queue offer/poll/size; queue poll timeout returns 204; 503 on full bounded queue
+- [ ] GREEN
+- [ ] `git commit -m "feat(rest): DATA handler (IMap CRUD + IQueue ops) — 10 tests green"`
+
+---
+
+### Block 11.6 — app/ migration + e2e REST acceptance (~8 tests)
+
+Migrate `app/src/http-server.ts` to delegate standard `/hazelcast/*` paths to the core
+`HeliosRestServer` and retain only demo-specific routes (`/map/:name/query`,
+`/near-cache/:name/stats`, etc.).
+
+Add an e2e acceptance test that starts a real `HeliosInstance` with REST enabled and
+exercises every enabled group end-to-end via `fetch()`.
+
+**TODO — Block 11.6**:
+- [ ] Refactor `app/src/http-server.ts` — start core `HeliosRestServer` for `/hazelcast/*`; keep custom routes for demo-specific endpoints
+- [ ] Existing `app/` 25-test suite must remain green after migration
+- [ ] Add e2e acceptance test: `Helios.newInstance()` with `restApiConfig.setEnabled(true).enableAllGroups()` → fetch all endpoint groups → assert responses → `instance.shutdown()` → assert port closed
+- [ ] All tests green
+- [ ] `git commit -m "feat(rest): e2e REST acceptance + app/ migration — tests green"`
+
+---
+
+**Phase 11 done gate**: Built-in REST API is a first-class feature of `@helios/core`:
+- `HeliosRestServer` (`Bun.serve()`) starts and stops with the `HeliosInstance` lifecycle
+- All 4 endpoint groups implemented and access-gated by `RestApiConfig`
+- Kubernetes health probes work out of the box via `/hazelcast/health/ready`
+- `DATA` group provides curl-level access to IMap and IQueue
+- `CLUSTER_WRITE` enables log-level tuning and graceful member shutdown without a client
+- `app/` demo delegates standard paths to the core server
+- TLS and auth-token support deferred to v2
+- ~56 new tests green
+
+---
+
 ## Cloud Discovery Replacement
 
 The Java aws/azure/gcp/kubernetes packages (~61 source files total) use `HttpURLConnection`
@@ -3174,7 +3554,7 @@ query planner, or a purpose-built TS SQL engine). Do not port Calcite.
 > the Java DAG engine line-by-line; instead we build a TypeScript-idiomatic pipeline API on
 > top of NATS JetStream + KV Store. See Phase 10 for the full plan.
 >
-> The one Jet sub-feature that remains deferred is **SQL-over-streams**, which depends on
+> The one Blitz sub-feature that remains deferred is **SQL-over-streams**, which depends on
 > the SQL engine (`hazelcast-sql/`) and is still deferred to v2 with it.
 
 ### CP Subsystem (`cp/` — 66 source files)
@@ -3293,7 +3673,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.0** — Package extraction: Bun workspace, @helios/core rename, @helios/nestjs extraction — 168 tests ✅ (2157 core + 168 nestjs)
 - [x] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — 10 tests ✅
 - [x] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — 17 tests ✅
-- [ ] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — ~10 tests
+- [x] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — 13 tests ✅
 - [ ] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — ~6 tests
 - [ ] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — ~8 tests
 - [ ] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — ~15 tests
@@ -3315,6 +3695,15 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — ~25 tests
 - [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
 - [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~280 tests green
+
+### Phase 11 — Built-in REST API (~56 tests)
+- [ ] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — ~12 tests
+- [ ] **Block 11.2** — `HeliosRestServer` (`Bun.serve()` lifecycle) + `RestApiFilter` (group gating) — ~8 tests
+- [ ] **Block 11.3** — `HealthCheckHandler` — `/hazelcast/health/*` endpoints (K8s probes, 503 on non-ACTIVE) — ~8 tests
+- [ ] **Block 11.4** — `ClusterReadHandler` + `ClusterWriteHandler` — cluster info, log level, member shutdown — ~10 tests
+- [ ] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — ~10 tests
+- [ ] **Block 11.6** — `app/` migration + e2e REST acceptance (all 4 groups, real instance, fetch) — ~8 tests
+- [ ] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green
 
 ---
 
@@ -3373,4 +3762,4 @@ bun run build
 
 ---
 
-*Plan v7.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests)*
+*Plan v8.0 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.0 complete — 2157 core + 168 nestjs = 2325 tests green | Phase 9.1+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests)*
