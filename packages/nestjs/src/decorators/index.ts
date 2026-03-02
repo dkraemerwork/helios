@@ -19,3 +19,9 @@ export {
     getMultiMapToken,
     getReplicatedMapToken,
 } from './inject-distributed-object.decorator';
+
+// ── Spring Cache-style method decorators ──────────────────────────────────
+export { Cacheable, type CacheableOptions } from './cacheable.decorator';
+export { CacheEvict, type CacheEvictOptions } from './cache-evict.decorator';
+export { CachePut, type CachePutOptions } from './cache-put.decorator';
+export { CacheableRegistry, type ICacheStore } from './cache-registry';

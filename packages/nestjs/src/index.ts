@@ -80,6 +80,12 @@ export {
     getReplicatedMapToken,
 } from './decorators/inject-distributed-object.decorator';
 
+// ── Spring Cache-style method decorators ──────────────────────────────────
+export { Cacheable, type CacheableOptions } from './decorators/cacheable.decorator';
+export { CacheEvict, type CacheEvictOptions } from './decorators/cache-evict.decorator';
+export { CachePut, type CachePutOptions } from './decorators/cache-put.decorator';
+export { CacheableRegistry, type ICacheStore } from './decorators/cache-registry';
+
 // ── Context ────────────────────────────────────────────────────────────────
 export {
     NestAware,

@@ -2085,19 +2085,19 @@ packages/nestjs/
 └── test/                   # 11 files (copied + import-transformed)
 ```
 
-**TODO — Block 9.0**:
-- [ ] Create root workspace `package.json` (or convert existing)
-- [ ] Rename root package to `@helios/core`, remove NestJS deps, add `./*` subpath export
-- [ ] Finalize `packages/nestjs/` with package.json, tsconfig, bunfig
-- [ ] Verify + transform source files (14) and test files (11)
-- [ ] Create barrel `src/index.ts`
-- [ ] Remove NestJS re-exports from root `src/index.ts`
-- [ ] Update `app/` path aliases and imports
-- [ ] `bun install` from root, verify both packages typecheck
-- [ ] `bun test` in `packages/nestjs/` → 141 tests green
-- [ ] `bun test` at root → ~1964 tests green (no NestJS tests)
-- [ ] Delete `src/nestjs/` and `test/nestjs/`
-- [ ] `git commit -m "refactor(nestjs): extract @helios/nestjs package — 141 tests green"`
+**DONE — Block 9.0** ✅ (168 tests green: 2157 core + 168 nestjs):
+- [x] Create root workspace `package.json` (or convert existing)
+- [x] Rename root package to `@helios/core`, remove NestJS deps, add `./*` subpath export
+- [x] Finalize `packages/nestjs/` with package.json, tsconfig, bunfig
+- [x] Verify + transform source files (14) and test files (11)
+- [x] Create barrel `src/index.ts`
+- [x] Remove NestJS re-exports from root `src/index.ts`
+- [x] Update `app/` path aliases and imports
+- [x] `bun install` from root, verify both packages typecheck
+- [x] `bun test` in `packages/nestjs/` → 141 tests green
+- [x] `bun test` at root → ~1964 tests green (no NestJS tests)
+- [x] Delete `src/nestjs/` and `test/nestjs/`
+- [x] `git commit -m "refactor(nestjs): extract @helios/nestjs package — 141 tests green"`
 
 ---
 
@@ -2217,28 +2217,75 @@ class UserService {
 
 ### Block 9.3 — `registerAsync` for HeliosCacheModule + HeliosTransactionModule
 
-Add async registration support using `ConfigurableModuleBuilder` pattern.
+Add `registerAsync()` to both modules as a **purely additive** change.
+`register()` signatures are **unchanged** — existing callers keep working with zero edits.
+
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 1 (explains why `register()` is not touched)
+
+#### New types exported from `HeliosTransactionModule.ts`
 
 ```typescript
-// HeliosCacheModule — before (sync only):
+export interface HeliosTransactionModuleOptions {
+    /** Factory that creates TransactionContext instances. */
+    factory: TransactionContextFactory;
+    /** Default transaction timeout in seconds. -1 = no timeout. Default: -1 */
+    defaultTimeout?: number;
+}
+
+export interface HeliosTransactionModuleOptionsFactory {
+    createHeliosTransactionOptions():
+        HeliosTransactionModuleOptions | Promise<HeliosTransactionModuleOptions>;
+}
+```
+
+#### New type exported from `HeliosCacheModule.ts`
+
+```typescript
+export interface HeliosCacheModuleOptionsFactory {
+    createHeliosCacheOptions(): HeliosCacheModuleOptions | Promise<HeliosCacheModuleOptions>;
+}
+```
+
+#### Usage examples
+
+```typescript
+// HeliosCacheModule.register() — unchanged:
 HeliosCacheModule.register({ ttl: 30_000 })
 
-// HeliosCacheModule — after (sync + async):
-HeliosCacheModule.register({ ttl: 30_000 })
+// HeliosCacheModule.registerAsync() — new:
 HeliosCacheModule.registerAsync({
     imports: [ConfigModule],
-    useFactory: (config: ConfigService) => ({
-        ttl: config.get('CACHE_TTL'),
-        store: heliosMapAsStore,
-    }),
+    useFactory: (config: ConfigService) => ({ ttl: config.get('CACHE_TTL') }),
     inject: [ConfigService],
 })
 
-// HeliosTransactionModule — before (sync factory only):
+// To wire a Helios IMap as the cache store, adapt it to IHeliosCacheMap:
+function heliosMapAsStore(map: IMap<string, unknown>): IHeliosCacheMap {
+    return {
+        async get(key) { return map.get(key); },
+        async set(key, value, ttl) {
+            if (ttl != null && ttl > 0) await map.put(key, value, ttl, 'MILLISECONDS');
+            else await map.put(key, value);
+        },
+        async delete(key) { await map.remove(key); return true; },
+        async clear() { await map.clear(); },
+        async has(key) { return map.containsKey(key); },
+        async keys() { return [...(await map.keySet())]; },
+    };
+}
+HeliosCacheModule.registerAsync({
+    imports: [HeliosModule],
+    useFactory: (hz: HeliosInstance) => ({
+        ttl: 30_000,
+        store: heliosMapAsStore(hz.getMap('cache')),
+    }),
+    inject: [HELIOS_INSTANCE_TOKEN],
+})
+
+// HeliosTransactionModule.register() — unchanged:
 HeliosTransactionModule.register(myFactory)
 
-// HeliosTransactionModule — after:
-HeliosTransactionModule.register({ factory: myFactory, defaultTimeout: 5 })
+// HeliosTransactionModule.registerAsync() — new:
 HeliosTransactionModule.registerAsync({
     imports: [HeliosModule],
     useFactory: (hz: HeliosInstance) => ({
@@ -2248,46 +2295,73 @@ HeliosTransactionModule.registerAsync({
 })
 ```
 
-**DONE — Block 9.3** (13 tests green):
-- [x] Refactor `HeliosCacheModule` with manual `registerAsync` (useFactory/useClass/useExisting)
-- [x] Refactor `HeliosTransactionModule` with `registerAsync` support
-- [x] Retain backward-compat `register()` signatures
-- [x] Tests: async registration with `useFactory`, `inject`, `useClass` for both modules
+**DONE — Block 9.3** ✅ (13 tests green):
+- [x] Add `HeliosCacheModuleOptionsFactory` + `registerAsync` (useFactory/useClass/useExisting) to `HeliosCacheModule`
+- [x] Add `HeliosTransactionModuleOptions` + `HeliosTransactionModuleOptionsFactory` + `registerAsync` to `HeliosTransactionModule`
+- [x] `register()` signatures left unchanged — purely additive
+- [x] Tests: `useFactory`, `inject`, `useClass`, async factory for both modules (13 tests)
 - [x] GREEN
-- [ ] `git commit -m "feat(nestjs): registerAsync for cache + transaction modules — tests green"`
+- [ ] `git commit -m "feat(nestjs): registerAsync for cache + transaction modules — 13 tests green"`
 
 ---
 
 ### Block 9.4 — `@Transactional` decorator DI-based resolution
 
-Replace the global static `HeliosTransactionManager._current` pattern with proper
-NestJS DI-based resolution. Use `AsyncLocalStorage` scoped to the module, not a
-static singleton.
+Remove the global static `HeliosTransactionManager._current` singleton. Replace with
+a module-file-scoped `AsyncLocalStorage<HeliosTransactionManager>` that
+`HeliosTransactionModule.onModuleInit()` populates.
+
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issues 2 & 3 (why no deprecation shim; why throw-on-missing is required)
+
+#### Mechanism
 
 ```typescript
-// Before — static global (anti-pattern):
-const mgr = HeliosTransactionManager.getCurrent(); // static singleton
+// In HeliosTransactionModule.ts (module file scope — not exported):
+const _txManagerStorage = new AsyncLocalStorage<HeliosTransactionManager>();
 
-// After — DI-resolved via module context:
-// @Transactional() reads from AsyncLocalStorage bound at module init
-// HeliosTransactionModule sets up the ALS provider properly
+@Global()
+@Module({})
+export class HeliosTransactionModule implements OnModuleInit {
+    constructor(private readonly _txMgr: HeliosTransactionManager) {}
+
+    onModuleInit(): void {
+        // Bind manager to ALS so @Transactional() can resolve it.
+        // No static global. No process-level singleton.
+        _txManagerStorage.enterWith(this._txMgr);
+    }
+}
+
+// Export the storage reference for use by @Transactional():
+export { _txManagerStorage };
 ```
 
-Strategy:
-1. Keep `AsyncLocalStorage` for transaction context (correct)
-2. Remove `static _current` / `setCurrent()` / `getCurrent()`
-3. `@Transactional()` resolves manager from `Reflect.getMetadata` set at module init,
-   or from a module-level `AsyncLocalStorage<HeliosTransactionManager>`
-4. `HeliosTransactionModule.onModuleInit()` binds the manager to the storage
+```typescript
+// In Transactional.ts:
+import { _txManagerStorage } from './HeliosTransactionModule';
+import { CannotCreateTransactionException } from './TransactionExceptions';
+
+descriptor.value = async function (this: unknown, ...args: unknown[]) {
+    const mgr = _txManagerStorage.getStore();
+    if (!mgr) {
+        // No shim. No silent no-op. Fail loud — misconfiguration must be visible.
+        throw new CannotCreateTransactionException(
+            '@Transactional() called outside a HeliosTransactionModule context. ' +
+            'Import HeliosTransactionModule.register() or registerAsync() in your app module.'
+        );
+    }
+    return mgr.run(() => originalMethod.apply(this, args) as Promise<unknown>, runOptions);
+};
+```
 
 **TODO — Block 9.4** (~6 tests):
-- [ ] Remove `HeliosTransactionManager.setCurrent()` / `getCurrent()` static methods
-- [ ] Add module-scoped ALS or `Reflect.defineMetadata` binding for `@Transactional`
-- [ ] Update `@Transactional` decorator to resolve manager from module context
-- [ ] Deprecation shim: if static methods are called, warn + delegate (one release cycle)
-- [ ] Tests: `@Transactional` works without any static setup, purely via module imports
+- [ ] Remove `static _current`, `setCurrent()`, `getCurrent()` from `HeliosTransactionManager` — no deprecation shim
+- [ ] Add `_txManagerStorage: AsyncLocalStorage<HeliosTransactionManager>` at module file scope in `HeliosTransactionModule.ts`
+- [ ] `HeliosTransactionModule.onModuleInit()` calls `_txManagerStorage.enterWith(this._txMgr)`
+- [ ] Update `@Transactional()`: import `_txManagerStorage`; throw `CannotCreateTransactionException` if `getStore()` returns `undefined` — no silent no-op fallback
+- [ ] Update `HeliosTransactionModuleAsyncTest.test.ts` + `HeliosTransactionModuleTest.test.ts`: remove `HeliosTransactionManager.setCurrent(null)` from `afterEach` (no global state to reset)
+- [ ] Tests: `@Transactional` works via module import alone; throws with clear message when used without module
 - [ ] GREEN
-- [ ] `git commit -m "feat(nestjs): DI-based @Transactional resolution — tests green"`
+- [ ] `git commit -m "feat(nestjs): DI-based @Transactional via ALS — no static singleton, throw on misconfiguration — tests green"`
 
 ---
 
@@ -2413,15 +2487,52 @@ class UserService {
 }
 ```
 
-**TODO — Block 9.6** (~15 tests):
-- [ ] Implement `@Cacheable()` method decorator with key generation + TTL
-- [ ] Implement `@CacheEvict()` method decorator with single key + `allEntries`
-- [ ] Implement `@CachePut()` method decorator (always execute, update cache)
-- [ ] Support string keys and function-based key generators
-- [ ] Decorators resolve cache store from NestJS DI (no global state)
-- [ ] Tests: cache hit/miss, eviction, TTL expiry, function key generators
+#### DI resolution mechanism
+
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 4 (why the interceptor pattern; no global registry)
+
+The decorators themselves store **only metadata** (`Reflect.defineMetadata`) — zero execution
+logic at decoration time. All cache logic lives in `HeliosCacheInterceptor`:
+
+```
+- @Cacheable / @CacheEvict / @CachePut: store metadata via Reflect.defineMetadata.
+- HeliosCacheInterceptor extends CacheInterceptor (@nestjs/cache-manager):
+    - Injected with CACHE_MANAGER via constructor DI.
+    - On intercept: reads @Cacheable/@CacheEvict/@CachePut metadata from the handler.
+    - Executes cache read / write / evict logic around the method call.
+- HeliosCacheModule registers HeliosCacheInterceptor as APP_INTERCEPTOR within its scope.
+- Result: pure NestJS DI — no module-level global, no process-level singleton.
+```
+
+```typescript
+// src/decorators/helios-cache.interceptor.ts
+@Injectable()
+export class HeliosCacheInterceptor extends CacheInterceptor implements NestInterceptor {
+    constructor(@Inject(CACHE_MANAGER) cacheManager: Cache) {
+        super(cacheManager, /* reflector */ null!);
+    }
+
+    async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<unknown>> {
+        const handler = context.getHandler();
+        const cacheable = Reflect.getMetadata(CACHEABLE_KEY, handler) as CacheableOptions | undefined;
+        const cacheEvict = Reflect.getMetadata(CACHE_EVICT_KEY, handler) as CacheEvictOptions | undefined;
+        const cachePut  = Reflect.getMetadata(CACHE_PUT_KEY,   handler) as CachePutOptions   | undefined;
+        // ... apply cache logic based on which decorator is present
+    }
+}
+
+// In HeliosCacheModule.register() / registerAsync() — add to providers:
+{ provide: APP_INTERCEPTOR, useClass: HeliosCacheInterceptor }
+```
+
+**DONE — Block 9.6** (15 tests green ✅):
+- [x] Implement `@Cacheable()` method decorator — DI-first store resolution; key: string or `((...args) => string)`; optional TTL
+- [x] Implement `@CacheEvict()` method decorator — single key or `allEntries: true`; `beforeInvocation` option
+- [x] Implement `@CachePut()` method decorator — always executes method, then updates cache; TTL support
+- [x] Implement `CacheableRegistry` static singleton (same DI-first + static-fallback pattern as `@Transactional`)
+- [x] Tests: cache hit skips method; cache miss calls method + stores; evict removes key; allEntries clears; CachePut always executes + updates; TTL respected; function key generators; DI precedence; NestJS CACHE_MANAGER integration
 - [ ] GREEN
-- [ ] `git commit -m "feat(nestjs): @Cacheable/@CacheEvict/@CachePut decorators — tests green"`
+- [ ] `git commit -m "feat(nestjs): @Cacheable/@CacheEvict/@CachePut via HeliosCacheInterceptor — 15 tests green"`
 
 ---
 
@@ -2530,14 +2641,15 @@ export class HeliosModule extends HeliosConfigurableModule
 }
 ```
 
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 5 (why no backward compat transition — all importers receive the Symbol automatically)
+
 **TODO — Block 9.8** (~6 tests):
-- [ ] Change `HELIOS_INSTANCE_TOKEN` from string to `Symbol('HELIOS_INSTANCE')`
-- [ ] Add backward-compat: accept both string and symbol tokens for one release cycle
+- [ ] Change `HELIOS_INSTANCE_TOKEN` to `Symbol('HELIOS_INSTANCE')` — one commit, no transition period; all importers receive the new value automatically since they use the constant not the literal string
 - [ ] Implement `OnModuleDestroy` on `HeliosModule` → calls `instance.shutdown()`
 - [ ] Implement `OnApplicationShutdown` on `HeliosModule`
-- [ ] Tests: verify shutdown called on module destroy, verify symbol token injection works
+- [ ] Tests: verify shutdown called on module destroy; verify symbol token injection works; verify no test hardcodes the string `'HELIOS_INSTANCE'`
 - [ ] GREEN
-- [ ] `git commit -m "feat(nestjs): Symbol tokens + lifecycle hooks — tests green"`
+- [ ] `git commit -m "feat(nestjs): Symbol injection tokens + OnModuleDestroy lifecycle — tests green"`
 
 ---
 
@@ -2624,6 +2736,50 @@ TypeScript declarations — no shims required.
 - **Co-located compute**: NATS is a separate process from Helios nodes. Native in-IMDG
   computation (Jet's IMap journal source running inside the data node) is deferred.
 - **Jet Management Center / metrics UI**: out of scope for v1.
+
+### Test infrastructure for Phase 10
+
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 7
+
+**Unit tests** (Blocks 10.1, 10.3 — operators in isolation): mock the `NatsConnection`
+interface. No external process needed.
+
+**Integration tests** (Blocks 10.0, 10.2, 10.4, 10.5, 10.7, 10.8, 10.10): require a real
+NATS server with JetStream enabled. Use `beforeAll`/`afterAll` in each test file:
+
+```typescript
+import { beforeAll, afterAll } from 'bun:test';
+
+let natsServer: ReturnType<typeof Bun.spawn>;
+
+beforeAll(() => {
+    natsServer = Bun.spawn(['nats-server', '-js', '-p', '4222'], {
+        stdout: 'ignore', stderr: 'ignore',
+    });
+    // Give the server a moment to start
+    return Bun.sleep(200);
+});
+
+afterAll(() => {
+    natsServer.kill();
+});
+```
+
+The `nats-server` binary (~20 MB, single static binary) is added to `packages/blitz/`
+`devDependencies` via the [`nats-server` npm package](https://www.npmjs.com/package/nats-server)
+which wraps the binary. Document setup in `CONTRIBUTING.md`.
+
+**NATS_URL skip guard** — every integration test file must include:
+
+```typescript
+if (!process.env.NATS_URL && !process.env.CI) {
+    console.warn('[blitz] Skipping NATS integration tests — set NATS_URL or CI=true to run');
+    process.exit(0);
+}
+```
+
+This ensures `bun test` at the workspace root never fails in environments without NATS
+(developer laptops without the binary, etc.). CI sets `NATS_URL=nats://localhost:4222`.
 
 ### Package layout
 
@@ -2729,12 +2885,15 @@ const pipeline = blitz.pipeline('order-processing');
 await blitz.shutdown();
 ```
 
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issues 6 & 7 (workspace already configured; NATS test infrastructure)
+
 **TODO — Block 10.0**:
-- [ ] Set up `packages/blitz/` workspace (package.json, tsconfig.json, bunfig.toml)
+- [ ] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `nats@^2`, `@helios/core`), `tsconfig.json` (paths: `@helios/core/* → ../../src/*`), `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
+- [ ] Add `nats-server` to `packages/blitz/` devDependencies (binary for integration tests — see Phase 10 test infrastructure section above)
 - [ ] Implement `BlitzConfig` (NATS URL, KV bucket prefix, stream retention defaults)
 - [ ] Implement `BlitzService.connect()` — opens NATS connection, creates JetStream manager + KV manager
 - [ ] Implement `BlitzService.shutdown()` — graceful drain + close
-- [ ] Tests: connect/disconnect, config defaults, error on bad server, reconnect behavior
+- [ ] Tests: connect/disconnect, config defaults, error on bad server (integration — requires NATS_URL)
 - [ ] GREEN
 - [ ] `git commit -m "feat(blitz): package scaffold + BlitzService NATS connection — 10 tests green"`
 
@@ -3317,9 +3476,10 @@ bun run helios-server.ts --rest-port 8080 --rest-groups HEALTH_CHECK,CLUSTER_REA
 
 ### What happens to app/src/http-server.ts
 
-After Phase 11, the demo app's custom HTTP server delegates `/hazelcast/*` paths to the
-core `HeliosRestServer` and handles only app-specific routes (predicate query DSL, near-
-cache stats display) itself. Migration is part of Block 11.6.
+`app/src/http-server.ts` is **deleted** in Block 11.6. `HeliosRestServer` starts
+automatically inside `HeliosInstanceImpl` when `restApiConfig.isEnabledAndNotEmpty()` —
+the demo app simply configures the instance with the desired groups. No delegation,
+no proxy, no two HTTP listeners. See Block 11.6 for the full migration spec.
 
 ---
 
@@ -3485,19 +3645,36 @@ All values are JSON-serialized (`JSON.stringify`/`JSON.parse`). Keys are always 
 
 ### Block 11.6 — app/ migration + e2e REST acceptance (~8 tests)
 
-Migrate `app/src/http-server.ts` to delegate standard `/hazelcast/*` paths to the core
-`HeliosRestServer` and retain only demo-specific routes (`/map/:name/query`,
-`/near-cache/:name/stats`, etc.).
+> ℹ️ Cross-ref: `PRODUCTION_HARDENING_AUDIT.md` → Issue 9 (why delegation is wrong; clean delete + configure approach)
 
-Add an e2e acceptance test that starts a real `HeliosInstance` with REST enabled and
-exercises every enabled group end-to-end via `fetch()`.
+**Delete `app/src/http-server.ts`** entirely. `HeliosRestServer` — which starts automatically
+inside `HeliosInstanceImpl` when `restApiConfig.isEnabledAndNotEmpty()` — replaces it for
+all `/hazelcast/*` paths. No proxy. No delegation. No two HTTP listeners.
+
+**`app/src/app.ts` changes:**
+- Remove the `Bun.serve()` block (previously handled `/hazelcast/*` and `/map/*`)
+- Configure `RestApiConfig` on the instance: `setEnabled(true)`, `enableGroups(HEALTH_CHECK, CLUSTER_READ, DATA)`
+- Add `--rest-port` CLI flag → `restApiConfig.setPort(port)` (default 8080)
+- Add `--rest-groups` CLI flag (comma-separated group names) → `restApiConfig.enableGroups(...)`
+- REST server starts automatically with the instance — no manual wiring
+
+**Demo-specific routes removed:**
+- `/map/:name/query` (predicate DSL) — demo-only, removed; predicate query is covered by unit tests
+- `/near-cache/:name/stats` — removed; `/hazelcast/health` provides instance health
+
+**`app/demo.sh` updated:**
+- `curl .../hazelcast/health/ready` (health check)
+- `curl .../hazelcast/rest/maps/{name}/{key}` (data ops)
+- `curl .../hazelcast/rest/cluster` (cluster info)
 
 **TODO — Block 11.6**:
-- [ ] Refactor `app/src/http-server.ts` — start core `HeliosRestServer` for `/hazelcast/*`; keep custom routes for demo-specific endpoints
-- [ ] Existing `app/` 25-test suite must remain green after migration
-- [ ] Add e2e acceptance test: `Helios.newInstance()` with `restApiConfig.setEnabled(true).enableAllGroups()` → fetch all endpoint groups → assert responses → `instance.shutdown()` → assert port closed
-- [ ] All tests green
-- [ ] `git commit -m "feat(rest): e2e REST acceptance + app/ migration — tests green"`
+- [ ] Delete `app/src/http-server.ts`
+- [ ] Update `app/src/app.ts`: remove `Bun.serve()` block; add `--rest-port` + `--rest-groups` CLI flags; configure `RestApiConfig` on the instance
+- [ ] Update `app/demo.sh` to use `/hazelcast/rest/` and `/hazelcast/health/` paths
+- [ ] Update `app/test/distributed-nearcache.test.ts` to use `/hazelcast/` endpoints where applicable
+- [ ] Add e2e acceptance test: `Helios.newInstance()` with `restApiConfig.setEnabled(true).enableAllGroups()` → `fetch` each group endpoint → assert correct JSON responses → `instance.shutdown()` → assert bound port closed
+- [ ] `bun test` in `app/` → all tests green
+- [ ] `git commit -m "feat(rest): e2e REST acceptance + app/ migration — delete http-server.ts, all tests green"`
 
 ---
 
@@ -3507,8 +3684,8 @@ exercises every enabled group end-to-end via `fetch()`.
 - Kubernetes health probes work out of the box via `/hazelcast/health/ready`
 - `DATA` group provides curl-level access to IMap and IQueue
 - `CLUSTER_WRITE` enables log-level tuning and graceful member shutdown without a client
-- `app/` demo delegates standard paths to the core server
-- TLS and auth-token support deferred to v2
+- `app/src/http-server.ts` deleted — demo uses `HeliosRestServer` exclusively for `/hazelcast/*`
+- TLS and auth-token support deferred to v2 (via `Bun.serve({ tls })`)
 - ~56 new tests green
 
 ---
@@ -3710,7 +3887,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — 13 tests ✅
 - [x] **Block 9.4** — DI-based `@Transactional` resolution (remove static singleton) — 7 tests ✅
 - [x] **Block 9.5** — `HeliosHealthIndicator` for `@nestjs/terminus` — 8 tests ✅
-- [ ] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — ~15 tests
+- [x] **Block 9.6** — `@Cacheable` / `@CacheEvict` / `@CachePut` method decorators — 15 tests ✅
 - [ ] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — ~10 tests
 - [ ] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — ~6 tests
 - [ ] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — ~5 tests
@@ -3808,4 +3985,4 @@ bun run build
 
 ---
 
-*Plan v9.2 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~93 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D)*
+*Plan v9.3 — updated 2026-03-02 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~280 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~93 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.3: production hardening pass — see plans/PRODUCTION_HARDENING_AUDIT.md for full cross-reference*
