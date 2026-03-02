@@ -46,7 +46,7 @@ export interface CacheableOptions {
      *   - Function: called with the method's runtime arguments.
      *   - Omitted: falls back to `<methodName>:<JSON.stringify(args)>`.
      */
-    key?: string | ((...args: unknown[]) => string);
+    key?: string | ((...args: any[]) => string);
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ export function Cacheable(options?: CacheableOptions): MethodDecorator {
             }
 
             const cacheKey = resolveKey(options?.key, propertyKey, args);
-            const cached = await store.get<unknown>(cacheKey);
+            const cached = await store.get(cacheKey);
             if (cached !== undefined) return cached;
 
             const result = await originalMethod.apply(this, args);

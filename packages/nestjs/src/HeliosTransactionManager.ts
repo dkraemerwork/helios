@@ -11,7 +11,6 @@
 import { Injectable } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { TransactionContext } from '@helios/core/transaction/TransactionContext';
-import { TransactionTimedOutException } from '@helios/core/transaction/TransactionTimedOutException';
 import {
     NoTransactionException,
     TransactionSystemException,
@@ -205,10 +204,10 @@ export class HeliosTransactionManager {
                     holder.clear();
                 } catch (commitErr) {
                     holder.clear();
+                    const cause = commitErr instanceof Error ? commitErr : new Error(String(commitErr));
                     throw new TransactionSystemException(
                         'Could not commit Helios transaction',
-                        commitErr instanceof TransactionTimedOutException ? commitErr :
-                        commitErr instanceof Error ? commitErr : new Error(String(commitErr)),
+                        cause,
                     );
                 }
                 return result;

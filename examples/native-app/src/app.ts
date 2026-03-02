@@ -13,10 +13,10 @@
  *   curl http://localhost:3002/map/demo/user1          # reads from node2 (replicated!)
  *   curl http://localhost:3002/near-cache/demo/stats    # near-cache hit/miss stats
  */
-import { Helios } from '../../../src/Helios';
-import { HeliosConfig } from '../../../src/config/HeliosConfig';
-import { MapConfig } from '../../../src/config/MapConfig';
-import { NearCacheConfig } from '../../../src/config/NearCacheConfig';
+import { Helios } from '@helios/Helios';
+import { HeliosConfig } from '@helios/config/HeliosConfig';
+import { MapConfig } from '@helios/config/MapConfig';
+import { NearCacheConfig } from '@helios/config/NearCacheConfig';
 import { HeliosHttpServer } from './http-server';
 
 // ── CLI argument parsing ────────────────────────────────────────────────

@@ -31,6 +31,9 @@
 | 19 | Block 10.7 | Sink error propagation contract undefined — when `write()` throws the plan never specifies whether the upstream JetStream message is nak'd, retried, or silently dropped | Added `Sink error propagation contract` subsection: sink failure = operator failure from fault policy's perspective; upstream message nak'd; full pipeline chain retries as a unit; idempotency requirements for sinks documented per-sink in Block 10.2 |
 | 20 | Block 10.0 | NATS server unavailability during pipeline execution is unaddressed — in-flight `js.publish()` and KV writes during reconnect window fail silently | Added NATS reconnect behavior subsection with explicit reconnect config fields (`maxReconnectAttempts`, `reconnectTimeWaitMs`, `connectTimeoutMs`, `natsPendingLimit`), per-primitive reconnect behavior contract, `BlitzEvent` enum for status monitoring, `nc.status()` subscription in `BlitzService` |
 | 21 | Block 10.7 | Block 10.7 has only 20 specified tests — severely under-tested for 8 distinct fault-tolerance behavioral axes; 80% coverage gate will fail | Raised Block 10.7 to 35 tests minimum with detailed per-concern test list covering AckPolicy (3), RetryPolicy fixed (3), RetryPolicy exponential (3), DeadLetterSink (4), CheckpointManager (8), Crash simulation (3), Sink errors (3); Phase 10 total raised from ~280 to ~295 |
+| 22 | Block 10.5 | `Aggregator<T, A, R>` name collision — plan claimed core batch aggregators are "reused here" but the blitz interface adds `combine()` which is absent in core; the two interfaces are incompatible, violating "no duplicate implementations" | Specified blitz aggregators as thin wrappers: delegate all logic to `@helios/core` implementations, add only `combine()` per wrapper; full interface spec and per-aggregator `combine()` semantics documented |
+| 23 | Block 10.1 | At-least-once duplicate delivery never documented as an explicit operator contract — operators WILL receive duplicate `process()` calls after restart but no JSDoc, StageContext, or test scenario exists to communicate this | Added at-least-once JSDoc to `Stage.ts` spec; added `StageContext` interface (`messageId`, `deliveryCount`, `nak()`); added `StageContext.ts` to package layout; added `AtLeastOnceTest` scenario to Block 10.10; added positive "What IS guaranteed" statement to Phase 10 intro |
+| 24 | Block 10.9 | `HeliosBlitzModule` uses `ConfigurableModuleBuilder` but `HeliosCacheModule` and `HeliosTransactionModule` use hand-rolled `register()`/`registerAsync()` — two patterns in the ecosystem with no documented rationale; new contributors will be confused | Added rationale note in Block 10.9 explaining the historical difference; specified `ConfigurableModuleBuilder` as the canonical pattern for all new `@helios/*` modules; noted cache/transaction migration as a separate future task; added note to Phase 9 done gate |
 
 ---
 
@@ -803,6 +806,126 @@ mode per concern.
 4. Phase 10 Master Todo List entry for Block 10.7 updated from `~20 tests` to `~35 tests`.
 
 5. Phase 10 checkpoint and footer version string updated accordingly.
+
+---
+
+## Issue 22 — Block 10.5: `Aggregator` name collision between `@helios/core` and `@helios/blitz`
+
+**Symptom:** Block 10.5 stated "Aggregators follow the same interface as Phase 1 Block 1.4
+(`src/aggregation/`). They are **reused here** — no duplicate implementations." However, the
+blitz `Aggregator<T, A, R>` interface includes a `combine(a: A, b: A): A` method that does not
+exist in the core batch aggregator. The two interfaces are incompatible. Claiming "reused" while
+defining an incompatible superset creates a false contract that will produce compile errors.
+
+**Root cause:** The subject-partitioned parallelism model (`withParallelism(N)` routing) does
+not require a combiner — all events for a given key always reach the same worker. However,
+the `combine()` method was retained in the blitz interface for scenarios where partial
+accumulators from separate time periods need to be merged. The plan never specified how the
+blitz aggregators relate to the core aggregators at the implementation level.
+
+**Fix applied:**
+
+1. The blitz `Aggregator<T, A, R>` interface is specified as a **superset** of the core batch
+   aggregator — it adds exactly one method: `combine(a: A, b: A): A`. Full interface spec added
+   to Block 10.5 with JSDoc for each method.
+
+2. The six concrete aggregators in `packages/blitz/src/aggregate/` are specified as **thin
+   wrappers** that:
+   - Delegate `create()`, `accumulate()`, and `export()` to `@helios/core` implementations
+   - Add only `combine()` as a single new method per wrapper
+
+3. Per-aggregator `combine()` semantics documented:
+   - `CountAggregator`: `combine(a, b) = a + b`
+   - `SumAggregator`: `combine(a, b) = a + b`
+   - `MinAggregator`: `combine(a, b) = Math.min(a, b)`
+   - `MaxAggregator`: `combine(a, b) = Math.max(a, b)`
+   - `AvgAggregator`: accumulator `{ sum, count }`, `combine(a, b) = { sum: a.sum + b.sum, count: a.count + b.count }`
+   - `DistinctAggregator`: accumulator `Set<T>`, `combine(a, b) = new Set([...a, ...b])`
+
+4. The confusing "reused here" sentence replaced with the wrapper pattern description.
+
+5. Block 10.5 TODO updated: first item is "Implement blitz aggregate wrappers that delegate to
+   `@helios/core` aggregators and add `combine()` — no business logic duplication".
+
+6. Package layout comment for `Aggregator.ts` updated to: "extends core batch contract with
+   `combine()` for parallel partial aggregation".
+
+---
+
+## Issue 23 — Block 10.1: At-least-once duplicate delivery undocumented as an operator contract
+
+**Symptom:** The "What is NOT in scope" section mentions at-least-once delivery once, in the
+context of exactly-once being deferred. `process()` WILL be called more than once for the same
+message after a crash or nak. Without explicit documentation at the API level — JSDoc on
+`Stage`, a `StageContext` with `deliveryCount`, or a test scenario — implementers will not
+know this and will write non-idempotent operators that produce duplicate data on retry.
+
+**Root cause:** The at-least-once contract was mentioned as a "not in scope" caveat rather than
+surfaced as the positive guarantee it is. No API surface was provided for implementers to detect
+or handle duplicate delivery.
+
+**Fix applied:**
+
+1. Added at-least-once JSDoc to the `Stage<T, R>` abstract class spec in Block 10.1, covering:
+   - The three scenarios that trigger redelivery (crash, nak, missed heartbeat)
+   - Three recommended idempotency patterns (idempotent by design, dedup key, natural idempotency)
+   - Warning for non-idempotent operations
+
+2. Added `StageContext` interface spec to Block 10.1:
+   ```typescript
+   export interface StageContext {
+     readonly messageId: string;      // same ID = same message, possibly redelivered
+     readonly deliveryCount: number;  // 1 = first delivery
+     nak(delayMs?: number): void;     // explicit nak with optional delay
+   }
+   ```
+
+3. Added `StageContext.ts` to the package layout (under `src/`, after `Stage.ts`).
+
+4. Updated `Stage.ts` method signature from `process(msg)` to `process(value: T, context: StageContext)`.
+
+5. Added `AtLeastOnceTest` to the Block 10.10 acceptance test table:
+   > Simulate crash mid-pipeline → restart → verify no data loss AND dedup key prevents double-counting
+
+6. Added a "What IS guaranteed (at-least-once)" positive statement section in the Phase 10
+   introduction (after the "What is NOT in scope" section), summarising the guarantee and
+   pointing to `Stage.ts` JSDoc for patterns.
+
+7. Added Block 10.1 TODOs: implement `Stage` abstract class with at-least-once JSDoc;
+   implement `StageContext` interface in `src/StageContext.ts`.
+
+---
+
+## Issue 24 — Block 10.9: `HeliosBlitzModule` DI pattern diverges from cache/transaction modules
+
+**Symptom:** Block 10.9 specifies `HeliosBlitzModule` uses `ConfigurableModuleBuilder` ("same
+pattern as Phase 9 Block 9.1"). The actual reference implementations `HeliosCacheModule.ts`
+(213 lines) and `HeliosTransactionModule.ts` (191 lines) both use hand-rolled `register()` +
+`registerAsync()` with manual `DynamicModule` — NOT `ConfigurableModuleBuilder`. Two different
+patterns exist in the `@helios/*` ecosystem with no documented rationale. New contributors will
+not know which pattern to follow.
+
+**Root cause:** `HeliosCacheModule` and `HeliosTransactionModule` were implemented before
+`ConfigurableModuleBuilder` was adopted as the standard in the `@helios/*` ecosystem. The
+pattern divergence accumulated organically without documentation. The fix is documentation,
+not code change — both patterns are correct; the choice needs to be captured.
+
+**Fix applied:**
+
+1. Added a rationale note in Block 10.9 (inserted before the code example), explaining:
+   - `HeliosBlitzModule` uses `ConfigurableModuleBuilder` (same as `HeliosModule` Block 9.1)
+   - `HeliosCacheModule` and `HeliosTransactionModule` use hand-rolled pattern — correct but
+     implemented before `ConfigurableModuleBuilder` was standardized
+   - **Canonical rule for new modules:** use `ConfigurableModuleBuilder`
+   - Cache/transaction migration to `ConfigurableModuleBuilder` tracked as a separate future
+     task, not in Phase 10 scope
+
+2. Added a note to the Phase 9 done gate section:
+   > "Note: `HeliosCacheModule` and `HeliosTransactionModule` use hand-rolled `register()`/
+   > `registerAsync()`. Future migration to `ConfigurableModuleBuilder` is tracked separately."
+
+The fix is purely documentation. No code changes required. The rationale is now available at
+the point of confusion (Block 10.9) and at the reference point (Phase 9 done gate).
 
 ---
 

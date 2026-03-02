@@ -4,11 +4,11 @@
  * Uses Bun.serve() with simple URL-pattern routing.
  * No external dependencies — just Bun built-ins.
  */
-import type { HeliosInstanceImpl } from '../../../src/instance/impl/HeliosInstanceImpl';
-import type { NearCacheStats } from '../../../src/nearcache/NearCacheStats';
-import type { Predicate } from '../../../src/query/Predicate';
-import { Predicates } from '../../../src/query/Predicates';
-import { NearCachedIMapWrapper } from '../../../src/map/impl/nearcache/NearCachedIMapWrapper';
+import type { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
+import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
+import type { Predicate } from '@helios/query/Predicate';
+import { Predicates } from '@helios/query/Predicates';
+import { NearCachedIMapWrapper } from '@helios/map/impl/nearcache/NearCachedIMapWrapper';
 import type { Server } from 'bun';
 
 export interface HttpServerOptions {
@@ -19,7 +19,7 @@ export interface HttpServerOptions {
 export class HeliosHttpServer {
     private readonly _instance: HeliosInstanceImpl;
     private readonly _httpPort: number;
-    private _server: Server | null = null;
+    private _server: Server<undefined> | null = null;
 
     constructor(opts: HttpServerOptions) {
         this._instance = opts.instance;

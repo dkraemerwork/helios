@@ -20,8 +20,10 @@
  * `@nestjs/cache-manager`) and our test doubles implement this.
  */
 export interface ICacheStore {
-    get<T = unknown>(key: string): Promise<T | undefined>;
-    set<T = unknown>(key: string, value: T, ttl?: number): Promise<void>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    get(key: string): Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    set(key: string, value: any, ttl?: number): Promise<void>;
     del(key: string): Promise<void>;
     reset(): Promise<void>;
 }
@@ -97,9 +99,9 @@ export function findCacheOnInstance(instance: unknown): ICacheStore | null {
  *   - Undefined: falls back to `<methodName>:<JSON.stringify(args)>`.
  */
 export function resolveKey(
-    key: string | ((...args: unknown[]) => string) | undefined,
+    key: string | ((...args: any[]) => string) | undefined,
     propertyKey: string | symbol,
-    args: unknown[],
+    args: any[],
 ): string {
     if (typeof key === 'function') return key(...args);
     if (typeof key === 'string') return key;

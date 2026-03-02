@@ -41,7 +41,7 @@ export interface CachePutOptions {
      *   - Function: called with the method's runtime arguments.
      *   - Omitted: falls back to `<methodName>:<JSON.stringify(args)>`.
      */
-    key?: string | ((...args: unknown[]) => string);
+    key?: string | ((...args: any[]) => string);
 }
 
 // ---------------------------------------------------------------------------

@@ -30,16 +30,16 @@ function makeTestStore(): ICacheStore & { store: Map<string, { value: unknown; e
     const store = new Map<string, { value: unknown; expiresAt?: number }>();
     return {
         store,
-        async get<T>(key: string): Promise<T | undefined> {
+        async get(key: string): Promise<any> {
             const entry = store.get(key);
             if (!entry) return undefined;
             if (entry.expiresAt != null && Date.now() > entry.expiresAt) {
                 store.delete(key);
                 return undefined;
             }
-            return entry.value as T;
+            return entry.value;
         },
-        async set<T>(key: string, value: T, ttl?: number): Promise<void> {
+        async set(key: string, value: unknown, ttl?: number): Promise<void> {
             store.set(key, {
                 value,
                 expiresAt: ttl != null && ttl > 0 ? Date.now() + ttl : undefined,
@@ -125,7 +125,7 @@ describe('@Cacheable — unit tests (static registry)', () => {
         const svc = new UserService();
         await svc.getUser();
 
-        const cached = await cacheStore.get<{ id: number; name: string }>('user:42');
+        const cached = await cacheStore.get('user:42') as { id: number; name: string } | undefined;
         expect(cached).toEqual({ id: 42, name: 'Alice' });
     });
 
@@ -171,7 +171,7 @@ describe('@Cacheable — unit tests (static registry)', () => {
         expect(result).toBe('ttl-value');
 
         // Still in cache immediately
-        expect(await cacheStore.get('ttl-key')).toBe('ttl-value');
+        expect(await cacheStore.get('ttl-key') as unknown).toBe('ttl-value');
 
         // Wait for TTL to expire
         await new Promise(r => setTimeout(r, 40));
@@ -264,7 +264,7 @@ describe('@CacheEvict — unit tests (static registry)', () => {
         await svc.removeItem(10);
 
         expect(await cacheStore.get('item:10')).toBeUndefined();
-        expect(await cacheStore.get('item:20')).toBe('twenty'); // untouched
+        expect(await cacheStore.get('item:20') as unknown).toBe('twenty'); // untouched
     });
 });
 
@@ -301,7 +301,7 @@ describe('@CachePut — unit tests (static registry)', () => {
 
         expect(result).toBe('fresh-data');
         expect(callCount).toBe(1);
-        expect(await cacheStore.get('data-key')).toBe('fresh-data');
+        expect(await cacheStore.get('data-key') as unknown).toBe('fresh-data');
     });
 
     // Test 11: always calls method even on cache hit — overwrites cache
@@ -323,7 +323,7 @@ describe('@CachePut — unit tests (static registry)', () => {
 
         expect(result).toEqual({ id: 5, name: 'Updated' });
         expect(callCount).toBe(1); // always called
-        expect(await cacheStore.get('user:5')).toEqual({ id: 5, name: 'Updated' });
+        expect(await cacheStore.get('user:5') as unknown).toEqual({ id: 5, name: 'Updated' });
     });
 
     // Test 12: function key generator in @CachePut
@@ -338,7 +338,7 @@ describe('@CachePut — unit tests (static registry)', () => {
         const svc = new OrderService();
         await svc.saveOrder('ord-42', 199);
 
-        expect(await cacheStore.get('order:ord-42')).toEqual({ id: 'ord-42', total: 199 });
+        expect(await cacheStore.get('order:ord-42') as unknown).toEqual({ id: 'ord-42', total: 199 });
     });
 
     // Test 13: TTL option in @CachePut
@@ -353,7 +353,7 @@ describe('@CachePut — unit tests (static registry)', () => {
         const svc = new FreshService();
         await svc.produce();
 
-        expect(await cacheStore.get('fresh-key')).toBe('fresh');
+        expect(await cacheStore.get('fresh-key') as unknown).toBe('fresh');
 
         await new Promise(r => setTimeout(r, 40));
         expect(await cacheStore.get('fresh-key')).toBeUndefined();
@@ -389,7 +389,7 @@ describe('@Cacheable — DI injected cache takes precedence over static registry
         await svc.loadValue();
 
         // DI store should have the cached value
-        expect(await diStore.get('di-key')).toBe('from-method');
+        expect(await diStore.get('di-key') as unknown).toBe('from-method');
         // Static store must NOT have been used
         expect(staticStore.store.size).toBe(0);
     });

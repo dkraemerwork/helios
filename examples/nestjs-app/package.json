@@ -1,0 +1,17 @@
+{
+  "name": "@helios/nestjs-example",
+  "version": "1.0.0",
+  "description": "NestJS example demonstrating near-cache and predicate queries using @helios/nestjs",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "dependencies": {
+    "@helios/nestjs": "file:../../packages/nestjs"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "beta"
+  }
+}

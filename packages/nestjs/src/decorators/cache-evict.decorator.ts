@@ -42,7 +42,7 @@ export interface CacheEvictOptions {
      *
      * Ignored when `allEntries: true`.
      */
-    key?: string | ((...args: unknown[]) => string);
+    key?: string | ((...args: any[]) => string);
 
     /**
      * When `true`, call `store.reset()` to clear the entire cache instead of

@@ -155,7 +155,7 @@ integrity, bounded buffering, explicit backpressure behavior) before performance
 | Module | Why deferred |
 |---|---|
 | `hazelcast-sql/` (706 files) | Requires porting Apache Calcite — a 500k+ line SQL planning framework. Stub `SqlService` with `throw new Error("SQL: use Helios v2")`. Integrate a native TS SQL library in v2. |
-| `jet/` (520 files) | Stream processing DAG engine. Complex but tractable. Defer to v1.5 after core is stable. |
+| `jet/` (520 files) | Java DAG engine — NOT ported line-by-line. **Replaced by `@helios/blitz` (Phase 10)** using NATS JetStream. See Phase 10 blocks 10.0–10.10. |
 | `cp/` (66 files) | Raft-based CP subsystem for strong consistency. Complex consensus. Defer to v2. |
 | `scheduledexecutor/` (66 files) | Distributed scheduled executor. Defer to v2. |
 
@@ -2700,6 +2700,10 @@ Subpath exports in `packages/nestjs/package.json`:
 
 ---
 
+> **Note:** `HeliosCacheModule` and `HeliosTransactionModule` use hand-rolled `register()`/
+> `registerAsync()`. Future migration to `ConfigurableModuleBuilder` is tracked separately —
+> not in Phase 9 scope. New `@helios/*` modules should use `ConfigurableModuleBuilder`.
+
 **Phase 9 done gate**: `@helios/nestjs` is a standalone, publishable NestJS library with:
 - `ConfigurableModuleBuilder`-based module registration (`forRoot` + `forRootAsync`)
 - `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators
@@ -2752,6 +2756,22 @@ TypeScript declarations — no shims required.
 - **Co-located compute**: NATS is a separate process from Helios nodes. Native in-IMDG
   computation (Jet's IMap journal source running inside the data node) is deferred.
 - **Jet Management Center / metrics UI**: out of scope for v1.
+
+### What IS guaranteed (at-least-once)
+
+**Every message that enters the pipeline is processed at least once. No message is silently
+dropped.** Operators must handle duplicate delivery — see `Stage.ts` JSDoc and
+`StageContext.deliveryCount` for dedup patterns.
+
+`process()` may be called more than once for the same message in these scenarios:
+- Pipeline process crashed before ack'ing the message.
+- A `nak()` was issued (operator error, sink error, explicit retry).
+- The NATS server redelivered the message after a missed heartbeat.
+
+Recommended idempotency patterns (see `Stage.ts` JSDoc for full spec):
+- `HeliosMapSink.put()` overwrites → safe to retry.
+- Dedup key in Helios IMap (`context.messageId` as key).
+- Window accumulator re-accumulates replayed events into same KV key → correct final count.
 
 ### Test infrastructure for Phase 10
 
@@ -2823,7 +2843,8 @@ packages/blitz/                              # @helios/blitz
 │   ├── index.ts                           # barrel export (does NOT re-export src/nestjs/)
 │   ├── Pipeline.ts                        # fluent DAG builder (Block 10.1); includes withParallelism(n)
 │   ├── Vertex.ts / Edge.ts               # DAG node + edge (Block 10.1)
-│   ├── Stage.ts                           # processing stage base (Block 10.1)
+│   ├── Stage.ts                           # processing stage base (Block 10.1) — at-least-once delivery contract; see JSDoc
+│   ├── StageContext.ts                    # messageId + deliveryCount + nak() per-delivery context (Block 10.1)
 │   ├── BlitzService.ts                      # top-level entry point (Block 10.0)
 │       ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0); includes checkpointIntervalAcks (default 100) + checkpointIntervalMs (default 5000); includes maxReconnectAttempts, reconnectTimeWaitMs, connectTimeoutMs, natsPendingLimit
 │   ├── BlitzEvent.ts                      # enum: NATS_RECONNECTING, NATS_RECONNECTED, PIPELINE_ERROR, PIPELINE_CANCELLED (Block 10.0)
@@ -2862,7 +2883,7 @@ packages/blitz/                              # @helios/blitz
 │   │   ├── WindowState.ts                 # NATS KV-backed window accumulator
 │   │   └── WindowOperator.ts              # applies policy + emits completed windows
 │   ├── aggregate/                         # Block 10.5
-│   │   ├── Aggregator.ts                  # interface: accumulate + combine + export
+│   │   ├── Aggregator.ts                  # extends core batch contract with combine() for parallel partial aggregation
 │   │   ├── CountAggregator.ts
 │   │   ├── SumAggregator.ts
 │   │   ├── MinAggregator.ts
@@ -3076,8 +3097,57 @@ src/
 ├── Pipeline.ts     # fluent builder: source → operator chain → sink
 ├── Vertex.ts       # DAG node (wraps source / operator / sink)
 ├── Edge.ts         # directed edge between vertices (NATS subject as the wire)
-└── Stage.ts        # abstract: process(msg) → void | msg | msg[]
+├── Stage.ts        # abstract: process(msg, context) → void | msg | msg[]
+└── StageContext.ts # per-delivery context: messageId, deliveryCount, nak()
 ```
+
+#### At-least-once delivery contract (Stage.ts)
+
+```typescript
+// src/Stage.ts
+/**
+ * A processing stage in a Blitz pipeline.
+ *
+ * **At-least-once delivery contract:**
+ * `process()` may be called more than once for the same message in the following scenarios:
+ * - The pipeline process crashed before ack'ing the message.
+ * - A nak() was issued (operator error, sink error, explicit retry).
+ * - The NATS server redelivered the message after a missed heartbeat.
+ *
+ * Operators MUST be designed for at-least-once delivery. The recommended patterns are:
+ * - **Idempotent by design**: `HeliosMapSink.put()` overwrites → safe to retry.
+ * - **Dedup key**: store a processed message ID in Helios IMap before processing;
+ *   skip if already present.
+ * - **Natural idempotency**: counting events in a window accumulator — replayed events
+ *   re-accumulate into the same KV key, producing the same final count.
+ *
+ * Non-idempotent operations (file appends, external API calls with side effects)
+ * must implement their own dedup logic.
+ */
+export abstract class Stage<T, R = T> {
+  abstract process(value: T, context: StageContext): Promise<R | R[] | void>;
+}
+```
+
+#### StageContext interface (StageContext.ts)
+
+```typescript
+// src/StageContext.ts
+export interface StageContext {
+  /** Unique message ID for this delivery. Same ID = same message, possibly redelivered. */
+  readonly messageId: string;
+  /** How many times this message has been delivered (1 = first delivery). */
+  readonly deliveryCount: number;
+  /** Explicitly nak this message with optional delay (ms). Throws if already ack'd. */
+  nak(delayMs?: number): void;
+}
+```
+
+#### At-least-once: positive statement
+
+> **What IS guaranteed (at-least-once):** Every message that enters the pipeline is processed
+> at least once. No message is silently dropped. Operators must handle duplicate delivery — see
+> `Stage.ts` JSDoc and `StageContext.deliveryCount` for dedup patterns.
 
 The Pipeline API mirrors Hazelcast Jet's `Pipeline` / `GeneralStage` model:
 
@@ -3101,6 +3171,8 @@ wires an `Edge` (backed by an intermediate NATS subject) between consecutive ver
 starts the consumer loop for each vertex.
 
 **TODO — Block 10.1**:
+- [ ] Implement `Stage<T, R>` abstract class with `process(value: T, context: StageContext): Promise<R | R[] | void>` — include full at-least-once JSDoc (see spec above)
+- [ ] Implement `StageContext` interface (`messageId`, `deliveryCount`, `nak(delayMs?)`) in `src/StageContext.ts`
 - [ ] Implement `Vertex` (name, stage ref, in-edges, out-edges)
 - [ ] Implement `Edge` (NATS subject name derived from vertex names)
 - [ ] Implement `Pipeline` fluent builder (readFrom → operator chain → writeTo)
@@ -3337,9 +3409,39 @@ src/aggregate/
 └── AggregatingOperator.ts    # consumes WindowOperator output; applies Aggregator; emits result
 ```
 
-Aggregators follow the same interface as Phase 1 Block 1.4 (`src/aggregation/`). They are
-**reused here** — `AggregatingOperator` adapts them to the streaming context. No duplicate
-implementations.
+The blitz `Aggregator<T, A, R>` interface extends the core batch aggregator contract with one
+additional method — `combine()` — required for subject-partitioned parallel workers:
+
+```typescript
+// packages/blitz/src/aggregate/Aggregator.ts
+export interface Aggregator<T, A, R> {
+  /** Create a new empty accumulator. */
+  create(): A;
+  /** Fold one item into the accumulator. Must be pure (no side effects). */
+  accumulate(acc: A, item: T): A;
+  /**
+   * Combine two partial accumulators into one.
+   * Required for subject-partitioned parallel workers (withParallelism > 1).
+   * For single-worker pipelines this method is never called.
+   */
+  combine(a: A, b: A): A;
+  /** Extract the final result from the accumulator. */
+  export(acc: A): R;
+}
+```
+
+The six concrete aggregators in `packages/blitz/src/aggregate/` are thin wrappers that
+delegate to the corresponding `@helios/core` implementations and add `combine()`:
+
+- `CountAggregator` wraps `@helios/core/aggregation/CountAggregator` — `combine(a, b) = a + b`
+- `SumAggregator` wraps `@helios/core/aggregation/SumAggregator` — `combine(a, b) = a + b`
+- `MinAggregator` — `combine(a, b) = Math.min(a, b)`
+- `MaxAggregator` — `combine(a, b) = Math.max(a, b)`
+- `AvgAggregator` — accumulator is `{ sum: number; count: number }`, `combine(a, b) = { sum: a.sum + b.sum, count: a.count + b.count }`
+- `DistinctAggregator` — accumulator is `Set<T>`, `combine(a, b) = new Set([...a, ...b])`
+
+No duplicate business logic. `@helios/core` remains the authoritative implementation.
+The blitz wrappers add exactly one method each.
 
 Grouped aggregations (equivalent to Jet's `groupingKey`):
 
@@ -3365,8 +3467,9 @@ Grouped aggregations (`byKey`) are correct by construction in two modes only:
 **Warning:** Grouped aggregations (`byKey`) MUST NOT be used with plain NATS queue groups, as queue groups distribute messages round-robin with no key-affinity. Each worker would hold only a partial count for any given key, producing silently wrong results.
 
 **TODO — Block 10.5**:
-- [ ] Implement `Aggregator<T, A, R>` interface (matches Block 1.4 contract)
-- [ ] Implement all 6 concrete aggregators (reuse/adapt from `@helios/core` where possible)
+- [ ] Implement blitz aggregate wrappers that delegate to `@helios/core` aggregators and add `combine()` — no business logic duplication
+- [ ] Implement `Aggregator<T, A, R>` interface (extends core batch contract with `combine(a: A, b: A): A` for parallel partial aggregation — see interface spec above)
+- [ ] Implement all 6 concrete aggregators as thin wrappers over `@helios/core/aggregation/` implementations (reuse core logic; add only `combine()`)
 - [ ] Implement `AggregatingOperator`: consume closed window from `WindowOperator`, run accumulation loop, emit result
 - [ ] Implement `byKey(keyFn)` grouping variant on each aggregator
 - [ ] Tests: each aggregator produces correct result; grouped aggregation; streaming aggregation without windowing (whole-stream running total)
@@ -3600,6 +3703,21 @@ src/nestjs/
 └── InjectBlitz.decorator.ts   # @InjectBlitz() parameter decorator
 ```
 
+> **Pattern rationale:** `HeliosBlitzModule` uses NestJS `ConfigurableModuleBuilder`
+> (the same pattern as `HeliosModule` in Block 9.1), NOT the hand-rolled `register()`/
+> `registerAsync()` pattern used by `HeliosCacheModule` and `HeliosTransactionModule`.
+>
+> **Why the difference:**
+> - `HeliosCacheModule` and `HeliosTransactionModule` were implemented before
+>   `ConfigurableModuleBuilder` was standardized in the `@helios/*` ecosystem. They
+>   use a hand-rolled pattern that is correct but verbose.
+> - New modules (`HeliosModule` Block 9.1, `HeliosBlitzModule` Block 10.9) use
+>   `ConfigurableModuleBuilder` — it generates `forRoot()` + `forRootAsync()` with
+>   `useFactory`/`useClass`/`useExisting` support from a single builder call.
+> - **When adding new `@helios/*` modules in the future: use `ConfigurableModuleBuilder`.**
+>   The cache and transaction modules will be migrated to this pattern in a future cleanup
+>   (tracked as a separate task — not in Phase 10 scope).
+
 ```typescript
 // App module
 @Module({
@@ -3673,6 +3791,7 @@ Required scenarios:
 | `BatchJobTest` | FileSource → transform → HeliosMapSink completes with correct count |
 | `DeadLetterTest` | Exhausted retries route to DL stream |
 | `CheckpointRestartTest` | Pipeline restart resumes from checkpoint, not from beginning |
+| `AtLeastOnceTest` | Simulate crash mid-pipeline → restart → verify no data loss AND dedup key prevents double-counting |
 
 **Feature parity gate** (blocks release of `@helios/blitz` v1.0):
 

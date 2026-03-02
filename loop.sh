@@ -64,6 +64,7 @@ Project root already contains:
   - node_modules/ installed (bun install already done)
   - app/          — demo application (HTTP + near-cache + predicates)
   - packages/nestjs/ — @helios/nestjs NestJS integration package
+  - packages/blitz/  — @helios/blitz NATS-backed stream processing (Phase 10)
 
 ══════════════════════════════════════════════════════════
 PRIMARY GOAL
@@ -85,7 +86,7 @@ SCOPE — READ BEFORE PICKING A BLOCK
 
 DEFERRED (skip if you encounter these blocks — mark SKIP and pick the next):
   - hazelcast-sql / SQL engine  →  deferred to v2 (requires porting Apache Calcite)
-  - jet / stream processing     →  deferred to v1.5
+  - jet/ (Java DAG engine)      →  REPLACED by @helios/blitz (Phase 10, NOT deferred)
   - cp / Raft CP subsystem      →  deferred to v2
   - scheduledexecutor           →  deferred to v2
 
@@ -99,6 +100,13 @@ REPLACED (do NOT convert Java files — write TypeScript from scratch):
 DROPPED (never port — skip any block referencing these):
   osgi, console, auditlog, hotrestart, persistence, crdt, wan, vector,
   durableexecutor, flakeidgen, dataconnection
+
+PHASE 10 — @helios/blitz (NOT deferred):
+  Phase 10 blocks (10.0–10.10) build @helios/blitz, a TypeScript-first NATS-backed
+  stream processing engine in packages/blitz/. This REPLACES the deferred Java jet/
+  module. These blocks are IN SCOPE — do NOT skip them as deferred.
+  Source: packages/blitz/src/     Tests: packages/blitz/test/
+  No Java test conversion — write TypeScript tests from the plan spec.
 
 Important scope clarification:
   - Legacy Java `hazelcast/extensions/*` modules remain dropped.
@@ -135,6 +143,12 @@ STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
     - Treat work as TypeScript-first in this repo (no Java test conversion requirement).
     - Keep `%%PLAN%%` and `MAPSTORE_EXTENSION_PLAN.md` terminology aligned when updating status text.
 
+  For Phase 10 blocks (`10.0`–`10.10`):
+    - Read `%%PLAN%%` Phase 10 section + `%%ROOT%%/plans/HELIOS_BLITZ_IMPLEMENTATION.md` as spec.
+    - Source goes in: %%ROOT%%/packages/blitz/src/
+    - Tests go in:   %%ROOT%%/packages/blitz/test/
+    - No Java test conversion — write TypeScript tests from the plan spec.
+
   For REPLACED blocks (TPC engine, cloud discovery):
     - Identify what the replacement should do (from plan description)
     - You will write TypeScript from scratch, not convert Java files
@@ -148,6 +162,12 @@ STEP 3 — CONVERT ALL TESTS FOR THE BLOCK
   For Phase 12 blocks:
     - Do NOT run `scripts/convert-java-tests.ts`.
     - Author TypeScript tests directly from `plans/MAPSTORE_EXTENSION_PLAN.md` expectations.
+    - Ensure tests compile, then run RED before implementation.
+
+  For Phase 10 blocks:
+    - Do NOT run `scripts/convert-java-tests.ts`.
+    - Author TypeScript tests directly from `plans/TYPESCRIPT_PORT_PLAN.md` Phase 10 block specs
+      and `plans/HELIOS_BLITZ_IMPLEMENTATION.md`.
     - Ensure tests compile, then run RED before implementation.
 
   For standard blocks, batch-convert using the converter:
@@ -189,9 +209,13 @@ STEP 5 — READ THE JAVA SOURCE
   For REPLACED blocks, understand the intent, not the implementation.
   For Phase 12 blocks, use `plans/MAPSTORE_EXTENSION_PLAN.md` + current TypeScript code as primary spec
   (consult listed Java references only where needed for behavioral parity).
+  For Phase 10 blocks, use `plans/TYPESCRIPT_PORT_PLAN.md` Phase 10 section +
+  `plans/HELIOS_BLITZ_IMPLEMENTATION.md` as the authoritative spec.
+  No Java source to read — this is a TypeScript-first implementation.
 
 STEP 6 — IMPLEMENT THE FULL TYPESCRIPT MODULE
   Create all %%ROOT%%/src/<path>/<Name>.ts files for the block.
+  For Phase 10 blocks, create files in %%ROOT%%/packages/blitz/src/<path>/<Name>.ts (NOT %%ROOT%%/src/).
 
   Type-mapping rules:
     long / int / short / byte / double / float  →  number
@@ -260,6 +284,23 @@ STEP 7 — VERIFY GREEN
       - bun test --pattern 'MapInvalidationMetaDataFetcher|CacheInvalidationMetaDataFetcher|anti-entropy|stale-read' 2>&1
     5.3:
       - bun test --pattern 'nearcache.*(e2e|acceptance|production-flow)|ClientNearCache.*Acceptance' 2>&1
+
+  For Phase 10 (@helios/blitz) blocks, run tests from the packages/blitz/ directory:
+    10.0: bun test --pattern 'BlitzService|BlitzConfig|connect' 2>&1
+    10.1: bun test --pattern 'Pipeline|Vertex|Edge|Stage|DAG' 2>&1
+    10.2: bun test --pattern 'source|sink|Source|Sink|Codec' 2>&1
+    10.3: bun test --pattern 'operator|MapOperator|Filter|FlatMap|Merge|Branch|Peek' 2>&1
+    10.4: bun test --pattern 'window|Window|WindowState|WindowOperator' 2>&1
+    10.5: bun test --pattern 'aggregate|Aggregat|AggregatingOperator' 2>&1
+    10.6: bun test --pattern 'join|HashJoin|WindowedJoin' 2>&1
+    10.7: bun test --pattern 'fault|Ack|Retry|DeadLetter|Checkpoint' 2>&1
+    10.8: bun test --pattern 'batch|Batch|EndOfStream' 2>&1
+    10.9: bun test --pattern 'nestjs|BlitzModule|BlitzService|InjectBlitz' 2>&1
+    10.10: bun test --pattern 'e2e|acceptance|parity' 2>&1
+
+  Run from: cd %%ROOT%%/packages/blitz && bun test --pattern '<pattern>' 2>&1
+  Then also run from root to ensure no regressions:
+    cd %%ROOT%% && bun run tsc --noEmit 2>&1
 
   Gate rules:
     - Every required gate command must pass.

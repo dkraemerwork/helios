@@ -661,6 +661,8 @@ Target files:
 - `app/src/**/*.ts`
 - `test/**/*.ts`
 - `app/test/**/*.ts`
+- `packages/**/*.ts`
+- `examples/**/*.ts`
 
 Required behavior:
 - Add `await` for selected IMap call expressions (including chained forms like `node.getMap(...).get(...)`).
@@ -677,6 +679,10 @@ Output:
 - summary of files changed + callsites rewritten
 - unresolved/blocked callsites with `file:line` and reason
 - non-zero exit when unresolved callsites remain
+
+CI gate requirement:
+- `--check` must run in CI across the full target-file set above.
+- Any unresolved IMap callsite is a hard failure (no allowlist/silent skip path).
 
 Run order: codemod first, then typecheck/tests.
 
@@ -804,6 +810,11 @@ Clear semantics:
 
 **`replaceIfSame(key, oldValue, newValue)`:** sync RecordStore check + comparison. If match: `store.put()` then `await mapDataStore.add()`. Return boolean.
 
+Async migration invariant:
+- Preserve existing listener side effects exactly when methods become async. Calls to
+  `_fireAdded`, `_fireUpdated`, `_fireRemoved`, and `_fireCleared` must still fire under
+  the same conditions and ordering as before.
+
 ### A3.4 — NetworkedMapProxy Update
 
 **Modify `src/map/impl/NetworkedMapProxy.ts`** (if it exists):  
@@ -811,12 +822,19 @@ Update method signatures to match the new async `IMap` interface. All methods th
 previously returned sync values now return `Promise`. Implementation can be a simple
 `return Promise.resolve(super.method(...))` wrapper if the parent is now async.
 
+Behavioral invariants (required):
+- Preserve current broadcast/invalidation behavior after async conversion (no lost or
+  duplicated publish paths).
+- Preserve remote-apply loop prevention semantics: any `_fromRemote` guard logic must
+  remain effective under `async/await` so remotely applied mutations do not re-broadcast.
+
 ### A3.5 — NearCachedIMapWrapper Update
 
 **Modify `src/map/impl/nearcache/NearCachedIMapWrapper.ts`:**  
 All 11 async IMap methods must be updated to their `Promise<...>` signatures. The
 near-cache wrapper intercepts `get()` (cache hit → return without calling super) and
-invalidates on `put()`/`set()`/`remove()`/`delete()`/`putAll()`/`replaceIfSame()`. All
+invalidates on `put()`/`set()`/`remove()`/`delete()`/`putAll()`/`putIfAbsent()`/
+`replace()`/`replaceIfSame()`/`clear()`. All
 delegations to the wrapped map use `await`.
 
 ### A3.6 — MapContainerService Wiring
@@ -881,6 +899,11 @@ async destroyMapStoreContext(mapName: string): Promise<void> {
 `MapContainerService` gains a `NodeEngine` constructor dependency to serialize EAGER
 entries before calling `RecordStore.put(Data, Data, ...)`.
 
+Constructor migration requirement (no ambiguity):
+- Update all existing `new MapContainerService(...)` callsites in this block, including
+  `HeliosInstanceImpl`, `TestHeliosInstance`, and direct test constructions, so the new
+  constructor shape compiles everywhere.
+
 `getOrCreateRecordStore()` stays **sync** (no change).
 
 ### A3.7 — MapProxy wiring in HeliosInstanceImpl / MapService
@@ -928,6 +951,8 @@ the same map.
 | `app/src/**/*.ts` (bulk) | app runtime IMap callsites migrated by codemod |
 | `test/**/*.ts` (bulk) | test IMap callsites migrated by codemod |
 | `app/test/**/*.ts` (bulk) | app test IMap callsites migrated by codemod |
+| `packages/**/*.ts` (bulk) | package IMap callsites migrated by codemod |
+| `examples/**/*.ts` (bulk) | example IMap callsites migrated by codemod |
 
 ### A3.9 — Integration Test Plan (~8 E2E tests + migration validates existing ~2,271)
 
@@ -952,8 +977,13 @@ Additional: `test/map/mapstore/InitialLoad.test.ts` (~4 tests for EAGER vs LAZY 
 # Step 1: dry-run codemod safety check (no writes)
 bun run scripts/async-imap-codemod.ts --check
 
+# CI gate: unresolved callsites must fail here (non-zero)
+
 # Step 2: apply codemod
 bun run scripts/async-imap-codemod.ts --write
+
+# Step 2b: post-write gate to ensure zero unresolved callsites remain
+bun run scripts/async-imap-codemod.ts --check
 
 # Step 3: typecheck
 bun run tsc --noEmit

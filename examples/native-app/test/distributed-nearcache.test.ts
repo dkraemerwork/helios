@@ -9,11 +9,11 @@
  *   5. GET on instance B → near-cache MISS again (re-fetched fresh data)
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { Helios } from '../../../src/Helios';
-import { HeliosConfig } from '../../../src/config/HeliosConfig';
-import { MapConfig } from '../../../src/config/MapConfig';
-import { NearCacheConfig } from '../../../src/config/NearCacheConfig';
-import type { HeliosInstanceImpl } from '../../../src/instance/impl/HeliosInstanceImpl';
+import { Helios } from '@helios/Helios';
+import { HeliosConfig } from '@helios/config/HeliosConfig';
+import { MapConfig } from '@helios/config/MapConfig';
+import { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import type { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
 import { HeliosHttpServer } from '../src/http-server';
 
 // Use high ports to avoid conflicts
@@ -24,6 +24,10 @@ const HTTP_PORT_B = 16802;
 
 const URL_A = `http://localhost:${HTTP_PORT_A}`;
 const URL_B = `http://localhost:${HTTP_PORT_B}`;
+
+async function getJson<T>(res: Response): Promise<T> {
+    return res.json() as Promise<T>;
+}
 
 describe('Distributed near-cache integration', () => {
     let nodeA: HeliosInstanceImpl;
@@ -85,7 +89,7 @@ describe('Distributed near-cache integration', () => {
 
     it('health endpoint works', async () => {
         const res = await fetch(`${URL_A}/health`);
-        const body = await res.json();
+        const body = await getJson<{ status: string; instance: string; peers: number }>(res);
         expect(body.status).toBe('ok');
         expect(body.instance).toBe('nodeA');
         expect(body.peers).toBeGreaterThanOrEqual(1);
@@ -93,7 +97,7 @@ describe('Distributed near-cache integration', () => {
 
     it('cluster info endpoint works', async () => {
         const res = await fetch(`${URL_B}/cluster/info`);
-        const body = await res.json();
+        const body = await getJson<{ instance: string; tcpPort: number }>(res);
         expect(body.instance).toBe('nodeB');
         expect(body.tcpPort).toBe(TCP_PORT_B);
     });
@@ -105,7 +109,7 @@ describe('Distributed near-cache integration', () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: 'Alice', age: 30 }),
         });
-        const putBody = await putRes.json();
+        const putBody = await getJson<{ stored: boolean }>(putRes);
         expect(putBody.stored).toBe(true);
 
         // Wait for replication
@@ -113,7 +117,7 @@ describe('Distributed near-cache integration', () => {
 
         // GET on B
         const getRes = await fetch(`${URL_B}/map/demo/user1`);
-        const getBody = await getRes.json();
+        const getBody = await getJson<{ value: unknown; source: string }>(getRes);
         expect(getBody.value).toEqual({ name: 'Alice', age: 30 });
         expect(getBody.source).toBe('store'); // first read = miss
     });
@@ -121,21 +125,23 @@ describe('Distributed near-cache integration', () => {
     it('second GET on B returns from near-cache', async () => {
         // The key "user1" was fetched in the previous test → should be in near-cache
         const getRes = await fetch(`${URL_B}/map/demo/user1`);
-        const getBody = await getRes.json();
+        const getBody = await getJson<{ value: unknown; source: string }>(getRes);
         expect(getBody.value).toEqual({ name: 'Alice', age: 30 });
         expect(getBody.source).toBe('near-cache'); // second read = hit
     });
 
     it('near-cache stats show hit and miss', async () => {
         const res = await fetch(`${URL_B}/near-cache/demo/stats`);
-        const body = await res.json();
+        const body = await getJson<{ hits: number; misses: number }>(res);
         expect(body.hits).toBeGreaterThanOrEqual(1);
         expect(body.misses).toBeGreaterThanOrEqual(1);
     });
 
     it('UPDATE on A → invalidates near-cache on B → next GET is miss', async () => {
         // Check near-cache stats before update
-        const statsBefore = await (await fetch(`${URL_B}/near-cache/demo/stats`)).json();
+        const statsBefore = await getJson<{ misses: number }>(
+            await fetch(`${URL_B}/near-cache/demo/stats`)
+        );
         const missesBefore: number = statsBefore.misses;
 
         // UPDATE on A
@@ -150,18 +156,20 @@ describe('Distributed near-cache integration', () => {
 
         // GET on B — should be a near-cache MISS (was invalidated)
         const getRes = await fetch(`${URL_B}/map/demo/user1`);
-        const getBody = await getRes.json();
+        const getBody = await getJson<{ value: unknown; source: string }>(getRes);
         expect(getBody.value).toEqual({ name: 'Alice', age: 31 }); // fresh data
         expect(getBody.source).toBe('store'); // miss after invalidation
 
         // Verify misses increased
-        const statsAfter = await (await fetch(`${URL_B}/near-cache/demo/stats`)).json();
+        const statsAfter = await getJson<{ misses: number }>(
+            await fetch(`${URL_B}/near-cache/demo/stats`)
+        );
         expect(statsAfter.misses).toBeGreaterThan(missesBefore);
     });
 
     it('after re-fetch, third GET on B returns from near-cache again', async () => {
         const getRes = await fetch(`${URL_B}/map/demo/user1`);
-        const getBody = await getRes.json();
+        const getBody = await getJson<{ value: unknown; source: string }>(getRes);
         expect(getBody.value).toEqual({ name: 'Alice', age: 31 });
         expect(getBody.source).toBe('near-cache'); // re-populated after miss
     });
@@ -169,7 +177,7 @@ describe('Distributed near-cache integration', () => {
     it('DELETE on A → removes from B', async () => {
         // DELETE on A
         const delRes = await fetch(`${URL_A}/map/demo/user1`, { method: 'DELETE' });
-        const delBody = await delRes.json();
+        const delBody = await getJson<{ removed: boolean }>(delRes);
         expect(delBody.removed).toBe(true);
 
         // Wait for replication
@@ -177,7 +185,7 @@ describe('Distributed near-cache integration', () => {
 
         // GET on B — should be null
         const getRes = await fetch(`${URL_B}/map/demo/user1`);
-        const getBody = await getRes.json();
+        const getBody = await getJson<{ value: unknown }>(getRes);
         expect(getBody.value).toBeNull();
     });
 
@@ -197,16 +205,18 @@ describe('Distributed near-cache integration', () => {
         await Bun.sleep(200);
 
         // List on A
-        const listA = await (await fetch(`${URL_A}/map/demo`)).json();
+        const listA = await getJson<{ size: number }>(await fetch(`${URL_A}/map/demo`));
         expect(listA.size).toBeGreaterThanOrEqual(2);
 
         // List on B (replicated)
-        const listB = await (await fetch(`${URL_B}/map/demo`)).json();
+        const listB = await getJson<{ size: number }>(await fetch(`${URL_B}/map/demo`));
         expect(listB.size).toBeGreaterThanOrEqual(2);
     });
 
     it('final near-cache stats show full lifecycle', async () => {
-        const stats = await (await fetch(`${URL_B}/near-cache/demo/stats`)).json();
+        const stats = await getJson<{ hits: number; misses: number; invalidations: number }>(
+            await fetch(`${URL_B}/near-cache/demo/stats`)
+        );
         // We've had multiple hits, misses, and invalidations
         expect(stats.hits).toBeGreaterThanOrEqual(2);
         expect(stats.misses).toBeGreaterThanOrEqual(2);
@@ -237,7 +247,7 @@ describe('Distributed near-cache integration', () => {
         await Bun.sleep(300);
 
         // Verify replication
-        const listB = await (await fetch(`${URL_B}/map/employees`)).json() as { size: number };
+        const listB = await getJson<{ size: number }>(await fetch(`${URL_B}/map/employees`));
         expect(listB.size).toBe(6);
     });
 
@@ -250,7 +260,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(1);
         expect(body.values[0].name).toBe('Alice');
     });
@@ -264,7 +274,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(3); // Charlie(35), Eve(32), Frank(45)
         const names = body.values.map(v => v.name).sort();
         expect(names).toEqual(['Charlie', 'Eve', 'Frank']);
@@ -279,7 +289,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'keys',
             }),
         });
-        const body = await res.json() as { count: number; keys: string[] };
+        const body = await getJson<{ count: number; keys: string[] }>(res);
         expect(body.count).toBe(3); // Alice(30), Bob(25), Diana(28)
         expect(body.keys.sort()).toEqual(['alice', 'bob', 'diana']);
     });
@@ -293,7 +303,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(4); // Alice, Bob, Charlie, Eve
     });
 
@@ -306,7 +316,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(1);
         expect(body.values[0].name).toBe('Alice');
     });
@@ -320,7 +330,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(3); // Alice, Charlie, Eve
         const names = body.values.map(v => v.name).sort();
         expect(names).toEqual(['Alice', 'Charlie', 'Eve']);
@@ -340,7 +350,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(2); // Charlie(110k), Eve(105k)
         const names = body.values.map(v => v.name).sort();
         expect(names).toEqual(['Charlie', 'Eve']);
@@ -360,7 +370,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(2); // Frank(Management), Bob(age 25)
         const names = body.values.map(v => v.name).sort();
         expect(names).toEqual(['Bob', 'Frank']);
@@ -375,19 +385,19 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(3); // Bob, Diana, Frank
     });
 
     it('predicate: query via GET params — salary > 100000', async () => {
         const res = await fetch(`${URL_A}/map/employees/values?attribute=salary&op=greaterThan&value=100000`);
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(3); // Charlie(110k), Eve(105k), Frank(130k)
     });
 
     it('predicate: query keys via GET params — department=Engineering', async () => {
         const res = await fetch(`${URL_A}/map/employees/keys?attribute=department&op=equal&value=Engineering`);
-        const body = await res.json() as { count: number; keys: string[] };
+        const body = await getJson<{ count: number; keys: string[] }>(res);
         expect(body.count).toBe(3); // alice, charlie, eve
         expect(body.keys.sort()).toEqual(['alice', 'charlie', 'eve']);
     });
@@ -401,7 +411,7 @@ describe('Distributed near-cache integration', () => {
                 projection: 'values',
             }),
         });
-        const body = await res.json() as { count: number; values: Array<{ name: string }> };
+        const body = await getJson<{ count: number; values: Array<{ name: string }> }>(res);
         expect(body.count).toBe(3); // Charlie, Eve, Frank — same data on both nodes
     });
 
