@@ -30,6 +30,8 @@ import { HeliosLifecycleService } from '@helios/instance/lifecycle/HeliosLifecyc
 import { LocalCluster } from '@helios/cluster/impl/LocalCluster';
 import { HeliosConfig } from '@helios/config/HeliosConfig';
 import { HeliosRestServer } from '@helios/rest/HeliosRestServer';
+import { HealthCheckHandler } from '@helios/rest/handler/HealthCheckHandler';
+import { NodeState } from '@helios/instance/lifecycle/NodeState';
 import type { HeliosInstance } from '@helios/core/HeliosInstance';
 import type { IMap } from '@helios/map/IMap';
 import type { IQueue } from '@helios/collection/IQueue';
@@ -118,6 +120,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
         // Start built-in REST server if configured
         this._restServer = new HeliosRestServer(this._config.getNetworkConfig().getRestApiConfig());
+        const healthHandler = new HealthCheckHandler(this);
+        this._restServer.registerHandler('/hazelcast/health', (req) => healthHandler.handle(req));
         this._restServer.start();
     }
 
@@ -251,6 +255,32 @@ export class HeliosInstanceImpl implements HeliosInstance {
     /** Returns the built-in REST server (always non-null; check isStarted() to see if running). */
     getRestServer(): HeliosRestServer {
         return this._restServer;
+    }
+
+    // ── HealthCheckState (for HealthCheckHandler) ─────────────────────────────
+
+    getNodeState(): NodeState {
+        return this._running ? NodeState.ACTIVE : NodeState.SHUTTING_DOWN;
+    }
+
+    getClusterState(): string {
+        return 'ACTIVE';
+    }
+
+    isClusterSafe(): boolean {
+        return true;
+    }
+
+    getClusterSize(): number {
+        return this._cluster.getMembers().length;
+    }
+
+    getMemberVersion(): string {
+        return '1.0.0';
+    }
+
+    getInstanceName(): string {
+        return this._name;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
