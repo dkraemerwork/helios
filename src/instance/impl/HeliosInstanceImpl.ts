@@ -29,6 +29,7 @@ import { ReplicatedMapImpl } from '@helios/replicatedmap/impl/ReplicatedMapImpl'
 import { HeliosLifecycleService } from '@helios/instance/lifecycle/HeliosLifecycleService';
 import { LocalCluster } from '@helios/cluster/impl/LocalCluster';
 import { HeliosConfig } from '@helios/config/HeliosConfig';
+import { HeliosRestServer } from '@helios/rest/HeliosRestServer';
 import type { HeliosInstance } from '@helios/core/HeliosInstance';
 import type { IMap } from '@helios/map/IMap';
 import type { IQueue } from '@helios/collection/IQueue';
@@ -78,6 +79,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     /** TCP transport — non-null when TCP-IP join is enabled. */
     private _transport: TcpClusterTransport | null = null;
 
+    /** Built-in REST server — non-null when REST API is configured. */
+    private readonly _restServer: HeliosRestServer;
+
     /** Near-cache manager — creates/manages near-caches per map name. */
     private readonly _nearCacheManager: DefaultNearCacheManager;
 
@@ -111,6 +115,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
         // Start TCP networking if configured
         this._startNetworking();
+
+        // Start built-in REST server if configured
+        this._restServer = new HeliosRestServer(this._config.getNetworkConfig().getRestApiConfig());
+        this._restServer.start();
     }
 
     // ── TCP networking ───────────────────────────────────────────────────
@@ -235,6 +243,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._nodeEngine.shutdown();
         this._transport?.shutdown();
         this._transport = null;
+        this._restServer.stop();
+    }
+
+    // ── REST server access ────────────────────────────────────────────────────
+
+    /** Returns the built-in REST server (always non-null; check isStarted() to see if running). */
+    getRestServer(): HeliosRestServer {
+        return this._restServer;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────

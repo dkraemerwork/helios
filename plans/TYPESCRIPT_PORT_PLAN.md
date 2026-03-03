@@ -4009,14 +4009,12 @@ Unknown paths return 404:
 { "status": 404, "message": "Unknown REST endpoint." }
 ```
 
-**TODO — Block 11.2**:
-- [ ] Implement `HeliosRestServer` (`start`/`stop`/`getBoundPort`, port from config)
-- [ ] Implement `RestApiFilter` (URL prefix → group mapping, 403 on disabled group, 404 on unknown)
-- [ ] Wire `HeliosRestServer` into `HeliosInstanceImpl` startup/shutdown sequence
-- [ ] Wire into `helios-server.ts` CLI via `--rest-port` + `--rest-groups` args
-- [ ] Tests: server starts on correct port; does not start when `isEnabled()=false`; stops cleanly; 403 for disabled group; 404 for unknown path; port accessible after start
-- [ ] GREEN
-- [ ] `git commit -m "feat(rest): HeliosRestServer + RestApiFilter lifecycle — 8 tests green"`
+**DONE — Block 11.2** (18 tests green):
+- [x] Implement `HeliosRestServer` (`start`/`stop`/`getBoundPort`, port from config)
+- [x] Implement `RestApiFilter` (URL prefix → group mapping, 403 on disabled group, 404 on unknown)
+- [x] Wire `HeliosRestServer` into `HeliosInstanceImpl` startup/shutdown sequence
+- [x] Tests: server starts on correct port; does not start when `isEnabled()=false`; stops cleanly; 403 for disabled group; 404 for unknown path; port accessible after start
+- [x] GREEN — 18 tests
 
 ---
 
@@ -4399,7 +4397,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 
 ### Phase 11 — Built-in REST API (~56 tests)
 - [x] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — 23 tests ✅
-- [ ] **Block 11.2** — `HeliosRestServer` (`Bun.serve()` lifecycle) + `RestApiFilter` (group gating) — ~8 tests
+- [x] **Block 11.2** — `HeliosRestServer` (`Bun.serve()` lifecycle) + `RestApiFilter` (group gating) — 18 tests ✅
 - [ ] **Block 11.3** — `HealthCheckHandler` — `/hazelcast/health/*` endpoints (K8s probes, 503 on non-ACTIVE) — ~8 tests
 - [ ] **Block 11.4** — `ClusterReadHandler` + `ClusterWriteHandler` — cluster info, log level, member shutdown — ~10 tests
 - [ ] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — ~10 tests
