@@ -4402,9 +4402,9 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 11.4** — `ClusterReadHandler` + `ClusterWriteHandler` — cluster info, log level, member shutdown — 10 tests ✅
 - [x] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — 10 tests ✅
 - [x] **Block 11.6** — `app/` migration + e2e REST acceptance (all 4 groups, real instance, fetch) — 8 tests ✅
-- [ ] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green
+- [x] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green ✅
 
-### Phase 12 — MapStore SPI + Extension Packages (~117 tests) ← **CURRENT**
+### Phase 12 — MapStore SPI + Extension Packages (~117 tests) ✅
 
 > Implementation spec: `plans/MAPSTORE_EXTENSION_PLAN.md` — read it before executing any Block 12.X.
 
@@ -4414,7 +4414,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 12.B** — `packages/s3/` (`@helios/s3`): `S3MapStore` + `S3Config` + `S3MapStore.factory(baseConfig)` (factory scopes prefix by map name), mock-S3-client tests, factory tests (2), workspace wiring — 14 tests ✅
 - [x] **Block 12.C** — `packages/mongodb/` (`@helios/mongodb`): `MongoMapStore` + `MongoConfig` + `MongoMapStore.factory(baseConfig)` (factory scopes collection by map name), mock-collection tests, factory tests (2), workspace wiring — 15 tests ✅
 - [x] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig` + `TursoMapStore.factory(baseConfig)` (factory scopes tableName by map name), real in-memory SQLite tests (`:memory:`), factory tests (2), workspace wiring — 18 tests ✅
-- [ ] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~117 new tests green, all existing tests still green
+- [x] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~117 new tests green, all existing tests still green ✅
 
 ---
 
