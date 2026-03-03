@@ -61,12 +61,12 @@ export class WindowedJoinOperator<L, R, O> extends Stage<JoinEvent<L, R>, O[]> {
     }
 
     /** Tag a left-stream event for input to this operator. */
-    static left<L, R = unknown>(value: L): JoinEvent<L, R> {
+    static left<L>(value: L): JoinEvent<L, never> {
         return { side: 'left', value };
     }
 
     /** Tag a right-stream event for input to this operator. */
-    static right<L = unknown, R>(value: R): JoinEvent<L, R> {
+    static right<R>(value: R): JoinEvent<never, R> {
         return { side: 'right', value };
     }
 

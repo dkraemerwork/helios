@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": true,
+    "sourceMap": false,
+    "removeComments": false,
+    "paths": {
+      "@helios/core/*": ["../../dist/src/*"],
+      "@helios/blitz/*": ["./src/*"],
+      "@helios/*": ["../../dist/src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules", "test"]
+}

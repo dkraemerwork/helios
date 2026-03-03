@@ -53,8 +53,8 @@ function buildMockBlitz(): BlitzService {
     // on/off return `this` (the mock blitz) for chaining
     _mockOn = mock(() => self);
     _mockOff = mock(() => self);
-    (self as Record<string, unknown>)['on'] = _mockOn;
-    (self as Record<string, unknown>)['off'] = _mockOff;
+    (self as unknown as Record<string, unknown>)['on'] = _mockOn;
+    (self as unknown as Record<string, unknown>)['off'] = _mockOff;
     return self;
 }
 
@@ -178,7 +178,7 @@ describe('HeliosBlitzModule.forRootAsync() — useFactory', () => {
         const mod: TestingModule = await Test.createTestingModule({
             imports: [
                 HeliosBlitzModule.forRootAsync({
-                    useFactory: async (servers: string) => ({ servers }),
+                    useFactory: async (...args: unknown[]) => ({ servers: args[0] as string }),
                     inject: [TOKEN],
                     extraProviders: [{ provide: TOKEN, useValue: 'nats://injected:4222' }],
                 }),
@@ -275,7 +275,7 @@ describe('HeliosBlitzService lifecycle', () => {
     });
 
     it('onModuleDestroy() is safe when blitz is already closed', async () => {
-        (_mockBlitz as Record<string, unknown>)['isClosed'] = true;
+        (_mockBlitz as unknown as Record<string, unknown>)['isClosed'] = true;
         const svc = new HeliosBlitzService(_mockBlitz);
         await svc.onModuleDestroy(); // must not throw
         expect(_mockShutdown).toHaveBeenCalledTimes(0);
@@ -293,10 +293,10 @@ describe('HeliosBlitzService lifecycle', () => {
         let closed = false;
         _mockShutdown = mock(() => {
             closed = true;
-            (_mockBlitz as Record<string, unknown>)['isClosed'] = true;
+            (_mockBlitz as unknown as Record<string, unknown>)['isClosed'] = true;
             return Promise.resolve();
         });
-        (_mockBlitz as Record<string, unknown>)['shutdown'] = _mockShutdown;
+        (_mockBlitz as unknown as Record<string, unknown>)['shutdown'] = _mockShutdown;
 
         const mod: TestingModule = await Test.createTestingModule({
             imports: [HeliosBlitzModule.forRoot(TEST_CONFIG)],
@@ -355,7 +355,7 @@ describe('HeliosBlitzService — delegation to BlitzService', () => {
     it('isClosed reflects underlying BlitzService.isClosed', () => {
         const svc = new HeliosBlitzService(_mockBlitz);
         expect(svc.isClosed).toBe(false);
-        (_mockBlitz as Record<string, unknown>)['isClosed'] = true;
+        (_mockBlitz as unknown as Record<string, unknown>)['isClosed'] = true;
         expect(svc.isClosed).toBe(true);
     });
 });

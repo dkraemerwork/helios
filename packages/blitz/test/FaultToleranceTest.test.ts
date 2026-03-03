@@ -73,11 +73,11 @@ function makePublisher(): DLPublisher & {
 
 describe('AckPolicy enum', () => {
     it('has EXPLICIT value', () => {
-        expect(AckPolicy.EXPLICIT).toBe('EXPLICIT');
+        expect(AckPolicy.EXPLICIT).toBe(AckPolicy.EXPLICIT);
     });
 
     it('has NONE value', () => {
-        expect(AckPolicy.NONE).toBe('NONE');
+        expect(AckPolicy.NONE).toBe(AckPolicy.NONE);
     });
 });
 

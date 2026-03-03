@@ -207,7 +207,7 @@ describe('InMemoryWindowState', () => {
 describe('WindowOperator — tumbling windows with count trigger', () => {
     it('accumulates events in KV state without closing before trigger', async () => {
         const policy = TumblingWindowPolicy.of({ size: 60_000 });
-        const state = new InMemoryWindowState<string>();
+        const state = new InMemoryWindowState<string[]>();
         const op = new WindowOperator({ policy, state, countTrigger: 3, eventTimeExtractor: () => 1_000 });
         await op.process('a', makeCtx());
         await op.process('b', makeCtx());
@@ -219,7 +219,7 @@ describe('WindowOperator — tumbling windows with count trigger', () => {
     it('emits window and deletes from state when count trigger fires', async () => {
         const emitted: string[][] = [];
         const policy = TumblingWindowPolicy.of({ size: 60_000 });
-        const state = new InMemoryWindowState<string>();
+        const state = new InMemoryWindowState<string[]>();
         const op = new WindowOperator({
             policy, state, countTrigger: 3,
             eventTimeExtractor: () => 1_000,
@@ -236,7 +236,7 @@ describe('WindowOperator — tumbling windows with count trigger', () => {
 
     it('process() returns the closed window events on trigger', async () => {
         const policy = TumblingWindowPolicy.of({ size: 60_000 });
-        const state = new InMemoryWindowState<number>();
+        const state = new InMemoryWindowState<number[]>();
         const op = new WindowOperator({ policy, state, countTrigger: 2, eventTimeExtractor: () => 0 });
         await op.process(1, makeCtx());
         const result = await op.process(2, makeCtx());
@@ -245,7 +245,7 @@ describe('WindowOperator — tumbling windows with count trigger', () => {
 
     it('events in different windows are tracked independently', async () => {
         const policy = TumblingWindowPolicy.of({ size: 60_000 });
-        const state = new InMemoryWindowState<number>();
+        const state = new InMemoryWindowState<number[]>();
         const op = new WindowOperator({ policy, state, countTrigger: 10 });
         // Window 0: events at t=0
         const opA = new WindowOperator({ policy, state, countTrigger: 10, eventTimeExtractor: () => 0 });
@@ -258,7 +258,7 @@ describe('WindowOperator — tumbling windows with count trigger', () => {
 
     it('closeWindow() force-closes and returns events', async () => {
         const policy = TumblingWindowPolicy.of({ size: 60_000 });
-        const state = new InMemoryWindowState<string>();
+        const state = new InMemoryWindowState<string[]>();
         const op = new WindowOperator({ policy, state, countTrigger: 100, eventTimeExtractor: () => 0 });
         await op.process('x', makeCtx());
         await op.process('y', makeCtx());
@@ -274,7 +274,7 @@ describe('WindowOperator — tumbling windows with count trigger', () => {
 describe('WindowOperator — sliding windows', () => {
     it('one event accumulates into multiple window keys', async () => {
         const policy = SlidingWindowPolicy.of({ size: 60_000, slide: 30_000 });
-        const state = new InMemoryWindowState<number>();
+        const state = new InMemoryWindowState<number[]>();
         const op = new WindowOperator({ policy, state, countTrigger: 100, eventTimeExtractor: () => 45_000 });
         await op.process(1, makeCtx());
         const keys = await state.list();
@@ -285,7 +285,7 @@ describe('WindowOperator — sliding windows', () => {
     it('sliding window closes all overlapping windows independently', async () => {
         const emitted: Array<{ key: string; events: number[] }> = [];
         const policy = SlidingWindowPolicy.of({ size: 60_000, slide: 30_000 });
-        const state = new InMemoryWindowState<number>();
+        const state = new InMemoryWindowState<number[]>();
         const op = new WindowOperator({
             policy, state, countTrigger: 1,
             eventTimeExtractor: () => 45_000,
@@ -302,7 +302,7 @@ describe('WindowOperator — sliding windows', () => {
 describe('WindowOperator — session windows', () => {
     it('consecutive events within gapMs accumulate in the same session', async () => {
         const policy = SessionWindowPolicy.of({ gapMs: 60_000 });
-        const state = new InMemoryWindowState<number>();
+        const state = new InMemoryWindowState<number[]>();
         const times = [0, 10_000, 20_000]; // all within 60s gap
         let timeIndex = 0;
         const op = new WindowOperator({
@@ -321,7 +321,7 @@ describe('WindowOperator — session windows', () => {
 
     it('event beyond gapMs starts a new session', async () => {
         const policy = SessionWindowPolicy.of({ gapMs: 5_000 });
-        const state = new InMemoryWindowState<number>();
+        const state = new InMemoryWindowState<number[]>();
         const times = [0, 10_000]; // gap of 10s > 5s → new session
         let timeIndex = 0;
         const op = new WindowOperator({

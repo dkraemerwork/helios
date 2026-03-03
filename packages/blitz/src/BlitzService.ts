@@ -1,6 +1,6 @@
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager, type JetStreamClient, type JetStreamManager } from '@nats-io/jetstream';
-import { Kvm, type KvManager } from '@nats-io/kv';
+import { Kvm } from '@nats-io/kv';
 import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from './BlitzConfig.ts';
 import { BlitzEvent } from './BlitzEvent.ts';
 import { Pipeline } from './Pipeline.ts';
@@ -37,7 +37,7 @@ export class BlitzService {
     readonly jsm: JetStreamManager;
 
     /** Key-Value store manager. */
-    readonly kvm: KvManager;
+    readonly kvm: Kvm;
 
     private _closed = false;
     private readonly _listeners: BlitzEventListener[] = [];
@@ -48,7 +48,7 @@ export class BlitzService {
         nc: NatsConnection,
         js: JetStreamClient,
         jsm: JetStreamManager,
-        kvm: KvManager,
+        kvm: Kvm,
     ) {
         this.config = config;
         this.nc = nc;
@@ -76,7 +76,6 @@ export class BlitzService {
                 ? undefined
                 : resolved.maxReconnectAttempts,
             reconnectTimeWait: resolved.reconnectWaitMs,
-            pendingLimit: resolved.natsPendingLimit,
         });
 
         const js = jetstream(nc);

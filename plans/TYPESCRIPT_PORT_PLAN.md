@@ -3772,12 +3772,12 @@ Required scenarios:
 | NestJS module integration | ✅ |
 | Bun-native (zero Node.js shims) | ✅ |
 
-**TODO — Block 10.10**:
-- [ ] Write all 10 acceptance scenarios above
-- [ ] Run feature parity gate — all scenarios must pass
-- [ ] Verify `bun publish --dry-run` succeeds for `packages/blitz/`
-- [ ] GREEN
-- [ ] `git commit -m "test(blitz): e2e acceptance + feature parity gate — @helios/blitz v1.0"`
+**DONE — Block 10.10**:
+- [x] Write all 10 acceptance scenarios above (33 tests total)
+- [x] Run feature parity gate — all scenarios pass
+- [x] Verify `bun publish --dry-run` succeeds for `packages/blitz/` (187 files, 0.28MB)
+- [x] GREEN — 33 tests green
+- [x] `git commit -m "test(blitz): Block 10.10 — e2e acceptance + feature parity gate — @helios/blitz v1.0 — 33 tests green"`
 
 ---
 
@@ -4394,8 +4394,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 10.7** — Fault tolerance (AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager, FaultHandler) — 44 tests green ✅
 - [x] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — 20 tests green ✅
 - [x] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — 27 tests green ✅
-- [ ] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — ~20 tests
-- [ ] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, ~295 tests green
+- [x] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — 33 tests green ✅
+- [x] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, 328 tests green ✅
 
 ### Phase 11 — Built-in REST API (~56 tests)
 - [ ] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — ~12 tests

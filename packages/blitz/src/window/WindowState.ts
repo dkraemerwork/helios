@@ -1,5 +1,6 @@
 import type { WindowKey } from './WindowPolicy.ts';
-import type { KvManager, KV } from '@nats-io/kv';
+import { Kvm } from '@nats-io/kv';
+import type { KV } from '@nats-io/kv';
 
 /**
  * Typed window accumulator store.
@@ -68,12 +69,12 @@ export class NatsKvWindowState<A> implements WindowState<A> {
     /**
      * Create (or open existing) NATS KV bucket for pipeline window state.
      *
-     * @param kvm - KvManager from BlitzService.kvm
+     * @param kvm - Kvm from BlitzService.kvm
      * @param pipelineName - pipeline name (used in bucket name)
      * @param bucketTtlMs - TTL for the KV bucket in ms (pass windowPolicy.maxDurationMs * 3)
      */
     static async create<A>(
-        kvm: KvManager,
+        kvm: Kvm,
         pipelineName: string,
         bucketTtlMs: number,
     ): Promise<NatsKvWindowState<A>> {
