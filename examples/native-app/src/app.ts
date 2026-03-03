@@ -2,35 +2,45 @@
 /**
  * Helios Distributed Demo App
  *
- * Starts a single Helios instance with TCP clustering and an HTTP REST server.
+ * Starts a single Helios instance with TCP clustering and the built-in
+ * HeliosRestServer for `/hazelcast/*` endpoints.
+ *
  * Run two instances to see distributed replication + near-cache in action:
  *
- *   Terminal 1:  bun run src/app.ts --name node1 --tcp-port 5701 --http-port 3001
- *   Terminal 2:  bun run src/app.ts --name node2 --tcp-port 5702 --http-port 3002 --peer localhost:5701
+ *   Terminal 1:  bun run src/app.ts --name node1 --tcp-port 5701 --rest-port 8081
+ *   Terminal 2:  bun run src/app.ts --name node2 --tcp-port 5702 --rest-port 8082 --peer localhost:5701
  *
  * Then use curl:
- *   curl -X PUT http://localhost:3001/map/demo/user1 -d '{"name":"Alice"}'
- *   curl http://localhost:3002/map/demo/user1          # reads from node2 (replicated!)
- *   curl http://localhost:3002/near-cache/demo/stats    # near-cache hit/miss stats
+ *   curl -X POST http://localhost:8081/hazelcast/rest/maps/demo/user1 \
+ *        -H 'Content-Type: application/json' -d '{"name":"Alice"}'
+ *   curl http://localhost:8082/hazelcast/rest/maps/demo/user1      # reads from node2
+ *   curl http://localhost:8081/hazelcast/health/ready               # K8s readiness probe
+ *   curl http://localhost:8081/hazelcast/rest/cluster               # cluster info
  */
 import { Helios } from '@helios/Helios';
 import { HeliosConfig } from '@helios/config/HeliosConfig';
 import { MapConfig } from '@helios/config/MapConfig';
 import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { HeliosHttpServer } from './http-server';
+import { RestEndpointGroup } from '@helios/rest/RestEndpointGroup';
 
 // ── CLI argument parsing ────────────────────────────────────────────────
 
 function parseArgs(args: string[]): {
     name: string;
     tcpPort: number;
-    httpPort: number;
+    restPort: number;
+    restGroups: RestEndpointGroup[];
     peers: string[];
 } {
     const result = {
         name: 'helios',
         tcpPort: 5701,
-        httpPort: 3001,
+        restPort: 8080,
+        restGroups: [
+            RestEndpointGroup.HEALTH_CHECK,
+            RestEndpointGroup.CLUSTER_READ,
+            RestEndpointGroup.DATA,
+        ] as RestEndpointGroup[],
         peers: [] as string[],
     };
 
@@ -46,8 +56,12 @@ function parseArgs(args: string[]): {
                 result.tcpPort = parseInt(next, 10);
                 i++;
                 break;
-            case '--http-port':
-                result.httpPort = parseInt(next, 10);
+            case '--rest-port':
+                result.restPort = parseInt(next, 10);
+                i++;
+                break;
+            case '--rest-groups':
+                result.restGroups = next.split(',').map((g) => g.trim() as RestEndpointGroup);
                 i++;
                 break;
             case '--peer':
@@ -62,11 +76,13 @@ Usage:
   bun run src/app.ts [options]
 
 Options:
-  --name <name>         Instance name (default: helios)
-  --tcp-port <port>     TCP cluster port (default: 5701)
-  --http-port <port>    HTTP REST port (default: 3001)
-  --peer <host:port>    Connect to peer (repeatable)
-  --help                Show this help
+  --name <name>              Instance name (default: helios)
+  --tcp-port <port>          TCP cluster port (default: 5701)
+  --rest-port <port>         REST API port (default: 8080)
+  --rest-groups <g1,g2,...>  Comma-separated REST groups to enable
+                             (default: HEALTH_CHECK,CLUSTER_READ,DATA)
+  --peer <host:port>         Connect to peer (repeatable)
+  --help                     Show this help
 `);
                 process.exit(0);
         }
@@ -88,6 +104,14 @@ async function main() {
         .getTcpIpConfig()
         .setEnabled(true);
 
+    // Enable built-in REST server
+    config.getNetworkConfig()
+        .getRestApiConfig()
+        .setEnabled(true)
+        .setPort(opts.restPort)
+        .disableAllGroups()
+        .enableGroups(...opts.restGroups);
+
     // Add peers
     for (const peer of opts.peers) {
         config.getNetworkConfig()
@@ -101,17 +125,10 @@ async function main() {
     demoMapConfig.setNearCacheConfig(new NearCacheConfig());
     config.addMapConfig(demoMapConfig);
 
-    // Start Helios instance
+    // Start Helios instance (REST server starts automatically)
     const instance = await Helios.newInstance(config);
-    console.log(`[${opts.name}] Helios instance started (TCP: ${opts.tcpPort})`);
-
-    // Start HTTP server
-    const httpServer = new HeliosHttpServer({
-        instance,
-        httpPort: opts.httpPort,
-    });
-    httpServer.start();
-    console.log(`[${opts.name}] HTTP server listening on http://localhost:${opts.httpPort}`);
+    const restPort = instance.getRestServer().getBoundPort();
+    console.log(`[${opts.name}] Helios instance started (TCP: ${opts.tcpPort}, REST: ${restPort})`);
 
     // Wait for peer connections
     if (opts.peers.length > 0) {
@@ -128,23 +145,23 @@ async function main() {
     }
 
     console.log(`
-[${opts.name}] Ready! Endpoints:
-  PUT    http://localhost:${opts.httpPort}/map/:name/:key        — store a value
-  GET    http://localhost:${opts.httpPort}/map/:name/:key        — read a value (shows near-cache source)
-  DELETE http://localhost:${opts.httpPort}/map/:name/:key        — remove a value
-  GET    http://localhost:${opts.httpPort}/map/:name             — list all entries
-  POST   http://localhost:${opts.httpPort}/map/:name/query       — query with predicate (JSON body)
-  GET    http://localhost:${opts.httpPort}/map/:name/values?...  — query values (query params)
-  GET    http://localhost:${opts.httpPort}/map/:name/keys?...    — query keys (query params)
-  GET    http://localhost:${opts.httpPort}/near-cache/:name/stats — near-cache stats
-  GET    http://localhost:${opts.httpPort}/health                — health check
-  GET    http://localhost:${opts.httpPort}/cluster/info          — cluster info
+[${opts.name}] Ready! REST endpoints on http://localhost:${restPort}:
+  GET    /hazelcast/health/ready                             — K8s readiness probe
+  GET    /hazelcast/health                                   — full health JSON
+  GET    /hazelcast/rest/cluster                             — cluster info
+  GET    /hazelcast/rest/instance                            — instance name
+  GET    /hazelcast/rest/log-level                           — current log level
+  POST   /hazelcast/rest/maps/{name}/{key}   (JSON body)    — store a value
+  GET    /hazelcast/rest/maps/{name}/{key}                   — read a value
+  DELETE /hazelcast/rest/maps/{name}/{key}                   — remove a value
+  GET    /hazelcast/rest/queues/{name}/size                  — queue size
+  POST   /hazelcast/rest/queues/{name}       (JSON body)    — offer to queue
+  GET    /hazelcast/rest/queues/{name}/{timeout}             — poll from queue
 `);
 
     // Graceful shutdown
     const shutdown = () => {
         console.log(`\n[${opts.name}] Shutting down...`);
-        httpServer.stop();
         instance.shutdown();
         console.log(`[${opts.name}] Goodbye.`);
         process.exit(0);

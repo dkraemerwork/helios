@@ -31,6 +31,10 @@ import { LocalCluster } from '@helios/cluster/impl/LocalCluster';
 import { HeliosConfig } from '@helios/config/HeliosConfig';
 import { HeliosRestServer } from '@helios/rest/HeliosRestServer';
 import { HealthCheckHandler } from '@helios/rest/handler/HealthCheckHandler';
+import { ClusterReadHandler } from '@helios/rest/handler/ClusterReadHandler';
+import { ClusterWriteHandler } from '@helios/rest/handler/ClusterWriteHandler';
+import { DataHandler } from '@helios/rest/handler/DataHandler';
+import type { DataHandlerMap, DataHandlerQueue, DataHandlerStore } from '@helios/rest/handler/DataHandler';
 import { NodeState } from '@helios/instance/lifecycle/NodeState';
 import type { HeliosInstance } from '@helios/core/HeliosInstance';
 import type { IMap } from '@helios/map/IMap';
@@ -81,6 +85,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     /** TCP transport — non-null when TCP-IP join is enabled. */
     private _transport: TcpClusterTransport | null = null;
 
+    /** Current log level (mutable via REST CLUSTER_WRITE). */
+    private _logLevel: string = 'INFO';
+
     /** Built-in REST server — non-null when REST API is configured. */
     private readonly _restServer: HeliosRestServer;
 
@@ -122,6 +129,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._restServer = new HeliosRestServer(this._config.getNetworkConfig().getRestApiConfig());
         const healthHandler = new HealthCheckHandler(this);
         this._restServer.registerHandler('/hazelcast/health', (req) => healthHandler.handle(req));
+
+        const clusterReadHandler = new ClusterReadHandler(this);
+        this._restServer.registerHandler('/hazelcast/rest/cluster', (req) => clusterReadHandler.handle(req));
+        this._restServer.registerHandler('/hazelcast/rest/instance', (req) => clusterReadHandler.handle(req));
+
+        const clusterWriteHandler = new ClusterWriteHandler(this);
+        this._restServer.registerHandler('/hazelcast/rest/log-level', (req) => clusterWriteHandler.handle(req));
+        this._restServer.registerHandler('/hazelcast/rest/management', (req) => clusterWriteHandler.handle(req));
+
+        const dataHandler = new DataHandler(this._makeDataStore());
+        this._restServer.registerHandler('/hazelcast/rest/maps', (req) => dataHandler.handle(req));
+        this._restServer.registerHandler('/hazelcast/rest/queues', (req) => dataHandler.handle(req));
+
         this._restServer.start();
     }
 
@@ -255,6 +275,49 @@ export class HeliosInstanceImpl implements HeliosInstance {
     /** Returns the built-in REST server (always non-null; check isStarted() to see if running). */
     getRestServer(): HeliosRestServer {
         return this._restServer;
+    }
+
+    // ── ClusterReadState (for ClusterReadHandler) ─────────────────────────────
+
+    getClusterName(): string {
+        return this._name;
+    }
+
+    getMemberCount(): number {
+        return this._cluster.getMembers().length;
+    }
+
+    // ── ClusterWriteState (for ClusterWriteHandler) ───────────────────────────
+
+    getLogLevel(): string {
+        return this._logLevel;
+    }
+
+    setLogLevel(level: string): void {
+        this._logLevel = level;
+    }
+
+    resetLogLevel(): void {
+        this._logLevel = 'INFO';
+    }
+
+    // ── DataHandlerStore factory ───────────────────────────────────────────────
+
+    private _makeDataStore(): DataHandlerStore {
+        return {
+            getMap: async (name: string) => {
+                const proxy = this._getOrCreateProxy(name);
+                const map: DataHandlerMap = {
+                    get: (key: string) => proxy.get(key as never) as Promise<unknown>,
+                    put: (key: string, value: unknown) => proxy.put(key as never, value as never) as Promise<unknown>,
+                    remove: (key: string) => proxy.remove(key as never) as Promise<unknown>,
+                };
+                return map;
+            },
+            getQueue: async (name: string) => {
+                return this.getQueue(name) as unknown as DataHandlerQueue;
+            },
+        };
     }
 
     // ── HealthCheckState (for HealthCheckHandler) ─────────────────────────────
