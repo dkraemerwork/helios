@@ -4118,14 +4118,14 @@ All values are JSON-serialized (`JSON.stringify`/`JSON.parse`). Keys are always 
 (the URL path segment). Map names and queue names are looked up via `instance.getMap(name)` /
 `instance.getQueue(name)`.
 
-**TODO — Block 11.5**:
-- [ ] Implement `DataHandler` with all map + queue endpoints above
-- [ ] Map GET: returns 204 (no body) when key is absent
-- [ ] Queue offer: returns 503 when `offer()` returns false (bounded queue full)
-- [ ] Queue poll: pass `timeout * 1000` ms to `queue.poll()`; returns 204 on timeout
-- [ ] Tests: map CRUD round-trip; 204 on absent key; 403 when DATA group disabled; queue offer/poll/size; queue poll timeout returns 204; 503 on full bounded queue
-- [ ] GREEN
-- [ ] `git commit -m "feat(rest): DATA handler (IMap CRUD + IQueue ops) — 10 tests green"`
+**DONE — Block 11.5**:
+- [x] Implement `DataHandler` with all map + queue endpoints above
+- [x] Map GET: returns 204 (no body) when key is absent
+- [x] Queue offer: returns 503 when `offer()` returns false (bounded queue full)
+- [x] Queue poll: pass `timeout * 1000` ms to `queue.poll()`; returns 204 on timeout
+- [x] Tests: map CRUD round-trip; 204 on absent key; 403 when DATA group disabled; queue offer/poll/size; queue poll timeout returns 204; 503 on full bounded queue
+- [x] GREEN
+- [x] `git commit -m "feat(rest): DATA handler (IMap CRUD + IQueue ops) — 10 tests green"`
 
 ---
 
@@ -4400,7 +4400,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 11.2** — `HeliosRestServer` (`Bun.serve()` lifecycle) + `RestApiFilter` (group gating) — 18 tests ✅
 - [x] **Block 11.3** — `HealthCheckHandler` — `/hazelcast/health/*` endpoints (K8s probes, 503 on non-ACTIVE) — 9 tests ✅
 - [x] **Block 11.4** — `ClusterReadHandler` + `ClusterWriteHandler` — cluster info, log level, member shutdown — 10 tests ✅
-- [ ] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — ~10 tests
+- [x] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — 10 tests ✅
 - [ ] **Block 11.6** — `app/` migration + e2e REST acceptance (all 4 groups, real instance, fetch) — ~8 tests
 - [ ] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green
 
