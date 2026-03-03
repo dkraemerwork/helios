@@ -4398,7 +4398,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, 328 tests green ✅
 
 ### Phase 11 — Built-in REST API (~56 tests)
-- [ ] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — ~12 tests
+- [x] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — 23 tests ✅
 - [ ] **Block 11.2** — `HeliosRestServer` (`Bun.serve()` lifecycle) + `RestApiFilter` (group gating) — ~8 tests
 - [ ] **Block 11.3** — `HealthCheckHandler` — `/hazelcast/health/*` endpoints (K8s probes, 503 on non-ACTIVE) — ~8 tests
 - [ ] **Block 11.4** — `ClusterReadHandler` + `ClusterWriteHandler` — cluster info, log level, member shutdown — ~10 tests
@@ -4475,4 +4475,4 @@ bun run build
 
 ---
 
-*Plan v9.9 — updated 2026-03-03 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 12.A1+A2+A3+B+C+D complete — 24+46+18+14+15+18=135 new tests green (2592 total) | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v9.9: Block 10.8 — @helios/blitz batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult), 20 tests green*
+*Plan v10.0 — updated 2026-03-03 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phase 1-9.4 complete — 2271 core + 25 app + 175 nestjs = 2471 tests green | Phase 12.A1+A2+A3+B+C+D complete — 24+46+18+14+15+18=135 new tests green | Phase 10 complete — 328 blitz tests green | Block 11.1 complete — 23 new tests green (2816 total) | Phase 9.5+: @helios/nestjs modern NestJS library patterns | Phase 10: @helios/blitz NATS-backed stream & batch processing engine (~295 tests) | Phase 11: built-in REST API via Bun.serve() (~56 tests, Block 11.1 done) | Phase 12: MapStore SPI + extension packages (S3, MongoDB, Turso) (~117 tests) — see MAPSTORE_EXTENSION_PLAN.md (Blocks 12.A1/A2/A3/B/C/D) | v10.0: Block 11.1 — RestApiConfig upgrade + RestEndpointGroup, 23 tests green*

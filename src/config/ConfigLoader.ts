@@ -16,6 +16,7 @@
  */
 import { HeliosConfig } from '@helios/config/HeliosConfig';
 import { MapConfig } from '@helios/config/MapConfig';
+import { RestEndpointGroup } from '@helios/rest/RestEndpointGroup';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.
@@ -69,6 +70,31 @@ export function parseRawConfig(raw: unknown): HeliosConfig {
     }
 
     const config = new HeliosConfig(name);
+
+    // --- rest-api config ---
+    if ('rest-api' in obj && obj['rest-api'] !== null && typeof obj['rest-api'] === 'object') {
+        const restRaw = obj['rest-api'] as Record<string, unknown>;
+        const restCfg = config.getNetworkConfig().getRestApiConfig();
+
+        if (typeof restRaw['enabled'] === 'boolean') {
+            restCfg.setEnabled(restRaw['enabled'] as boolean);
+        }
+        if (typeof restRaw['port'] === 'number') {
+            restCfg.setPort(restRaw['port'] as number);
+        }
+        if (typeof restRaw['request-timeout-ms'] === 'number') {
+            restCfg.setRequestTimeoutMs(restRaw['request-timeout-ms'] as number);
+        }
+        if (Array.isArray(restRaw['enabled-groups'])) {
+            restCfg.disableAllGroups();
+            const validGroups = new Set(Object.values(RestEndpointGroup));
+            for (const g of restRaw['enabled-groups'] as unknown[]) {
+                if (typeof g === 'string' && validGroups.has(g as RestEndpointGroup)) {
+                    restCfg.enableGroups(g as RestEndpointGroup);
+                }
+            }
+        }
+    }
 
     // --- map configs ---
     if ('maps' in obj && obj['maps'] !== undefined) {
