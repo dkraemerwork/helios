@@ -4743,7 +4743,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 13.2** — Fix `PacketDispatcherTest` spurious `1 fail / 1 error` in workspace root run caused by `CheckpointManager` log leak from blitz fault-tolerance tests — 0 new tests (test hygiene)
 - [x] **Phase 13 checkpoint**: `bun test` at root shows `0 fail 0 error`; `bun test` inside `packages/blitz/` shows 27 NestJS tests green
 
-### Phase 14 — Blitz Embedded NATS Server ← **CURRENT**
+### Phase 14 — Blitz Embedded NATS Server
 
 > Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md`
 > Goal: Embed a NATS JetStream server natively inside `@helios/blitz` so that users never need
@@ -4757,12 +4757,12 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 14.5** — Remove `skipIf` guards from all 4 blitz integration test files (`BlitzServiceTest`, `PipelineTest`, `SourceSinkTest`, `WindowingTest`) — 0 new tests (test hygiene)
 - [x] **Phase 14 checkpoint**: `bun test packages/blitz/` — **0 skip, 0 fail** ✅
 
-### Phase 15 — Production SerializationServiceImpl
+### Phase 15 — Production SerializationServiceImpl ← **CURRENT**
 
 > Cross-ref: `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (reviewed in `plans/SERIALIZATION_SERVICE_IMPL_PLAN_REVIEW.md`)
 > Goal: Replace `TestSerializationService` (JSON-only placeholder that throws on `writeObject`/`readObject`) with a full production `SerializationServiceImpl`. All 14 review issues (B1–B4, K1–K8, W2–W5) plus Round 2 issues (N2, N3, N5, N10, N11, N17, N18, N19) are incorporated into the implementation spec. The two broken production paths (`ByteArrayObjectDataOutput.writeObject` and `ByteArrayObjectDataInput.readObject`) will become functional.
 
-- [ ] **Block 15.1** — Core infrastructure: `HazelcastSerializationError` + `SerializerAdapter` interface + `DataSerializerHook` interface + `SerializationConfig` + `BufferPool` (free-list, max 3 items) — ~6 tests
+- [x] **Block 15.1** — Core infrastructure: `HazelcastSerializationError` + `SerializerAdapter` interface + `DataSerializerHook` interface + `SerializationConfig` + `BufferPool` (free-list, max 3 items) — 15 tests
 - [ ] **Block 15.2** — All 21 built-in serializers: 19 primitive/array types + `UuidSerializer` + `JavaScriptJsonSerializer` (self-framing with 4-byte length prefix; breaking migration from `TestSerializationService` is documented and safe) — ~21 tests
 - [ ] **Block 15.3** — `DataSerializableSerializer` (typeId -2): IDS write/read with EE version byte skipping, factory registry, `registerFactory()`, error on non-IDS header — ~6 tests
 - [ ] **Block 15.4** — `SerializationServiceImpl`: dispatch chain (`serializerFor` + `serializerForTypeId`), `toData`/`toObject`/`writeObject`/`readObject`, `BufferPool` wiring, factory hook registration — ~20 tests
