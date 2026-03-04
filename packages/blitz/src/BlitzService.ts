@@ -5,6 +5,11 @@ import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from '
 import { BlitzEvent } from './BlitzEvent.ts';
 import { Pipeline } from './Pipeline.ts';
 import { BatchPipeline } from './batch/BatchPipeline.ts';
+import { NatsServerManager } from './server/NatsServerManager.ts';
+import { NatsServerBinaryResolver } from './server/NatsServerBinaryResolver.ts';
+import type { NatsServerNodeConfig } from './server/NatsServerConfig.ts';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /** Listener for BlitzEvents emitted by BlitzService. */
 export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
@@ -40,6 +45,7 @@ export class BlitzService {
     readonly kvm: Kvm;
 
     private _closed = false;
+    private _manager: NatsServerManager | null = null;
     private readonly _listeners: BlitzEventListener[] = [];
     private readonly _runningPipelines = new Map<string, Pipeline>();
 
@@ -58,6 +64,24 @@ export class BlitzService {
 
         // Subscribe to NATS status events and forward as BlitzEvents.
         this._subscribeToStatus();
+    }
+
+    /**
+     * Start an embedded NATS JetStream server and connect BlitzService to it.
+     *
+     * @throws NatsServerNotFoundError if the nats-server binary cannot be resolved.
+     * @throws Error if the server(s) do not become reachable within startTimeoutMs.
+     */
+    static async start(config: Omit<BlitzConfig, 'servers'> = {}): Promise<BlitzService> {
+        const resolved = resolveBlitzConfig(config);
+        const nodeConfigs = buildNodeConfigs(resolved);
+        const manager = await NatsServerManager.spawn(nodeConfigs);
+        const servers = manager.clientUrls;
+        // Strip embedded/cluster before calling connect — connect only needs servers
+        const { embedded: _e, cluster: _c, ...rest } = config;
+        const service = await BlitzService.connect({ ...rest, servers });
+        service._manager = manager;
+        return service;
     }
 
     /**
@@ -190,6 +214,8 @@ export class BlitzService {
         }
         this._closed = true;
         await this.nc.drain();
+        // N15 FIX: must await — kills embedded processes and waits for port release
+        await this._manager?.shutdown();
     }
 
     private _emit(event: BlitzEvent, detail?: unknown): void {
@@ -220,4 +246,60 @@ export class BlitzService {
             // Status iterator closes when the connection closes — swallow.
         });
     }
+}
+
+/**
+ * Translate ResolvedBlitzConfig → NatsServerNodeConfig[].
+ * Internal helper for BlitzService.start().
+ */
+function buildNodeConfigs(config: ResolvedBlitzConfig): NatsServerNodeConfig[] {
+    if (config.embedded) {
+        const e = config.embedded;
+        const binaryPath = NatsServerBinaryResolver.resolve(e.binaryPath);
+        return [{
+            binaryPath,
+            port: e.port,
+            clusterPort: 0,
+            dataDir: e.dataDir,
+            serverName: 'helios-blitz-embedded',
+            clusterName: undefined,
+            routes: [],
+            extraArgs: e.extraArgs,
+            startTimeoutMs: e.startTimeoutMs,
+        }];
+    }
+
+    if (config.cluster) {
+        const c = config.cluster;
+        const binaryPath = NatsServerBinaryResolver.resolve(c.binaryPath);
+        const nodes: NatsServerNodeConfig[] = [];
+
+        // For cluster mode without explicit dataDir, use unique temp dirs per node
+        // to avoid JetStream storage conflicts between nodes sharing the OS default.
+        const baseTmpDir = c.dataDir ?? join(tmpdir(), `blitz-cluster-${Date.now()}`);
+
+        for (let i = 0; i < c.nodes; i++) {
+            const port = c.basePort + i;
+            const clusterPort = c.baseClusterPort + i;
+            const routes = Array.from({ length: c.nodes }, (_, j) => j)
+                .filter(j => j !== i)
+                .map(j => `nats://127.0.0.1:${c.baseClusterPort + j}`);
+
+            nodes.push({
+                binaryPath,
+                port,
+                clusterPort,
+                dataDir: `${baseTmpDir}/node-${i}`,
+                serverName: `${c.name}-node-${i}`,
+                clusterName: c.name,
+                routes,
+                extraArgs: [],
+                startTimeoutMs: c.startTimeoutMs,
+            });
+        }
+
+        return nodes;
+    }
+
+    throw new Error('buildNodeConfigs: config must have embedded or cluster set');
 }
