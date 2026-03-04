@@ -636,6 +636,11 @@ All 2,271 existing tests must remain green (no existing code changed).
 
 **STATUS: ✅ Complete — 46 tests green (2026-03-02)**
 
+> **Write-behind durability:** Write-behind queue state is protected via partition backup
+> replication (not WAL). `WriteBehindStateHolder` captures all queued entries and replicates
+> them to backup nodes via `MapReplicationOperation`. See `plans/MULTI_NODE_RESILIENCE_PLAN.md`
+> Phase F for the complete specification.
+
 ---
 
 ## Block 12.A3 — IMap Async Migration + MapProxy Wiring + Integration Tests

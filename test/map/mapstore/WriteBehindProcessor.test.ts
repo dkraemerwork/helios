@@ -106,11 +106,12 @@ describe('WriteBehindProcessor', () => {
     const entries: DelayedEntry<string, string>[] = [addedEntry('k1', 'v1', 100)];
     const result = await processor.process(entries);
 
-    // 1 initial + 3 retries = 4 attempts at batch, then 1 per-entry fallback
-    expect(attempts).toBe(4);
+    // 3 total batch attempts (matching Hazelcast's RETRY_TIMES_OF_A_FAILED_STORE_OPERATION = 3)
+    expect(attempts).toBe(3);
     expect(storeFn).toHaveBeenCalledWith('k1', 'v1');
     expect(result.fallbackBatchCount).toBe(1);
-    expect(result.retryCount).toBe(3);
+    // retryCount = 2 (retries between the 3 batch attempts)
+    expect(result.retryCount).toBe(2);
   });
 
   it('continue-on-error: per-entry fallback continues even if some entries fail', async () => {
@@ -135,10 +136,16 @@ describe('WriteBehindProcessor', () => {
     ];
     const result = await processor.process(entries);
 
-    // All 3 fallback entries attempted
-    expect(callCount.store).toBe(3);
+    // k1 succeeds on first individual try (1 call)
+    // k2 fails all 3 individual retries (3 calls)
+    // k3 succeeds on first individual try (1 call)
+    // Total: 1 + 3 + 1 = 5 individual store() calls
+    expect(callCount.store).toBe(5);
     expect(result.failedEntries).toBe(1);
     expect(result.successfulEntries).toBe(2);
+    // k2 should be in the failed list
+    expect(result.failed.length).toBe(1);
+    expect(result.failed[0].key).toBe('k2');
   });
 
   it('continues processing later batch groups after one failed batch', async () => {

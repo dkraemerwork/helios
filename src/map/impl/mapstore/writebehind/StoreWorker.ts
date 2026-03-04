@@ -27,7 +27,14 @@ export class StoreWorker<K, V> {
     this.stop();
     const entries = this._queue.drainAll();
     if (entries.length > 0) {
-      await this._processor.process(entries);
+      const result = await this._processor.process(entries);
+      // Hard flush: log failures but do NOT re-queue them
+      // (matches Hazelcast's flushInternal → printErrorLog behavior)
+      if (result.failed.length > 0) {
+        console.warn(
+          `[WriteBehind] flush: ${result.failed.length} entries could not be stored and were dropped`,
+        );
+      }
     }
   }
 
@@ -37,7 +44,13 @@ export class StoreWorker<K, V> {
     try {
       const entries = this._queue.drainTo(Date.now());
       if (entries.length > 0) {
-        await this._processor.process(entries);
+        const result = await this._processor.process(entries);
+        // Re-queue failed entries at the front for retry on next tick
+        // This cycle repeats indefinitely — matching Hazelcast's
+        // reAddFailedStoreOperationsToQueues() in StoreWorker.java
+        if (result.failed.length > 0) {
+          this._queue.addFirst(result.failed);
+        }
       }
     } finally {
       this._running = false;

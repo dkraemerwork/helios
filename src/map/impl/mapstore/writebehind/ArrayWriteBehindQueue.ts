@@ -8,6 +8,15 @@ export class ArrayWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
     this._queue.push(entry);
   }
 
+  addFirst(entries: DelayedEntry<K, V>[]): void {
+    if (entries.length === 0) return;
+    this._queue.unshift(...entries);
+  }
+
+  addForcibly(entry: DelayedEntry<K, V>): void {
+    this._queue.push(entry);
+  }
+
   drainTo(now: number): DelayedEntry<K, V>[] {
     const drained: DelayedEntry<K, V>[] = [];
     while (this._queue.length > 0 && this._queue[0].storeTime <= now) {

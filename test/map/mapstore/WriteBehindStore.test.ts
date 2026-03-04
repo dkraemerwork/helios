@@ -44,7 +44,7 @@ describe('WriteBehindStore', () => {
     store.destroy();
   });
 
-  it('load() bypasses queue and delegates directly to wrapper', async () => {
+  it('load() delegates to wrapper when no staged entry exists', async () => {
     const { impl, wrapper, queue, processor } = makeFullStack();
     const store = new WriteBehindStore(wrapper, queue, processor, 5000);
 
@@ -52,6 +52,34 @@ describe('WriteBehindStore', () => {
 
     expect(result).toBe('loaded');
     expect(impl.load).toHaveBeenCalledWith('k');
+    store.destroy();
+  });
+
+  it('load() returns staged value for keys with pending writes (read-your-writes)', async () => {
+    const { impl, wrapper, queue, processor } = makeFullStack();
+    const store = new WriteBehindStore(wrapper, queue, processor, 5000);
+
+    await store.add('k', 'staged-value', Date.now());
+
+    const result = await store.load('k');
+
+    expect(result).toBe('staged-value');
+    // Wrapper should NOT have been called — staging area served the read
+    expect(impl.load).not.toHaveBeenCalled();
+    store.destroy();
+  });
+
+  it('load() returns null for keys with pending deletes in staging area', async () => {
+    const { impl, wrapper, queue, processor } = makeFullStack();
+    const store = new WriteBehindStore(wrapper, queue, processor, 5000);
+
+    await store.remove('k', Date.now());
+
+    const result = await store.load('k');
+
+    expect(result).toBeNull();
+    // Wrapper should NOT have been called — staging area intercepted the read
+    expect(impl.load).not.toHaveBeenCalled();
     store.destroy();
   });
 

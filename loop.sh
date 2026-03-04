@@ -108,6 +108,46 @@ PHASE 10 — @helios/blitz (NOT deferred):
   Source: packages/blitz/src/     Tests: packages/blitz/test/
   No Java test conversion — write TypeScript tests from the plan spec.
 
+PHASE 13 — Infrastructure Fixes (NOT new features):
+  Phase 13 blocks (13.1, 13.2) fix broken infrastructure — no new source files, no Java
+  conversion, no test pattern gating. These are pure config/test-hygiene fixes.
+  Block 13.1: add reflect-metadata to packages/blitz devDependencies + run bun install.
+  Block 13.2: suppress CheckpointManager log leak in FaultToleranceTest so root bun test shows 0 errors.
+  Gate for BOTH: cd %%ROOT%% && bun test → 0 fail, 0 error.
+  Gate for 13.1 additionally: cd %%ROOT%%/packages/blitz && bun test → 0 errors, all NestJS tests green.
+  No GATE-CHECK required gate count > 0 for Phase 13 blocks — emit GATE-CHECK: block=13.1 required=0 passed=0 labels=infrastructure-fix.
+
+PHASE 14 — Blitz Embedded NATS Server (NOT deferred):
+  Phase 14 blocks (14.1–14.5) embed a NATS JetStream server natively inside @helios/blitz.
+  This eliminates the need for external NATS provisioning for single-node and cluster use.
+  Source: packages/blitz/src/server/     Tests: packages/blitz/test/server/
+  No Java test conversion — read `%%ROOT%%/plans/BLITZ_EMBEDDED_NATS_PLAN.md` as spec.
+  Block 14.1: promote nats-server from devDep → dep + NatsServerBinaryResolver.
+  Block 14.2: NatsServerConfig + NatsServerManager (spawn + health-poll + shutdown).
+  Block 14.3: BlitzConfig extensions (EmbeddedNatsConfig, NatsClusterConfig).
+  Block 14.4: BlitzService.start() static factory + shutdown() extension.
+  Block 14.5: Remove skipIf guards from all 4 blitz integration test files.
+  Gate: cd %%ROOT%%/packages/blitz && bun test → 0 skip, 0 fail.
+
+PHASE 15 — Production SerializationServiceImpl (NOT deferred):
+  Phase 15 blocks (15.1–15.5) replace TestSerializationService with a production-grade
+  SerializationServiceImpl supporting all built-in typeIds, BufferPool, DataSerializerHooks,
+  and writeObject/readObject. Primary spec: %%ROOT%%/plans/SERIALIZATION_SERVICE_IMPL_PLAN.md
+  Source: %%ROOT%%/src/internal/serialization/impl/
+  Tests:  %%ROOT%%/test/internal/serialization/impl/
+  No Java test conversion — author TypeScript tests from the plan spec.
+  Block 15.1: HazelcastSerializationError + SerializerAdapter + DataSerializerHook + SerializationConfig + BufferPool.
+  Block 15.2: All 21 built-in serializers (primitive, array, UUID, JavaScriptJson).
+  Block 15.3: DataSerializableSerializer (typeId -2, IDS dispatch, factory registry).
+  Block 15.4: SerializationServiceImpl (dispatch chain, toData/toObject/writeObject/readObject, BufferPool wiring).
+  Block 15.5: Wire SerializationServiceImpl into HeliosInstanceImpl + full regression (0 fail, 0 error).
+  CRITICAL FIXES to implement (see plan for full detail):
+    - Block 15.2 UuidSerializer.read(): use BigInt.asUintN(64, value).toString(16) — NOT signed bigint hex
+    - Block 15.2 JavaScriptJsonSerializer.write(): check json===undefined after JSON.stringify (functions/Symbols return undefined, not throw)
+    - Block 15.4 dispatch step 7: use Buffer.isBuffer(obj) NOT instanceof Uint8Array
+    - Block 15.4 readObject(): implement useBigEndianForTypeId parameter
+    - Block 15.5: store ss as private field, call this._ss.destroy() in shutdown()
+
 Important scope clarification:
   - Legacy Java `hazelcast/extensions/*` modules remain dropped.
   - Phase 12 extension packages in this repo are IN SCOPE: `packages/s3`, `packages/mongodb`, `packages/turso`.
@@ -137,6 +177,34 @@ STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
     b) ALL Java source files needed to make those tests pass
     c) Where TypeScript tests go:   %%ROOT%%/test/<path>/
     d) Where TypeScript source goes: %%ROOT%%/src/<path>/
+
+  For Phase 13 blocks (`13.1`, `13.2`):
+    - These are INFRASTRUCTURE FIX blocks — no Java source, no test conversion, no new source files.
+    - Block 13.1: edit `packages/blitz/package.json` devDependencies, run `bun install`, verify.
+    - Block 13.2: find and suppress the console.warn leak in `packages/blitz/test/FaultToleranceTest.test.ts`.
+    - Gate: `cd %%ROOT%% && bun test` must show `0 fail 0 error`.
+    - Block 13.1 additional gate: `cd %%ROOT%%/packages/blitz && bun test` must show no `preload not found`.
+    - Emit GATE-CHECK: block=<id> required=0 passed=0 labels=infrastructure-fix
+
+  For Phase 14 blocks (`14.1`–`14.5`):
+    - Read `%%ROOT%%/plans/BLITZ_EMBEDDED_NATS_PLAN.md` as the source-of-truth spec.
+    - Source goes in: %%ROOT%%/packages/blitz/src/server/
+    - Tests go in:   %%ROOT%%/packages/blitz/test/server/
+    - No Java test conversion — author TypeScript tests from the plan spec.
+    - Treat work as TypeScript-first embedded NATS server implementation.
+
+  For Phase 15 blocks (`15.1`–`15.5`):
+    - Read `%%ROOT%%/plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` as the source-of-truth spec.
+    - Source goes in: %%ROOT%%/src/internal/serialization/impl/
+    - Tests go in:   %%ROOT%%/test/internal/serialization/impl/
+    - No Java test conversion — author TypeScript tests from the plan spec.
+    - Treat as TypeScript-first serialization implementation (no Java conversion).
+    - MUST implement all Round-3 critical fixes verbatim as specified in the plan:
+        * UuidSerializer.read(): BigInt.asUintN(64, val).toString(16) (NOT signed .toString(16))
+        * JavaScriptJsonSerializer.write(): undefined check after JSON.stringify + before Buffer.from()
+        * serializerFor() step 7: Buffer.isBuffer(obj) NOT instanceof Uint8Array
+        * readObject(): useBigEndianForTypeId parameter
+        * HeliosInstanceImpl: store ss as field, call this._ss.destroy() in shutdown()
 
   For Phase 12 blocks (`12.A1`, `12.A2`, `12.A3`, `12.B`, `12.C`, `12.D`):
     - Read `%%ROOT%%/plans/MAPSTORE_EXTENSION_PLAN.md` as the source-of-truth spec.
@@ -169,6 +237,21 @@ STEP 3 — CONVERT ALL TESTS FOR THE BLOCK
     - Author TypeScript tests directly from `plans/TYPESCRIPT_PORT_PLAN.md` Phase 10 block specs
       and `plans/HELIOS_BLITZ_IMPLEMENTATION.md`.
     - Ensure tests compile, then run RED before implementation.
+
+  For Phase 14 blocks:
+    - Do NOT run `scripts/convert-java-tests.ts`.
+    - Author TypeScript tests directly from `plans/TYPESCRIPT_PORT_PLAN.md` Phase 14 block specs
+      and `plans/BLITZ_EMBEDDED_NATS_PLAN.md`.
+    - Tests go in `%%ROOT%%/packages/blitz/test/server/` — create directory if missing.
+    - Ensure tests compile, then run RED before implementation.
+
+  For Phase 15 blocks:
+    - Do NOT run `scripts/convert-java-tests.ts`.
+    - Author TypeScript tests directly from `plans/TYPESCRIPT_PORT_PLAN.md` Phase 15 block specs
+      and `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md`.
+    - Tests go in `%%ROOT%%/test/internal/serialization/impl/` — create directory if missing.
+    - Ensure tests compile, then run RED before implementation.
+    - Include the mandatory new tests from the plan's Implementation Order section step 14.
 
   For standard blocks, batch-convert using the converter:
 
@@ -302,9 +385,26 @@ STEP 7 — VERIFY GREEN
   Then also run from root to ensure no regressions:
     cd %%ROOT%% && bun run tsc --noEmit 2>&1
 
+  For Phase 13 (infrastructure-fix) blocks, run:
+    13.1: cd %%ROOT%%/packages/blitz && bun test 2>&1   (must show 0 errors, no "preload not found")
+          cd %%ROOT%% && bun test 2>&1                  (must show 0 fail, 0 error)
+    13.2: cd %%ROOT%% && bun test 2>&1                  (must show 0 fail, 0 error)
+    Phase 13 blocks emit: GATE-CHECK: block=<id> required=0 passed=0 labels=infrastructure-fix
+    (required=0 is valid for infra-fix blocks — the loop accepts passed==required==0 as green)
+
+  For Phase 15 (SerializationServiceImpl) blocks, run from root:
+    15.1: bun test test/internal/serialization/impl/BufferPoolTest.test.ts 2>&1
+    15.2: bun test test/internal/serialization/impl/SerializerPrimitivesTest.test.ts 2>&1
+    15.3: bun test test/internal/serialization/impl/DataSerializableSerializerTest.test.ts 2>&1
+    15.4: bun test test/internal/serialization/impl/ 2>&1
+    15.5: bun test 2>&1   (full regression — exit code 0, 0 fail, 0 error required)
+    Then always: bun run tsc --noEmit 2>&1
+    Block 15.5 gate criterion: exit code 0 (do NOT hardcode a test count — the count grows
+    as Phase 14 + Phase 15 add tests; the authoritative gate is the exit code being 0).
+
   Gate rules:
     - Every required gate command must pass.
-    - Every required gate command must execute non-zero tests.
+    - Every required gate command must execute non-zero tests (EXCEPT Phase 13 infra-fix blocks where required=0 is valid).
     - Any missing or failed required gate means NOT GREEN.
 
   ALL required gates must pass. Fix → re-run → repeat until fully green.
@@ -400,6 +500,7 @@ for ITERATION in $(seq 1 $MAX_ITERATIONS); do
   if [[ "$GATE_LINE" =~ required=([0-9]+)[[:space:]]+passed=([0-9]+) ]]; then
     REQUIRED="${BASH_REMATCH[1]}"
     PASSED="${BASH_REMATCH[2]}"
+    # required=0 passed=0 is valid for Phase 13 infrastructure-fix blocks
     if (( PASSED < REQUIRED )); then
       echo ""
       echo "  Block $ITERATION gate failure (required=$REQUIRED passed=$PASSED). Retrying in 15s..."

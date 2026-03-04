@@ -27,7 +27,7 @@ describe('StoreWorker', () => {
   it('start() enables periodic ticking (manual time check)', async () => {
     const processMock = mock(async (_entries: any[]) => ({
       totalEntries: 0, successfulEntries: 0, failedEntries: 0,
-      batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0,
+      batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0, failed: [],
     }));
     const { processor } = makeProcessor();
     (processor as any).process = processMock;
@@ -49,7 +49,7 @@ describe('StoreWorker', () => {
   it('stop() prevents further ticks', async () => {
     const processMock = mock(async (_entries: any[]) => ({
       totalEntries: 0, successfulEntries: 0, failedEntries: 0,
-      batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0,
+      batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0, failed: [],
     }));
     const { processor } = makeProcessor();
     (processor as any).process = processMock;
@@ -73,7 +73,7 @@ describe('StoreWorker', () => {
       processedEntries.push(entries);
       return {
         totalEntries: entries.length, successfulEntries: entries.length, failedEntries: 0,
-        batchGroups: 1, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0,
+        batchGroups: 1, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0, failed: [],
       };
     });
     const { processor } = makeProcessor();
@@ -97,7 +97,7 @@ describe('StoreWorker', () => {
   it('flush() stops the interval timer', async () => {
     const processMock = mock(async (_entries: any[]) => ({
       totalEntries: 0, successfulEntries: 0, failedEntries: 0,
-      batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0,
+      batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0, failed: [],
     }));
     const { processor } = makeProcessor();
     (processor as any).process = processMock;
@@ -125,7 +125,7 @@ describe('StoreWorker', () => {
       }
       return {
         totalEntries: 0, successfulEntries: 0, failedEntries: 0,
-        batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0,
+        batchGroups: 0, batchFailures: 0, retryCount: 0, fallbackBatchCount: 0, failed: [],
       };
     });
     const { processor } = makeProcessor();

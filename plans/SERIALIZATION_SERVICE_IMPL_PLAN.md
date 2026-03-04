@@ -6,6 +6,45 @@
 
 ---
 
+## Issues Found & Fixed (Post-Review Round 2)
+
+Issues found after the initial staff-engineer review (`SERIALIZATION_SERVICE_IMPL_PLAN_REVIEW.md`)
+was incorporated. These are additional bugs discovered in the updated plan.
+
+| # | Severity | Issue | Fix location in plan |
+|---|----------|-------|----------------------|
+| N2 | CRITICAL | `serializerFor()` dispatch ordering: `Uint8Array`/`Buffer` guard must fire before IDS duck-type check | "Serializer Priority & Dispatch Logic" step 7–8 |
+| N3 | CRITICAL | (See `BLITZ_EMBEDDED_NATS_PLAN.md` — N3 is a Blitz-plan issue) | — |
+| N5 | WRONG | Mixed `bigint[] + number[]` array routes to `JavaScriptJsonSerializer` → `JSON.stringify` crashes on bigint | Dispatch step 9 "else (mixed types)" note; covered by N11 fix |
+| N8 | BLOCKING | `ByteArraySerializer` accepts `instanceof Uint8Array` but write path calls `Buffer.copy()` which doesn't exist on plain `Uint8Array` — runtime crash | "Serializer Priority & Dispatch Logic" step 7; "ByteArraySerializer N8 fix note" |
+| N10 | WRONG | Same as N5 — documented explicitly in dispatch logic | Dispatch step 9 |
+| N11 | CRITICAL | `JSON.stringify()` crashes with unclassified `TypeError` for any object with a `bigint` field — no `HazelcastSerializationError` context | `JavaScriptJsonSerializer.write()` — try-catch added |
+| N17 | WRONG | Plain POJO with bigint field falls to `JavaScriptJsonSerializer` and crashes opaquely | Covered by N11 fix |
+| N18 | GAP | `DataSerializableSerializer` read path does not validate `obj.readData` is a function before calling it | `DataSerializableSerializer` read wire format spec |
+| N19 | GAP | `SerializationServiceImpl` has no `destroy()` method — buffer pool is never drained on shutdown | `SerializationServiceImpl` class spec; `BufferPool.clear()` added |
+
+## Issues Found & Fixed (Post-Review Round 3)
+
+Issues found in a third review pass covering wire format correctness, TYPESCRIPT_PORT_PLAN.md
+alignment, and protocol completeness.
+
+| # | Severity | Issue | Fix location in plan |
+|---|----------|-------|----------------------|
+| R3-C1 | CRITICAL | `readObject()` missing `useBigEndianForTypeId` parameter — silent endianness corruption in LE mode | `readObject(inp)` implementation section — overload added |
+| R3-C2 | CRITICAL | `UuidSerializer.read()` signed bigint produces corrupted hex for ~50% of UUIDs (negative bigint .toString(16) returns "-x" not the correct unsigned hex) | `UuidSerializer` read section — `BigInt.asUintN(64, value)` fix added |
+| R3-C3 | CRITICAL | `JavaScriptJsonSerializer.write()`: `JSON.stringify()` returns `undefined` (not throws) for functions/Symbols — `Buffer.from(undefined)` produces raw unclassified TypeError | `JavaScriptJsonSerializer` write section — `undefined` check added after try-catch |
+| R3-B1 | BLOCKING | `toData()` uses `instanceof HeapData` (concrete class) instead of interface check — future second Data implementation silently breaks pass-through | `toData()` implementation — constraint comment added |
+| R3-B2 | BLOCKING | "immutable post-construction" claim is incorrect — `BufferPool` has mutable array contents | Wiring section — terminology changed to "safe to share in single-threaded environments" |
+| R3-B3 | BLOCKING | Non-Goals section didn't explicitly warn about plain DataSerializable incompatibility with Java peers | Non-Goals section — protocol incompatibility warning added |
+| R3-B4 | BLOCKING | Block 15.5 in `TYPESCRIPT_PORT_PLAN.md` omitted `ss.destroy()` — buffer pools leak across test runs | `TYPESCRIPT_PORT_PLAN.md` Block 15.5 steps — N19 FIX note added |
+| R3-W1 | WRONG | IntegerArraySerializer dispatch: int32 range check implied but never made explicit — risk of silent truncation | Dispatch step 9 — verbatim range check `el >= -2147483648 && el <= 2147483647` added |
+| R3-W2 | WRONG | Array dispatch: number[] with integers > int32 silently becomes double[] — semantic loss undocumented | Dispatch step 9 — caller guidance note added |
+| R3-G1 | GAP | FloatSerializer (typeId -9): read-path present but write-path absent — asymmetry undocumented | `FloatArraySerializer` section — FloatSerializer asymmetry note added |
+| R3-G2 | GAP | `JavaScriptJsonSerializer` has no version sentinel — forward-compatibility gap for rolling upgrades | Wire format section — design note added |
+| R3-X1 | CRITICAL | `TYPESCRIPT_PORT_PLAN.md` Block 15.4 step 7 says `instanceof Uint8Array` instead of `Buffer.isBuffer(obj)` — contradicts SERIALIZATION_SERVICE_IMPL_PLAN.md N8 fix | `TYPESCRIPT_PORT_PLAN.md` Block 15.4 step 7 — corrected to `Buffer.isBuffer(obj)` with N8 explanation |
+
+---
+
 ## Background & Context
 
 The Helios serialization layer is a TypeScript port of Hazelcast's
@@ -63,6 +102,7 @@ binary stream (e.g., map entry serializers, operation codecs).
 - ~~**Thread-local buffer pooling**~~ — **RESOLVED:** a simple free-list `BufferPool` (max 3 items, no synchronization needed) is included in this plan. See the "Buffer pooling via simple free-list" section.
 - **`ManagedContext.initialize()`** — dependency injection hook not needed until service injection is implemented
 - **Partition strategy / partition hash calculation** — partition hash written as `0` (same as `TestSerializationService`)
+- **Plain DataSerializable (non-IdentifiedDataSerializable) deserialization** — ⚠️ **PROTOCOL INCOMPATIBILITY WITH JAVA NODES:** Java's `DataSerializableSerializer` fully implements plain DataSerializable (typeId -2 with bit0=0 in the header) — it reads the class name as a string, instantiates via reflection, and calls `readData()`. Helios throws `HazelcastSerializationError` for any non-IDS header. This is a **known protocol gap for mixed Java/Helios clusters**: any plain-DataSerializable object received from a Java peer (including `AbstractPredicate` subclasses, many internal operation types, and any class implementing `DataSerializable` directly without `IdentifiedDataSerializable`) will crash the Helios read path. This implementation is INCOMPATIBLE with Java nodes that send plain DataSerializable (non-identified) objects. Implementers must be aware that Helios v1 cannot participate in a mixed cluster where plain DataSerializable objects flow from Java nodes.
 
 ---
 
@@ -131,10 +171,18 @@ including arrays):
 4. typeof obj === 'bigint'           → LongSerializer         (typeId -8)
 5. typeof obj === 'boolean'          → BooleanSerializer      (typeId -4)
 6. typeof obj === 'string'           → StringSerializer       (typeId -11)
-7. obj instanceof Uint8Array/Buffer  → ByteArraySerializer    (typeId -12)
+7. Buffer.isBuffer(obj)              → ByteArraySerializer    (typeId -12)
+     (N8 FIX: use Buffer.isBuffer(), NOT instanceof Uint8Array.
+      Buffer.copy() does not exist on plain Uint8Array — calling
+      Buffer.copy() on a non-Buffer Uint8Array throws TypeError at runtime.
+      ByteArraySerializer.write() calls writeByteArray() which internally
+      uses Buffer.copy(), so the dispatch guard MUST use Buffer.isBuffer()
+      to avoid a crash on plain Uint8Array inputs.)
 8. obj with getFactoryId()/getClassId() methods
      (IdentifiedDataSerializable duck-type check — must come BEFORE array
-      check to match Java's DataSerializable > constant-type priority)
+      check to match Java's DataSerializable > constant-type priority;
+      N2 FIX: this check also ensures Buffer/Uint8Array guard at step 7 has
+      already fired before we reach IDS dispatch — ordering is correct)
                                      → DataSerializableSerializer (typeId -2)
 9. Array.isArray(obj)
      ├── length === 0                → JavaScriptJsonSerializer (typeId -130)
@@ -143,10 +191,33 @@ including arrays):
      ├── any element is null/undef   → JavaScriptJsonSerializer (typeId -130)
      ├── all boolean                 → BooleanArraySerializer (typeId -13)
      ├── all bigint                  → LongArraySerializer    (typeId -17)
-     ├── all number (int32)          → IntegerArraySerializer (typeId -16)
-     ├── all number (float/mixed)    → DoubleArraySerializer  (typeId -19)
+      ├── all number (int32)          → IntegerArraySerializer (typeId -16)
+      │     EXPLICIT RANGE CHECK REQUIRED: the per-element classification test MUST be
+      │     Number.isInteger(el) && el >= -2147483648 && el <= 2147483647
+      │     Using only Number.isInteger(el) without the range bounds silently
+      │     misclassifies large integers (e.g. 2**40) as int32, causing writeIntArray()
+      │     to silently truncate them to wrong 32-bit values with no error.
+      ├── all number (float/mixed)    → DoubleArraySerializer  (typeId -19)
+      │     NOTE — SEMANTIC LOSS: a number[] containing integers that exceed int32 range
+      │     but are NOT bigint (e.g. [1, 2**33, 3]) falls through to DoubleArraySerializer.
+      │     A Java node deserializing this receives double[] containing [1.0, 8589934592.0, 3.0],
+      │     NOT long[]. Floating-point representation of 2**33 is exact, but the type is wrong,
+      │     and precision is lost for integers beyond Number.MAX_SAFE_INTEGER (2**53 - 1).
+      │     CALLER GUIDANCE: to serialize as long[], use bigint[] instead of number[].
+      │     This behavior is undocumented in Java and is an inherent consequence of JS's
+      │     single numeric type — it cannot be fixed without a breaking API change.
      ├── all string                  → StringArraySerializer  (typeId -20)
-     └── else (mixed types)          → JavaScriptJsonSerializer (typeId -130)
+     └── else (mixed types, incl.    → JavaScriptJsonSerializer (typeId -130)
+          bigint+number mix)           N5/N10 FIX: a mixed bigint[]+number[]
+                                       array falls here. JavaScriptJsonSerializer
+                                       calls JSON.stringify() which throws
+                                       TypeError on any bigint element. This
+                                       case is caught by the N11 try-catch wrap
+                                       in JavaScriptJsonSerializer.write() and
+                                       rethrown as HazelcastSerializationError
+                                       with a clear message. Callers should not
+                                       mix bigint and number in arrays if they
+                                       need Hazelcast wire-format serialization.
 10. Fallback                         → JavaScriptJsonSerializer (typeId -130)
 ```
 
@@ -254,6 +325,14 @@ N bytes  obj.writeData(out)
          → if !factory: throw HazelcastSerializationError('No DataSerializerFactory for namespace: ' + factoryId)
          → obj = factory.create(classId)
          → if !obj: throw HazelcastSerializationError('Factory cannot create instance for classId: ' + classId + ' on factoryId: ' + factoryId)
+         → N18 FIX: validate readData is callable before invoking:
+              if (typeof obj.readData !== 'function'):
+                  throw HazelcastSerializationError(
+                      'Factory created object for classId ' + classId +
+                      ' / factoryId ' + factoryId +
+                      ' does not implement readData(inp). ' +
+                      'The object must implement IdentifiedDataSerializable.'
+                  )
          → if DataSerializableHeader.isVersioned(header):
               inp.readByte(); inp.readByte();   // skip 2 EE version bytes
          → obj.readData(inp)
@@ -375,6 +454,14 @@ export class SerializationServiceImpl implements InternalSerializationService {
     writeObject(out: ByteArrayObjectDataOutput, obj: unknown): void { ... }
     readObject<T>(inp: ByteArrayObjectDataInput, aClass?: unknown): T { ... }
     getClassLoader(): null { return null; }   // TypeScript: no class loader concept
+
+    // N19 FIX: expose destroy() so HeliosInstanceImpl can drain and release
+    // the buffer pool on shutdown. Without this, pooled ByteArrayObjectDataOutput
+    // buffers hold onto their internal Buffer allocations indefinitely even after
+    // the Helios instance is shut down.
+    destroy(): void {
+        this.bufferPool.clear();
+    }
 }
 ```
 
@@ -383,7 +470,14 @@ export class SerializationServiceImpl implements InternalSerializationService {
 ```typescript
 toData(obj: unknown): Data | null {
     if (obj == null) return null;
-    if (obj instanceof HeapData) return obj;   // already serialized
+    // DEVIATION FROM JAVA: Java checks `obj instanceof Data` (the interface), not the
+    // concrete class. Helios checks `instanceof HeapData` (the only Data implementation).
+    // This means a future Data implementation that does NOT extend HeapData (e.g., a test
+    // mock or a network-received wrapper) would NOT be caught here and would be re-serialized.
+    // CONSTRAINT: No second Data implementation may be introduced without updating this check.
+    // If a second implementation is added, change this to a duck-type check:
+    //   if (typeof (obj as any).toByteArray === 'function' && typeof (obj as any).getType === 'function')
+    if (obj instanceof HeapData) return obj;   // already serialized — pass through
 
     const adapter = this.serializerFor(obj);
     const out = this.bufferPool.takeOutputBuffer();
@@ -437,8 +531,30 @@ writeObject(out: ByteArrayObjectDataOutput, obj: unknown): void {
 ### `readObject(inp)` implementation
 
 ```typescript
-readObject<T>(inp: ByteArrayObjectDataInput, _aClass?: unknown): T {
-    const typeId = inp.readInt();
+readObject<T>(
+    inp: ByteArrayObjectDataInput,
+    _aClass?: unknown,
+    useBigEndianForTypeId: boolean = false,
+): T {
+    // useBigEndianForTypeId: when true, read the typeId as BIG_ENDIAN regardless
+    // of the stream's configured byte order. Java's AbstractSerializationService
+    // (line 343-366) exposes this parameter for operation codecs that embed types
+    // in mixed-endian formats (e.g., IDS frames within a LITTLE_ENDIAN stream).
+    // Default is false (use stream byte order) which is correct for all standard
+    // deserialization paths. Only set to true when the caller is decoding a
+    // mixed-endian protocol message.
+    //
+    // Implementation note: if useBigEndianForTypeId is true, temporarily switch
+    // the input stream to BIG_ENDIAN for the readInt() call, then restore:
+    //   const prevOrder = inp.getByteOrder();
+    //   if (useBigEndianForTypeId) inp.setByteOrder(ByteOrder.BIG_ENDIAN);
+    //   const typeId = inp.readInt();
+    //   if (useBigEndianForTypeId) inp.setByteOrder(prevOrder);
+    // If ByteArrayObjectDataInput does not support setByteOrder(), read 4 raw bytes
+    // and construct the int manually: (b0 << 24) | (b1 << 16) | (b2 << 8) | b3.
+    const typeId = useBigEndianForTypeId
+        ? inp.readIntBigEndian()   // read exactly 4 bytes in BE regardless of stream order
+        : inp.readInt();            // use stream byte order (standard path)
     const adapter = this.serializerForTypeId(typeId);
     return adapter.read(inp) as T;
 }
@@ -446,6 +562,11 @@ readObject<T>(inp: ByteArrayObjectDataInput, _aClass?: unknown): T {
 
 Note: `aClass` is accepted for interface compatibility but not used (TypeScript has no
 class-loader-based instantiation; type dispatch is purely by typeId).
+
+`readIntBigEndian()` must be added to `ByteArrayObjectDataInput` if it does not already
+exist: read 4 bytes at the current position and combine as `(b[0] << 24) | (b[1] << 16) |
+(b[2] << 8) | b[3]` (unsigned bit assembly using `>>> 0` to avoid signed overflow in JS).
+Advance position by 4. This method ignores the stream's configured byte order.
 
 ---
 
@@ -541,6 +662,13 @@ export class BufferPool {
             this.inputPool.push(inp);
         }
     }
+
+    // N19 FIX: drain all pooled buffers on service shutdown so their
+    // internal Buffer allocations are released for GC.
+    clear(): void {
+        this.outputPool.length = 0;
+        this.inputPool.length = 0;
+    }
 }
 ```
 
@@ -578,7 +706,7 @@ Use `const` object literal (not class) — no instance state required.
 | `FloatSerializer` | -9 | `writeFloat` | `readFloat` |
 | `DoubleSerializer` | -10 | `writeDouble` | `readDouble` |
 | `StringSerializer` | -11 | `writeString` | `readString` |
-| `ByteArraySerializer` | -12 | `writeByteArray` | `readByteArray` |
+| `ByteArraySerializer` | -12 | `writeByteArray` (input must be `Buffer` — see N8 note) | `readByteArray` |
 | `BooleanArraySerializer` | -13 | `writeBooleanArray` | `readBooleanArray` |
 | `CharArraySerializer` | -14 | `writeCharArray` | `readCharArray` |
 | `ShortArraySerializer` | -15 | `writeShortArray` | `readShortArray` |
@@ -598,6 +726,51 @@ compatibility when deserializing Java `Character` data. Infrastructure already e
 
 **`FloatArraySerializer` (typeId -18):** Required for read-path compatibility with Java
 `float[]` data. Infrastructure: `writeFloatArray()` / `readFloatArray()`.
+
+**`FloatSerializer` (typeId -9) — write-path asymmetry:** `FloatSerializer` is registered
+in `constantSerializers` for typeId -9 and is fully available on the READ path (required
+for deserializing `Float` values received from Java nodes). However, JavaScript has no
+separate `float` primitive — all numbers are 64-bit doubles. The WRITE dispatch chain has
+no branch that routes to `FloatSerializer`, so Helios CANNOT produce typeId -9 data.
+All numeric scalars from Helios serialize as int32, long, or double (typeIds -7, -8, -10).
+Developers porting Java code that uses `float` types will silently get `double` output.
+This asymmetry is architecturally unavoidable and is by design for v1.
+
+**`ByteArraySerializer` (typeId -12) — N8 fix note:**
+
+**N8 FIX:** `writeByteArray()` in `ByteArrayObjectDataOutput` internally calls `Buffer.copy()`
+which is a Node.js/Bun `Buffer`-only method and does NOT exist on plain `Uint8Array`. If a
+caller passes a plain `Uint8Array` (not a Buffer), the write path crashes with:
+
+```
+TypeError: src.copy is not a function
+```
+
+The dispatch guard at step 7 of `serializerFor()` therefore MUST use `Buffer.isBuffer(obj)`
+(not `obj instanceof Uint8Array`). `Buffer.isBuffer()` returns `false` for plain `Uint8Array`
+inputs, which correctly falls them through to `JavaScriptJsonSerializer` instead of crashing.
+
+If future code needs to serialize plain `Uint8Array` values, wrap them first:
+```typescript
+const buf = Buffer.from(uint8Array);   // zero-copy when backed by same ArrayBuffer
+map.put('key', buf);
+```
+
+Or coerce inside `ByteArraySerializer.write()`:
+```typescript
+write(out, obj) {
+    // Ensure we have a Buffer — Buffer.from(buf) on an existing Buffer is a no-op copy
+    // but Buffer.from(uint8Array) creates a Buffer view over the same memory (zero-copy).
+    const buf = Buffer.isBuffer(obj) ? (obj as Buffer) : Buffer.from(obj as Uint8Array);
+    out.writeByteArray(buf);
+}
+```
+
+The **recommended approach** is the coerce-in-serializer pattern so that any `Uint8Array`
+instance is safely handled without a crash, while the dispatch guard still preferentially
+routes `Buffer` instances directly.
+
+---
 
 ### `UuidSerializer` (typeId -21)
 
@@ -622,7 +795,19 @@ Read:
 read(inp) {
     const most  = inp.readLong();    // uses stream byte order (matches Java UuidSerializer)
     const least = inp.readLong();    // uses stream byte order (matches Java UuidSerializer)
-    const hex = most.toString(16).padStart(16, '0') + least.toString(16).padStart(16, '0');
+    // CRITICAL FIX: inp.readLong() returns a SIGNED bigint (via readBigInt64BE/LE).
+    // For UUIDs where mostSigBits >= 2^63 (i.e., the high bit is set — roughly 50% of
+    // all real-world UUIDs), the signed bigint is negative (e.g. -1n for 0xFFFFFFFFFFFFFFFF).
+    // A negative bigint's .toString(16) returns "-1", NOT "ffffffffffffffff".
+    // padStart(16, '0') then produces "-000000000000001" — 16 chars but starting with '-',
+    // which is a malformed UUID string. This corrupts ~50% of all UUIDs.
+    //
+    // Fix: use BigInt.asUintN(64, value) to reinterpret the signed 64-bit bigint as an
+    // unsigned 64-bit bigint before calling .toString(16). This is zero-cost (no allocation,
+    // no data change — just reinterpretation of the bit pattern).
+    const mostHex  = BigInt.asUintN(64, most).toString(16).padStart(16, '0');
+    const leastHex = BigInt.asUintN(64, least).toString(16).padStart(16, '0');
+    const hex = mostHex + leastHex;
     return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 ```
@@ -642,11 +827,53 @@ makes the serializer self-framing — it works identically whether called from `
 (where HeapData provides an outer boundary) or from `writeObject()` (where no outer
 envelope exists).
 
+**Forward-compatibility design note:** The typeId -130 wire format has no version sentinel
+(no version byte after the length prefix). Any future change to the wire format
+(compression, schema version, encryption) would require a new typeId or a version byte
+at a fixed offset. Without a version byte, cross-version rolling upgrades between a
+node writing the new format and a node reading the old format will silently corrupt
+data. If this serializer ever needs to evolve, introduce a version byte BEFORE the
+existing `byteLength` field (i.e., read 1-byte version first, then 4-byte length).
+For v1, the format is stable and this note is informational only — no version byte is written.
+
 ```typescript
 export const JavaScriptJsonSerializer: SerializerAdapter = {
     getTypeId: () => SerializationConstants.JAVASCRIPT_JSON_SERIALIZATION_TYPE,  // -130
     write(out, obj) {
-        const json = JSON.stringify(obj);
+        // N11 FIX: JSON.stringify() throws an unclassified TypeError (not
+        // HazelcastSerializationError) when the object graph contains any
+        // bigint field (e.g., { id: 42n }). This TypeError propagates through
+        // toData() as an opaque crash with no context about which object caused
+        // it. Wrap in try-catch and rethrow as HazelcastSerializationError so
+        // callers can handle it explicitly and error messages are actionable.
+        // This also catches circular-reference TypeErrors from JSON.stringify.
+        let json: string;
+        try {
+            json = JSON.stringify(obj);
+        } catch (e) {
+            throw new HazelcastSerializationError(
+                `JavaScriptJsonSerializer cannot serialize object: ${
+                    e instanceof Error ? e.message : String(e)
+                }. Objects with bigint fields or circular references cannot be ` +
+                'serialized with the default JSON serializer. ' +
+                'Use a custom serializer or convert bigint fields to string/number.',
+                e,
+            );
+        }
+        // CRITICAL FIX: JSON.stringify() returns undefined (NOT throws) for values that
+        // have no JSON representation: functions, Symbols, and plain undefined values.
+        //   JSON.stringify(function(){}) === undefined  (no throw)
+        //   JSON.stringify(Symbol('x')) === undefined   (no throw)
+        //   JSON.stringify(undefined)   === undefined   (no throw)
+        // Buffer.from(undefined, 'utf8') then throws a raw TypeError with no context.
+        // Check for undefined and throw a classified HazelcastSerializationError.
+        if (json === undefined) {
+            throw new HazelcastSerializationError(
+                'JavaScriptJsonSerializer cannot serialize this value: JSON.stringify returned ' +
+                'undefined. Functions, Symbols, and undefined values cannot be serialized. ' +
+                'Use a custom serializer or convert the value to a JSON-representable type.',
+            );
+        }
         const utf8Bytes = Buffer.from(json, 'utf8');
         out.writeInt(utf8Bytes.length);
         out.writeBytes(utf8Bytes, 0, utf8Bytes.length);
@@ -723,7 +950,10 @@ this._nearCacheManager = new DefaultNearCacheManager(ss);
 `NodeEngineImpl` and `DefaultNearCacheManager`. Creating separate instances causes the
 NearCacheManager's instance to have empty factory registries — any `toObject()` call
 through the near-cache that encounters IDS-encoded data would throw "factory not found".
-`SerializationServiceImpl` is immutable post-construction, so sharing is safe.
+`SerializationServiceImpl` is safe to share in single-threaded environments — the buffer
+pool is not thread-safe, but Bun is single-threaded and each Bun Worker gets its own JS
+heap (and therefore its own SerializationServiceImpl instance). Sharing across Workers
+via SharedArrayBuffer is not supported and would break the buffer pool invariants.
 
 ---
 
@@ -752,16 +982,42 @@ service — it should not need changes.
 2. `SerializerAdapter.ts`
 3. `DataSerializerHook.ts` (interface only)
 4. `SerializationConfig.ts` (including `DataSerializableFactory`, `DataSerializerHook[]`)
-5. `bufferpool/BufferPool.ts`
+5. `bufferpool/BufferPool.ts` — includes `clear()` method for N19 destroy support
 6. `serializers/NullSerializer.ts`
 7. `serializers/` — all primitive serializers including CharSerializer (single file per, alphabetical)
 8. `serializers/` — all array serializers including CharArraySerializer, FloatArraySerializer
+   - IntegerArraySerializer: per-element check MUST be `Number.isInteger(el) && el >= -2147483648 && el <= 2147483647`
 9. `serializers/UuidSerializer.ts`
+   - CRITICAL: `read()` MUST use `BigInt.asUintN(64, value).toString(16)` — NOT plain `.toString(16)`
+     on a signed bigint. See the signed-bigint hex corruption fix in the UuidSerializer section.
 10. `serializers/JavaScriptJsonSerializer.ts`
+    - N11 FIX: wrap `JSON.stringify()` in try-catch, rethrow as `HazelcastSerializationError`
+    - CRITICAL: check `if (json === undefined)` AFTER the try-catch and throw `HazelcastSerializationError`
+      (JSON.stringify of functions/Symbols returns undefined without throwing — raw TypeError follows)
+    - Error message must name the serializer and explain the bigint/circular-reference/function cause
 11. `serializers/DataSerializableSerializer.ts`
-12. `SerializationServiceImpl.ts` (with BufferPool, factory registration, serializerForTypeId error handling)
-13. Update `HeliosInstanceImpl.ts` (single shared instance for NodeEngine + NearCacheManager)
-14. Write tests
+    - N18 FIX: validate `typeof obj.readData === 'function'` before calling `obj.readData(inp)`
+12. `SerializationServiceImpl.ts`
+    - N8 FIX: dispatch guard MUST use `Buffer.isBuffer(obj)` for `ByteArraySerializer` (NOT `instanceof Uint8Array`)
+    - N5/N10 FIX: mixed bigint+number array falls to JavaScriptJsonSerializer (documented in dispatch comments)
+    - N17 FIX: covered by N11 — any POJO with bigint fields hits N11 JSON.stringify guard
+    - N19 FIX: add `destroy()` method that calls `this.bufferPool.clear()`
+    - `readObject()`: implement `useBigEndianForTypeId` parameter — see readObject spec above
+    - Includes BufferPool, factory registration, serializerForTypeId error handling
+    - Store the `SerializationServiceImpl` as a field so `HeliosInstanceImpl.shutdown()` can call `this._ss.destroy()`
+13. Update `HeliosInstanceImpl.ts`
+    - Store `ss` as a private field: `private readonly _ss: SerializationServiceImpl`
+    - Single shared instance for NodeEngine + NearCacheManager
+    - N19 FIX: call `this._ss.destroy()` in `shutdown()` after `this._nodeEngine.shutdown()`
+14. Write tests:
+    - N11 test: `toData_objectWithBigintField_throwsHazelcastSerializationError`
+    - NEW test: `toData_function_throwsHazelcastSerializationError` (JSON.stringify returns undefined for functions)
+    - NEW test: `toData_symbol_throwsHazelcastSerializationError` (JSON.stringify returns undefined for symbols)
+    - N8 test: `toData_plainUint8Array_serializesWithoutCrash` (coerced to Buffer inside serializer)
+    - N18 test: `readObject_factoryReturnsObjectWithoutReadData_throwsHazelcastSerializationError`
+    - N19 test: `destroy_clearsBufferPool_noLeak`
+    - NEW test: `readUuid_highBitSet_correctHex` (UUID with mostSigBits >= 2^63 must NOT produce minus sign in hex)
+    - NEW test: `readObject_littleEndian_useBigEndianForTypeId_readsCorrectTypeId`
 15. Run `bun test` — verify all existing tests pass, new tests pass
 
 ---

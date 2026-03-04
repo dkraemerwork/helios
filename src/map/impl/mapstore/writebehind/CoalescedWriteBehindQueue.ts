@@ -22,6 +22,21 @@ export class CoalescedWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
     }
   }
 
+  addFirst(entries: DelayedEntry<K, V>[]): void {
+    for (const entry of entries) {
+      const key = JSON.stringify(entry.key);
+      // Only re-add if not already present (existing entry is newer, takes precedence)
+      if (!this._map.has(key)) {
+        this._map.set(key, entry);
+      }
+    }
+  }
+
+  addForcibly(entry: DelayedEntry<K, V>): void {
+    const key = JSON.stringify(entry.key);
+    this._map.set(key, entry);
+  }
+
   drainTo(now: number): DelayedEntry<K, V>[] {
     const drained: DelayedEntry<K, V>[] = [];
     for (const [k, entry] of this._map) {
