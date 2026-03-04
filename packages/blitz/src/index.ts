@@ -7,7 +7,7 @@
 
 export { BlitzService } from './BlitzService.ts';
 export type { BlitzEventListener } from './BlitzService.ts';
-export type { BlitzConfig, ResolvedBlitzConfig } from './BlitzConfig.ts';
+export type { BlitzConfig, ResolvedBlitzConfig, EmbeddedNatsConfig, NatsClusterConfig, ResolvedEmbeddedNatsConfig, ResolvedNatsClusterConfig } from './BlitzConfig.ts';
 export { resolveBlitzConfig } from './BlitzConfig.ts';
 export { BlitzEvent } from './BlitzEvent.ts';
 export { BlitzError } from './errors/BlitzError.ts';

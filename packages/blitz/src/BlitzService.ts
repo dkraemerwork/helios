@@ -67,6 +67,9 @@ export class BlitzService {
      */
     static async connect(config: BlitzConfig): Promise<BlitzService> {
         const resolved = resolveBlitzConfig(config);
+        if (!resolved.servers) {
+            throw new Error('BlitzService.connect() requires `servers` in config. Use BlitzService.start() for embedded mode.');
+        }
 
         const nc = await connect({
             servers: resolved.servers,

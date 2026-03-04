@@ -69,4 +69,98 @@ describe('BlitzConfig', () => {
             }
         });
     });
+
+    describe('resolveBlitzConfig — embedded/cluster extensions', () => {
+        it('no args defaults to embedded in-memory', () => {
+            const cfg = resolveBlitzConfig({});
+            expect(cfg.embedded).toBeDefined();
+            expect(cfg.servers).toBeUndefined();
+            expect(cfg.cluster).toBeUndefined();
+        });
+
+        it('servers and embedded throws', () => {
+            expect(() => resolveBlitzConfig({
+                servers: 'nats://localhost:4222',
+                embedded: {},
+            })).toThrow(/exactly one of/i);
+        });
+
+        it('servers and cluster throws', () => {
+            expect(() => resolveBlitzConfig({
+                servers: 'nats://localhost:4222',
+                cluster: { nodes: 3 },
+            })).toThrow(/exactly one of/i);
+        });
+
+        it('embedded and cluster throws', () => {
+            expect(() => resolveBlitzConfig({
+                embedded: {},
+                cluster: { nodes: 3 },
+            })).toThrow(/exactly one of/i);
+        });
+
+        it('servers only resolves correctly', () => {
+            const cfg = resolveBlitzConfig({ servers: 'nats://myhost:5222' });
+            expect(cfg.servers).toBe('nats://myhost:5222');
+            expect(cfg.embedded).toBeUndefined();
+            expect(cfg.cluster).toBeUndefined();
+        });
+
+        it('embedded only applies default port', () => {
+            const cfg = resolveBlitzConfig({ embedded: {} });
+            expect(cfg.embedded).toBeDefined();
+            expect(cfg.embedded!.port).toBe(4222);
+        });
+
+        it('embedded custom port preserved', () => {
+            const cfg = resolveBlitzConfig({ embedded: { port: 14222 } });
+            expect(cfg.embedded!.port).toBe(14222);
+        });
+
+        it('embedded custom dataDir preserved', () => {
+            const cfg = resolveBlitzConfig({ embedded: { dataDir: '/tmp/blitz-data' } });
+            expect(cfg.embedded!.dataDir).toBe('/tmp/blitz-data');
+        });
+
+        it('embedded startTimeoutMs defaults to 10000', () => {
+            const cfg = resolveBlitzConfig({ embedded: {} });
+            expect(cfg.embedded!.startTimeoutMs).toBe(10_000);
+        });
+
+        it('cluster nodes must be odd — 2 nodes throws', () => {
+            expect(() => resolveBlitzConfig({
+                cluster: { nodes: 2 },
+            })).toThrow(/odd/i);
+        });
+
+        it('cluster nodes 3 succeeds', () => {
+            const cfg = resolveBlitzConfig({ cluster: { nodes: 3 } });
+            expect(cfg.cluster).toBeDefined();
+            expect(cfg.cluster!.nodes).toBe(3);
+        });
+
+        it('cluster dataDir applied to all nodes', () => {
+            const cfg = resolveBlitzConfig({ cluster: { nodes: 3, dataDir: '/data/blitz' } });
+            expect(cfg.cluster!.dataDir).toBe('/data/blitz');
+        });
+
+        it('cluster port overlap throws (N7)', () => {
+            expect(() => resolveBlitzConfig({
+                cluster: { nodes: 3, basePort: 6222, baseClusterPort: 6222 },
+            })).toThrow(/overlap/i);
+        });
+
+        it('cluster port no overlap succeeds (N7)', () => {
+            const cfg = resolveBlitzConfig({
+                cluster: { nodes: 3, basePort: 4222, baseClusterPort: 6222 },
+            });
+            expect(cfg.cluster).toBeDefined();
+        });
+
+        it('cluster defaults basePort=4222 and baseClusterPort=6222', () => {
+            const cfg = resolveBlitzConfig({ cluster: { nodes: 3 } });
+            expect(cfg.cluster!.basePort).toBe(4222);
+            expect(cfg.cluster!.baseClusterPort).toBe(6222);
+        });
+    });
 });
