@@ -12,7 +12,8 @@
  * TcpClusterTransport is started and map mutations are broadcast to peers.
  */
 import { NodeEngineImpl } from '@helios/spi/impl/NodeEngineImpl';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
+import { SerializationServiceImpl } from '@helios/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig } from '@helios/internal/serialization/impl/SerializationConfig';
 import { MapContainerService } from '@helios/map/impl/MapContainerService';
 import { MapService } from '@helios/map/impl/MapService';
 import { MapProxy } from '@helios/map/impl/MapProxy';
@@ -94,6 +95,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     /** Near-cache manager — creates/manages near-caches per map name. */
     private readonly _nearCacheManager: DefaultNearCacheManager;
 
+    /** Production serialization service — shared by NodeEngine and NearCacheManager. */
+    private readonly _ss: SerializationServiceImpl;
+
     /**
      * Subscribers for remote INVALIDATE messages.
      * Registered via onRemoteInvalidate().
@@ -106,17 +110,18 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._config = config ?? new HeliosConfig();
         this._name = this._config.getName();
 
-        // Wire NodeEngine with JSON-based serialization (production SerializationServiceImpl
-        // will replace TestSerializationService once binary codec is complete in Block 7.2+).
-        this._nodeEngine = new NodeEngineImpl(new TestSerializationService());
+        // Production SerializationServiceImpl — single shared instance for NodeEngine + NearCacheManager.
+        const serializationConfig = new SerializationConfig();
+        this._ss = new SerializationServiceImpl(serializationConfig);
+        this._nodeEngine = new NodeEngineImpl(this._ss);
 
         // Register MapContainerService
         this._mapService = new MapContainerService();
         this._mapService.setNodeEngine(this._nodeEngine);
         this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
 
-        // Near-cache manager (uses the same serialization service as the node engine)
-        this._nearCacheManager = new DefaultNearCacheManager(new TestSerializationService());
+        // Near-cache manager — shares the same serialization service as the node engine
+        this._nearCacheManager = new DefaultNearCacheManager(this._ss);
 
         // Lifecycle and cluster
         this._lifecycleService = new HeliosLifecycleService();
@@ -265,6 +270,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._replicatedMaps.clear();
         this._lifecycleService.shutdown();
         this._nodeEngine.shutdown();
+        this._ss.destroy();
         this._transport?.shutdown();
         this._transport = null;
         this._restServer.stop();
