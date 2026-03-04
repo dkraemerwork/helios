@@ -4778,7 +4778,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 > migration, backup replication, anti-entropy, and map state transfer including write-behind queues.
 > **Depends on:** Phase 15 (production SerializationServiceImpl — required for binary serialization of operations and backup data)
 
-- [ ] **Block 16.A0** — Multi-node test infrastructure (`TestClusterNode`, `TestCluster` harness with `startNode`/`killNode`/`isolateNode`/`waitForStable`) — ~5 tests
+- [x] **Block 16.A0** — Multi-node test infrastructure (`TestClusterNode`, `TestCluster` harness with `startNode`/`killNode`/`isolateNode`/`waitForStable`) — 5 tests
 - [x] **Block 16.A1** — `ClusterServiceImpl` + `ClusterStateManager` (orchestrates 4 sub-managers, cluster state transitions with partition stamp validation) — 30 tests
 - [x] **Block 16.A2** — `MembershipManager` (member list publishing, mastership claims with remote agreement, suspected members, partition table repair for returning members) — 19 tests
 - [x] **Block 16.A3** — `ClusterHeartbeatManager` (deadline failure detection, clock drift, cooperative yield, split-brain detection with quorum gate) — 22 tests
