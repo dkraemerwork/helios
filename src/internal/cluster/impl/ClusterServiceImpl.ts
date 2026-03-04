@@ -73,6 +73,10 @@ export class ClusterServiceImpl implements Cluster {
         return this._joined;
     }
 
+    setJoined(joined: boolean): void {
+        this._joined = joined;
+    }
+
     getClusterId(): string | null {
         return this._clusterId;
     }
@@ -118,6 +122,10 @@ export class ClusterServiceImpl implements Cluster {
 
     isMemberSuspected(member: Member): boolean {
         return this._suspectedMembers.has(member.getUuid());
+    }
+
+    clearSuspicion(member: Member): void {
+        this._suspectedMembers.delete(member.getUuid());
     }
 
     // ── updateMembers ────────────────────────────────────────────────────────
