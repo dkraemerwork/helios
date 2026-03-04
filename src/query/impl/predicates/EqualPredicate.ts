@@ -19,6 +19,9 @@ export class EqualPredicate<K = unknown, V = unknown>
 
   value: unknown;
 
+  private _convertedValue: unknown = undefined;
+  private _converted = false;
+
   constructor(attributeName?: string, value?: unknown) {
     super(attributeName);
     this.value = value;
@@ -28,9 +31,12 @@ export class EqualPredicate<K = unknown, V = unknown>
     if (attributeValue === null || attributeValue === undefined) {
       return isNull(this.value);
     }
-    this.value = this.convert(attributeValue, this.value);
+    if (!this._converted) {
+      this._convertedValue = this.convert(attributeValue, this.value);
+      this._converted = true;
+    }
     const attr = this.convertEnumValue(attributeValue);
-    return Comparables.equal(attr, this.value);
+    return Comparables.equal(attr, this._convertedValue);
   }
 
   negate(): Predicate<K, V> {

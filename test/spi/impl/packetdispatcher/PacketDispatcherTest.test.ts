@@ -121,8 +121,10 @@ describe('PacketDispatcherTest', () => {
 
     test('whenProblemHandlingPacket_thenSwallowed', () => {
         const packet = new Packet().setPacketType(Packet.Type.OPERATION);
-        // Create a fresh dispatcher with a throwing executor to avoid bun:test mock state issues
-        const throwingExecutor = mock(() => { throw new Error('ExpectedRuntimeException'); });
+        // Use a plain function (not mock()) — bun's mock() re-throws after recording,
+        // which would escape the dispatcher's try/catch. A plain function throws only once,
+        // letting the dispatcher swallow it correctly.
+        const throwingExecutor = (_p: Packet): void => { throw new Error('ExpectedRuntimeException'); };
         const testDispatcher = new PacketDispatcher(
             throwingExecutor,
             responseHandler,

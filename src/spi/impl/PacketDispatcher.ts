@@ -56,7 +56,8 @@ export class PacketDispatcher {
                     console.error(`Header flags [${packet.getFlags().toString(2)}] specify an undefined packet type ${packet.getPacketType().name}`);
             }
         } catch (t: unknown) {
-            console.error(`Failed to process: ${packet}`, t);
+            const msg = t instanceof Error ? `${t.message}\n${t.stack ?? ''}` : String(t);
+            console.error(`Failed to process: ${packet} — ${msg}`);
         }
     }
 }

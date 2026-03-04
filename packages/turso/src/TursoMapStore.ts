@@ -1,4 +1,4 @@
-import { createClient } from '@libsql/client';
+ import { createClient } from '@libsql/client';
 import type { Client, InStatement } from '@libsql/client';
 import type { TursoConfig, Serializer } from './TursoConfig.js';
 

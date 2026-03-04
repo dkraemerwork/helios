@@ -38,4 +38,34 @@ describe('EqualPredicate', () => {
 
     // In JS NaN !== NaN (same as Java ==)
   });
+
+  test('apply_multipleCallsWithSameType_doesNotMutateOriginalValue', () => {
+    // Predicate created with string value '42'; all entries are strings (homogeneous)
+    // convert() returns the value unchanged when types already match
+    const p = new EqualPredicate('this', '42');
+    expect(p.apply(entry('42'))).toBe(true);
+    expect(p.apply(entry('99'))).toBe(false);
+    expect(p.apply(entry('42'))).toBe(true);
+    // The key invariant: this.value must NOT have been overwritten — it stays '42' (string)
+    expect((p as { value: unknown }).value).toBe('42');
+  });
+
+  test('apply_repeatedCalls_cacheConvertedValueStably', () => {
+    // Entry holds number 5; predicate holds string '5'
+    // convert() should coerce '5'→5 once and cache it
+    const p = new EqualPredicate('this', '5');
+    const e = entry(5);
+    for (let i = 0; i < 5; i++) {
+      expect(p.apply(e)).toBe(true);
+    }
+    // Original value stays '5'
+    expect((p as { value: unknown }).value).toBe('5');
+  });
+
+  test('apply_nullValue_returnsTrueForNullEntry', () => {
+    const p = new EqualPredicate('this', null);
+    expect(p.apply(entry(null))).toBe(true);
+    expect(p.apply(entry(undefined))).toBe(true);
+    expect(p.apply(entry(0))).toBe(false);
+  });
 });

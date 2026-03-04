@@ -16,8 +16,10 @@ export class InPredicate<K = unknown, V = unknown>
   implements VisitablePredicate<K, V> {
 
   _values: unknown[];
-  private _convertedValues: unknown[] | null = null;
-  private _valuesContainNull: boolean | null = null;
+  private _lookup: Set<unknown> | null = null;
+  private _hasNull: boolean = false;
+  private _hasNaN: boolean = false;
+  private _hasNegZero: boolean = false;
 
   constructor(attributeName?: string, ...values: unknown[]) {
     super(attributeName);
@@ -28,38 +30,50 @@ export class InPredicate<K = unknown, V = unknown>
   }
 
   protected override applyForSingleAttributeValue(attributeValue: unknown): boolean {
-    // Handle null attribute
-    if ((attributeValue === null || attributeValue === undefined) && this._convertedValues === null) {
-      if (this._valuesContainNull !== null) {
-        return this._valuesContainNull;
+    if (attributeValue === null || attributeValue === undefined) {
+      if (this._lookup === null) {
+        this._buildLookup(attributeValue);
       }
-      for (const v of this._values) {
-        if (isNull(v)) {
-          this._valuesContainNull = true;
-          return true;
-        }
-      }
-      this._valuesContainNull = false;
-      return false;
+      return this._hasNull;
     }
 
-    if (this._convertedValues === null) {
-      this._convertedValues = this._values.map(v => {
-        if (isNull(v)) return null;
-        return this.convert(attributeValue, v);
-      });
+    if (this._lookup === null) {
+      this._buildLookup(attributeValue);
     }
 
     const attr = this.convertEnumValue(attributeValue);
-    return this._convertedValues.some(v => this._isMemberOf(attr, v));
+
+    if (typeof attr === 'number') {
+      if (isNaN(attr)) return this._hasNaN;
+      if (Object.is(attr, -0)) return this._hasNegZero;
+      return this._lookup!.has(attr);
+    }
+
+    return this._lookup!.has(attr);
   }
 
-  /** Membership check using Object.is for numbers (NaN==NaN, -0!==0). */
-  private _isMemberOf(attrValue: unknown, storedValue: unknown): boolean {
-    if (typeof attrValue === 'number' && typeof storedValue === 'number') {
-      return Object.is(attrValue, storedValue);
+  private _buildLookup(attributeValue: unknown): void {
+    this._lookup = new Set<unknown>();
+    for (const v of this._values) {
+      if (isNull(v)) {
+        this._hasNull = true;
+        continue;
+      }
+      const converted = attributeValue !== null && attributeValue !== undefined
+        ? this.convert(attributeValue, v)
+        : v;
+      if (typeof converted === 'number') {
+        if (isNaN(converted)) {
+          this._hasNaN = true;
+        } else if (Object.is(converted, -0)) {
+          this._hasNegZero = true;
+        } else {
+          this._lookup.add(converted);
+        }
+      } else {
+        this._lookup.add(converted);
+      }
     }
-    return attrValue === storedValue;
   }
 
   accept(visitor: Visitor, indexes: IndexRegistry): Predicate<K, V> {

@@ -1,13 +1,25 @@
 {
   "name": "@helios/nestjs-example",
   "version": "1.0.0",
-  "description": "NestJS example demonstrating near-cache and predicate queries using @helios/nestjs",
+  "description": "NestJS example demonstrating near-cache, predicates, and MapStore persistence (MongoDB, S3, Turso) using @helios/nestjs",
   "private": true,
   "scripts": {
     "start": "bun run src/main.ts",
     "typecheck": "bun run tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "reflect-metadata": "^0.2.2",
+    "@nestjs/common": "^11.1.14",
+    "@nestjs/core": "^11.1.14",
+    "@nestjs/cache-manager": "^3.1.0",
+    "@nestjs/event-emitter": "^3.0.1",
+    "@nestjs/terminus": "^11.1.1",
+    "cache-manager": "^7.2.8",
+    "rxjs": "^7.8.2",
+    "mongodb": "^6.12.0",
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@libsql/client": "^0.14.0"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "beta"

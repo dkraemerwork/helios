@@ -19,14 +19,9 @@ export abstract class AbstractPredicate<K = unknown, V = unknown>
 
   apply(entry: QueryableEntry<K, V>): boolean {
     const attributeValue = entry.getAttributeValue(this.attributeName);
-    return this._convertAndApply(attributeValue);
-  }
-
-  private _convertAndApply(attributeValue: unknown): boolean {
-    if (attributeValue === null || attributeValue === undefined) {
-      return this.applyForSingleAttributeValue(null);
-    }
-    return this.applyForSingleAttributeValue(attributeValue);
+    return this.applyForSingleAttributeValue(
+      attributeValue === undefined ? null : attributeValue
+    );
   }
 
   protected abstract applyForSingleAttributeValue(attributeValue: unknown): boolean;

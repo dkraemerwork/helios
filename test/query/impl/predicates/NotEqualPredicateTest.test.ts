@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import { NotEqualPredicate } from '@helios/query/impl/predicates/NotEqualPredicate';
 import { EqualPredicate } from '@helios/query/impl/predicates/EqualPredicate';
 import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
+import { entry } from './PredicateTestUtils';
 
 /** Simple mock entry returning a specific attribute value. */
 function mockEntry(attributeValue: unknown): QueryableEntry {
@@ -56,5 +57,32 @@ describe('NotEqualPredicate', () => {
   test('getId_isConstant', () => {
     const predicate = new NotEqualPredicate('bar', 'foo');
     expect(predicate.getClassId()).toBe(9);
+  });
+
+  test('apply_multipleCallsWithSameType_doesNotMutateOriginalValue', () => {
+    // Predicate created with string value '42'; all entries are strings (homogeneous)
+    // convert() returns the value unchanged when types already match
+    const p = new NotEqualPredicate('this', '42');
+    expect(p.apply(entry('42'))).toBe(false);  // equal → not unequal
+    expect(p.apply(entry('99'))).toBe(true);   // not equal → unequal
+    expect(p.apply(entry('42'))).toBe(false);  // equal again
+    // The key invariant: this.value must NOT have been overwritten — it stays '42' (string)
+    expect((p as { value: unknown }).value).toBe('42');
+  });
+
+  test('apply_repeatedCalls_cacheConvertedValueStably', () => {
+    const p = new NotEqualPredicate('this', '5');
+    const e = entry(10);
+    for (let i = 0; i < 5; i++) {
+      expect(p.apply(e)).toBe(true);
+    }
+    expect((p as { value: unknown }).value).toBe('5');
+  });
+
+  test('apply_nullValue_notEqualToNonNull', () => {
+    const p = new NotEqualPredicate('this', null);
+    expect(p.apply(entry(0))).toBe(true);
+    expect(p.apply(entry(''))).toBe(true);
+    expect(p.apply(entry(null))).toBe(false);
   });
 });

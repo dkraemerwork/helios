@@ -19,6 +19,9 @@
       "@helios/core/*": ["../../src/core/*", "../../src/*"],
       "@helios/nestjs": ["../../packages/nestjs/src/index.ts"],
       "@helios/nestjs/*": ["../../packages/nestjs/src/*"],
+      "@helios/mongodb": ["../../packages/mongodb/src/index.ts"],
+      "@helios/s3": ["../../packages/s3/src/index.ts"],
+      "@helios/turso": ["../../packages/turso/src/index.ts"],
       "@helios/*": ["../../src/*"]
     },
 
