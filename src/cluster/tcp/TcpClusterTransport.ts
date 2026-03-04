@@ -6,18 +6,23 @@
  * replicate map operations and near-cache invalidations to every connected peer.
  *
  * Wire format:
- *   [4-byte big-endian uint32: JSON payload length][JSON payload bytes]
+ *   [4-byte big-endian uint32: serialized payload length][serialized payload bytes]
  *
  * Session handshake:
  *   On each new connection (inbound or outbound) both sides immediately send a
  *   HELLO message carrying their node ID.  Only after receiving HELLO is the
  *   channel moved into `_peers` and eligible for broadcasts.
+ *
+ * Block 16.A5: Added SerializationStrategy support, new message types,
+ * send()/disconnectPeer()/onMessage, membership-driven connection management.
  */
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@helios/internal/eventloop/Eventloop';
 import type { ClusterMessage } from '@helios/cluster/tcp/ClusterMessage';
+import { type SerializationStrategy, JsonSerializationStrategy } from '@helios/cluster/tcp/SerializationStrategy';
 
 export class TcpClusterTransport {
     private readonly _nodeId: string;
+    private readonly _strategy: SerializationStrategy;
     private _server: EventloopServer | null = null;
 
     /**
@@ -28,7 +33,7 @@ export class TcpClusterTransport {
 
     /**
      * Per-channel receive buffer: accumulates raw bytes until a complete
-     * length-prefixed JSON frame can be extracted.
+     * length-prefixed frame can be extracted.
      */
     private readonly _buffers = new Map<EventloopChannel, Buffer>();
 
@@ -46,9 +51,12 @@ export class TcpClusterTransport {
     onPeerConnected: (nodeId: string) => void = () => {};
     /** Fired when a peer's channel is closed. */
     onPeerDisconnected: (nodeId: string) => void = () => {};
+    /** Fired for any non-HELLO message that is not handled by legacy callbacks. */
+    onMessage: (msg: ClusterMessage) => void = () => {};
 
-    constructor(nodeId: string) {
+    constructor(nodeId: string, strategy?: SerializationStrategy) {
         this._nodeId = nodeId;
+        this._strategy = strategy ?? new JsonSerializationStrategy();
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -106,6 +114,23 @@ export class TcpClusterTransport {
         return this._server?.port() ?? null;
     }
 
+    // ── Targeted send ─────────────────────────────────────────────────────
+
+    /** Send a message to a specific peer by node ID. */
+    send(peerId: string, msg: ClusterMessage): void {
+        const ch = this._peers.get(peerId);
+        if (ch) this._sendMsg(ch, msg);
+    }
+
+    /** Disconnect a specific peer by node ID. */
+    disconnectPeer(peerId: string): void {
+        const ch = this._peers.get(peerId);
+        if (ch) {
+            this._peers.delete(peerId);
+            ch.close();
+        }
+    }
+
     // ── Broadcast API ─────────────────────────────────────────────────────
 
     broadcastPut(mapName: string, key: unknown, value: unknown): void {
@@ -124,6 +149,11 @@ export class TcpClusterTransport {
         this._broadcast({ type: 'INVALIDATE', mapName, key });
     }
 
+    /** Broadcast any message type to all peers. */
+    broadcast(msg: ClusterMessage): void {
+        this._broadcast(msg);
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────
 
     private _broadcast(msg: ClusterMessage): void {
@@ -133,11 +163,10 @@ export class TcpClusterTransport {
     }
 
     private _sendMsg(ch: EventloopChannel, msg: ClusterMessage): void {
-        const json = JSON.stringify(msg);
-        const jsonBuf = Buffer.from(json, 'utf8');
-        const frame = Buffer.allocUnsafe(4 + jsonBuf.length);
-        frame.writeUInt32BE(jsonBuf.length, 0);
-        jsonBuf.copy(frame, 4);
+        const payload = this._strategy.serialize(msg);
+        const frame = Buffer.allocUnsafe(4 + payload.length);
+        frame.writeUInt32BE(payload.length, 0);
+        payload.copy(frame, 4);
         ch.write(frame);
     }
 
@@ -171,7 +200,7 @@ export class TcpClusterTransport {
             buf = buf.subarray(4 + msgLen);
 
             try {
-                const msg = JSON.parse(msgBytes.toString('utf8')) as ClusterMessage;
+                const msg = this._strategy.deserialize(msgBytes);
                 this._handleMsg(ch, msg);
             } catch {
                 // Malformed frame — discard and continue
@@ -202,6 +231,12 @@ export class TcpClusterTransport {
 
             case 'INVALIDATE':
                 this.onRemoteInvalidate(msg.mapName, msg.key);
+                break;
+
+            default:
+                // All new message types (JOIN_REQUEST, FINALIZE_JOIN, MEMBERS_UPDATE,
+                // HEARTBEAT, FETCH_MEMBERS_VIEW, OPERATION, BACKUP, etc.)
+                this.onMessage(msg);
                 break;
         }
     }
