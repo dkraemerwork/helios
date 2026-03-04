@@ -534,6 +534,20 @@ HeliosInstanceImpl + HeliosLifecycleService
               ├─► 11.4 CLUSTER_READ + CLUSTER_WRITE handlers       [parallel]
               └─► 11.5 DATA handler (IMap CRUD + IQueue ops)       [parallel]
                     └─► 11.6 app/ migration + e2e REST acceptance
+
+[Phase 16 — depends on Phase 15 (production SerializationServiceImpl)]
+SerializationServiceImpl + HeliosInstanceImpl + all data structures
+  └─► 16.A0 test infra → 16.A1 ClusterService → 16.A2 MembershipMgr → 16.A3 Heartbeat
+        └─► 16.A4 JoinManager → 16.A5 TCP upgrade
+              └─► 16.B1 PartitionStateManager → 16.B2 PartitionServiceImpl
+                    └─► 16.B3a migration local planning → 16.B4-B6 (parallel)
+                          └─► 16.C1 InvocationRegistry → 16.C2 Invocation → 16.C3 OpService
+                                └─► 16.C4 MapProxy migration (retire broadcast path)
+                                      └─► 16.B3b migration remote execution
+                                            └─► 16.D1-D4 backup replication
+                                                  └─► 16.E1-E3 anti-entropy
+                                                        └─► 16.F1-F4 map replication
+                                                              └─► 16.INT integration tests
 ```
 
 ---
@@ -1402,7 +1416,11 @@ Start with TestClusterRegistry so multi-node tests can run in-process.
 > **Multi-node resilience plan:** The full cluster runtime, partition service, operation
 > routing, backup replication, anti-entropy, and map replication (including write-behind
 > queue state transfer) are specified in `plans/MULTI_NODE_RESILIENCE_PLAN.md`. That plan
-> covers Phases A–F building on the data model foundations delivered in Blocks 4.0–4.4 below.
+> covers Phases A–F (mapped to Phase 16 blocks 16.A0–16.INT in the Master Todo List),
+> building on the data model foundations delivered in Blocks 4.0–4.4 below.
+> Phase 16 depends on Phase 15 (production SerializationServiceImpl) for binary
+> serialization of operations and backup data. 26 audit findings have been reviewed
+> and remediated in the plan — see the Audit Remediation Tracker section.
 
 ---
 
@@ -4733,7 +4751,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 > lifecycle — binary resolution, spawn, health-poll, cluster formation, and shutdown.
 
 - [x] **Block 14.1** — `package.json` change (`nats-server` dep → dependency) + `NatsServerBinaryResolver` (npm package → PATH → explicit override → error chain; N16 FIX: use `createRequire(import.meta.url)` not `require.resolve`; N6 FIX: `existsSync()` check after resolve) — 8 tests
-- [ ] **Block 14.2** — `NatsServerConfig` (internal typed config) + `NatsServerManager` (spawn + health-poll + shutdown; N13 FIX: close probe connections in `_waitUntilReady` finally block; N14 FIX: poll `jsm.info()` for cluster JetStream readiness; N15 FIX: `shutdown()` is async, `await proc.exited`) — ~20 tests
+- [x] **Block 14.2** — `NatsServerConfig` (internal typed config) + `NatsServerManager` (spawn + health-poll + shutdown; N13 FIX: close probe connections in `_waitUntilReady` finally block; N14 FIX: poll `jsm.getAccountInfo()` for cluster JetStream readiness; N15 FIX: `shutdown()` is async, `await proc.exited`) — 14 tests
 - [ ] **Block 14.3** — `BlitzConfig` extensions (`EmbeddedNatsConfig`, `NatsClusterConfig` interfaces) + mutual-exclusivity validation + N7 FIX: port-overlap validation for cluster configs — ~15 tests
 - [ ] **Block 14.4** — `BlitzService.start()` static factory + `shutdown()` extension (N15 FIX: `await this._manager?.shutdown()` — must await, not fire-and-forget) — ~15 tests
 - [ ] **Block 14.5** — Remove `skipIf` guards from all 4 blitz integration test files (`BlitzServiceTest`, `PipelineTest`, `SourceSinkTest`, `WindowingTest`) — 0 new tests (test hygiene)
@@ -4750,6 +4768,46 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [ ] **Block 15.4** — `SerializationServiceImpl`: dispatch chain (`serializerFor` + `serializerForTypeId`), `toData`/`toObject`/`writeObject`/`readObject`, `BufferPool` wiring, factory hook registration — ~20 tests
 - [ ] **Block 15.5** — Wire `SerializationServiceImpl` into `HeliosInstanceImpl` (single shared instance for `NodeEngineImpl` + `DefaultNearCacheManager`); full regression — all tests green (N12 FIX: do NOT hardcode a test count here — Phase 14 adds ~60 tests and Phase 15 itself adds ~53; the gate command is authoritative)
 - [ ] **Phase 15 checkpoint**: `bun test` at root — 0 fail, 0 error (all tests green including Phase 14 + 15 additions), `writeObject`/`readObject` no longer throw in production paths
+
+### Phase 16 — Multi-Node Resilience (Cluster Runtime + Partition Replication + Anti-Entropy)
+
+> **Cross-ref:** `plans/MULTI_NODE_RESILIENCE_PLAN.md` — the authoritative spec for all Phase 16 blocks.
+> **Audit status:** 26 findings (6 CRITICAL, 12 HIGH, 8 MEDIUM, 2 LOW) have been reviewed and remediated in the plan.
+> **Goal:** Replace `LocalCluster` stub and single-node `OperationServiceImpl` with a fully
+> distributed cluster: real membership, heartbeats, master election, partition assignment,
+> migration, backup replication, anti-entropy, and map state transfer including write-behind queues.
+> **Depends on:** Phase 15 (production SerializationServiceImpl — required for binary serialization of operations and backup data)
+
+- [ ] **Block 16.A0** — Multi-node test infrastructure (`TestClusterNode`, `TestCluster` harness with `startNode`/`killNode`/`isolateNode`/`waitForStable`) — ~5 tests
+- [ ] **Block 16.A1** — `ClusterServiceImpl` + `ClusterStateManager` (orchestrates 4 sub-managers, cluster state transitions with partition stamp validation) — ~15 tests
+- [ ] **Block 16.A2** — `MembershipManager` (member list publishing, mastership claims with remote agreement, suspected members, partition table repair for returning members) — ~18 tests
+- [ ] **Block 16.A3** — `ClusterHeartbeatManager` (deadline failure detection, clock drift, cooperative yield, split-brain detection with quorum gate) — ~21 tests
+- [ ] **Block 16.A4** — `ClusterJoinManager` enhanced (full join protocol with pre-join op, ConfigCheck, master self-election, master crash recovery) — ~15 tests
+- [ ] **Block 16.A5** — TCP protocol upgrade (new message types: JoinRequest/FinalizeJoin/MembersUpdate/Heartbeat/FetchMembersView/Operation/Backup, SerializationStrategy interface) — ~10 tests
+- [ ] **Block 16.B1** — `PartitionStateManager` (partition assignment, repartition, state stamp) — ~12 tests
+- [ ] **Block 16.B2** — `InternalPartitionServiceImpl` (partition table lifecycle, membership-triggered rebalancing) — ~15 tests
+- [ ] **Block 16.B3a** — `MigrationManager` local planning (triggerControlTask, ControlTask, RedoPartitioningTask, pause/resume — NO remote sends) — ~12 tests
+- [ ] **Block 16.B4** — `PartitionContainer` (partition→namespace→RecordStore hierarchy) — ~6 tests
+- [ ] **Block 16.B5** — Graceful shutdown protocol (`ShutdownRequestOp`, `ProcessShutdownRequestsTask`) — ~8 tests
+- [ ] **Block 16.B6** — `MigrationAwareService` interface + `ServiceNamespace` + `PartitionMigrationEvent` — ~5 tests
+- [ ] **Block 16.C1** — `InvocationRegistry` (callId correlation, backpressure) — ~6 tests
+- [ ] **Block 16.C2** — `Invocation` + `PartitionInvocation` + `TargetInvocation` (invocation lifecycle, retry, backup ack tracking with timeout) — ~12 tests
+- [ ] **Block 16.C3** — `OperationServiceImpl` upgrade (partition routing, migration guards, remote invocation, `localMode` for backward compat) — ~24 tests
+- [ ] **Block 16.C4** — MapProxy migration to OperationService (all map ops route through `invokeOnPartition`, retire broadcast path) — ~10 tests
+- [ ] **Block 16.B3b** — `MigrationManager` remote execution (MigrationRequestOp, commitMigration with infinite retry + version +1 delta, FinalizeMigration, PublishCompletedMigrations with version gap rejection — requires Phase C) — ~20 tests
+- [ ] **Block 16.D1** — `BackupAwareOperation` interface — ~2 tests
+- [ ] **Block 16.D2** — `OperationBackupHandler` (version increment, backup wrapper creation, sync/async routing) — ~8 tests
+- [ ] **Block 16.D3** — `Backup` execution (ownership validation, version staleness check, BackupAck) — ~8 tests
+- [ ] **Block 16.D4** — Map operations as `BackupAwareOperation` (Put/Remove/Set/Delete backup ops) — ~23 tests
+- [ ] **Block 16.E1** — `PartitionReplicaManager` (version tracking per partition, staleness detection, sync triggering) — ~8 tests
+- [ ] **Block 16.E2** — Anti-entropy task + `PartitionBackupReplicaAntiEntropyOp` — ~6 tests
+- [ ] **Block 16.E3** — Replica sync (full state transfer with per-namespace chunking, OOM prevention) — ~18 tests
+- [ ] **Block 16.F1** — `MapReplicationStateHolder` (record capture + apply) — ~6 tests
+- [ ] **Block 16.F2** — `WriteBehindStateHolder` (queue + staging area capture via `asList()`, flush sequences, worker restart) — ~8 tests
+- [ ] **Block 16.F3** — `MapReplicationOperation` (composes all three state holders) — ~4 tests
+- [ ] **Block 16.F4** — Write-behind queue serialization support (`asList`, `reset`, `getFlushSequences`, `setFlushSequences`) — ~4 tests
+- [ ] **Block 16.INT** — Integration tests (3-node write-behind resilience, 2-node replication, anti-entropy, chaos test harness) — ~15 tests
+- [ ] **Phase 16 checkpoint**: All multi-node resilience tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. Minimum 300 tests across Phase 16.
 
 ---
 
@@ -4808,4 +4866,4 @@ bun run build
 
 ---
 
-*Plan v13.0 — updated 2026-03-04 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–13 complete — 2845 tests green (2845 pass, 0 fail, 0 error) | Phase 14 CURRENT: Blocks 14.1-14.5 (Blitz Embedded NATS Server) — ~60 new tests planned | Phase 15 QUEUED: Blocks 15.1-15.5 (Production SerializationServiceImpl) — ~53 new tests planned | Added Phase 15 detailed block sections + Master Todo entries | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15)*
+*Plan v14.0 — updated 2026-03-04 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–13 complete — 2845 tests green (2845 pass, 0 fail, 0 error) | Phase 14 CURRENT: Blocks 14.1-14.5 (Blitz Embedded NATS Server) — ~60 new tests planned | Phase 15 QUEUED: Blocks 15.1-15.5 (Production SerializationServiceImpl) — ~53 new tests planned | Phase 16 QUEUED: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy) — ~300+ tests planned, 26 audit findings remediated | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16)*

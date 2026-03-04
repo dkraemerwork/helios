@@ -148,6 +148,31 @@ PHASE 15 — Production SerializationServiceImpl (NOT deferred):
     - Block 15.4 readObject(): implement useBigEndianForTypeId parameter
     - Block 15.5: store ss as private field, call this._ss.destroy() in shutdown()
 
+PHASE 16 — Multi-Node Resilience (NOT deferred):
+  Phase 16 blocks (16.A0–16.INT) implement the full multi-node cluster runtime:
+  real membership, heartbeats, master election, partition assignment, migration,
+  backup replication, anti-entropy, and map state transfer including write-behind queues.
+  Primary spec: %%ROOT%%/plans/MULTI_NODE_RESILIENCE_PLAN.md (26 audit findings remediated).
+  Source: %%ROOT%%/src/internal/cluster/impl/ + %%ROOT%%/src/internal/partition/impl/ + %%ROOT%%/src/spi/impl/operationservice/
+  Tests:  %%ROOT%%/test/internal/cluster/ + %%ROOT%%/test/internal/partition/ + %%ROOT%%/test/spi/impl/operationservice/
+  Test infrastructure: %%ROOT%%/test-support/TestClusterNode.ts + %%ROOT%%/test-support/TestCluster.ts
+  Java reference (read-only): %%ROOT%%/../helios-1/hazelcast/src/main/java/com/hazelcast/
+  Key Java files to read as spec: ClusterServiceImpl.java, MembershipManager.java,
+    ClusterHeartbeatManager.java, ClusterJoinManager.java, InternalPartitionServiceImpl.java,
+    PartitionStateManagerImpl.java, MigrationManagerImpl.java, OperationServiceImpl.java,
+    Invocation.java, OperationBackupHandler.java, Backup.java, PartitionReplicaManager.java,
+    MapReplicationOperation.java, WriteBehindStateHolder.java
+  CRITICAL audit remediation rules (from MULTI_NODE_RESILIENCE_PLAN.md):
+    - Block 16.A1: finalizeJoin MUST run preJoinOp BEFORE updateMembers (Finding 1)
+    - Block 16.B3b: MigrationCommitOp uses infinite retry; version +1 delta on failure (Findings 2, 3)
+    - Block 16.C4: MapProxy MUST route through OperationService; retire broadcast path (Findings 4, 5)
+    - Block 16.C3: Async lock audit — NO TCP sends while holding lock (Finding 6)
+    - Block 16.A4: Master crash recovery via DecideNewMembersViewTask (Finding 7)
+    - Block 16.F2: asList() MUST capture staging area + queue; worker.start() after applyState (Findings 8-10)
+    - Block 16.B3a→C→B3b: Split migration to break circular B↔C dependency (Finding 11)
+  Phase dependency: Phase 16 depends on Phase 15 (production SerializationServiceImpl).
+  Gate: cd %%ROOT%% && bun test → 0 fail, 0 error. Minimum 300 tests across Phase 16.
+
 Important scope clarification:
   - Legacy Java `hazelcast/extensions/*` modules remain dropped.
   - Phase 12 extension packages in this repo are IN SCOPE: `packages/s3`, `packages/mongodb`, `packages/turso`.
