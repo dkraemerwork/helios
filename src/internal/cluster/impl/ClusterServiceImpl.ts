@@ -81,6 +81,10 @@ export class ClusterServiceImpl implements Cluster {
         return this._clusterId;
     }
 
+    setClusterId(clusterId: string): void {
+        this._clusterId = clusterId;
+    }
+
     // ── Cluster state ────────────────────────────────────────────────────────
 
     getClusterState(): ClusterState {
@@ -112,6 +116,10 @@ export class ClusterServiceImpl implements Cluster {
 
     setMigrationsInProgress(inProgress: boolean): void {
         this._migrationsInProgress = inProgress;
+    }
+
+    isMigrationsInProgress(): boolean {
+        return this._migrationsInProgress;
     }
 
     // ── Suspect management ───────────────────────────────────────────────────
@@ -205,5 +213,9 @@ export class ClusterServiceImpl implements Cluster {
 
     getMemberMap(): MemberMap {
         return this._memberMap;
+    }
+
+    setMemberMap(memberMap: MemberMap): void {
+        this._memberMap = memberMap;
     }
 }
