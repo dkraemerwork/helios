@@ -1,0 +1,12 @@
+import type { SerializerAdapter } from '@helios/internal/serialization/impl/SerializerAdapter';
+import { SerializationConstants } from '@helios/internal/serialization/impl/SerializationConstants';
+
+export const ByteArraySerializer: SerializerAdapter = {
+    getTypeId: () => SerializationConstants.CONSTANT_TYPE_BYTE_ARRAY,
+    write(out, obj) {
+        // N8 FIX: coerce plain Uint8Array to Buffer to avoid Buffer.copy() crash
+        const buf = Buffer.isBuffer(obj) ? (obj as Buffer) : Buffer.from(obj as Uint8Array);
+        out.writeByteArray(buf);
+    },
+    read(inp) { return inp.readByteArray(); },
+};
