@@ -4,9 +4,10 @@
  * Tests: window policies (tumbling/sliding/session), WindowState (InMemory),
  * WindowOperator (count-triggered closes, emit + delete lifecycle).
  *
- * NATS KV integration tests are skipped unless NATS_URL or CI env is set.
+ * NATS KV integration tests use the embedded NATS server via BlitzService.start().
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { BlitzService } from '../src/BlitzService.ts';
 import { TumblingWindowPolicy } from '../src/window/TumblingWindowPolicy.ts';
 import { SlidingWindowPolicy } from '../src/window/SlidingWindowPolicy.ts';
 import { SessionWindowPolicy } from '../src/window/SessionWindowPolicy.ts';
@@ -336,35 +337,19 @@ describe('WindowOperator — session windows', () => {
     });
 });
 
-// ─── NATS KV WindowState (integration — skip unless NATS available) ───────────
+// ─── NATS KV WindowState (integration — embedded NATS server) ─────────────────
 
-const NATS_AVAILABLE = !!process.env['NATS_URL'] || !!process.env['CI'];
-const NATS_URL = process.env['NATS_URL'] ?? 'nats://localhost:4222';
-
-describe.skipIf(!NATS_AVAILABLE)('NatsKvWindowState — NATS integration', () => {
-    let natsServer: ReturnType<typeof Bun.spawn> | null = null;
+describe('NatsKvWindowState — NATS integration', () => {
+    let embeddedBlitz: BlitzService;
+    let NATS_URL: string;
 
     beforeAll(async () => {
-        if (!process.env['NATS_URL']) {
-            natsServer = Bun.spawn(
-                [require.resolve('nats-server/bin/nats-server'), '-js', '-p', '4222'],
-                { stdout: 'ignore', stderr: 'ignore' },
-            );
-            const { connect } = await import('@nats-io/transport-node');
-            for (let i = 0; i < 30; i++) {
-                try {
-                    const nc = await connect({ servers: 'nats://localhost:4222', timeout: 500 });
-                    await nc.close();
-                    break;
-                } catch {
-                    await Bun.sleep(100);
-                }
-            }
-        }
+        embeddedBlitz = await BlitzService.start();
+        NATS_URL = embeddedBlitz.config.servers as string;
     });
 
-    afterAll(() => {
-        natsServer?.kill();
+    afterAll(async () => {
+        await embeddedBlitz.shutdown();
     });
 
     it('put/get/delete/list roundtrip via NATS KV', async () => {
@@ -404,16 +389,16 @@ describe.skipIf(!NATS_AVAILABLE)('NatsKvWindowState — NATS integration', () =>
         const nc1 = await connect({ servers: NATS_URL });
         const kvm1 = new Kvm(nc1);
         const state1 = await NatsKvWindowState.create<number[]>(kvm1, 'restart-test', 60_000);
-        await state1.put('win:0:60000', [1, 2, 3]);
+        await state1.put('win.0.60000', [1, 2, 3]);
         await nc1.close();
 
         // Second "process" — simulated restart, state should still be there
         const nc2 = await connect({ servers: NATS_URL });
         const kvm2 = new Kvm(nc2);
         const state2 = await NatsKvWindowState.create<number[]>(kvm2, 'restart-test', 60_000);
-        const events = await state2.get('win:0:60000');
+        const events = await state2.get('win.0.60000');
         expect(events).toEqual([1, 2, 3]);
-        await state2.delete('win:0:60000');
+        await state2.delete('win.0.60000');
         await nc2.close();
     });
 });

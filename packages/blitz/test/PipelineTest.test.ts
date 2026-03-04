@@ -245,34 +245,15 @@ describe('Stage — at-least-once delivery contract', () => {
 // Integration tests — BlitzService.submit / cancel (requires NATS)
 // ---------------------------------------------------------------------------
 
-const NATS_AVAILABLE = !!process.env.NATS_URL || !!process.env.CI;
-
-describe.skipIf(!NATS_AVAILABLE)('BlitzService — submit/cancel lifecycle (requires NATS)', () => {
-  let natsServer: ReturnType<typeof Bun.spawn>;
+describe('BlitzService — submit/cancel lifecycle', () => {
   let blitz: BlitzService;
 
   beforeAll(async () => {
-    natsServer = Bun.spawn(
-      [require.resolve('nats-server/bin/nats-server'), '-js', '-p', '4333'],
-      { stdout: 'ignore', stderr: 'ignore' },
-    );
-    // Health poll — wait until NATS accepts connections (up to 3s)
-    const { connect } = await import('@nats-io/transport-node');
-    for (let i = 0; i < 30; i++) {
-      try {
-        const nc = await connect({ servers: 'nats://localhost:4333' });
-        await nc.close();
-        break;
-      } catch {
-        await Bun.sleep(100);
-      }
-    }
-    blitz = await BlitzService.connect({ servers: 'nats://localhost:4333' });
+    blitz = await BlitzService.start();
   });
 
   afterAll(async () => {
     await blitz.shutdown();
-    natsServer.kill();
   });
 
   test('pipeline() creates a Pipeline registered with BlitzService', () => {

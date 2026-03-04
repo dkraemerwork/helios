@@ -4754,8 +4754,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 14.2** — `NatsServerConfig` (internal typed config) + `NatsServerManager` (spawn + health-poll + shutdown; N13 FIX: close probe connections in `_waitUntilReady` finally block; N14 FIX: poll `jsm.getAccountInfo()` for cluster JetStream readiness; N15 FIX: `shutdown()` is async, `await proc.exited`) — 14 tests
 - [x] **Block 14.3** — `BlitzConfig` extensions (`EmbeddedNatsConfig`, `NatsClusterConfig` interfaces) + mutual-exclusivity validation + N7 FIX: port-overlap validation for cluster configs — 15 tests
 - [x] **Block 14.4** — `BlitzService.start()` static factory + `shutdown()` extension (N15 FIX: `await this._manager?.shutdown()` — must await, not fire-and-forget) — 10 tests
-- [ ] **Block 14.5** — Remove `skipIf` guards from all 4 blitz integration test files (`BlitzServiceTest`, `PipelineTest`, `SourceSinkTest`, `WindowingTest`) — 0 new tests (test hygiene)
-- [ ] **Phase 14 checkpoint**: `bun test packages/blitz/` — **0 skip, 0 fail** (currently: 26 skip)
+- [x] **Block 14.5** — Remove `skipIf` guards from all 4 blitz integration test files (`BlitzServiceTest`, `PipelineTest`, `SourceSinkTest`, `WindowingTest`) — 0 new tests (test hygiene)
+- [x] **Phase 14 checkpoint**: `bun test packages/blitz/` — **0 skip, 0 fail** ✅
 
 ### Phase 15 — Production SerializationServiceImpl
 

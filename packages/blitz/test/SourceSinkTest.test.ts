@@ -371,35 +371,15 @@ describe('HttpWebhookSource', () => {
 // NATS integration (requires running NATS server — skipped by default)
 // ---------------------------------------------------------------------------
 
-const NATS_AVAILABLE = !!process.env.NATS_URL || !!process.env.CI;
-
-describe.skipIf(!NATS_AVAILABLE)(
-  'NatsSource + NatsSink — NATS integration (requires NATS)',
-  () => {
-    let natsServer: ReturnType<typeof Bun.spawn>;
+describe('NatsSource + NatsSink — NATS integration', () => {
     let blitz: BlitzService;
 
     beforeAll(async () => {
-      natsServer = Bun.spawn(
-        [require.resolve('nats-server/bin/nats-server'), '-js', '-p', '4335'],
-        { stdout: 'ignore', stderr: 'ignore' },
-      );
-      const { connect } = await import('@nats-io/transport-node');
-      for (let i = 0; i < 30; i++) {
-        try {
-          const nc = await connect({ servers: 'nats://localhost:4335' });
-          await nc.close();
-          break;
-        } catch {
-          await Bun.sleep(100);
-        }
-      }
-      blitz = await BlitzService.connect({ servers: 'nats://localhost:4335' });
+      blitz = await BlitzService.start();
     });
 
     afterAll(async () => {
       await blitz.shutdown();
-      natsServer.kill();
     });
 
     test('NatsSink.toSubject encodes and NatsSource.fromSubject decodes', async () => {
@@ -416,5 +396,4 @@ describe.skipIf(!NATS_AVAILABLE)(
       msg.ack();
       await iter.return?.();
     });
-  },
-);
+});
