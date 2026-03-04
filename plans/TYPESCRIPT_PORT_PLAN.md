@@ -4765,7 +4765,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 15.1** — Core infrastructure: `HazelcastSerializationError` + `SerializerAdapter` interface + `DataSerializerHook` interface + `SerializationConfig` + `BufferPool` (free-list, max 3 items) — 15 tests
 - [x] **Block 15.2** — All 21 built-in serializers: 19 primitive/array types + `UuidSerializer` + `JavaScriptJsonSerializer` (self-framing with 4-byte length prefix; breaking migration from `TestSerializationService` is documented and safe) — 60 tests
 - [x] **Block 15.3** — `DataSerializableSerializer` (typeId -2): IDS write/read with EE version byte skipping, factory registry, `registerFactory()`, error on non-IDS header — 7 tests
-- [ ] **Block 15.4** — `SerializationServiceImpl`: dispatch chain (`serializerFor` + `serializerForTypeId`), `toData`/`toObject`/`writeObject`/`readObject`, `BufferPool` wiring, factory hook registration — ~20 tests
+- [x] **Block 15.4** — `SerializationServiceImpl`: dispatch chain (`serializerFor` + `serializerForTypeId`), `toData`/`toObject`/`writeObject`/`readObject`, `BufferPool` wiring, factory hook registration — 36 tests
 - [ ] **Block 15.5** — Wire `SerializationServiceImpl` into `HeliosInstanceImpl` (single shared instance for `NodeEngineImpl` + `DefaultNearCacheManager`); full regression — all tests green (N12 FIX: do NOT hardcode a test count here — Phase 14 adds ~60 tests and Phase 15 itself adds ~53; the gate command is authoritative)
 - [ ] **Phase 15 checkpoint**: `bun test` at root — 0 fail, 0 error (all tests green including Phase 14 + 15 additions), `writeObject`/`readObject` no longer throw in production paths
 
