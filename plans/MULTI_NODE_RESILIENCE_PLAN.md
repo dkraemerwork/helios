@@ -710,12 +710,30 @@ This eliminates the circular dependency while keeping the migration logic logica
 
 4. **`pauseMigration()` / `resumeMigration()`** — `boolean` toggle with delayed resume (3s, matching `MIGRATION_PAUSE_DURATION_SECONDS_ON_MIGRATION_FAILURE`)
 
-5. **`PublishCompletedMigrationsOp` — notifying all members (H-7):**
+5. **`commitMigrationToDestination()`** — commit phase:
+   - `MigrationCommitOperation` sent to destination
+   - **Remediation — Finding 2 (CRITICAL): Infinite Commit Retry**
+     `MigrationCommitOperation` MUST use infinite retry (`tryCount = Number.MAX_SAFE_INTEGER`) with heartbeat-based timeout (not wall-clock timeout). A commit that succeeds on the destination but whose response is lost would corrupt the partition table if the master assumes failure.
+     Ref: `MigrationManagerImpl.java:413-482` — `commitMigrationToDestinationAsync()` sets `tryCount=Integer.MAX_VALUE` and recursively retries on `OperationTimeoutException`.
+     The +1 version delta (Finding 3) is the safety net for when this infinite retry eventually gives up.
+
+   - **Remediation — Finding 3 (HIGH): Version +1 Extra Delta on Migration Failure**
+     When a migration fails or a commit fails, increment the partition version by `replicaCount + 1` (not just `replicaCount`). The extra +1 prevents a stale in-flight `MigrationCommitOperation` (that the master assumed failed) from being applied later.
+     Ref: `MigrationManagerImpl.java:1519-1521, 1603-1605`
+     Add test: "Migration failure: version increment includes +1 extra delta"
+     Add test: "Stale commit after failure: rejected due to version mismatch"
+
+6. **`PublishCompletedMigrationsOp` — notifying all members (H-7):**
    - After each migration finalizes, master sends `PublishCompletedMigrationsOp` to all members
    - **Ref:** `PublishCompletedMigrationsOperation.java:42-96`
    - Operation carries `Collection<MigrationInfo>`; receivers call `applyCompletedMigrations()` to update their local partition tables immediately
    - Without this step, non-master nodes only learn about ownership changes via the periodic `publishPartitionState()` broadcast (default interval: 15 s), creating a 15-second window where operations are routed to stale owners and silently fail or are retried unnecessarily
    - `completedMigrations` field accumulates these until the next full partition-state publish, at which point it is cleared
+
+   **Remediation — Finding 12 (HIGH): Version Gap Rejection in applyCompletedMigrations**
+   `applyCompletedMigrations()` MUST check that each migration's `initialPartitionVersion` equals the current partition version. If there's a gap (migration was missed), reject the entire batch and request full partition state from master.
+   Ref: `InternalPartitionServiceImpl.java:860` — `if (initialPartitionVersion != currentVersion) → break, return false`
+   Add test: "applyCompletedMigrations: version gap causes full state request"
 
 6. **Migration rollback protocol (H-8):**
    - **Ref:** `FinalizeMigrationOperation.java:97, 181-205`
@@ -725,7 +743,7 @@ This eliminates the circular dependency while keeping the migration logic logica
    - Master marks migration as failed, calls `pauseMigration()` briefly, then replans using remaining healthy replicas
    - Rollback ensures no partial state is ever observable; partition ownership reverts to the pre-migration assignment
 
-**Test plan (~20 tests):**
+**Test plan (~25 tests):**
 - Migration planning: member added → correct migration decisions
 - Migration execution: data transferred to destination
 - Migration commit: partition table updated on both nodes
@@ -739,6 +757,10 @@ This eliminates the circular dependency while keeping the migration logic logica
 - Rollback on source death: destination clears partial state, master replans
 - Rollback idempotency: calling rollback twice leaves clean state
 - Rollback with replan: subsequent migration attempt uses surviving replicas
+- *(Finding 2)* Migration failure: version increment includes +1 extra delta
+- *(Finding 2)* Stale commit after failure: rejected due to version mismatch
+- *(Finding 3)* Infinite retry on MigrationCommitOperation with heartbeat-based timeout
+- *(Finding 12)* applyCompletedMigrations: version gap causes full state request
 
 ### Block B.4 — PartitionContainer (H-5)
 
@@ -799,7 +821,21 @@ recordStores: Map<string, RecordStore>   // map name → RecordStore
 - `ShutdownRequestOp` — sent from departing node to master; master replies with `ACK` once all partitions migrated
 - No new operation needed for the ack path; master sends a direct response on the same operation future
 
-**Test plan (~8 tests):**
+**Remediation — Finding 14 (HIGH): ProcessShutdownRequestsTask**
+The plan omits the mechanism by which the master knows when to send the shutdown ack. Add:
+
+**New periodic task on master: `ProcessShutdownRequestsTask`**
+- Runs periodically (every 5s, same interval as heartbeat)
+- For each member in `shutdownRequestedMembers`:
+  1. Check if the member owns zero partitions (`getMemberPartitions(member).length === 0`)
+  2. If zero partitions remain → send `ShutdownResponseOp` to the departing member
+  3. Remove member from `shutdownRequestedMembers`
+- Without this periodic check, the departing node's await will never resolve.
+
+Ref: `MigrationManagerImpl.java:621-635, 2030`
+Add test: "ProcessShutdownRequestsTask sends response when partitions are migrated away"
+
+**Test plan (~9 tests):**
 - Graceful shutdown: all partitions migrated off departing node before it exits
 - Graceful shutdown: departing node not assigned any new partitions during shutdown window
 - Graceful shutdown: `memberRemoved()` after graceful shutdown does not trigger redundant replanning
@@ -808,6 +844,7 @@ recordStores: Map<string, RecordStore>   // map name → RecordStore
 - `ShutdownRequestOp` idempotency: duplicate sends handled without error
 - Concurrent shutdown: two nodes shutting down simultaneously — both are excluded from repartition
 - Shutdown vs crash comparison: graceful shutdown leaves no orphaned partitions; crash does (existing recovery path)
+- *(Finding 14)* ProcessShutdownRequestsTask sends response when partitions are migrated away
 
 ### Block B.6 — MigrationAwareService Interface (H-6)
 
@@ -930,6 +967,22 @@ const newState = await computeNewState(state); // INTERLEAVING POINT!
 writeState(newState); // State may have changed between the two lines!
 ```
 
+**Remediation — Finding 6 (CRITICAL): Lock Contention = Distributed Deadlock Factory**
+
+In Bun's single-threaded model, a single `clusterServiceLock` guarding `finalizeJoin`, `updateMembers`, `heartbeat`, `suspectMember`, `triggerControlTask`, and every migration step creates a contention bottleneck. If a lock holder performs I/O (TCP send, migration data transfer) while holding the lock, all other critical sections queue up. A heartbeat blocked behind a migration lock will stall, causing false suspicions.
+
+**Mandatory audit rules for lock usage:**
+1. **No TCP sends or awaits for remote responses while holding the lock.** The lock guards only atomic in-memory state transitions.
+2. **Pattern:** Lock → snapshot-read → release lock → I/O outside lock → re-acquire lock → compare-and-swap validation.
+3. **Consider separate locks** for membership, migration, and heartbeat instead of one global lock. At minimum:
+   - `membershipLock` — guards MemberMap and suspected set
+   - `migrationLock` — guards migration queue and active migrations
+   - Heartbeat reads (checking failure detector) should be lock-free
+4. Each `async` method in `Invocation`, `InvocationRegistry`, and `OperationServiceImpl` that touches shared maps MUST be audited against these rules before implementation.
+
+Add test: "Heartbeat fires within 200ms during a 5-second migration transfer"
+Add test: "Lock holder does not perform TCP send while holding clusterServiceLock"
+
 **Scope:** This is a **fundamental constraint** that applies to all phases. It is documented here
 because Phase C is the first phase with heavy async interaction between partition routing,
 invocation lifecycle, and TCP send/receive. Every `async` method in `Invocation`,
@@ -1045,6 +1098,14 @@ change — the future interface is unchanged. Tests that exercise the full invoc
 - Backup ack timeout fires `resetAndReInvoke()` when primary has left
 - Backup ack timeout resolves immediately when primary is still alive
 
+**Remediation — Finding 15 (HIGH): Backup Ack Timeout Performance**
+1. Specify the timeout detection mechanism: an **invocation monitor** running as a periodic `setInterval` (every 1000ms, matching Java's `InvocationMonitor.run()`)
+2. Document the 5-second latency spike as known behavior when a backup ack is lost and primary is alive
+3. Consider a shorter default timeout (2000ms) for Bun since re-invocation is cheaper in single-threaded model
+4. The invocation monitor iterates all pending invocations and fires `resetAndReInvoke()` or resolves immediately based on primary liveness
+
+Add test: "Invocation monitor detects and resolves backup ack timeout within configured window"
+
 ### Block C.3 — OperationServiceImpl Upgrade
 
 **Ref:** `OperationServiceImpl.java`
@@ -1079,7 +1140,7 @@ outboundHandler: OutboundOperationHandler (serializes + sends via TCP)
 - `TargetNotMemberException` — target address is not a cluster member
 - `MemberLeftException` — target member left cluster
 
-**Test plan (~24 tests):**
+**Test plan (~26 tests):**
 - Partition routing: operation reaches partition owner
 - Remote invocation: operation sent to correct node, response received
 - Retry on migration: operation retried after PartitionMigratingException
@@ -1090,6 +1151,58 @@ outboundHandler: OutboundOperationHandler (serializes + sends via TCP)
 - *(H-2)* Future resolves only after all expected backup acks arrive
 - *(H-2)* Backup ack timeout fires `resetAndReInvoke()` when primary has left
 - *(H-2)* Backup ack timeout resolves immediately when primary is still alive
+- *(Finding 15)* Invocation monitor detects and resolves backup ack timeout within configured window
+
+**Remediation — Finding 18 (HIGH): Backward Compatibility for Existing Tests**
+~2,500+ existing tests assume single-node `OperationServiceImpl` (target ignored, all operations local). After Phase C upgrades to routing-aware:
+
+**Option chosen: `localMode` flag**
+Add a `localMode: boolean` constructor parameter to `OperationServiceImpl`:
+- `localMode = true` (default in tests): skip routing, migration guards, ownership checks. Matches current behavior.
+- `localMode = false` (production): full routing, migration guards, remote dispatch.
+
+`TestPartitionService` must be upgraded to support owner lookups for multi-node tests (return real owner from partition table, not always `true`).
+
+This ensures zero regressions in existing tests while enabling full multi-node behavior in production.
+
+### Block C.4 — MapProxy Migration to OperationService (Finding 4 Remediation)
+
+**Severity: CRITICAL** — Without this block, Phases C–F are non-functional for the primary data structure.
+
+**Problem:** `MapProxy` (488 lines) calls `RecordStore` directly — it never goes through `OperationService`. All map operations bypass partition routing, migration guards, backup sending, and retry logic.
+
+**Evidence:** `MapProxy.ts:107-122` — `put()` calls `this._store.put(kd, vd, -1, -1)` directly. No `invokeOnPartition` anywhere.
+
+**Required changes:**
+1. Rewrite `MapProxy.put/get/remove/containsKey/etc.` to call `OperationService.invokeOnPartition(serviceName, op, partitionId)` instead of calling RecordStore directly
+2. Each map operation becomes an `Operation` subclass (PutOperation, GetOperation, etc.) executed through OperationService
+3. `NetworkedMapProxy` must be either retired or refactored to use OperationService — the old TCP broadcast path is obsolete
+
+**Test plan (~10 tests):**
+- MapProxy.put routes through OperationService
+- MapProxy.get routes through OperationService
+- Operation rejected when partition is migrating (PartitionMigratingException)
+- Operation retried after WrongTargetException
+- Multi-node: put on node A, readable on node B via partition routing
+
+---
+
+### ⚠ Critical Transition: Broadcast → Operation Routing (Finding 5)
+
+**Severity: CRITICAL** — Dual write paths cause double-application of every mutation.
+
+The existing `TcpClusterTransport` broadcasts `MAP_PUT`, `MAP_REMOVE`, `MAP_CLEAR` messages to all peers. The new partition-based operation routing sends operations to the partition owner, which then sends backups. If both paths coexist, every write is applied twice.
+
+**Transition plan (mandatory, enforced in Block C.4):**
+1. After Block C.4 completes, `MapProxy` MUST stop using the broadcast path
+2. The old `MAP_PUT`/`MAP_REMOVE`/`MAP_CLEAR` message types in `ClusterMessage.ts` are deprecated
+3. `NetworkedMapProxy` is either retired or refactored to use OperationService exclusively
+4. Remove broadcast message handlers from `TcpClusterTransport` message processing
+
+**Without this transition, the system produces data corruption from double-application.**
+
+Add test: "After C.4, map writes do NOT trigger broadcast messages"
+Add test: "Old broadcast message types are not processed after transition"
 
 ---
 
@@ -1301,6 +1414,10 @@ activeSyncs: number                      // bounded parallelism counter
 - `triggerPartitionReplicaSync(partitionId, replicaIndex)` — sends `PartitionReplicaSyncRequest` to primary (bounded by `maxParallelReplications`)
 - `finalizeReplicaSync(partitionId, replicaIndex, versions)` — clears and sets versions after successful sync
 
+**Remediation — Finding 21 (MEDIUM): Per-Namespace Version Tracking**
+Helios v1 only has MapService. Simplify to partition-level versions (not per-namespace).
+**Document the limitation:** "Version tracking is per-partition, not per-namespace. When a second service (e.g., CacheService) adds replication support, version tracking must be retrofitted to per-namespace. This is a known v1 limitation."
+
 ### Block E.2 — Anti-Entropy Task
 
 **Ref:** `PartitionReplicaManager.AntiEntropyTask`, `PartitionPrimaryReplicaAntiEntropyTask.java`, `PartitionBackupReplicaAntiEntropyOperation.java`
@@ -1345,10 +1462,17 @@ serialized into one `PartitionReplicaSyncResponse`. Under memory pressure, this 
 **Reference:** Plan line 1019 defers chunked migration. Hazelcast addresses this via
 `chunkedMigrationEnabled` and `maxTotalChunkedDataInBytes` in `MigrationRequestOperation.java`.
 
-**Mandatory mitigation:** Add memory bounds checking before sending full state:
-- Estimate serialized size before transfer
-- If > threshold (e.g., 50MB), queue the sync and process in chunks
-- This is NOT a premature optimization — it is a crash prevention mechanism
+**Remediation — Finding 16 (HIGH): Anti-Entropy Chunking Protocol**
+The plan says "queue the sync and process in chunks" without defining the protocol. Define a minimal chunking protocol:
+
+**Per-namespace chunking (practical middle ground):**
+1. Instead of sending all namespaces in one response, process one `RecordStore` (namespace) at a time
+2. Each `PartitionReplicaSyncResponse` carries state for exactly ONE namespace
+3. Backup processes responses sequentially, applying each namespace independently
+4. If a single namespace exceeds `maxSingleSyncSizeBytes` (50MB), log a warning and proceed (the alternative is OOM, which is worse)
+5. This provides natural chunks without a complex multi-message reassembly protocol
+
+**Contradiction resolution:** The plan defers chunked migration to "Scope Exclusions" while requiring chunked anti-entropy. These are now decoupled: anti-entropy uses per-namespace chunking (simpler), migration remains full-state (deferred).
 
 **Configuration:** Add `maxSingleSyncSizeBytes` (default 50MB).
 
@@ -1361,6 +1485,8 @@ serialized into one `PartitionReplicaSyncResponse`. Under memory pressure, this 
 - Large partition sync: verify size check triggers chunked fallback before OOM
 - Chunked fallback: state applied correctly across multiple chunks
 - Threshold configuration: `maxSingleSyncSizeBytes` respected at runtime
+- *(Finding 16)* Per-namespace chunking: each PartitionReplicaSyncResponse carries one namespace
+- *(Finding 16)* Namespace exceeds maxSingleSyncSizeBytes: warning logged, sync proceeds
 
 ---
 
@@ -1469,6 +1595,34 @@ understanding the tradeoff.
    - Update sequence counter
    - Restart worker
 
+**Remediation — Finding 8 (HIGH): StoreWorker Auto-Start After applyState()**
+`applyState()` MUST explicitly call `worker.start()` after the `addForcibly()` loop. The existing `StoreWorker` has `start()` (creates setInterval) and `stop()` (clears interval) but no `restart()`. After `reset()` stops the worker, `start()` must be called.
+Additionally, entries with `storeTime <= now` (overdue on the old primary) must be flushed on the first tick — the worker's `drainTo(now)` handles this if entries retain their original `storeTime`.
+Add test: "applyState: worker starts after addForcibly loop; overdue entries flush on first tick"
+
+**Remediation — Finding 9 (HIGH): Missing Method Signatures**
+Block F.4 must specify explicit method signatures before implementation:
+
+```typescript
+// WriteBehindQueue additions:
+asList(): DelayedEntry<K, V>[]    // Returns a SNAPSHOT copy (not live reference)
+
+// WriteBehindStore additions:
+reset(): void                       // Stops worker, clears queue AND staging area
+getFlushSequences(): Map<string, number>   // keyed by map name
+setFlushSequences(sequences: Map<string, number>): void
+```
+
+Add these to the `WriteBehindQueue` interface definition in the plan.
+
+**Remediation — Finding 10 (HIGH): Staging Area Data Loss**
+`asList()` MUST capture queue + staging area entries (not queue alone). During a flush cycle, entries are moved from queue to staging area. If the node crashes mid-flush, those entries exist only in the staging area — `asList()` reading only the queue would lose them.
+
+**Implementation:** `asList()` returns `[...this._stagingArea.values(), ...this._queue]`
+
+This is the simplest fix matching the intent. Alternative: replicate staging area separately (more complex, deferred).
+Add test: "asList: includes entries currently in staging area during flush"
+
 #### ⚠ Staging Area Semantics — M-3 · Staging Area Replication Semantics
 
 The staging area is NOT directly replicated.
@@ -1521,7 +1675,7 @@ Add methods to the existing write-behind classes to support state capture:
 - Add `setFlushSequences(sequences)` — sets flush sequences during replication apply
 - Add `reset()` — stops worker, clears queue (called during replication before re-populating)
 
-**Test plan (~22 tests = 20 core + 2 data loss window):**
+**Test plan (~25 tests = 20 core + 2 data loss window + 3 remediation):**
 - MapReplicationStateHolder: capture and apply records correctly
 - WriteBehindStateHolder: captures all queued entries, applies via `addForcibly()`
 - WriteBehindStateHolder: flush sequences captured and restored
@@ -1534,10 +1688,22 @@ Add methods to the existing write-behind classes to support state capture:
   - Write-behind entries are present in Node B's queue and eventually flushed to MapStore
 - Data loss window (H-4): entries written after `asList()` snapshot are absent on destination
 - Data loss window (H-4): entries written before `asList()` snapshot are present on destination
+- *(Finding 8)* applyState: worker starts after addForcibly loop; overdue entries flush on first tick
+- *(Finding 9)* WriteBehindQueue.asList returns snapshot copy (not live reference)
+- *(Finding 9)* WriteBehindStore.reset clears queue AND staging area
+- *(Finding 9)* WriteBehindStore getFlushSequences/setFlushSequences round-trip correctly
+- *(Finding 10)* asList: includes entries currently in staging area during flush
 
 ---
 
 ## Integration Test Plan
+
+**Remediation — Finding 24 (MEDIUM): Test Count Target**
+~130 tests across 6 phases is dangerously low for a distributed systems layer. Target:
+- **Minimum: 300 tests** across all multi-node resilience phases
+- Add ~50 failure-scenario tests: node crash during each migration phase, concurrent joins during migration, heartbeat timeout during state transfer, operations during cluster state transitions
+- Add a chaos test harness (`test-support/ChaosRunner.ts`) that randomly kills/isolates nodes during a continuous workload
+- 3 integration tests → expand to 10+ covering: 2-node, 3-node, 5-node, rolling restart, split-brain detection
 
 ### Multi-node write-behind resilience test
 
@@ -1588,6 +1754,8 @@ New configuration properties (matching Hazelcast equivalents):
 | `invocationMaxRetryCount` | 250 | `INVOCATION_MAX_RETRY_COUNT` |
 | `invocationRetryPauseMillis` | 500 | `INVOCATION_RETRY_PAUSE` |
 | `mastershipClaimTimeoutSeconds` | 60 | `MASTERSHIP_CLAIM_TIMEOUT_SECONDS` |
+| `backupAckTimeoutMillis` | 5000 | `OPERATION_BACKUP_TIMEOUT_MILLIS` |
+| `shutdownCheckIntervalSeconds` | 5 | ProcessShutdownRequestsTask interval |
 
 ---
 
@@ -1601,7 +1769,8 @@ New configuration properties (matching Hazelcast equivalents):
 | Split-brain **merge** (only) | Requires sophisticated merge policies; defer to v2. Split-brain **detection** (quorum check → read-only mode) is NOT deferred — see Block A.3.1 |
 | Chunked migration | Start with full-state migration; chunked is a performance optimization |
 | Merkle-tree differential sync | Start with full state transfer; differential is a performance optimization |
-| Backpressure regulator (async→sync promotion) | Start without; add when observed under load |
+| Backpressure regulator (async→sync promotion) | Start without; add when observed under load. **Known limitation (Finding 25):** Under high write throughput with `asyncBackupCount > 0`, data durability may be lower than configured backup count due to silently dropped async backups. |
+| WaitSet invalidation for parked operations | Helios v1 has no blocking operations (e.g., queue poll with timeout in distributed mode). If added later, `WaitSet.invalidateAll(partitionId)` must be called during migration finalization to wake parked operations with `PartitionMigratingException`. **(Finding 26)** |
 | WAN replication | Explicitly dropped (see TYPESCRIPT_PORT_PLAN.md) |
 | CP subsystem (Raft) | Explicitly deferred to v2 |
 
@@ -1615,3 +1784,7 @@ New configuration properties (matching Hazelcast equivalents):
 4. **Retry on migration** — operations retry transparently when partitions are migrating
 5. **Anti-entropy convergence** — stale replicas are detected and repaired within one sync interval
 6. **All existing tests pass** — zero regressions from multi-node additions
+7. **Pre-join state applied** — joining nodes have partition state before participating (Finding 1)
+8. **Split-brain detection** — minority partition enters read-only mode (Block A.3.1)
+9. **Migration commit reliability** — infinite retry with version safety (Finding 2, 3)
+10. **No dual write paths** — broadcast path fully retired after Phase C (Finding 5)

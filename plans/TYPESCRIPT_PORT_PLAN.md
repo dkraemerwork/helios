@@ -4732,7 +4732,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 > to provision or manage an external NATS process. `BlitzService.start()` owns the full server
 > lifecycle — binary resolution, spawn, health-poll, cluster formation, and shutdown.
 
-- [ ] **Block 14.1** — `package.json` change (`nats-server` dep → dependency) + `NatsServerBinaryResolver` (npm package → PATH → explicit override → error chain; N16 FIX: use `createRequire(import.meta.url)` not `require.resolve`; N6 FIX: `existsSync()` check after resolve) — ~10 tests
+- [x] **Block 14.1** — `package.json` change (`nats-server` dep → dependency) + `NatsServerBinaryResolver` (npm package → PATH → explicit override → error chain; N16 FIX: use `createRequire(import.meta.url)` not `require.resolve`; N6 FIX: `existsSync()` check after resolve) — 8 tests
 - [ ] **Block 14.2** — `NatsServerConfig` (internal typed config) + `NatsServerManager` (spawn + health-poll + shutdown; N13 FIX: close probe connections in `_waitUntilReady` finally block; N14 FIX: poll `jsm.info()` for cluster JetStream readiness; N15 FIX: `shutdown()` is async, `await proc.exited`) — ~20 tests
 - [ ] **Block 14.3** — `BlitzConfig` extensions (`EmbeddedNatsConfig`, `NatsClusterConfig` interfaces) + mutual-exclusivity validation + N7 FIX: port-overlap validation for cluster configs — ~15 tests
 - [ ] **Block 14.4** — `BlitzService.start()` static factory + `shutdown()` extension (N15 FIX: `await this._manager?.shutdown()` — must await, not fire-and-forget) — ~15 tests
