@@ -4865,7 +4865,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.INT** — Integration tests (3-node write-behind resilience, 2-node replication, anti-entropy, chaos test harness) — 15 tests
 - [x] **Phase 16 checkpoint**: All multi-node resilience tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. 3461 tests across all phases ✅
 
-### Phase 17 — Distributed Executor Service (IExecutorService + scatter integration) ← **CURRENT**
+### Phase 17 — Distributed Executor Service (IExecutorService + scatter integration) ✅
 
 > **Cross-ref:** `plans/DISTRIBUTED_EXECUTOR_PLAN.md` — the authoritative spec for all Phase 17 blocks.
 > **Goal:** Implement Hazelcast-compatible `IExecutorService` (Tier 1 — immediate, non-durable,
@@ -4892,8 +4892,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 17.9E** — Add internal execution-backend seam + parity flag (`inline` vs `scatter`, backend-independent stats/lifecycle) — 9 tests ✅
 - [x] **Block 17.9F** — Freeze executor semantics with prerequisite tests before final Scatter integration (single-node + multi-node semantic gates) — 15 tests ✅
 - [x] **Block 17.10** — Scatter-backed multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — 17 tests ✅
-- [ ] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — ~12 tests
-- [ ] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. ~3670 tests across all phases
+- [x] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — 12 tests ✅
+- [x] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. 3674 tests across all phases ✅
 
 ---
 
