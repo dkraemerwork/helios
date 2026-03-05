@@ -1,32 +1,46 @@
 /**
- * Port of {@code com.hazelcast.internal.partition.impl.MigrationManager} (local planning only).
+ * Port of {@code com.hazelcast.internal.partition.impl.MigrationManager}.
  *
  * Block 16.B3a: triggerControlTask, ControlTask, RedoPartitioningTask,
  * MigrationPlanner invocation, pauseMigration/resumeMigration.
- * No remote sends — those are in Block 16.B3b.
+ * Block 16.B3b: remote execution (MigrationRequestOperation, commit, finalize).
  */
 import type { PartitionStateManager } from '@helios/internal/partition/impl/PartitionStateManager';
 import type { MigrationQueue } from '@helios/internal/partition/impl/MigrationQueue';
 import { MigrationPlanner, type MigrationDecisionCallback } from '@helios/internal/partition/impl/MigrationPlanner';
 import { MigrationInfo } from '@helios/internal/partition/MigrationInfo';
+import { MigrationRequestOperation } from '@helios/internal/partition/impl/MigrationRequestOperation';
+import { MigrationCommitOperation } from '@helios/internal/partition/impl/MigrationCommitOperation';
 import type { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
+import type { PartitionContainer } from '@helios/internal/partition/impl/PartitionContainer';
+import type { MigrationAwareService } from '@helios/internal/partition/MigrationAwareService';
+import type { ServiceNamespace } from '@helios/internal/services/ServiceNamespace';
 import type { Member } from '@helios/cluster/Member';
 
+export interface MigrationManagerOptions {
+    maxParallelMigrations?: number;
+}
+
 /**
- * Manages migration lifecycle — local planning phase only.
- * Remote execution (MigrationRequestOperation, commit, finalize) is deferred to Block B.3b.
+ * Manages migration lifecycle — planning and remote execution.
  */
 export class MigrationManager {
     private readonly _stateManager: PartitionStateManager;
     private readonly _migrationQueue: MigrationQueue;
     private readonly _planner: MigrationPlanner;
+    private readonly _maxParallelMigrations: number;
     private _paused: boolean;
 
-    constructor(stateManager: PartitionStateManager, migrationQueue: MigrationQueue) {
+    constructor(stateManager: PartitionStateManager, migrationQueue: MigrationQueue, options?: MigrationManagerOptions) {
         this._stateManager = stateManager;
         this._migrationQueue = migrationQueue;
         this._planner = new MigrationPlanner();
+        this._maxParallelMigrations = options?.maxParallelMigrations ?? 10;
         this._paused = false;
+    }
+
+    getMaxParallelMigrations(): number {
+        return this._maxParallelMigrations;
     }
 
     /**
@@ -119,6 +133,29 @@ export class MigrationManager {
 
     isMigrationPaused(): boolean {
         return this._paused;
+    }
+
+    /**
+     * Execute a single migration: build a MigrationRequestOperation from the
+     * container's namespaces and registered services, then return it.
+     * The caller is responsible for sending it to the destination via OperationService.
+     */
+    executeMigration(
+        migration: MigrationInfo,
+        container: PartitionContainer,
+        services: ReadonlyMap<string, MigrationAwareService>,
+    ): MigrationRequestOperation {
+        const namespaces: ServiceNamespace[] = container.getAllNamespaces()
+            .map(name => ({ getServiceName: () => name }));
+        return new MigrationRequestOperation(migration, namespaces, services);
+    }
+
+    /**
+     * Create a MigrationCommitOperation for the given migration.
+     * Uses infinite retry (Number.MAX_SAFE_INTEGER) per Finding 2.
+     */
+    createCommitOperation(migration: MigrationInfo): MigrationCommitOperation {
+        return new MigrationCommitOperation(migration);
     }
 
     private _replicasEqual(a: (PartitionReplica | null)[], b: (PartitionReplica | null)[]): boolean {

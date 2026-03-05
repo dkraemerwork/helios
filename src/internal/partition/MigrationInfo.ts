@@ -19,6 +19,7 @@ export class MigrationInfo {
     private readonly _destinationCurrentReplicaIndex: number;
     private readonly _destinationNewReplicaIndex: number;
     private _status: MigrationStatus;
+    private _initialPartitionVersion: number = 0;
 
     constructor(
         partitionId: number,
@@ -48,4 +49,7 @@ export class MigrationInfo {
     getDestinationNewReplicaIndex(): number { return this._destinationNewReplicaIndex; }
     getStatus(): MigrationStatus { return this._status; }
     setStatus(status: MigrationStatus): this { this._status = status; return this; }
+
+    getInitialPartitionVersion(): number { return this._initialPartitionVersion; }
+    setInitialPartitionVersion(version: number): this { this._initialPartitionVersion = version; return this; }
 }

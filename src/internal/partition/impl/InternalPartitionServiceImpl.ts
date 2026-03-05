@@ -11,6 +11,7 @@ import type { Address } from '@helios/cluster/Address';
 import type { Member } from '@helios/cluster/Member';
 import type { Data } from '@helios/internal/serialization/Data';
 import type { MigrationAwareService } from '@helios/internal/partition/MigrationAwareService';
+import type { MigrationInfo } from '@helios/internal/partition/MigrationInfo';
 
 /**
  * Represents the partition runtime state received from the master.
@@ -27,6 +28,7 @@ export class InternalPartitionServiceImpl {
     private readonly _stateManager: PartitionStateManager;
     private readonly _partitionCount: number;
     private readonly _migrationAwareServices = new Map<string, MigrationAwareService>();
+    private _completedMigrations: MigrationInfo[] = [];
     private _initialized: boolean;
 
     constructor(partitionCount: number = 271) {
@@ -131,6 +133,75 @@ export class InternalPartitionServiceImpl {
 
     getMigrationAwareServices(): ReadonlyMap<string, MigrationAwareService> {
         return this._migrationAwareServices;
+    }
+
+    /**
+     * Apply completed migrations received from master via PublishCompletedMigrationsOp.
+     * Each migration's initialPartitionVersion must match the current partition version;
+     * if there's a version gap, reject the entire batch and return false.
+     *
+     * Ref: InternalPartitionServiceImpl.java:860
+     * Remediation — Finding 12: version gap rejection.
+     */
+    applyCompletedMigrations(migrations: readonly MigrationInfo[]): boolean {
+        for (const migration of migrations) {
+            const partitionId = migration.getPartitionId();
+            const partition = this._stateManager.getPartition(partitionId);
+            const currentVersion = partition.version();
+            const initialVersion = migration.getInitialPartitionVersion();
+
+            if (initialVersion !== currentVersion) {
+                // Version gap — reject entire batch, request full state from master
+                return false;
+            }
+
+            // Apply the migration: update replicas
+            const dest = migration.getDestination();
+            const destNewIdx = migration.getDestinationNewReplicaIndex();
+            if (dest !== null && destNewIdx >= 0) {
+                partition.setReplica(destNewIdx, dest);
+            }
+
+            const source = migration.getSource();
+            const srcNewIdx = migration.getSourceNewReplicaIndex();
+            if (source !== null && srcNewIdx === -1) {
+                const srcCurIdx = migration.getSourceCurrentReplicaIndex();
+                if (srcCurIdx >= 0) {
+                    const current = partition.getReplica(srcCurIdx);
+                    if (current && current.equals(source)) {
+                        partition.setReplica(srcCurIdx, null);
+                    }
+                }
+            }
+
+            this._completedMigrations.push(migration as MigrationInfo);
+        }
+
+        this._stateManager.updateStamp();
+        return true;
+    }
+
+    /** Clear the completed migrations list (after full partition-state publish). */
+    clearCompletedMigrations(): void {
+        this._completedMigrations = [];
+    }
+
+    /** Get the accumulated completed migrations since last clear. */
+    getCompletedMigrations(): readonly MigrationInfo[] {
+        return this._completedMigrations;
+    }
+
+    /**
+     * Called when a migration fails. Increments partition version by replicaCount + 1.
+     * The extra +1 prevents stale in-flight MigrationCommitOperations from being applied.
+     *
+     * Ref: MigrationManagerImpl.java:1519-1521, 1603-1605
+     * Remediation — Finding 3: version +1 extra delta.
+     */
+    onMigrationFailure(partitionId: number, replicaCount: number): void {
+        const partition = this._stateManager.getPartition(partitionId);
+        partition.setVersion(partition.version() + replicaCount + 1);
+        this._stateManager.updateStamp();
     }
 
     private _applyNewAssignment(newAssignment: (PartitionReplica | null)[][]): void {
