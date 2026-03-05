@@ -20,6 +20,12 @@ export interface OperationServiceImplOptions {
     localAddress?: Address;
     maxConcurrentInvocations?: number;
     invocationTryCount?: number;
+    /**
+     * Optional remote send hook for non-local target invocations.
+     * When provided, operations targeting non-local members are dispatched
+     * through this callback instead of being rejected.
+     */
+    remoteSend?: (op: Operation, target: Address) => Promise<void>;
 }
 
 export class OperationServiceImpl implements OperationService {
@@ -28,6 +34,7 @@ export class OperationServiceImpl implements OperationService {
     private readonly _localAddress: Address | null;
     private readonly _registry: InvocationRegistry;
     private readonly _invocationTryCount: number;
+    private readonly _remoteSend: ((op: Operation, target: Address) => Promise<void>) | null;
     private _callIdCounter = 1n;
 
     constructor(nodeEngine: NodeEngine, options?: OperationServiceImplOptions) {
@@ -35,6 +42,7 @@ export class OperationServiceImpl implements OperationService {
         this._localMode = options?.localMode ?? true;
         this._localAddress = options?.localAddress ?? null;
         this._invocationTryCount = options?.invocationTryCount ?? 250;
+        this._remoteSend = options?.remoteSend ?? null;
         this._registry = new InvocationRegistry(
             options?.maxConcurrentInvocations ?? 100_000,
         );
@@ -129,8 +137,11 @@ export class OperationServiceImpl implements OperationService {
     private _invokeOnTargetRouted<T>(op: Operation, target: Address): InvocationFuture<T> {
         const localAddress = this._localAddress!;
 
-        // Remote transport not yet wired — reject non-local targets
+        // Non-local target: use remoteSend if available, otherwise reject
         if (!target.equals(localAddress)) {
+            if (this._remoteSend) {
+                return this._invokeRemote<T>(op, target);
+            }
             const future = new InvocationFuture<T>();
             future.completeExceptionally(
                 new TargetNotMemberException(target),
@@ -144,6 +155,39 @@ export class OperationServiceImpl implements OperationService {
         );
 
         return this._doInvoke<T>(invocation);
+    }
+
+    /**
+     * Remote invocation path: dispatches the operation to a non-local member
+     * via the configured remoteSend callback.
+     */
+    private _invokeRemote<T>(op: Operation, target: Address): InvocationFuture<T> {
+        const future = new InvocationFuture<T>();
+
+        this._prepareOperation(op);
+
+        op.setResponseHandler({
+            sendResponse(_op: Operation, response: unknown): void {
+                future.complete(response as T);
+            },
+        });
+
+        void (async () => {
+            try {
+                await this._remoteSend!(op, target);
+                // If remoteSend ran the op, response handler should have fired.
+                // If not, auto-complete.
+                if (!future.isDone()) {
+                    future.complete(undefined as unknown as T);
+                }
+            } catch (e) {
+                if (!future.isDone()) {
+                    future.completeExceptionally(e instanceof Error ? e : new Error(String(e)));
+                }
+            }
+        })();
+
+        return future;
     }
 
     private _doInvoke<T>(invocation: PartitionInvocation | TargetInvocation): InvocationFuture<T> {
