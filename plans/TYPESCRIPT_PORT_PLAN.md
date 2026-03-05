@@ -4802,7 +4802,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.E1** — `PartitionReplicaManager` (version tracking per partition, staleness detection, sync triggering) — 19 tests
 - [x] **Block 16.E2** — Anti-entropy task + `PartitionBackupReplicaAntiEntropyOp` — 9 tests
 - [x] **Block 16.E3** — Replica sync (full state transfer with per-namespace chunking, OOM prevention) — 21 tests
-- [ ] **Block 16.F1** — `MapReplicationStateHolder` (record capture + apply) — ~6 tests
+- [x] **Block 16.F1** — `MapReplicationStateHolder` (record capture + apply) — 6 tests
 - [ ] **Block 16.F2** — `WriteBehindStateHolder` (queue + staging area capture via `asList()`, flush sequences, worker restart) — ~8 tests
 - [ ] **Block 16.F3** — `MapReplicationOperation` (composes all three state holders) — ~4 tests
 - [ ] **Block 16.F4** — Write-behind queue serialization support (`asList`, `reset`, `getFlushSequences`, `setFlushSequences`) — ~4 tests
