@@ -4842,7 +4842,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 
 - [x] **Block 17.0** — Executor runtime foundation + scatter workspace (close remote OperationService gap, expose cluster/partition routing surfaces, add scatter dependency) — 13 tests ✅
 - [x] **Block 17.1** — `ExecutorConfig` + `HeliosConfig` extensions (bounded defaults, pool caps, timeouts, validation) — 11 tests ✅
-- [ ] **Block 17.2** — `IExecutorService` + `TaskCallable<T>` contracts (registration API, local inline API, submit/execute routing surface) — ~10 tests
+- [x] **Block 17.2** — `IExecutorService` + `TaskCallable<T>` contracts (registration API, local inline API, submit/execute routing surface) — 10 tests ✅
 - [ ] **Block 17.3** — `TaskTypeRegistry` + registration fingerprinting (pre-registration model, rollout mismatch detection) — ~10 tests
 - [ ] **Block 17.4** — `ExecuteCallableOperation` + `MemberCallableOperation` (result envelope, offload semantics, retry boundaries) — ~12 tests
 - [ ] **Block 17.5** — `ExecutorContainerService` + bounded scatter execution engine (queue caps, timeout/recycle, cancel state machine, stats) — ~15 tests
