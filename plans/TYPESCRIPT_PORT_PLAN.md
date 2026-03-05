@@ -4788,7 +4788,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.B2** — `InternalPartitionServiceImpl` (partition table lifecycle, membership-triggered rebalancing) — 15 tests
 - [x] **Block 16.B3a** — `MigrationManager` local planning (triggerControlTask, ControlTask, RedoPartitioningTask, pause/resume — NO remote sends) — 12 tests
 - [x] **Block 16.B4** — `PartitionContainer` (partition→namespace→RecordStore hierarchy) — 7 tests
-- [ ] **Block 16.B5** — Graceful shutdown protocol (`ShutdownRequestOp`, `ProcessShutdownRequestsTask`) — ~8 tests
+- [x] **Block 16.B5** — Graceful shutdown protocol (`ShutdownRequestOp`, `ProcessShutdownRequestsTask`) — 10 tests
 - [ ] **Block 16.B6** — `MigrationAwareService` interface + `ServiceNamespace` + `PartitionMigrationEvent` — ~5 tests
 - [ ] **Block 16.C1** — `InvocationRegistry` (callId correlation, backpressure) — ~6 tests
 - [ ] **Block 16.C2** — `Invocation` + `PartitionInvocation` + `TargetInvocation` (invocation lifecycle, retry, backup ack tracking with timeout) — ~12 tests
