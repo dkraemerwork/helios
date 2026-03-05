@@ -4797,7 +4797,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.B3b** — `MigrationManager` remote execution (MigrationRequestOp, commitMigration with infinite retry + version +1 delta, FinalizeMigration, PublishCompletedMigrations with version gap rejection — requires Phase C) — 25 tests
 - [x] **Block 16.D1** — `BackupAwareOperation` interface — 5 tests
 - [x] **Block 16.D2** — `OperationBackupHandler` (version increment, backup wrapper creation, sync/async routing) — 9 tests
-- [ ] **Block 16.D3** — `Backup` execution (ownership validation, version staleness check, BackupAck) — ~8 tests
+- [x] **Block 16.D3** — `Backup` execution (ownership validation, version staleness check, BackupAck) — 10 tests
 - [ ] **Block 16.D4** — Map operations as `BackupAwareOperation` (Put/Remove/Set/Delete backup ops) — ~23 tests
 - [ ] **Block 16.E1** — `PartitionReplicaManager` (version tracking per partition, staleness detection, sync triggering) — ~8 tests
 - [ ] **Block 16.E2** — Anti-entropy task + `PartitionBackupReplicaAntiEntropyOp` — ~6 tests
