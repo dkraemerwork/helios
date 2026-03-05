@@ -8,6 +8,7 @@ import type { ReplicatedMap } from '@helios/replicatedmap/ReplicatedMap';
 import type { DistributedObject } from '@helios/core/DistributedObject';
 import type { LifecycleService } from '@helios/instance/lifecycle/LifecycleService';
 import type { Cluster } from '@helios/cluster/Cluster';
+import type { IExecutorService } from '@helios/executor/IExecutorService';
 import type { HeliosConfig } from '@helios/config/HeliosConfig';
 
 /**
@@ -53,6 +54,9 @@ export interface HeliosInstance {
 
     /** Returns the configuration for this instance. */
     getConfig(): HeliosConfig;
+
+    /** Returns the distributed executor service with the given name. */
+    getExecutorService(name: string): IExecutorService;
 
     /** Shuts down this instance. */
     shutdown(): void;

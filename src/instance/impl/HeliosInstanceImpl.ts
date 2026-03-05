@@ -49,6 +49,10 @@ import type { DistributedObject } from '@helios/core/DistributedObject';
 import type { LifecycleService } from '@helios/instance/lifecycle/LifecycleService';
 import type { Cluster } from '@helios/cluster/Cluster';
 import type { MapConfig } from '@helios/config/MapConfig';
+import type { IExecutorService } from '@helios/executor/IExecutorService';
+import { ExecutorServiceProxy } from '@helios/executor/impl/ExecutorServiceProxy';
+import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry';
+import { ExecutorRejectedExecutionException } from '@helios/executor/ExecutorExceptions';
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = 'hz:impl:mapService';
@@ -82,6 +86,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     private readonly _topics = new Map<string, TopicImpl<unknown>>();
     private readonly _multiMaps = new Map<string, MultiMapImpl<unknown, unknown>>();
     private readonly _replicatedMaps = new Map<string, ReplicatedMapImpl<unknown, unknown>>();
+    private readonly _executors = new Map<string, ExecutorServiceProxy>();
 
     /** TCP transport — non-null when TCP-IP join is enabled. */
     private _transport: TcpClusterTransport | null = null;
@@ -284,6 +289,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     shutdown(): void {
         this._running = false;
+        // Shut down all executor services (fire-and-forget the promises)
+        for (const exec of this._executors.values()) {
+            exec.shutdown().catch(() => {});
+        }
+        this._executors.clear();
         for (const topic of this._topics.values()) topic.destroy();
         for (const rm of this._replicatedMaps.values()) rm.destroy();
         this._nearCachedMaps.clear();
@@ -515,6 +525,28 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return rm as ReplicatedMap<K, V>;
     }
 
+    getExecutorService(name: string): IExecutorService {
+        if (!this._running) {
+            throw new ExecutorRejectedExecutionException('HeliosInstance is shut down');
+        }
+        let proxy = this._executors.get(name);
+        if (!proxy) {
+            const config = this._config.getExecutorConfig(name);
+            const registry = new TaskTypeRegistry();
+            proxy = new ExecutorServiceProxy(
+                name,
+                this._nodeEngine,
+                config,
+                registry,
+                this._name,
+            );
+            // Register shutdown hook so shutdownAsync() drains executors
+            this.registerShutdownHook(() => proxy!.shutdown());
+            this._executors.set(name, proxy);
+        }
+        return proxy;
+    }
+
     getDistributedObject(serviceName: string, name: string): DistributedObject {
         if (serviceName === MAP_SERVICE_NAME) {
             this.getMap<unknown, unknown>(name);
@@ -543,7 +575,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         throw new Error('CP subsystem is not supported in this version (deferred to v2)');
     }
 
-    getScheduledExecutorService(_name: string): never {
+    getScheduledExecutorService(_name?: string): never {
         throw new Error('ScheduledExecutorService is not supported in this version (deferred to v2)');
     }
 }
