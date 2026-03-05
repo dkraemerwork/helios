@@ -13,12 +13,17 @@ import type { ExecutorContainerService } from '@helios/executor/impl/ExecutorCon
 export class CancellationOperation extends Operation {
     readonly executorName: string;
     readonly taskUuid: string;
+    private _containerService: ExecutorContainerService | null = null;
 
     constructor(executorName: string, taskUuid: string) {
         super();
         this.executorName = executorName;
         this.taskUuid = taskUuid;
         this.serviceName = 'helios:executor';
+    }
+
+    setContainerService(container: ExecutorContainerService): void {
+        this._containerService = container;
     }
 
     /**
@@ -31,9 +36,11 @@ export class CancellationOperation extends Operation {
     }
 
     override async run(): Promise<void> {
-        // In distributed mode, the OperationService would resolve the container
-        // and call cancelOn(). For now, sendResponse with the result.
-        // The container is injected by the service before run().
+        if (this._containerService) {
+            const result = this._containerService.cancelTask(this.taskUuid);
+            this.sendResponse(result);
+            return;
+        }
         this.sendResponse(false);
     }
 }

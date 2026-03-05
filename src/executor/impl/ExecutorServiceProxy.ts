@@ -19,6 +19,7 @@ import { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFu
 import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
 import { ExecuteCallableOperation, type TaskDescriptor } from '@helios/executor/impl/ExecuteCallableOperation.js';
 import { MemberCallableOperation } from '@helios/executor/impl/MemberCallableOperation.js';
+import { CancellationOperation } from '@helios/executor/impl/CancellationOperation.js';
 import {
     ExecutorRejectedExecutionException,
     ExecutorTaskLostException,
@@ -159,6 +160,18 @@ export class ExecutorServiceProxy implements IExecutorService {
 
     executeLocal<T>(task: InlineTaskCallable<T>): void {
         this.submitLocal(task);
+    }
+
+    // ── Cancel routing ────────────────────────────────────────────────
+
+    /**
+     * Cancel a task by UUID. Routes a CancellationOperation through OperationService
+     * to the partition that owns the task.
+     */
+    cancelTask(taskUuid: string, partitionId: number): InvocationFuture<boolean> {
+        const op = new CancellationOperation(this._name, taskUuid);
+        return this._nodeEngine.getOperationService()
+            .invokeOnPartition<boolean>(SERVICE_NAME, op, partitionId);
     }
 
     // ── Lifecycle ───────────────────────────────────────────────────────

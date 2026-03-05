@@ -13,11 +13,16 @@ import type { ExecutorContainerService } from '@helios/executor/impl/ExecutorCon
 
 export class ShutdownOperation extends Operation {
     readonly executorName: string;
+    private _containerService: ExecutorContainerService | null = null;
 
     constructor(executorName: string) {
         super();
         this.executorName = executorName;
         this.serviceName = 'helios:executor';
+    }
+
+    setContainerService(container: ExecutorContainerService): void {
+        this._containerService = container;
     }
 
     /**
@@ -29,8 +34,11 @@ export class ShutdownOperation extends Operation {
     }
 
     override async run(): Promise<void> {
-        // In distributed mode, the OperationService resolves the container
-        // and calls shutdownOn(). For now, sendResponse with void.
+        if (this._containerService) {
+            await this._containerService.shutdown();
+            this.sendResponse(undefined);
+            return;
+        }
         this.sendResponse(undefined);
     }
 }

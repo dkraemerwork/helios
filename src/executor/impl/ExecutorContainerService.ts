@@ -52,6 +52,7 @@ export class ExecutorContainerService {
     private readonly _registry: TaskTypeRegistry;
     private readonly _pools = new Map<string, PoolEntry>();
     private readonly _handles = new Map<string, TaskHandle>();
+    private readonly _requestsByUuid = new Map<string, TaskRequest>();
     private _shutdown = false;
     private _stats = {
         started: 0, completed: 0, cancelled: 0, rejected: 0, timedOut: 0,
@@ -104,6 +105,7 @@ export class ExecutorContainerService {
             return new Promise<ExecutorOperationResult>((resolve) => {
                 const handle: TaskHandle = { state: TaskState.QUEUED, resolve, enqueuedAt: Date.now() };
                 this._handles.set(request.taskUuid, handle);
+                this._requestsByUuid.set(request.taskUuid, request);
                 pool!.queuedTasks.push({ request, handle });
                 this._stats.pending++;
             });
@@ -139,6 +141,7 @@ export class ExecutorContainerService {
                 errorMessage: null,
             });
             this._handles.delete(taskUuid);
+            this._requestsByUuid.delete(taskUuid);
             return true;
         }
 
@@ -155,10 +158,72 @@ export class ExecutorContainerService {
                 errorMessage: null,
             });
             this._handles.delete(taskUuid);
+            this._requestsByUuid.delete(taskUuid);
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Mark all in-flight tasks submitted by a departed member as task-lost.
+     * Resolves their promises with a task-lost envelope.
+     */
+    markTasksLostForMember(memberUuid: string): void {
+        for (const [uuid, handle] of this._handles) {
+            if (handle.state !== TaskState.QUEUED && handle.state !== TaskState.RUNNING) continue;
+
+            // Find the matching request to check submitterMemberUuid
+            let matchesMember = false;
+            for (const pool of this._pools.values()) {
+                const queued = pool.queuedTasks.find((t) => t.request.taskUuid === uuid);
+                if (queued && queued.request.submitterMemberUuid === memberUuid) {
+                    matchesMember = true;
+                    pool.queuedTasks.splice(pool.queuedTasks.indexOf(queued), 1);
+                    break;
+                }
+            }
+
+            // For running tasks, check the request that was stored
+            if (!matchesMember) {
+                const req = this._requestsByUuid.get(uuid);
+                if (req && req.submitterMemberUuid === memberUuid) {
+                    matchesMember = true;
+                }
+            }
+
+            if (!matchesMember) continue;
+
+            if (handle.state === TaskState.RUNNING) {
+                // Find which pool owns this and decrement
+                for (const pool of this._pools.values()) {
+                    if (pool.activeCount > 0) {
+                        // We can't precisely know which pool, but we track by request
+                        const req = this._requestsByUuid.get(uuid);
+                        if (req && pool.taskType === req.taskType) {
+                            pool.activeCount--;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                this._stats.pending--;
+            }
+
+            handle.state = TaskState.TASK_LOST;
+            this._stats.taskLost++;
+            if (handle.timeoutTimer) clearTimeout(handle.timeoutTimer);
+            handle.resolve({
+                taskUuid: uuid,
+                status: 'task-lost',
+                originMemberUuid: '',
+                resultData: null,
+                errorName: 'ExecutorTaskLostException',
+                errorMessage: 'member departed',
+            });
+            this._handles.delete(uuid);
+            this._requestsByUuid.delete(uuid);
+        }
     }
 
     getTaskState(taskUuid: string): TaskState | undefined {
@@ -207,6 +272,7 @@ export class ExecutorContainerService {
             });
         }
         this._handles.clear();
+        this._requestsByUuid.clear();
         this._pools.clear();
     }
 
@@ -224,6 +290,7 @@ export class ExecutorContainerService {
             const now = Date.now();
             const handle: TaskHandle = { state: TaskState.RUNNING, resolve, enqueuedAt };
             this._handles.set(request.taskUuid, handle);
+            this._requestsByUuid.set(request.taskUuid, request);
             pool.activeCount++;
             pool.lastUsed = now;
             this._stats.started++;
@@ -280,6 +347,7 @@ export class ExecutorContainerService {
                     errorMessage: `Task "${request.taskUuid}" timed out after ${request.timeoutMillis}ms`,
                 });
                 this._handles.delete(request.taskUuid);
+                this._requestsByUuid.delete(request.taskUuid);
                 this._drainQueue(pool);
             }, request.timeoutMillis);
         }
@@ -316,6 +384,7 @@ export class ExecutorContainerService {
                     errorMessage: null,
                 });
                 this._handles.delete(request.taskUuid);
+                this._requestsByUuid.delete(request.taskUuid);
                 this._drainQueue(pool);
             } catch (e) {
                 if (!this._handles.has(request.taskUuid)) {
@@ -339,6 +408,7 @@ export class ExecutorContainerService {
                     errorMessage: err.message,
                 });
                 this._handles.delete(request.taskUuid);
+                this._requestsByUuid.delete(request.taskUuid);
                 this._drainQueue(pool);
             }
         };
