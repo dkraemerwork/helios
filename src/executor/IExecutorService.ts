@@ -32,6 +32,10 @@ export interface LocalExecutorStats {
 export interface TaskTypeRegistration<T> {
     readonly version?: string;
     readonly poolSize?: number;
+    /** Module path for worker-safe materialization (distributed execution). */
+    readonly modulePath?: string;
+    /** Named export within the module (defaults to 'default'). */
+    readonly exportName?: string;
 }
 
 export interface IExecutorService {
