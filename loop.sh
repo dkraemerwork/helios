@@ -176,7 +176,7 @@ PHASE 16 — Multi-Node Resilience (NOT deferred):
   Gate: cd %%ROOT%% && bun test → 0 fail, 0 error. Minimum 300 tests across Phase 16.
 
 PHASE 17 — Distributed Executor Service (NOT deferred):
-  Phase 17 blocks (17.0–17.INT) implement Helios IExecutorService Tier 1 — an immediate,
+  Phase 17 blocks (17.0–17.9F, 17.10, 17.INT) implement Helios IExecutorService Tier 1 — an immediate,
   non-durable, non-scheduled distributed executor — using scatter.pool() Bun-native worker threads for
   off-main-thread task execution, routed via OperationService for distributed cluster dispatch.
   Primary spec: %%ROOT%%/plans/DISTRIBUTED_EXECUTOR_PLAN.md (the authoritative reference).
@@ -191,6 +191,7 @@ PHASE 17 — Distributed Executor Service (NOT deferred):
   No Java test conversion — author TypeScript tests from the plan spec.
   Critical Phase 17 rules (from DISTRIBUTED_EXECUTOR_PLAN.md):
     - Block 17.0 closes runtime gaps first: remote OperationService path, cluster/partition visibility, and graceful shutdown hook surfaces
+    - Blocks 17.9A-17.9F are mandatory finish-up prerequisite blocks before 17.10/17.INT; do not skip ahead to final integration tests
     - scatter.pool() is monomorphic: one pool per task type, but queues and active pools must be bounded
     - Distributed execution uses registered task types only; inline functions are local-only
     - Registration fingerprint parity must be verified across nodes before enqueue

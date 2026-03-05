@@ -208,12 +208,159 @@ Block 17.0 - Executor runtime foundation + scatter workspace
     -> 17.7 - CancellationOperation + ShutdownOperation
     -> 17.8 - HeliosInstance wiring + lifecycle + permissions
     -> 17.9 - ExecutorStats + monitoring + overload signals
+    -> 17.9A - real executor transport + service-backed container routing
+    -> 17.9B - container hot-path rewiring
+    -> 17.9C - worker-materializable registration hardening
+    -> 17.9D - real control-operation and task-lost semantics
+    -> 17.9E - execution-backend seam + parity flag
+    -> 17.9F - prerequisite semantic freeze tests
     -> 17.10 - Multi-node integration tests
     -> 17.INT - End-to-end acceptance and rollout gate
 ```
 
 All blocks are sequential. Phase 17 is intentionally not parallelized because the runtime
 prerequisites and failure semantics build on one another.
+
+---
+
+## Ordered Finish-Up Checklist
+
+This checklist reflects the repository's current reality, not just the intended Phase 17 design.
+Complete these steps in order before treating Phase 17 as truly end-to-end.
+These steps map 1:1 to canonical queue blocks `17.9A`-`17.9F` in
+`plans/TYPESCRIPT_PORT_PLAN.md`.
+
+### Step 1 / Block 17.9A - Make executor operations truly remote and service-backed
+
+Primary files:
+
+- `src/spi/impl/operationservice/impl/OperationServiceImpl.ts`
+- `src/spi/NodeEngine.ts`
+- `src/spi/PartitionService.ts`
+- `src/spi/impl/NodeEngineImpl.ts`
+- `src/instance/impl/HeliosInstanceImpl.ts`
+
+Checklist:
+
+- [ ] finish real non-local `invokeOnTarget()` and `invokeOnPartition()` transport for executor use
+- [ ] preserve response correlation, binary payload transport, and remote error propagation
+- [ ] expose partition-owner, migration, and member-left signals needed by executor routing
+- [ ] register a real member-local executor container service instead of relying on proxy-local state
+- [ ] make instance shutdown await executor-aware service shutdown
+
+Exit gate:
+
+- a distributed executor operation can reach a non-local member, invoke a member-local service,
+  and fail with real transport/member errors instead of local stubs
+
+### Step 2 / Block 17.9B - Put `ExecutorContainerService` on the hot path
+
+Primary files:
+
+- `src/executor/impl/ExecuteCallableOperation.ts`
+- `src/executor/impl/MemberCallableOperation.ts`
+- `src/executor/impl/ExecutorContainerService.ts`
+- `src/executor/impl/ExecutorServiceProxy.ts`
+
+Checklist:
+
+- [ ] stop executing `desc.factory(input)` directly inside executor operations
+- [ ] make `ExecuteCallableOperation` validate registration then delegate to a resolved container
+- [ ] make `MemberCallableOperation` use the same container path while preserving no-retry semantics
+- [ ] resolve containers by `executorName` from a real member-local service registry
+- [ ] keep the existing executor result-envelope contract stable for callers
+
+Exit gate:
+
+- no distributed executor task is executed by directly invoking the registered factory from an
+  operation class
+
+### Step 3 / Block 17.9C - Harden registration so tasks are worker-materializable
+
+Primary files:
+
+- `src/executor/IExecutorService.ts`
+- `src/executor/impl/TaskTypeRegistry.ts`
+- executor registration tests
+
+Checklist:
+
+- [ ] extend `registerTaskType()` metadata so distributed tasks describe how they load in a worker
+- [ ] store worker materialization metadata in `TaskTypeRegistry`, not only `{ factory, version, poolSize }`
+- [ ] include worker materialization metadata in the fingerprint contract
+- [ ] validate that distributed registrations are worker-safe before accepting them
+- [ ] prefer module-backed distributed task registration over closure-dependent raw functions
+- [ ] preserve `submitLocal` / `executeLocal` as the only inline-function path
+
+Exit gate:
+
+- every distributed task registration carries enough information for a future Scatter adapter to
+  materialize the task on every member without closure access
+
+### Step 4 / Block 17.9D - Finish cancellation, timeout, shutdown, and task-lost semantics
+
+Primary files:
+
+- `src/executor/impl/CancellationOperation.ts`
+- `src/executor/impl/ShutdownOperation.ts`
+- `src/executor/impl/ExecutorServiceProxy.ts`
+- `src/executor/impl/ExecutorContainerService.ts`
+- invocation/member-left handling files
+
+Checklist:
+
+- [ ] wire `CancellationOperation` to the resolved container and return real results
+- [ ] wire `ShutdownOperation` to the resolved container and wait for drain/timeout
+- [ ] make proxy futures cancel back to the member that accepted the task
+- [ ] produce real `task-lost` results for member death after remote accept
+- [ ] preserve strong queued cancel and logical in-flight cancel with late-result drop accounting
+- [ ] define shutdown-timeout fallback behavior explicitly and test it
+
+Exit gate:
+
+- all executor statuses (`success`, `cancelled`, `rejected`, `task-lost`, `timeout`) are produced
+  by real runtime paths, not only surfaced by types and proxy mapping
+
+### Step 5 / Block 17.9E - Add an internal execution-backend seam before swapping to Scatter
+
+Primary files:
+
+- new internal executor runtime files
+- `src/executor/impl/ExecutorContainerService.ts`
+- `src/config/ExecutorConfig.ts`
+- stats files
+
+Checklist:
+
+- [ ] introduce an internal execution-backend abstraction owned by Helios
+- [ ] keep the public executor API stable while allowing `inline` and `scatter` backends internally
+- [ ] add a temporary runtime/config flag for parity testing during the backend swap
+- [ ] keep stats and lifecycle behavior backend-independent
+
+Exit gate:
+
+- Helios can run the same executor semantics through a backend seam, making the later Scatter swap
+  an implementation change rather than an API rewrite
+
+### Step 6 / Block 17.9F - Freeze semantics with tests before full Scatter integration
+
+Primary files:
+
+- executor unit/integration test suites
+- multi-node executor tests
+
+Checklist:
+
+- [ ] unit-test queueing, pool caps, cancellation, timeout, shutdown, and late-result handling
+- [ ] add multi-node tests for member-targeted no-retry, partition retry-before-accept, and task-lost after accept
+- [ ] add registration mismatch/unknown-task tests using the new worker-materialization metadata
+- [ ] prove executor shutdown drains or fails deterministically across instance shutdown
+- [ ] keep existing Phase 16 transport/invocation coverage green while executor semantics are tightened
+
+Exit gate:
+
+- only after Steps 1-6 are green should Phase 17 proceed to the final Scatter-backed multi-node
+  integration and rollout gates in Blocks `17.10` and `17.INT`
 
 ---
 
@@ -602,11 +749,211 @@ Expose snapshots only, never live mutable objects.
 
 ---
 
-## Block 17.10 - Multi-Node Integration Tests
+## Block 17.9A - Real Executor Transport + Service-Backed Container Routing
 
 ### Goal
 
-Prove the executor works across a real Helios cluster path, not only in isolated unit tests.
+Close the remaining gap between the Phase 17 executor API surface and the actual distributed
+runtime path.
+
+### Required changes
+
+- finish real non-local `invokeOnTarget()` / `invokeOnPartition()` transport for executor use
+- preserve response correlation, binary payload transport, and remote error propagation
+- expose partition-owner, migration, and member-left signals needed by executor routing
+- register a real member-local executor container service instead of relying on proxy-local state
+- make instance shutdown await executor-aware service shutdown
+
+### Primary files
+
+- `src/spi/impl/operationservice/impl/OperationServiceImpl.ts`
+- `src/spi/NodeEngine.ts`
+- `src/spi/PartitionService.ts`
+- `src/spi/impl/NodeEngineImpl.ts`
+- `src/instance/impl/HeliosInstanceImpl.ts`
+
+### Test plan (~12 tests)
+
+- remote `invokeOnTarget` reaches a non-local member for executor operations
+- remote `invokeOnPartition` resolves current owner and round-trips successfully
+- response correlation remains correct for concurrent executor calls
+- remote error propagation preserves executor error class/message
+- partition-owner/migration lookup is visible to executor routing
+- member-left detection is surfaced distinctly from generic invocation failure
+- executor container service is resolved from member-local service wiring
+- instance shutdown awaits executor-aware service shutdown hooks
+
+---
+
+## Block 17.9B - Put `ExecutorContainerService` on the Hot Path
+
+### Goal
+
+Ensure distributed executor tasks are always accepted and executed through the container service,
+never by directly invoking registered factories from operation classes.
+
+### Required changes
+
+- stop executing `desc.factory(input)` directly inside executor operations
+- make `ExecuteCallableOperation` validate registration then delegate to a resolved container
+- make `MemberCallableOperation` use the same container path while preserving no-retry semantics
+- resolve containers by `executorName` from a real member-local service registry
+- keep the existing executor result-envelope contract stable for callers
+
+### Primary files
+
+- `src/executor/impl/ExecuteCallableOperation.ts`
+- `src/executor/impl/MemberCallableOperation.ts`
+- `src/executor/impl/ExecutorContainerService.ts`
+- `src/executor/impl/ExecutorServiceProxy.ts`
+
+### Test plan (~10 tests)
+
+- `ExecuteCallableOperation` delegates to the resolved container
+- `MemberCallableOperation` delegates to the resolved container
+- direct inline factory execution path is no longer used for distributed tasks
+- unknown task type still rejects before enqueue through the container path
+- result envelope remains unchanged for successful tasks
+- container resolution is by `executorName`, not proxy-local state
+- member-targeted no-retry behavior remains intact after rewiring
+
+---
+
+## Block 17.9C - Worker-Materializable Registration Hardening
+
+### Goal
+
+Make distributed task registration describe how a task can be materialized inside a worker, not
+just how it runs on the main thread.
+
+### Required changes
+
+- extend `registerTaskType()` metadata so distributed tasks describe how they load in a worker
+- store worker materialization metadata in `TaskTypeRegistry`, not only `{ factory, version, poolSize }`
+- include worker materialization metadata in the fingerprint contract
+- validate that distributed registrations are worker-safe before accepting them
+- prefer module-backed distributed task registration over closure-dependent raw functions
+- preserve `submitLocal` / `executeLocal` as the only inline-function path
+
+### Primary files
+
+- `src/executor/IExecutorService.ts`
+- `src/executor/impl/TaskTypeRegistry.ts`
+- related executor registration tests
+
+### Test plan (~10 tests)
+
+- module-backed task registration stores worker materialization metadata correctly
+- fingerprint changes when worker materialization metadata changes
+- closure-dependent distributed registrations are rejected deterministically
+- local inline registration path still works for `submitLocal` / `executeLocal`
+- remote inline submissions are still rejected deterministically
+- registration mismatch still rejects before enqueue with the stronger fingerprint contract
+
+---
+
+## Block 17.9D - Real Cancel / Shutdown / Task-Lost Runtime Semantics
+
+### Goal
+
+Finish the executor control paths so cancellation, shutdown, and post-acceptance failure
+semantics are enforced by real runtime behavior.
+
+### Required changes
+
+- wire `CancellationOperation` to the resolved container and return real results
+- wire `ShutdownOperation` to the resolved container and wait for drain/timeout
+- make proxy futures cancel back to the member that accepted the task
+- produce real `task-lost` results for member death after remote accept
+- preserve strong queued cancel and logical in-flight cancel with late-result drop accounting
+- define shutdown-timeout fallback behavior explicitly and test it
+
+### Primary files
+
+- `src/executor/impl/CancellationOperation.ts`
+- `src/executor/impl/ShutdownOperation.ts`
+- `src/executor/impl/ExecutorServiceProxy.ts`
+- `src/executor/impl/ExecutorContainerService.ts`
+- invocation/member-left handling files
+
+### Test plan (~12 tests)
+
+- queued cancel returns the real container-backed result
+- cancelling an accepted remote task routes to the original owner member
+- shutdown drains healthy work through the container path
+- shutdown timeout triggers explicit fallback behavior
+- member death after remote accept surfaces `ExecutorTaskLostException`
+- late result after logical cancel is dropped and accounted for
+- duplicate cancel/shutdown operations remain deterministic and idempotent where expected
+
+---
+
+## Block 17.9E - Internal Execution Backend Seam + Parity Flag
+
+### Goal
+
+Create a clean Helios-owned seam so swapping from inline execution to Scatter is an internal
+backend change rather than an API rewrite.
+
+### Required changes
+
+- introduce an internal execution-backend abstraction owned by Helios
+- keep the public executor API stable while allowing `inline` and `scatter` backends internally
+- add a temporary runtime/config flag for parity testing during the backend swap
+- keep stats and lifecycle behavior backend-independent
+
+### Primary files
+
+- new internal executor runtime files
+- `src/executor/impl/ExecutorContainerService.ts`
+- `src/config/ExecutorConfig.ts`
+- stats files
+
+### Test plan (~8 tests)
+
+- executor container can run through the `inline` backend via the new seam
+- backend selection is config-driven and deterministic
+- unsupported backend values fail fast
+- stats snapshots remain stable across backend choice
+- lifecycle behavior (`shutdown`, rejection after close) is backend-independent
+- parity flag defaults remain safe for the current rollout stage
+
+---
+
+## Block 17.9F - Prerequisite Semantic Freeze Tests
+
+### Goal
+
+Lock in the corrected executor semantics before the final Scatter-backed multi-node integration
+and rollout work.
+
+### Required changes
+
+- add single-node and multi-node tests for the corrected prerequisite semantics
+- prove queueing, pool caps, cancellation, timeout, shutdown, and late-result handling through
+  the real runtime path
+- add registration mismatch/unknown-task tests using the stronger worker-materialization metadata
+- prove executor shutdown drains or fails deterministically across instance shutdown
+- keep existing Phase 16 transport/invocation coverage green while executor semantics tighten
+
+### Test plan (~14 tests)
+
+- container queueing and pool-cap semantics remain deterministic
+- member-targeted no-retry still holds after the routing fixes
+- partition retry-before-accept still holds after the routing fixes
+- task-lost after remote accept is covered end-to-end before Scatter swap
+- registration mismatch and unknown task type both fail before enqueue
+- instance shutdown drains or times out deterministically with executors present
+- existing invocation transport tests remain green after prerequisite changes
+
+---
+
+## Block 17.10 - Scatter-Backed Multi-Node Integration Tests
+
+### Goal
+
+Prove the Scatter-backed executor works across a real Helios cluster path, not only in isolated
+unit tests.
 
 ### Required scenarios (~18 tests)
 
@@ -688,4 +1035,4 @@ Not accepted in Phase 17:
 7. Member-targeted no-retry and partition-targeted pre-acceptance retry are both enforced.
 8. Phase 17 tests pass and the full repository stays green.
 
-*Plan v2.0 - updated 2026-03-05 | Scope: Phase 17 Tier 1 only | Contract: immediate, non-durable, non-scheduled distributed executor | Canonical queue: `plans/TYPESCRIPT_PORT_PLAN.md` Master Todo | Deferred: durable executor + scheduled executor (Phase 18+)*
+*Plan v2.2 - updated 2026-03-05 | Scope: Phase 17 Tier 1 only | Contract: immediate, non-durable, non-scheduled distributed executor | Canonical queue: `plans/TYPESCRIPT_PORT_PLAN.md` Master Todo | Deferred: durable executor + scheduled executor (Phase 18+)*

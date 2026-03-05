@@ -1060,14 +1060,14 @@ Depends on: Block 3.2b, Phase 1 Block 1.6 (query).
 
 ```
 src/map/impl/query/
-└── MapQueryEngine.ts       (uses Phase 1 predicates + indexes)
+└── MapQueryEngine.ts       (baseline scaffold only; full map query routing/index registry hardening in Block 7.4a)
 ```
 
 **TODO — Block 3.2c**:
 - [x] Convert ~15 map query integration test files
-- [x] Implement MapQueryEngine and wire it to Phase 1 predicates/indexes
-- [x] Integrate query path through MapProxy/MapService
-- [x] Verify predicate filtering + index-backed query execution
+- [x] Implement MapQueryEngine and wire baseline predicate execution to Phase 1 predicate/index contracts
+- [x] Add baseline predicate filtering support on map query methods; full engine routing deferred to Block 7.4a
+- [x] Verify predicate filtering correctness; production index registry/API/config execution deferred to Block 7.4a
 - [x] GREEN
 - [x] `git commit -m "feat(map): query integration + MapQueryEngine wiring — 24 tests green"`
 
@@ -1826,6 +1826,9 @@ The module:
 Goal: wire all implemented data structures into a usable HeliosInstance facade, prove it
 works end-to-end with an example app, then harden for production deployment.
 
+Current open production gap: indexed map queries are still not production-ready. Block 7.4a
+closes the remaining registry/API/config/runtime holes before the Phase 7 production claim is valid.
+
 ---
 
 ### Block 7.0 — Wire data structures into TestHeliosInstance + example app ✅
@@ -1929,10 +1932,39 @@ Promote `SimpleMapProxy` to a full `IMap<K,V>` interface with:
 **TODO — Block 7.4**:
 - [x] Define `IMap<K,V>` interface with full method surface
 - [x] Implement `MapProxy` extending current `SimpleMapProxy` with query/aggregation/listener support
-- [x] Wire `MapQueryEngine` into map proxy query methods
+- [x] Add query/aggregation method surface on `MapProxy`; production `MapQueryEngine` routing and indexed execution deferred to Block 7.4a
 - [x] Tests: predicate queries, aggregation, entry listeners, async operations
 - [x] GREEN
 - [x] `git commit -m "feat(map): full IMap interface with queries/aggregation/listeners"`
+
+---
+
+### Block 7.4a — Map indexing production completion
+
+Current gap snapshot:
+- `src/query/impl/IndexRegistry.ts` is still a stub contract
+- `src/map/impl/MapProxy.ts` query methods still iterate `getAllEntries()` directly
+- `src/map/impl/query/MapQueryEngine.ts` still executes scan-first local predicate evaluation
+- `src/map/IMap.ts` has no public `addIndex(...)` API
+- `src/config/MapConfig.ts` and `src/config/ConfigLoader.ts` do not expose declarative map indexes
+
+Depends on: Block 1.6 (predicate semantics), Block 1.7 (config model), Block 3.2c (baseline query wiring), Block 7.1 (production `HeliosInstanceImpl`), Block 7.4 (public `IMap` surface).
+
+**TODO — Block 7.4a**:
+- [ ] Replace the stubbed registry path with a concrete runtime index registry: attribute lookup, ordered/unordered matching, add/remove/update/rebuild lifecycle, bootstrap from existing entries, and zero placeholder methods on the hot path
+- [ ] Promote map index configuration into `config/`: add a real `IndexConfig` model, surface indexes on `MapConfig`, validate duplicates/unsupported combinations, and support JSON/YAML/XML parse + round-trip coverage
+- [ ] Add public runtime index APIs on `IMap`, `MapProxy`, and map wrappers/proxies (`addIndex` plus config-driven bootstrap) so declarative indexes and live indexes converge on the same registry
+- [ ] Replace full-scan predicate execution with planner-driven indexed execution in `MapQueryEngine`; route `values(predicate)`, `keySet(predicate)`, `entrySet(predicate)`, and predicate-backed `aggregate(...)` through it, with scan fallback only when no compatible index exists
+- [ ] Keep indexes correct across every mutation path: `put`, `set`, `replace`, `remove`, `delete`, `clear`, `putAll`, entry processors, map-store loads, startup rebuild, and partition migration/replication hooks
+- [ ] Add end-to-end tests for runtime `addIndex()` on populated maps, config-driven index bootstrap, equality/range/prefix predicates, correctness after updates/removes/clear, near-cache wrapper parity, and multi-node query correctness
+- [ ] Add production proof gates proving indexed predicates do not devolve to full scans when a usable index exists; require `bun run tsc --noEmit` plus green `query`/`map`/`config`/`app` suites before closing the block
+- [ ] `git commit -m "feat(map): production-ready indexing and indexed query execution"`
+
+Exit criteria:
+- No stub or placeholder index implementation remains on the query execution path
+- `IMap.addIndex(...)` and `MapConfig` indexes both materialize the same runtime indexes
+- Equality, range, and prefix predicates use indexes when available and remain correct after writes, deletes, reloads, and node-to-node movement
+- Full-map scans remain only as an explicit fallback for predicates with no compatible index
 
 ---
 
@@ -2010,7 +2042,7 @@ Prepare Helios for distribution:
 
 ---
 
-**Phase 7 done gate**: Production-deployable Helios v1.0 with working example app, real TCP multi-node support, production near-cache proof, CLI server mode, and publishable npm package.
+**Phase 7 done gate**: Production-deployable Helios v1.0 only after Block 7.4a is green: working example app, real TCP multi-node support, production near-cache proof, production-ready indexed query execution, CLI server mode, and publishable npm package.
 
 ---
 
@@ -4639,7 +4671,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 3.1** — spi — 65 tests ✅
 - [x] **Block 3.2a** — map core RecordStore/CRUD — 21 tests ✅
 - [x] **Block 3.2b** — map advanced ops + entry processors + putAll/getAll — 32 tests ✅
-- [x] **Block 3.2c** — map query integration + MapQueryEngine wiring — 24 tests ✅
+- [x] **Block 3.2c** — baseline map predicate queries + MapQueryEngine scaffold — 24 tests ✅
 - [x] **Block 3.3** — collections (topic + collection + multimap) — 149 tests ✅
 - [x] **Block 3.4** — ringbuffer full — 42 tests ✅
 - [x] **Block 3.5** — cache — 51 tests ✅
@@ -4683,11 +4715,12 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 7.2** — Helios.newInstance() factory + config-driven bootstrap — 27 tests ✅
 - [x] **Block 7.3** — HeliosInstance interface expansion (getMap, getQueue, getTopic, getList, getSet, getMultiMap, getReplicatedMap) — 27 tests ✅
 - [x] **Block 7.4** — SimpleMapProxy → IMap interface promotion (typed distributed map with full IMap contract) — 47 tests ✅
+- [ ] **Block 7.4a** — Production map indexing completion (real `IndexRegistry`, indexed `MapQueryEngine`, public `addIndex`, config-driven indexes, no query-path stubs) — TODO
 - [x] **Block 7.5** — Multi-node TCP integration test (2+ real instances, real Bun.listen/connect) — 6 tests ✅
 - [x] **Block 7.6** — Near-cache production proof soak/stress suite (per Production Proof Gate thresholds) — 12 tests ✅
 - [x] **Block 7.7** — CLI entrypoint + standalone server mode (bun run helios-server.ts) — 36 tests ✅
 - [x] **Block 7.8** — npm package structure + build + publish pipeline — 40 tests ✅
-- [x] **Phase 7 checkpoint**: production-deployable Helios v1.0
+- [ ] **Phase 7 checkpoint**: production-deployable Helios v1.0 after Block 7.4a indexed-query gates are green
 
 ### Phase 8 — Near-Cache ↔ TCP Invalidation Wiring
 - [x] **Block 8.1** — Wire near-cache into HeliosInstanceImpl.getMap() + TCP invalidation path — 10 tests ✅
@@ -4839,6 +4872,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 > non-scheduled executor) using `scatter.pool()` Bun-native worker threads for off-main-thread task execution,
 > routed via `OperationService` for distributed cluster dispatch.
 > **Depends on:** Phase 16 (OperationService routing, partition system, backup replication) + scatter library (`../scatter`)
+> **Execution note:** Blocks `17.9A`-`17.9F` are finish-up prerequisite blocks inserted before `17.10` and `17.INT`
+> because the earlier Phase 17 work landed with partial runtime assumptions that still need to be closed end-to-end.
 
 - [x] **Block 17.0** — Executor runtime foundation + scatter workspace (close remote OperationService gap, expose cluster/partition routing surfaces, add scatter dependency) — 13 tests ✅
 - [x] **Block 17.1** — `ExecutorConfig` + `HeliosConfig` extensions (bounded defaults, pool caps, timeouts, validation) — 11 tests ✅
@@ -4850,9 +4885,15 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 17.7** — `CancellationOperation` + `ShutdownOperation` (task cancel routing, cluster-wide executor close, shutdown timeout behavior) — 8 tests ✅
 - [x] **Block 17.8** — `HeliosInstance` wiring (`getExecutorService(name)`, lifecycle integration, graceful shutdown hook, NodeEngine registration) — 10 tests ✅
 - [x] **Block 17.9** — `ExecutorStats` + monitoring (pending/started/completed/cancelled/rejected/timedOut/taskLost/lateResultsDropped/totalStartLatencyMs/totalExecutionTimeMs/activeWorkers, pool health snapshots) — 10 tests ✅
-- [ ] **Block 17.10** — Multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — ~18 tests
+- [ ] **Block 17.9A** — Finish real executor transport + service-backed container routing (non-local invocation, member-local executor service resolution, async shutdown surfaces) — ~12 tests
+- [ ] **Block 17.9B** — Put `ExecutorContainerService` on the hot path (no direct factory execution from operations, container delegation only) — ~10 tests
+- [ ] **Block 17.9C** — Harden task registration for worker materialization (worker-safe metadata, fingerprint inputs, inline-vs-distributed enforcement) — ~10 tests
+- [ ] **Block 17.9D** — Finish real cancel/shutdown/task-lost runtime semantics (container-backed control ops, accepted-task ownership, shutdown timeout behavior) — ~12 tests
+- [ ] **Block 17.9E** — Add internal execution-backend seam + parity flag (`inline` vs `scatter`, backend-independent stats/lifecycle) — ~8 tests
+- [ ] **Block 17.9F** — Freeze executor semantics with prerequisite tests before final Scatter integration (single-node + multi-node semantic gates) — ~14 tests
+- [ ] **Block 17.10** — Scatter-backed multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — ~18 tests
 - [ ] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — ~12 tests
-- [ ] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. ~3600 tests across all phases
+- [ ] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. ~3670 tests across all phases
 
 ---
 
@@ -4911,4 +4952,4 @@ bun run build
 
 ---
 
-*Plan v17.1 — updated 2026-03-05 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–16 complete — 3461 tests green (3461 pass, 0 fail, 0 error) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Phase 17 CURRENT: Blocks 17.0-17.INT (Distributed Executor Service — immediate, non-durable, non-scheduled executor, ~139 tests) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16), `plans/DISTRIBUTED_EXECUTOR_PLAN.md` (Phase 17)*
+*Plan v17.2 — updated 2026-03-05 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–16 complete — 3461 tests green (3461 pass, 0 fail, 0 error) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Phase 17 CURRENT: Blocks 17.0-17.9F, 17.10, 17.INT (Distributed Executor Service — immediate, non-durable, non-scheduled executor, ~205 tests) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16), `plans/DISTRIBUTED_EXECUTOR_PLAN.md` (Phase 17)*
