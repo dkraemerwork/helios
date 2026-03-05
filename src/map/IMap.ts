@@ -7,6 +7,7 @@
 import type { Predicate } from '@helios/query/Predicate';
 import type { Aggregator } from '@helios/aggregation/Aggregator';
 import type { EntryListener } from '@helios/map/EntryListener';
+import type { IndexConfig } from '@helios/config/IndexConfig';
 
 export interface IMap<K, V> {
     /** Returns the name of this map. */
@@ -62,6 +63,11 @@ export interface IMap<K, V> {
      * Returns true if replaced.
      */
     replaceIfSame(key: K, oldValue: V, newValue: V): Promise<boolean>;
+
+    // ── Indexing ──────────────────────────────────────────────────────────────
+
+    /** Adds an index to this map for the given configuration. */
+    addIndex(indexConfig: IndexConfig): void;
 
     // ── Predicate-based query methods ────────────────────────────────────────
 

@@ -4,6 +4,7 @@ import { InMemoryFormat } from '@helios/config/InMemoryFormat';
 import { MaxSizePolicy } from '@helios/config/MaxSizePolicy';
 import { MapStoreConfig } from '@helios/config/MapStoreConfig';
 import { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import type { IndexConfig } from '@helios/config/IndexConfig';
 
 export class MapConfig {
     static readonly MIN_BACKUP_COUNT = 0;
@@ -32,6 +33,7 @@ export class MapConfig {
     private _perEntryStatsEnabled: boolean = MapConfig.DEFAULT_ENTRY_STATS_ENABLED;
     private _readBackupData: boolean = false;
     private _splitBrainProtectionName: string | null = null;
+    private _indexConfigs: IndexConfig[] = [];
 
     constructor(name?: string) {
         // Initialize eviction config with map defaults
@@ -171,6 +173,20 @@ export class MapConfig {
 
     setSplitBrainProtectionName(splitBrainProtectionName: string): this {
         this._splitBrainProtectionName = splitBrainProtectionName;
+        return this;
+    }
+
+    getIndexConfigs(): IndexConfig[] {
+        return [...this._indexConfigs];
+    }
+
+    setIndexConfigs(indexConfigs: IndexConfig[]): this {
+        this._indexConfigs = [...indexConfigs];
+        return this;
+    }
+
+    addIndexConfig(indexConfig: IndexConfig): this {
+        this._indexConfigs.push(indexConfig);
         return this;
     }
 

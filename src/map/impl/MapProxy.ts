@@ -1,5 +1,6 @@
 /**
  * Full IMap implementation — Block 7.4.
+ * Block 7.4a: production indexing (IndexRegistry, addIndex, indexed queries, index maintenance).
  * Block 12.A3: methods made async + MapDataStore field + lazy wiring.
  * Block 16.C4: core ops route through OperationService.invokeOnPartition().
  *
@@ -7,6 +8,7 @@
  * user-facing distributed-map proxy with:
  *   - Operation-routed core ops (put, get, remove, set, delete, putIfAbsent, clear)
  *   - Predicate-based queries (keySet/values/entrySet with Predicate)
+ *   - Indexed query execution when compatible index exists
  *   - Aggregation (aggregate / aggregate with Predicate)
  *   - Entry listeners (addEntryListener / removeEntryListener)
  *   - Locking (lock / tryLock / unlock / isLocked)
@@ -28,6 +30,12 @@ import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
 import type { MapDataStore } from '@helios/map/impl/mapstore/MapDataStore';
 import { EmptyMapDataStore } from '@helios/map/impl/mapstore/EmptyMapDataStore';
 import type { MapStoreConfig } from '@helios/config/MapStoreConfig';
+import type { MapConfig } from '@helios/config/MapConfig';
+import type { IndexConfig } from '@helios/config/IndexConfig';
+import { IndexRegistryImpl } from '@helios/query/impl/IndexRegistryImpl';
+import type { SortedIndex } from '@helios/query/impl/SortedIndex';
+import { IndexMatchHint } from '@helios/query/impl/QueryContext';
+import { canonicalizeAttribute } from '@helios/query/impl/IndexUtils';
 import { MapService } from '@helios/map/impl/MapService';
 import type { Operation } from '@helios/spi/impl/operationservice/Operation';
 import { PutOperation } from '@helios/map/impl/operation/PutOperation';
@@ -66,18 +74,29 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Singleflight promise for MapDataStore initialization. */
     private _mapStoreInitPromise: Promise<void> | null = null;
 
+    /** Index registry for this map — supports indexed query execution. */
+    private readonly _indexRegistry = new IndexRegistryImpl();
+
     constructor(
         name: string,
         store: RecordStore,
         nodeEngine: NodeEngine,
         containerService: MapContainerService,
         mapStoreConfig?: MapStoreConfig,
+        mapConfig?: MapConfig,
     ) {
         this._name = name;
         this._store = store;
         this._nodeEngine = nodeEngine;
         this._containerService = containerService;
         this._mapStoreConfig = mapStoreConfig ?? null;
+
+        // Bootstrap indexes from config
+        if (mapConfig !== undefined) {
+            for (const idxCfg of mapConfig.getIndexConfigs()) {
+                this._indexRegistry.addIndex(idxCfg);
+            }
+        }
     }
 
     /** Lazily initialize MapDataStore on first store-touching call (singleflight). */
@@ -111,6 +130,28 @@ export class MapProxy<K, V> implements IMap<K, V> {
         return this._name;
     }
 
+    // ── Indexing ──────────────────────────────────────────────────────────
+
+    addIndex(indexConfig: IndexConfig): void {
+        this._indexRegistry.addIndex(indexConfig);
+        // Rebuild index from existing entries
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+            const k = this._toObject<K>(kd);
+            const v = this._toObject<V>(vd);
+            if (k === null || v === null) continue;
+            const entryKey = this._indexKey(k);
+            const entry = this._makeEntry(k, v);
+            for (const attr of indexConfig.getAttributes()) {
+                const canonical = canonicalizeAttribute(attr);
+                const value = entry.getAttributeValue(canonical);
+                const index = this._indexRegistry.getIndex(canonical, indexConfig.getType());
+                if (index !== null) {
+                    index.insert(value, entryKey);
+                }
+            }
+        }
+    }
+
     // ── Operation routing helpers ─────────────────────────────────────────
 
     private async _invokeOnKeyPartition<T>(op: Operation, key: Data): Promise<T> {
@@ -139,6 +180,8 @@ export class MapProxy<K, V> implements IMap<K, V> {
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.add(key, value, Date.now());
         }
+        // Index maintenance
+        this._updateIndex(key, value, oldValue);
         if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
@@ -151,14 +194,16 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
-        const hadOld = this.containsKey(key);
+        // Read old value for index removal before overwrite
+        const oldValue = this.containsKey(key) ? await this._readCurrentValue(key) : null;
         await this._invokeOnKeyPartition<void>(
             new SetOperation(this._name, kd, vd, -1, -1), kd,
         );
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.add(key, value, Date.now());
         }
-        if (!hadOld) {
+        this._updateIndex(key, value, oldValue);
+        if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
             this._fireUpdated(key, value, null);
@@ -199,18 +244,27 @@ export class MapProxy<K, V> implements IMap<K, V> {
         }
         if (oldData === null || oldData === undefined) return null;
         const oldValue = this._toObject<V>(oldData);
+        // Index maintenance
+        if (oldValue !== null) {
+            this._removeFromIndex(key, oldValue);
+        }
         this._fireRemoved(key, oldValue);
         return oldValue;
     }
 
     async delete(key: K): Promise<void> {
         await this._ensureMapDataStore();
+        // Read old value for index removal before delete
+        const oldValue = await this._readCurrentValue(key);
         const kd = this._toData(key);
         const removed = await this._invokeOnKeyPartition<boolean>(
             new DeleteOperation(this._name, kd), kd,
         );
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.remove(key, Date.now());
+        }
+        if (removed && oldValue !== null) {
+            this._removeFromIndex(key, oldValue);
         }
         if (removed) {
             this._fireRemoved(key, null);
@@ -257,6 +311,8 @@ export class MapProxy<K, V> implements IMap<K, V> {
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.clear();
         }
+        // Clear all index entries
+        this._indexRegistry.clearIndexes();
         this._fireCleared();
     }
 
@@ -273,6 +329,8 @@ export class MapProxy<K, V> implements IMap<K, V> {
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.add(key, value, Date.now());
         }
+        // Index the new entry (only reached when key was absent)
+        this._addToIndex(key, value);
         return null;
     }
 
@@ -333,6 +391,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
     values(): V[];
     values(predicate: Predicate<K, V>): V[];
     values(predicate?: Predicate<K, V>): V[] {
+        if (predicate !== undefined) {
+            const indexedKeys = this._tryIndexScan(predicate);
+            if (indexedKeys !== null) {
+                return this._collectValuesByKeys(indexedKeys, predicate);
+            }
+        }
         const result: V[] = [];
         for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
@@ -348,6 +412,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
     keySet(): Set<K>;
     keySet(predicate: Predicate<K, V>): Set<K>;
     keySet(predicate?: Predicate<K, V>): Set<K> {
+        if (predicate !== undefined) {
+            const indexedKeys = this._tryIndexScan(predicate);
+            if (indexedKeys !== null) {
+                return this._collectKeysByKeys(indexedKeys, predicate);
+            }
+        }
         const result = new Set<K>();
         for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
@@ -363,6 +433,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
     entrySet(): Map<K, V>;
     entrySet(predicate: Predicate<K, V>): Map<K, V>;
     entrySet(predicate?: Predicate<K, V>): Map<K, V> {
+        if (predicate !== undefined) {
+            const indexedKeys = this._tryIndexScan(predicate);
+            if (indexedKeys !== null) {
+                return this._collectEntriesByKeys(indexedKeys, predicate);
+            }
+        }
         const result = new Map<K, V>();
         for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
@@ -445,6 +521,163 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Inject a MapDataStore directly (used by tests and MapContainerService). */
     setMapDataStore(store: MapDataStore<K, V>): void {
         this._mapDataStore = store;
+    }
+
+    // ── Index maintenance ────────────────────────────────────────────────
+
+    private _indexKey(key: K): string {
+        return JSON.stringify(key);
+    }
+
+    private _addToIndex(key: K, value: V): void {
+        if (this._indexRegistry.getIndexes().length === 0) return;
+        const entryKey = this._indexKey(key);
+        const entry = this._makeEntry(key, value);
+        this._indexRegistry.insertEntry(entryKey, (attr) => entry.getAttributeValue(attr));
+    }
+
+    private _removeFromIndex(key: K, value: V): void {
+        if (this._indexRegistry.getIndexes().length === 0) return;
+        const entryKey = this._indexKey(key);
+        const entry = this._makeEntry(key, value);
+        this._indexRegistry.removeEntry(entryKey, (attr) => entry.getAttributeValue(attr));
+    }
+
+    private _updateIndex(key: K, newValue: V, oldValue: V | null): void {
+        if (this._indexRegistry.getIndexes().length === 0) return;
+        if (oldValue !== null) {
+            this._removeFromIndex(key, oldValue);
+        }
+        this._addToIndex(key, newValue);
+    }
+
+    /** Read the current value for a key without going through get() (no load-on-miss). */
+    private async _readCurrentValue(key: K): Promise<V | null> {
+        const kd = this._toData(key);
+        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+        const store = this._containerService.getOrCreateRecordStore(this._name, partitionId);
+        const data = store.get(kd);
+        if (data === null) return null;
+        return this._toObject<V>(data);
+    }
+
+    // ── Indexed query helpers ────────────────────────────────────────────
+
+    /**
+     * Attempt to use an index to narrow the candidate set for the predicate.
+     * Returns a set of candidate entry keys (JSON-serialized K), or null if no index applies.
+     */
+    private _tryIndexScan(predicate: Predicate<K, V>): ReadonlySet<string> | null {
+        // Check for index-aware predicates by duck-typing their known properties
+        const p = predicate as unknown as Record<string, unknown>;
+
+        if (typeof p['attributeName'] !== 'string') return null;
+        const attr = canonicalizeAttribute(p['attributeName'] as string);
+
+        // EqualPredicate
+        if ('value' in p && !('from' in p) && !('less' in p) && !('_values' in p) && !('expression' in p)) {
+            const index = this._indexRegistry.matchIndex(attr, IndexMatchHint.PREFER_UNORDERED);
+            if (index === null) return null;
+            const keys = index.getEqual(p['value']);
+            return keys instanceof Set ? keys : new Set(keys as string[]);
+        }
+
+        // InPredicate
+        if ('_values' in p && Array.isArray(p['_values'])) {
+            const index = this._indexRegistry.matchIndex(attr, IndexMatchHint.PREFER_UNORDERED);
+            if (index === null) return null;
+            const result = new Set<string>();
+            for (const v of p['_values'] as unknown[]) {
+                const keys = index.getEqual(v);
+                if (keys instanceof Set) {
+                    for (const k of keys) result.add(k);
+                } else {
+                    for (const k of keys as string[]) result.add(k);
+                }
+            }
+            return result;
+        }
+
+        // BetweenPredicate
+        if ('from' in p && 'to' in p) {
+            const index = this._indexRegistry.matchIndex(attr, IndexMatchHint.PREFER_ORDERED);
+            if (index === null || !('getBetween' in index)) return null;
+            const sorted = index as SortedIndex;
+            const keys = sorted.getBetween(p['from'], p['to']);
+            return new Set(keys);
+        }
+
+        // GreaterLessPredicate
+        if ('less' in p && 'equal' in p && 'value' in p) {
+            const index = this._indexRegistry.matchIndex(attr, IndexMatchHint.PREFER_ORDERED);
+            if (index === null || !('getGreaterThan' in index)) return null;
+            const sorted = index as SortedIndex;
+            const less = p['less'] as boolean;
+            const equal = p['equal'] as boolean;
+            const keys = less
+                ? sorted.getLessThan(p['value'], equal)
+                : sorted.getGreaterThan(p['value'], equal);
+            return new Set(keys);
+        }
+
+        // LikePredicate (prefix only)
+        if ('expression' in p && typeof p['expression'] === 'string') {
+            const expr = p['expression'] as string;
+            if (!expr.endsWith('%')) return null;
+            const prefix = expr.slice(0, -1);
+            // Only use index for simple prefix patterns (no wildcards in prefix)
+            if (prefix.includes('%') || prefix.includes('_')) return null;
+            const index = this._indexRegistry.matchIndex(attr, IndexMatchHint.PREFER_ORDERED);
+            if (index === null || !('getByPrefix' in index)) return null;
+            const sorted = index as SortedIndex;
+            const keys = sorted.getByPrefix(prefix);
+            return new Set(keys);
+        }
+
+        return null;
+    }
+
+    /** Collect values from candidate keys, applying predicate as final filter. */
+    private _collectValuesByKeys(candidateKeys: ReadonlySet<string>, predicate: Predicate<K, V>): V[] {
+        const result: V[] = [];
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+            const k = this._toObject<K>(kd);
+            const v = this._toObject<V>(vd);
+            if (k === null || v === null) continue;
+            if (!candidateKeys.has(this._indexKey(k))) continue;
+            if (predicate.apply(this._makeEntry(k, v))) {
+                result.push(v);
+            }
+        }
+        return result;
+    }
+
+    private _collectKeysByKeys(candidateKeys: ReadonlySet<string>, predicate: Predicate<K, V>): Set<K> {
+        const result = new Set<K>();
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+            const k = this._toObject<K>(kd);
+            const v = this._toObject<V>(vd);
+            if (k === null || v === null) continue;
+            if (!candidateKeys.has(this._indexKey(k))) continue;
+            if (predicate.apply(this._makeEntry(k, v))) {
+                result.add(k);
+            }
+        }
+        return result;
+    }
+
+    private _collectEntriesByKeys(candidateKeys: ReadonlySet<string>, predicate: Predicate<K, V>): Map<K, V> {
+        const result = new Map<K, V>();
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+            const k = this._toObject<K>(kd);
+            const v = this._toObject<V>(vd);
+            if (k === null || v === null) continue;
+            if (!candidateKeys.has(this._indexKey(k))) continue;
+            if (predicate.apply(this._makeEntry(k, v))) {
+                result.set(k, v);
+            }
+        }
+        return result;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────

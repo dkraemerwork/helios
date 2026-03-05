@@ -16,6 +16,7 @@ import { NOT_RESERVED } from '@helios/internal/nearcache/NearCacheRecord';
 import type { Predicate } from '@helios/query/Predicate';
 import type { Aggregator } from '@helios/aggregation/Aggregator';
 import type { EntryListener } from '@helios/map/EntryListener';
+import type { IndexConfig } from '@helios/config/IndexConfig';
 
 export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
     private readonly _delegate: IMap<K, V>;
@@ -115,6 +116,8 @@ export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
     async removeAsync(key: K): Promise<V | null> {
         return this.remove(key);
     }
+
+    addIndex(indexConfig: IndexConfig): void { this._delegate.addIndex(indexConfig); }
 
     // ── Pure delegation (no near-cache impact) ──────────────────────
 
