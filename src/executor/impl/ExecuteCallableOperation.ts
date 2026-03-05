@@ -64,6 +64,22 @@ export class ExecuteCallableOperation extends Operation {
 
     override async run(): Promise<void> {
         const { descriptor } = this;
+
+        // Auto-resolve registry and container from NodeEngine service registry
+        // if not explicitly set (production path: operation handler injects these).
+        if (!this._registry) {
+            const ne = this.getNodeEngine();
+            if (ne) {
+                const containerKey = `helios:executor:container:${descriptor.executorName}`;
+                const container = ne.getServiceOrNull<ExecutorContainerService>(containerKey);
+                if (container) this._containerService = container;
+
+                const registryKey = `helios:executor:registry:${descriptor.executorName}`;
+                const reg = ne.getServiceOrNull<TaskTypeRegistry>(registryKey);
+                if (reg) this._registry = reg;
+            }
+        }
+
         const registry = this._registry;
 
         if (!registry) {
@@ -132,12 +148,13 @@ export class ExecuteCallableOperation extends Operation {
         }
     }
 
-    /** Wrap raw payload bytes into a HeapData (8-byte header + payload). */
+    /** Wrap raw payload bytes into HeapData with 4-byte length prefix. */
     static _wrapAsHeapData(payload: Buffer): HeapData {
-        const buf = Buffer.alloc(HeapData.HEAP_DATA_OVERHEAD + payload.length);
+        const buf = Buffer.alloc(HeapData.HEAP_DATA_OVERHEAD + 4 + payload.length);
         Bits.writeIntB(buf, HeapData.PARTITION_HASH_OFFSET, 0);
         Bits.writeIntB(buf, HeapData.TYPE_OFFSET, -130);
-        payload.copy(buf, HeapData.DATA_OFFSET);
+        Bits.writeIntB(buf, HeapData.DATA_OFFSET, payload.length);
+        payload.copy(buf, HeapData.DATA_OFFSET + 4);
         return new HeapData(buf);
     }
 

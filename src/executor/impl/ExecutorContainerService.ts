@@ -424,11 +424,16 @@ export class ExecutorContainerService {
         runTask();
     }
 
+    /**
+     * Wrap raw JSON bytes into HeapData with 4-byte length prefix
+     * (matching JavaScriptJsonSerializer's read format).
+     */
     private static _wrapAsHeapData(payload: Buffer): HeapData {
-        const buf = Buffer.alloc(HeapData.HEAP_DATA_OVERHEAD + payload.length);
+        const buf = Buffer.alloc(HeapData.HEAP_DATA_OVERHEAD + 4 + payload.length);
         Bits.writeIntB(buf, HeapData.PARTITION_HASH_OFFSET, 0);
         Bits.writeIntB(buf, HeapData.TYPE_OFFSET, -130); // JAVASCRIPT_JSON
-        payload.copy(buf, HeapData.DATA_OFFSET);
+        Bits.writeIntB(buf, HeapData.DATA_OFFSET, payload.length);
+        payload.copy(buf, HeapData.DATA_OFFSET + 4);
         return new HeapData(buf);
     }
 

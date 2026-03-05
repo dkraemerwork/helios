@@ -145,9 +145,9 @@ describe('ExecutorContainerService', () => {
 
         expect(result.status).toBe('success');
         expect(result.resultData).not.toBeNull();
-        // Result data contains serialized 42 (HeapData: 8-byte header + JSON payload)
+        // Result data contains serialized 42 (HeapData: 8-byte header + 4-byte length + JSON payload)
         const raw = result.resultData!.toByteArray()!;
-        const payload = raw.subarray(8); // skip HeapData overhead
+        const payload = raw.subarray(12); // skip HeapData overhead + 4-byte length prefix
         expect(JSON.parse(payload.toString('utf8'))).toBe(42);
     });
 

@@ -36,6 +36,16 @@ export class CancellationOperation extends Operation {
     }
 
     override async run(): Promise<void> {
+        // Auto-resolve container from NodeEngine service registry if not set
+        if (!this._containerService) {
+            const ne = this.getNodeEngine();
+            if (ne) {
+                const key = `helios:executor:container:${this.executorName}`;
+                const container = ne.getServiceOrNull<ExecutorContainerService>(key);
+                if (container) this._containerService = container;
+            }
+        }
+
         if (this._containerService) {
             const result = this._containerService.cancelTask(this.taskUuid);
             this.sendResponse(result);

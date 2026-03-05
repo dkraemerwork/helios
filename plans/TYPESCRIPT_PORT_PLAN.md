@@ -4891,7 +4891,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 17.9D** — Finish real cancel/shutdown/task-lost runtime semantics (container-backed control ops, accepted-task ownership, shutdown timeout behavior) — 11 tests ✅
 - [x] **Block 17.9E** — Add internal execution-backend seam + parity flag (`inline` vs `scatter`, backend-independent stats/lifecycle) — 9 tests ✅
 - [x] **Block 17.9F** — Freeze executor semantics with prerequisite tests before final Scatter integration (single-node + multi-node semantic gates) — 15 tests ✅
-- [ ] **Block 17.10** — Scatter-backed multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — ~18 tests
+- [x] **Block 17.10** — Scatter-backed multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — 17 tests ✅
 - [ ] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — ~12 tests
 - [ ] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. ~3670 tests across all phases
 
