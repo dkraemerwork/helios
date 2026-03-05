@@ -65,4 +65,8 @@ export class CoalescedWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
   clear(): void {
     this._map.clear();
   }
+
+  asList(): DelayedEntry<K, V>[] {
+    return Array.from(this._map.values());
+  }
 }

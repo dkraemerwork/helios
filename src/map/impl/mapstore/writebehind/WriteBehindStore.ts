@@ -24,6 +24,7 @@ export class WriteBehindStore<K, V> implements MapDataStore<K, V> {
    * Prevents stale reads for keys with pending write-behind operations.
    */
   private readonly _stagingArea = new Map<string, DelayedEntry<K, V>>();
+  private readonly _flushSequences = new Map<string, number>();
 
   constructor(
     private readonly _wrapper: MapStoreWrapper<K, V>,
@@ -112,6 +113,43 @@ export class WriteBehindStore<K, V> implements MapDataStore<K, V> {
 
   hasPendingWrites(): boolean {
     return !this._queue.isEmpty();
+  }
+
+  /** Stops worker, clears queue AND staging area. Used during replication before re-populating. */
+  reset(): void {
+    this._worker.stop();
+    this._queue.clear();
+    this._stagingArea.clear();
+  }
+
+  /**
+   * Returns a snapshot of all queued entries for replication capture.
+   * Note: staging area entries are also in the queue (staging is a read-your-writes cache,
+   * not a processing buffer). Returning queue entries only avoids duplicates.
+   */
+  asList(): DelayedEntry<K, V>[] {
+    return this._queue.asList();
+  }
+
+  getFlushSequences(): Map<string, number> {
+    return new Map(this._flushSequences);
+  }
+
+  setFlushSequences(sequences: Map<string, number>): void {
+    this._flushSequences.clear();
+    for (const [k, v] of sequences) {
+      this._flushSequences.set(k, v);
+    }
+  }
+
+  /** Exposes the underlying queue for replication (addForcibly). */
+  get queue(): WriteBehindQueue<K, V> {
+    return this._queue;
+  }
+
+  /** Exposes the worker for replication (start after applyState). */
+  get worker(): StoreWorker<K, V> {
+    return this._worker;
   }
 
   destroy(): void {

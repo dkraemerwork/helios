@@ -68,6 +68,10 @@ export class BoundedWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
     return this._usedCapacity;
   }
 
+  asList(): DelayedEntry<K, V>[] {
+    return this._delegate.asList();
+  }
+
   private _checkCapacity(count: number): void {
     if (this._usedCapacity + count > this._maxCapacity) {
       throw new ReachedMaxSizeException(

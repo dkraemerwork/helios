@@ -42,4 +42,8 @@ export class ArrayWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
   clear(): void {
     this._queue.length = 0;
   }
+
+  asList(): DelayedEntry<K, V>[] {
+    return this._queue.slice();
+  }
 }

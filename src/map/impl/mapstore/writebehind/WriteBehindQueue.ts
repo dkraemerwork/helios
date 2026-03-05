@@ -13,4 +13,6 @@ export interface WriteBehindQueue<K, V> {
   size(): number;
   isEmpty(): boolean;
   clear(): void;
+  /** Returns a snapshot copy of all entries (for replication capture). */
+  asList(): DelayedEntry<K, V>[];
 }
