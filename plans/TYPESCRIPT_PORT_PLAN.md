@@ -4806,7 +4806,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.F2** — `WriteBehindStateHolder` (queue + staging area capture via `asList()`, flush sequences, worker restart) — 13 tests
 - [x] **Block 16.F3** — `MapReplicationOperation` (composes all three state holders) — 4 tests
 - [x] **Block 16.F4** — Write-behind queue serialization support (`asList`, `reset`, `getFlushSequences`, `setFlushSequences`) — 3 tests (new; core methods already implemented in F2)
-- [ ] **Block 16.INT** — Integration tests (3-node write-behind resilience, 2-node replication, anti-entropy, chaos test harness) — ~15 tests
+- [x] **Block 16.INT** — Integration tests (3-node write-behind resilience, 2-node replication, anti-entropy, chaos test harness) — 15 tests
 - [ ] **Phase 16 checkpoint**: All multi-node resilience tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. Minimum 300 tests across Phase 16.
 
 ---
