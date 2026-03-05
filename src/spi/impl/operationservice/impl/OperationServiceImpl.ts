@@ -1,22 +1,54 @@
 /**
- * Port of {@code com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl},
- * simplified to in-process single-node dispatch.
+ * Port of {@code com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl}.
  *
- * All operations run locally in the same Bun event loop, eliminating the need for
- * Java's InvocationRegistry, BackpressureRegulator, and InvocationMonitor.
+ * Block 16.C3 upgrade: routing-aware dispatch with InvocationRegistry,
+ * PartitionInvocation, TargetInvocation, migration guards, retry, and
+ * backward-compatible localMode for existing tests.
  */
 import type { NodeEngine } from '@helios/spi/NodeEngine';
 import type { OperationService } from '@helios/spi/impl/operationservice/OperationService';
 import type { Address } from '@helios/cluster/Address';
 import { Operation } from '@helios/spi/impl/operationservice/Operation';
 import { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFuture';
+import { InvocationRegistry } from '@helios/spi/impl/operationservice/InvocationRegistry';
+import { PartitionInvocation } from '@helios/spi/impl/operationservice/PartitionInvocation';
+import { TargetInvocation } from '@helios/spi/impl/operationservice/TargetInvocation';
+import { PartitionMigratingException, RetryableException, TargetNotMemberException } from '@helios/spi/impl/operationservice/RetryableException';
+
+export interface OperationServiceImplOptions {
+    localMode?: boolean;
+    localAddress?: Address;
+    maxConcurrentInvocations?: number;
+    invocationTryCount?: number;
+}
 
 export class OperationServiceImpl implements OperationService {
     private readonly _nodeEngine: NodeEngine;
+    private readonly _localMode: boolean;
+    private readonly _localAddress: Address | null;
+    private readonly _registry: InvocationRegistry;
+    private readonly _invocationTryCount: number;
     private _callIdCounter = 1n;
 
-    constructor(nodeEngine: NodeEngine) {
+    constructor(nodeEngine: NodeEngine, options?: OperationServiceImplOptions) {
         this._nodeEngine = nodeEngine;
+        this._localMode = options?.localMode ?? true;
+        this._localAddress = options?.localAddress ?? null;
+        this._invocationTryCount = options?.invocationTryCount ?? 250;
+        this._registry = new InvocationRegistry(
+            options?.maxConcurrentInvocations ?? 100_000,
+        );
+    }
+
+    getInvocationRegistry(): InvocationRegistry {
+        return this._registry;
+    }
+
+    getLocalAddress(): Address {
+        if (this._localAddress === null) {
+            throw new Error('No local address configured');
+        }
+        return this._localAddress;
     }
 
     /**
@@ -43,18 +75,167 @@ export class OperationServiceImpl implements OperationService {
     }
 
     /**
-     * In-process partition invocation.
+     * Invoke an operation targeting a specific partition.
      *
-     * Wires a ResponseHandler that resolves the returned InvocationFuture.
-     * The operation must call sendResponse(value) to complete the future.
-     * If run() returns without calling sendResponse, the future auto-completes
-     * with undefined.
+     * In localMode: executes locally without routing (backward compat).
+     * In routing mode: creates a PartitionInvocation, registers in InvocationRegistry,
+     * resolves partition owner, and dispatches (local or remote).
      */
     invokeOnPartition<T>(serviceName: string, op: Operation, partitionId: number): InvocationFuture<T> {
-        const future = new InvocationFuture<T>();
-
         op.serviceName = serviceName;
         op.partitionId = partitionId;
+
+        if (this._localMode) {
+            return this._invokeLocal<T>(op);
+        }
+
+        return this._invokeOnPartitionRouted<T>(op, partitionId);
+    }
+
+    /**
+     * Invoke an operation targeting a specific cluster member.
+     *
+     * In localMode: executes locally ignoring target (backward compat).
+     * In routing mode: creates a TargetInvocation and dispatches.
+     */
+    invokeOnTarget<T>(serviceName: string, op: Operation, target: Address): InvocationFuture<T> {
+        op.serviceName = serviceName;
+
+        if (this._localMode) {
+            return this._invokeLocal<T>(op);
+        }
+
+        return this._invokeOnTargetRouted<T>(op, target);
+    }
+
+    /** Shut down the operation service: reject new invocations, reset pending. */
+    shutdown(): void {
+        this._registry.shutdown();
+        this._registry.reset(new Error('OperationService shut down'));
+    }
+
+    // ── routing-mode dispatch ───────────────────────────────────────────────
+
+    private _invokeOnPartitionRouted<T>(op: Operation, partitionId: number): InvocationFuture<T> {
+        const localAddress = this._localAddress!;
+        const invocation = new PartitionInvocation(
+            op, this._registry, this._nodeEngine, localAddress, partitionId,
+            { tryCount: this._invocationTryCount },
+        );
+
+        return this._doInvoke<T>(invocation);
+    }
+
+    private _invokeOnTargetRouted<T>(op: Operation, target: Address): InvocationFuture<T> {
+        const localAddress = this._localAddress!;
+
+        // Remote transport not yet wired — reject non-local targets
+        if (!target.equals(localAddress)) {
+            const future = new InvocationFuture<T>();
+            future.completeExceptionally(
+                new TargetNotMemberException(target),
+            );
+            return future;
+        }
+
+        const invocation = new TargetInvocation(
+            op, this._registry, this._nodeEngine, localAddress, target,
+            { tryCount: this._invocationTryCount },
+        );
+
+        return this._doInvoke<T>(invocation);
+    }
+
+    private _doInvoke<T>(invocation: PartitionInvocation | TargetInvocation): InvocationFuture<T> {
+        const future = invocation.future as InvocationFuture<T>;
+
+        try {
+            invocation.initInvocationTarget();
+            this._registry.register(invocation);
+        } catch (e) {
+            future.completeExceptionally(e);
+            return future;
+        }
+
+        this._executeWithRetry(invocation);
+
+        return future;
+    }
+
+    /**
+     * Execute the operation with retry logic. On retryable errors, re-resolves the
+     * partition target and retries (with exponential backoff after the first N fast retries).
+     * On non-retryable errors or max retries exceeded, rejects the future.
+     */
+    private _executeWithRetry(invocation: PartitionInvocation | TargetInvocation): void {
+        const op = invocation.op;
+        op.setNodeEngine(this._nodeEngine);
+
+        // Wire response handler to notify the invocation
+        op.setResponseHandler({
+            sendResponse: (_op: Operation, response: unknown) => {
+                invocation.notifyNormalResponse(response, 0);
+            },
+        });
+
+        const runOnce = async (): Promise<void> => {
+            try {
+                // Migration guard check
+                const partitionService = this._nodeEngine.getPartitionService() as any;
+                if (op.partitionId >= 0 && typeof partitionService.isMigrating === 'function') {
+                    if (partitionService.isMigrating(op.partitionId)) {
+                        throw new PartitionMigratingException(op.partitionId);
+                    }
+                }
+
+                await op.beforeRun();
+                await op.run();
+
+                // Auto-complete if the operation didn't call sendResponse
+                if (!invocation.future.isDone()) {
+                    invocation.notifyNormalResponse(undefined, 0);
+                }
+            } catch (e) {
+                if (invocation.future.isDone()) return;
+
+                const error = e instanceof Error ? e : new Error(String(e));
+
+                if (error instanceof RetryableException && invocation.invokeCount < invocation.tryCount) {
+                    invocation.invokeCount++;
+                    op.deactivate();
+                    invocation.initInvocationTarget();
+
+                    // Re-register (assigns new callId)
+                    try {
+                        this._registry.register(invocation);
+                    } catch (regErr) {
+                        invocation.future.completeExceptionally(regErr);
+                        return;
+                    }
+
+                    const delay = invocation.getRetryDelayMs();
+                    if (delay === 0) {
+                        void runOnce();
+                    } else {
+                        setTimeout(() => void runOnce(), delay);
+                    }
+                    return;
+                }
+
+                // Non-retryable or retries exhausted
+                this._registry.deregister(invocation);
+                invocation.future.completeExceptionally(error);
+            }
+        };
+
+        void runOnce();
+    }
+
+    // ── localMode dispatch (backward compat) ────────────────────────────────
+
+    private _invokeLocal<T>(op: Operation): InvocationFuture<T> {
+        const future = new InvocationFuture<T>();
+
         this._prepareOperation(op);
 
         op.setResponseHandler({
@@ -67,7 +248,6 @@ export class OperationServiceImpl implements OperationService {
             try {
                 await op.beforeRun();
                 await op.run();
-                // Auto-complete if the operation didn't call sendResponse
                 if (!future.isDone()) {
                     future.complete(undefined as unknown as T);
                 }
@@ -79,14 +259,6 @@ export class OperationServiceImpl implements OperationService {
         })();
 
         return future;
-    }
-
-    /**
-     * In-process target invocation. In single-node mode, target is ignored and the
-     * operation runs locally, identical to invokeOnPartition.
-     */
-    invokeOnTarget<T>(serviceName: string, op: Operation, _target: Address): InvocationFuture<T> {
-        return this.invokeOnPartition<T>(serviceName, op, op.partitionId);
     }
 
     // ── internals ──────────────────────────────────────────────────────────
