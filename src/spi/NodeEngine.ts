@@ -13,6 +13,12 @@ import type { ILogger } from '@helios/test-support/ILogger';
 import type { OperationService } from '@helios/spi/impl/operationservice/OperationService';
 import type { HeliosProperties } from '@helios/spi/properties/HeliosProperties';
 import type { PartitionService } from '@helios/spi/PartitionService';
+import type { Address } from '@helios/cluster/Address';
+
+/** Minimal cluster service surface exposed through NodeEngine. */
+export interface ClusterServiceView {
+    getMembers(): ReadonlyArray<{ address(): Address }>;
+}
 
 export interface NodeEngine {
     /** Returns the service responsible for executing Operations. */
@@ -52,4 +58,10 @@ export interface NodeEngine {
 
     /** Deserialize a Data wrapper back to a typed object. Returns null for null input. */
     toObject<T>(data: Data | null): T | null;
+
+    /** Returns the local address of this node. */
+    getLocalAddress(): Address;
+
+    /** Returns a view of the cluster service for member enumeration. */
+    getClusterService(): ClusterServiceView;
 }

@@ -106,6 +106,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     private _running = true;
 
+    /** Registered async shutdown hooks — awaited during shutdownAsync(). */
+    private readonly _shutdownHooks: Array<() => Promise<void>> = [];
+
     constructor(config?: HeliosConfig) {
         this._config = config ?? new HeliosConfig();
         this._name = this._config.getName();
@@ -259,6 +262,24 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     getName(): string {
         return this._name;
+    }
+
+    /**
+     * Register an async hook to be awaited during shutdownAsync().
+     * Used by executor services and other drainable subsystems.
+     */
+    registerShutdownHook(hook: () => Promise<void>): void {
+        this._shutdownHooks.push(hook);
+    }
+
+    /**
+     * Async shutdown that awaits all registered shutdown hooks before
+     * tearing down the instance. Use this when graceful draining is needed.
+     */
+    async shutdownAsync(): Promise<void> {
+        // Await all registered hooks (e.g., executor drain)
+        await Promise.allSettled(this._shutdownHooks.map(h => h()));
+        this.shutdown();
     }
 
     shutdown(): void {

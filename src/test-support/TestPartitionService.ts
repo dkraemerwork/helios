@@ -7,10 +7,13 @@
  * Port of the test-support pattern from Java integration tests.
  */
 import type { Data } from '@helios/internal/serialization/Data';
+import { Address } from '@helios/cluster/Address';
 
 export const PARTITION_COUNT = 271;
 
 export class TestPartitionService {
+    private readonly _localAddress = new Address('127.0.0.1', 5701);
+
     getPartitionCount(): number {
         return PARTITION_COUNT;
     }
@@ -23,6 +26,14 @@ export class TestPartitionService {
 
     isPartitionLocallyOwned(_partitionId: number): boolean {
         return true;
+    }
+
+    getPartitionOwner(_partitionId: number): Address | null {
+        return this._localAddress;
+    }
+
+    isMigrating(_partitionId: number): boolean {
+        return false;
     }
 
     private _partitionHash(key: Data | object): number {

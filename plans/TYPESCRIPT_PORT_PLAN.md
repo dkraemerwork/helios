@@ -548,6 +548,19 @@ SerializationServiceImpl + HeliosInstanceImpl + all data structures
                                                   └─► 16.E1-E3 anti-entropy
                                                         └─► 16.F1-F4 map replication
                                                               └─► 16.INT integration tests
+
+[Phase 17 — depends on Phase 16 (Multi-Node Resilience) + scatter library]
+OperationService + PartitionService + ClusterService + scatter.pool()
+  └─► 17.0 runtime foundation + scatter workspace → 17.1 ExecutorConfig
+        └─► 17.2 IExecutorService contract → 17.3 TaskTypeRegistry + fingerprinting
+              └─► 17.4 Operations + retry boundaries
+                    └─► 17.5 ExecutorContainerService + bounded execution engine
+                          └─► 17.6 ExecutorServiceProxy + future/result handling
+                                └─► 17.7 Cancellation + Shutdown ops
+                                      └─► 17.8 HeliosInstance wiring + lifecycle
+                                            └─► 17.9 ExecutorStats + monitoring
+                                                  └─► 17.10 multi-node integration
+                                                        └─► 17.INT rollout acceptance
 ```
 
 ---
@@ -4576,13 +4589,23 @@ Raft-based CP subsystem providing strong consistency guarantees (linearizable IA
 IAtomicReference, FencedLock, ISemaphore, ICountDownLatch). Correct Raft implementation
 is non-trivial. Defer to v2.
 
-### Scheduled Executor (`scheduledexecutor/` — 66 source files)
+### Scheduled Executor (`scheduledexecutor/` — 66 source files) + Durable Executor (`durableexecutor/`)
 
-Distributed scheduled executor with durable scheduling (survives node failures). Defer to v2.
+> **Phase 17 covers `IExecutorService`** (Tier 1 — immediate, non-durable, non-scheduled executor) using
+> scatter worker threads. The remaining tiers are deferred:
+> - **Tier 2: `IDurableExecutorService`** — ring-buffer replicated executor (survives node failure)
+> - **Tier 3: `IScheduledExecutorService`** — durable scheduling (delayed, periodic, partition-replicated)
+>
+> See `plans/DISTRIBUTED_EXECUTOR_PLAN.md` for the full tier architecture.
+
+Distributed scheduled executor with durable scheduling (survives node failures). Tiers 2–3 deferred to Phase 18+.
 
 ---
 
 ## Master Todo List
+
+> Canonical loop-selection source: only the `- [ ] **Block ...` lines inside this Master Todo List.
+> Detailed per-block sections elsewhere in this document are descriptive status/spec text, not queue entries.
 
 ### Phase 0 — Tooling ✅
 - [x] Project scaffolding (package.json, tsconfig.json, bunfig.toml)
@@ -4809,6 +4832,28 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.INT** — Integration tests (3-node write-behind resilience, 2-node replication, anti-entropy, chaos test harness) — 15 tests
 - [x] **Phase 16 checkpoint**: All multi-node resilience tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. 3461 tests across all phases ✅
 
+### Phase 17 — Distributed Executor Service (IExecutorService + scatter integration) ← **CURRENT**
+
+> **Cross-ref:** `plans/DISTRIBUTED_EXECUTOR_PLAN.md` — the authoritative spec for all Phase 17 blocks.
+> **Goal:** Implement Hazelcast-compatible `IExecutorService` (Tier 1 — immediate, non-durable,
+> non-scheduled executor) using `scatter.pool()` Bun-native worker threads for off-main-thread task execution,
+> routed via `OperationService` for distributed cluster dispatch.
+> **Depends on:** Phase 16 (OperationService routing, partition system, backup replication) + scatter library (`../scatter`)
+
+- [x] **Block 17.0** — Executor runtime foundation + scatter workspace (close remote OperationService gap, expose cluster/partition routing surfaces, add scatter dependency) — 13 tests ✅
+- [ ] **Block 17.1** — `ExecutorConfig` + `HeliosConfig` extensions (bounded defaults, pool caps, timeouts, validation) — ~8 tests
+- [ ] **Block 17.2** — `IExecutorService` + `TaskCallable<T>` contracts (registration API, local inline API, submit/execute routing surface) — ~10 tests
+- [ ] **Block 17.3** — `TaskTypeRegistry` + registration fingerprinting (pre-registration model, rollout mismatch detection) — ~10 tests
+- [ ] **Block 17.4** — `ExecuteCallableOperation` + `MemberCallableOperation` (result envelope, offload semantics, retry boundaries) — ~12 tests
+- [ ] **Block 17.5** — `ExecutorContainerService` + bounded scatter execution engine (queue caps, timeout/recycle, cancel state machine, stats) — ~15 tests
+- [ ] **Block 17.6** — `ExecutorServiceProxy` (routing via OperationService, future/result unwrapping, fan-out, local inline fast path) — ~16 tests
+- [ ] **Block 17.7** — `CancellationOperation` + `ShutdownOperation` (task cancel routing, cluster-wide executor close, shutdown timeout behavior) — ~8 tests
+- [ ] **Block 17.8** — `HeliosInstance` wiring (`getExecutorService(name)`, lifecycle integration, graceful shutdown hook, NodeEngine registration) — ~10 tests
+- [ ] **Block 17.9** — `ExecutorStats` + monitoring (pending/started/completed/cancelled/rejected/timedOut/taskLost, pool health snapshots) — ~8 tests
+- [ ] **Block 17.10** — Multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — ~18 tests
+- [ ] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — ~12 tests
+- [ ] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. ~3600 tests across all phases
+
 ---
 
 ## Commit Convention
@@ -4866,4 +4911,4 @@ bun run build
 
 ---
 
-*Plan v17.0 — updated 2026-03-05 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–16 complete — 3461 tests green (3461 pass, 0 fail, 0 error) | Phase 14 DONE: Blocks 14.1-14.5 (Blitz Embedded NATS Server) | Phase 15 DONE: Blocks 15.1-15.5 (Production SerializationServiceImpl — Round 3 post-review fixes applied: R3-C1 cross-plan Buffer.isBuffer, R3-C2 UUID BigInt.asUintN, R3-C3 readObject useBigEndianForTypeId, R3-C4 JSON.stringify undefined guard, R3-B1 ss.destroy()) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16)*
+*Plan v17.1 — updated 2026-03-05 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–16 complete — 3461 tests green (3461 pass, 0 fail, 0 error) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Phase 17 CURRENT: Blocks 17.0-17.INT (Distributed Executor Service — immediate, non-durable, non-scheduled executor, ~139 tests) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16), `plans/DISTRIBUTED_EXECUTOR_PLAN.md` (Phase 17)*

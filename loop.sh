@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
-# loop.sh — Helios Module-Batch TDD Porting Loop
+# loop.sh — Helios Canonical Block Execution Loop
 #
 # Usage:  ./loop.sh
 #
-# Strategy: ONE BLOCK per iteration (not one test).
-# A block = an entire module (e.g. all of internal/util, all of map/).
+# Strategy: ONE Master Todo block per iteration (not one test).
+# A block may be a Java-port module or a TypeScript-first implementation block,
+# depending on the active phase in plans/TYPESCRIPT_PORT_PLAN.md.
 #
 # Each iteration invokes Claude, which:
-#   1. Reads the plan
-#   2. Picks the next uncompleted [ ] Block item
-#   3. Batch-converts ALL Java tests for the block (converter + manual cleanup)
+#   1. Reads the canonical plan
+#   2. Picks the next unchecked Master Todo block
+#   3. Prepares the block's tests from the authoritative spec
 #   4. Verifies RED  (all tests fail before any implementation)
-#   5. Reads Java source as spec
-#   6. Implements the FULL TypeScript module (all source files for the block)
+#   5. Reads the authoritative implementation sources/specs
+#   6. Implements the FULL block
 #   7. Verifies GREEN (all block tests pass + tsc --noEmit clean)
-#   8. Marks the Block [x] in the plan + updates counts
+#   8. Marks the Block [x] in the canonical plan
 #   9. Commits
 #  10. Exits — loop re-triggers for the next Block
 #
@@ -42,11 +43,11 @@ trap 'rm -f "$PROMPT_FILE" "$RUN_LOG"; echo ""; echo "Loop stopped after ${ITERA
 BUN_VER="$(bun --version 2>/dev/null || echo '1.x')"
 
 cat > "$PROMPT_FILE" << 'ENDOFPROMPT'
-You are one iteration of the Helios module-batch TDD porting loop.
-Your job: complete EXACTLY ONE Block from the plan, then stop.
+You are one iteration of the Helios canonical block execution loop.
+Your job: complete EXACTLY ONE Master Todo Block from the plan, then stop.
 
-The unit of work is a BLOCK (an entire module), NOT a single test file.
-You convert all tests for the block, implement the full module, get everything green, commit.
+The unit of work is a BLOCK (an entire module or TypeScript-first feature slice), NOT a single test file.
+Some blocks are Java-port blocks. Later phases are TypeScript-first. Follow the selected block's authoritative spec, get everything green, commit, and stop.
 
 ══════════════════════════════════════════════════════════
 PROJECT: HELIOS
@@ -88,7 +89,8 @@ DEFERRED (skip if you encounter these blocks — mark SKIP and pick the next):
   - hazelcast-sql / SQL engine  →  deferred to v2 (requires porting Apache Calcite)
   - jet/ (Java DAG engine)      →  REPLACED by @helios/blitz (Phase 10, NOT deferred)
   - cp / Raft CP subsystem      →  deferred to v2
-  - scheduledexecutor           →  deferred to v2
+  - scheduledexecutor           →  deferred to Phase 18+ (Tier 3; Phase 17 covers IExecutorService Tier 1)
+  - durableexecutor             →  deferred to Phase 18+ (Tier 2; see DISTRIBUTED_EXECUTOR_PLAN.md)
 
 REPLACED (do NOT convert Java files — write TypeScript from scratch):
   - hazelcast-tpc-engine  →  Write Bun-native Eventloop.ts adapter from scratch (no Java line-by-line port).
@@ -99,7 +101,7 @@ REPLACED (do NOT convert Java files — write TypeScript from scratch):
 
 DROPPED (never port — skip any block referencing these):
   osgi, console, auditlog, hotrestart, persistence, crdt, wan, vector,
-  durableexecutor, flakeidgen, dataconnection
+  flakeidgen, dataconnection
 
 PHASE 10 — @helios/blitz (NOT deferred):
   Phase 10 blocks (10.0–10.10) build @helios/blitz, a TypeScript-first NATS-backed
@@ -173,6 +175,31 @@ PHASE 16 — Multi-Node Resilience (NOT deferred):
   Phase dependency: Phase 16 depends on Phase 15 (production SerializationServiceImpl).
   Gate: cd %%ROOT%% && bun test → 0 fail, 0 error. Minimum 300 tests across Phase 16.
 
+PHASE 17 — Distributed Executor Service (NOT deferred):
+  Phase 17 blocks (17.0–17.INT) implement Helios IExecutorService Tier 1 — an immediate,
+  non-durable, non-scheduled distributed executor — using scatter.pool() Bun-native worker threads for
+  off-main-thread task execution, routed via OperationService for distributed cluster dispatch.
+  Primary spec: %%ROOT%%/plans/DISTRIBUTED_EXECUTOR_PLAN.md (the authoritative reference).
+  Source: %%ROOT%%/src/executor/ + %%ROOT%%/src/executor/impl/ + %%ROOT%%/src/config/ExecutorConfig.ts
+  Tests:  %%ROOT%%/test/executor/ + %%ROOT%%/test/executor/impl/
+  Scatter library (sibling repo, read-only reference): %%ROOT%%/../scatter/
+  Java reference (read-only): %%ROOT%%/../helios-1/hazelcast/src/main/java/com/hazelcast/
+  Key Java files to read as spec: IExecutorService.java, ExecutorServiceProxy.java,
+    DistributedExecutorService.java, AbstractCallableTaskOperation.java,
+    CallableTaskOperation.java, MemberCallableTaskOperation.java,
+    CancellationOperation.java, ShutdownOperation.java, ExecutorConfig.java
+  No Java test conversion — author TypeScript tests from the plan spec.
+  Critical Phase 17 rules (from DISTRIBUTED_EXECUTOR_PLAN.md):
+    - Block 17.0 closes runtime gaps first: remote OperationService path, cluster/partition visibility, and graceful shutdown hook surfaces
+    - scatter.pool() is monomorphic: one pool per task type, but queues and active pools must be bounded
+    - Distributed execution uses registered task types only; inline functions are local-only
+    - Registration fingerprint parity must be verified across nodes before enqueue
+    - MemberCallableOperation does NOT retry on member departure; partition-targeted retries stop once remote accept happens
+    - Post-acceptance member loss is task-lost failure, not transparent replay
+    - 17.INT must verify backpressure, registry mismatch, cancel contract, shutdown timeout, and full regression
+  Phase dependency: Phase 17 depends on Phase 16 (OperationService routing, partition system).
+  Gate: cd %%ROOT%% && bun test → 0 fail, 0 error. Minimum 120 tests across Phase 17.
+
 Important scope clarification:
   - Legacy Java `hazelcast/extensions/*` modules remain dropped.
   - Phase 12 extension packages in this repo are IN SCOPE: `packages/s3`, `packages/mongodb`, `packages/turso`.
@@ -181,23 +208,32 @@ Important scope clarification:
 YOUR STEPS — execute all in order
 ══════════════════════════════════════════════════════════
 
-STEP 1 — READ THE PLAN
+STEP 1 — SELECT THE CANONICAL NEXT BLOCK
   Read %%PLAN%% in full.
-  Go to the Master Todo List section.
-  If a phase header in Master Todo List is marked with '← **CURRENT**', select the first
+  Use ONLY the Master Todo List as the queue source.
+  The selectable range starts at the line `## Master Todo List` and ends at the next `## ` section.
+  If a phase header in that range is marked with '← **CURRENT**', select the first
   '- [ ] **Block ...' under that CURRENT phase section.
   If no CURRENT marker exists (or no unchecked block remains in that section),
-  find the FIRST line starting with '- [ ] **Block' (not checkpoint lines).
+  select the FIRST line in the Master Todo List starting with '- [ ] **Block' (not checkpoint lines).
   If it already has '(BLOCKED: ...)', re-check whether the blocker is now resolved.
   Keep blocked entries in the same canonical form so they stay selectable/revisitable:
     - [ ] **Block X.Y** (BLOCKED: <reason>)
   Check if it is deferred or dropped (see SCOPE above).
   If it is → mark it:  - [~] **Block X.Y** (SKIPPED: deferred/dropped)
-  and find the next non-skipped [ ] Block. If still blocked, keep/refresh BLOCKED reason and pick the next [ ] **Block ...** line.
+  and find the next non-skipped [ ] Block in the Master Todo List. If still blocked, keep/refresh BLOCKED reason and pick the next [ ] **Block ...** line.
   The target is the first [ ] **Block** that is not currently blocked.
 
-STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
-  From the block description in the plan, determine:
+STEP 2 — IDENTIFY THE BLOCK FAMILY AND FILES
+  First determine BLOCK_ID from the selected Master Todo entry.
+
+  If BLOCK_ID is in Phase 10, 12, 13, 14, 15, or 17:
+    - Treat the block as TypeScript-first work.
+    - Use the phase-specific plan/document named below as the primary spec.
+    - Determine TypeScript source/test targets from that spec and the block text.
+    - Do NOT assume Java test conversion or Java source porting.
+
+  Otherwise (standard Java-port blocks), determine:
     a) ALL Java test files for this block (not just one — the entire module)
     b) ALL Java source files needed to make those tests pass
     c) Where TypeScript tests go:   %%ROOT%%/test/<path>/
@@ -231,6 +267,18 @@ STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
         * readObject(): useBigEndianForTypeId parameter
         * HeliosInstanceImpl: store ss as field, call this._ss.destroy() in shutdown()
 
+  For Phase 17 blocks (`17.0`–`17.INT`):
+    - Read `%%ROOT%%/plans/DISTRIBUTED_EXECUTOR_PLAN.md` as the source-of-truth spec.
+    - Block selection still comes from the Master Todo in `%%PLAN%%`.
+    - Do NOT assume remote OperationService dispatch, cluster visibility, or graceful shutdown are already finished just because Phase 16 is checked off; Block 17.0 closes those gaps.
+    - Source goes in: %%ROOT%%/src/executor/ + %%ROOT%%/src/executor/impl/
+    - Tests go in:   %%ROOT%%/test/executor/ + %%ROOT%%/test/executor/impl/
+    - Config file:   %%ROOT%%/src/config/ExecutorConfig.ts
+    - No Java test conversion — author TypeScript tests from the plan spec.
+    - Scatter library reference: %%ROOT%%/../scatter/ (read-only sibling repo)
+    - Treat as TypeScript-first executor implementation using scatter.pool() workers.
+    - MUST follow the authoritative Phase 17 rules from `plans/DISTRIBUTED_EXECUTOR_PLAN.md`, including bounded defaults, registration fingerprint checks, local-only inline tasks, and explicit task-lost semantics.
+
   For Phase 12 blocks (`12.A1`, `12.A2`, `12.A3`, `12.B`, `12.C`, `12.D`):
     - Read `%%ROOT%%/plans/MAPSTORE_EXTENSION_PLAN.md` as the source-of-truth spec.
     - Treat work as TypeScript-first in this repo (no Java test conversion requirement).
@@ -251,7 +299,10 @@ STEP 2 — IDENTIFY ALL FILES FOR THE BLOCK
     - Which tests need @nestjs/testing Test.createTestingModule()
     - That jest.mock/spyOn/fn must be replaced with bun:test equivalents (see below)
 
-STEP 3 — CONVERT ALL TESTS FOR THE BLOCK
+STEP 3 — PREPARE TESTS FOR THE BLOCK
+  For TypeScript-first blocks, author or update TypeScript tests directly from the authoritative plan/spec.
+  For standard Java-port blocks, batch-convert the Java tests and then clean them up.
+
   For Phase 12 blocks:
     - Do NOT run `scripts/convert-java-tests.ts`.
     - Author TypeScript tests directly from `plans/MAPSTORE_EXTENSION_PLAN.md` expectations.
@@ -277,6 +328,13 @@ STEP 3 — CONVERT ALL TESTS FOR THE BLOCK
     - Tests go in `%%ROOT%%/test/internal/serialization/impl/` — create directory if missing.
     - Ensure tests compile, then run RED before implementation.
     - Include the mandatory new tests from the plan's Implementation Order section step 14.
+
+  For Phase 17 blocks:
+    - Do NOT run `scripts/convert-java-tests.ts`.
+    - Author TypeScript tests directly from `plans/DISTRIBUTED_EXECUTOR_PLAN.md` block specs.
+    - Tests go in `%%ROOT%%/test/executor/` and `%%ROOT%%/test/executor/impl/` — create directories if missing.
+    - Ensure tests compile, then run RED before implementation.
+    - Reference Java files (read-only) for behavioral parity, not line-by-line conversion.
 
   For standard blocks, batch-convert using the converter:
 
@@ -311,15 +369,24 @@ STEP 4 — VERIFY RED
   Every test must FAIL at this point.
   If any test passes before implementation — stop, something is wrong, report it.
 
-STEP 5 — READ THE JAVA SOURCE
-  Read every Java source file for this block.
-  These are your spec. Understand every public method, exception, edge case, invariant.
-  For REPLACED blocks, understand the intent, not the implementation.
+STEP 5 — READ THE AUTHORITATIVE SPEC
+  For standard Java-port blocks:
+    - Read every Java source file for this block.
+    - These are your implementation spec. Understand every public method, exception, edge case, invariant.
+
+  For REPLACED blocks:
+    - Understand the intent, not the Java implementation.
+
+  For TypeScript-first blocks:
+    - Read the authoritative phase plan/spec first.
+    - Use Java references only where the plan explicitly says they are parity references.
+
   For Phase 12 blocks, use `plans/MAPSTORE_EXTENSION_PLAN.md` + current TypeScript code as primary spec
   (consult listed Java references only where needed for behavioral parity).
   For Phase 10 blocks, use `plans/TYPESCRIPT_PORT_PLAN.md` Phase 10 section +
   `plans/HELIOS_BLITZ_IMPLEMENTATION.md` as the authoritative spec.
-  No Java source to read — this is a TypeScript-first implementation.
+  For Phase 17 blocks, use `plans/DISTRIBUTED_EXECUTOR_PLAN.md` as the authoritative spec and
+  read the current TypeScript runtime code needed to close the documented Phase 17 gaps before coding forward.
 
 STEP 6 — IMPLEMENT THE FULL TYPESCRIPT MODULE
   Create all %%ROOT%%/src/<path>/<Name>.ts files for the block.
@@ -333,7 +400,7 @@ STEP 6 — IMPLEMENT THE FULL TYPESCRIPT MODULE
     java.time.Instant / Duration                 →  TimeSource/Clock abstractions (Temporal when available, fallback otherwise)
     CompletableFuture<T>                         →  Promise<T>
     computeIfAbsent(key, fn)                     →  map.getOrInsertComputed(key, fn)  (ES2025)
-    synchronized / volatile / AtomicXxx          →  plain field/number  (Bun is single-threaded)
+    synchronized / volatile / AtomicXxx          →  do NOT blindly collapse to plain fields when the block uses worker-thread or cross-task coordination; follow the authoritative phase plan
     final local var                              →  const
     final field                                  →  readonly
     throws XxxException                          →  remove; add @throws JSDoc
@@ -427,6 +494,22 @@ STEP 7 — VERIFY GREEN
     Block 15.5 gate criterion: exit code 0 (do NOT hardcode a test count — the count grows
     as Phase 14 + Phase 15 add tests; the authoritative gate is the exit code being 0).
 
+  For Phase 17 (Distributed Executor Service) blocks, run from root:
+    17.0: bun test --pattern 'ExecutorRuntimeFoundation|ScatterPoolAdapter|TaskExecutionEngine|OperationService.*remote' 2>&1
+    17.1: bun test --pattern 'ExecutorConfig' 2>&1
+    17.2: bun test --pattern 'IExecutorService|TaskCallable|InlineTask' 2>&1
+    17.3: bun test --pattern 'TaskTypeRegistry|TaskRegistration' 2>&1
+    17.4: bun test --pattern 'ExecuteCallableOperation|MemberCallableOperation|Executor.*Retry' 2>&1
+    17.5: bun test --pattern 'ExecutorContainerService|ExecutorExecutionEngine' 2>&1
+    17.6: bun test --pattern 'ExecutorServiceProxy|CancellableFuture' 2>&1
+    17.7: bun test --pattern 'CancellationOperation|ShutdownOperation|ExecutorShutdown' 2>&1
+    17.8: bun test --pattern 'getExecutorService|executor.*wiring|ExecutorServicePermission' 2>&1
+    17.9: bun test --pattern 'ExecutorStats|ExecutorHealth|ExecutorMonitoring' 2>&1
+    17.10: bun test --pattern 'executor.*integration|executor.*multi-node|executor.*registry-mismatch' 2>&1
+    17.INT: bun test --pattern 'executor.*e2e|executor.*acceptance|executor.*rollout' 2>&1
+    Then always: bun run tsc --noEmit 2>&1
+    Final block (17.INT) gate: bun test 2>&1 (full regression — exit code 0, 0 fail, 0 error).
+
   Gate rules:
     - Every required gate command must pass.
     - Every required gate command must execute non-zero tests (EXCEPT Phase 13 infra-fix blocks where required=0 is valid).
@@ -441,10 +524,10 @@ STEP 7 — VERIFY GREEN
 
 STEP 8 — UPDATE THE PLAN
   In %%PLAN%%:
-    a) In the per-phase checklist: change  - [ ] (block item)  →  - [x] (block item)
-    b) In the Master Todo List:    change  - [ ] **Block X.Y**  →  - [x] **Block X.Y**
-    c) Update the "Tests already ported & green" counter (add the number of tests just greened)
-    d) Update the "Tests remaining" counter (subtract the same number)
+    a) In the Master Todo List: change `- [ ] **Block X.Y**`  →  `- [x] **Block X.Y**`
+    b) Keep any detailed per-phase status text aligned if the selected block also has a detailed section
+    c) Update phase/footer status text if the selected phase moves from CURRENT to complete
+    d) Do NOT invent or remove queue entries outside the Master Todo List
 
   For Phase 12 blocks, also keep `plans/MAPSTORE_EXTENSION_PLAN.md` status/count text in sync
   with what was actually completed in the iteration.
@@ -463,6 +546,7 @@ STEP 9 — COMMIT AND STOP
 RULES — non-negotiable
 ══════════════════════════════════════════════════════════
 - One Block per iteration. Exactly one. No more.
+- The canonical queue is the Master Todo List in `%%PLAN%%`; do not pick blocks from detailed descriptive sections.
 - Process the ENTIRE block — all tests, all source files — not just one test.
 - Never skip RED — all tests must fail before writing any source.
 - Never modify Java source files under %%ROOT%%/hazelcast* (read-only spec).

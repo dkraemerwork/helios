@@ -9,7 +9,7 @@
  */
 import type { Data } from '@helios/internal/serialization/Data';
 import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
+import type { NodeEngine, ClusterServiceView } from '@helios/spi/NodeEngine';
 import type { OperationService } from '@helios/spi/impl/operationservice/OperationService';
 import type { ILogger } from '@helios/test-support/ILogger';
 import type { HeliosProperties } from '@helios/spi/properties/HeliosProperties';
@@ -19,8 +19,10 @@ import { TestPartitionService } from '@helios/test-support/TestPartitionService'
 import { OperationServiceImpl } from '@helios/spi/impl/operationservice/impl/OperationServiceImpl';
 import { HeliosException } from '@helios/core/exception/HeliosException';
 import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
+import { Address } from '@helios/cluster/Address';
 
 export class TestNodeEngine implements NodeEngine {
+    private readonly _localAddress = new Address('127.0.0.1', 5701);
     private readonly _serializationService: SerializationService = new TestSerializationService();
     private readonly _partitionService: TestPartitionService = new TestPartitionService();
     private readonly _properties: HeliosProperties = new MapHeliosProperties();
@@ -90,5 +92,15 @@ export class TestNodeEngine implements NodeEngine {
 
     toObject<T>(data: Data | null): T | null {
         return this._serializationService.toObject<T>(data);
+    }
+
+    getLocalAddress(): Address {
+        return this._localAddress;
+    }
+
+    getClusterService(): ClusterServiceView {
+        return {
+            getMembers: () => [{ address: () => this._localAddress }],
+        };
     }
 }

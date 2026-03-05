@@ -46,7 +46,9 @@
   ],
   "author": "Helios Contributors",
   "license": "Apache-2.0",
-  "dependencies": {},
+  "dependencies": {
+    "scatter": "file:../scatter"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^25.3.3",
