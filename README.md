@@ -1,6 +1,12 @@
 # Helios
 
-**Helios** is a distributed in-memory data platform built from scratch in TypeScript for Bun and ES2025. Inspired by [Hazelcast](https://hazelcast.com/) — production-grade, zero JVM dependency.
+**Helios** is a distributed in-memory data platform written in TypeScript for [Bun](https://bun.sh). It brings Hazelcast-style distributed data structures, clustering, and stream processing to the JavaScript ecosystem — no JVM required.
+
+- **3,461 tests** passing across 287 files
+- **Zero external runtime dependencies** for the core
+- **Production serialization** — full binary wire format compatible with Hazelcast clients
+- **Multi-node TCP clustering** — partition replication, anti-entropy repair, vector clock conflict resolution
+- **Embedded NATS** — stream processing without a separate NATS server
 
 ---
 
@@ -8,168 +14,123 @@
 
 | Package | Description | Status |
 |---|---|---|
-| **`@helios/core`** | Distributed data structures, clustering, serialization, near-cache | Shipped |
-| **`@helios/nestjs`** | First-class NestJS 11 integration with modern DI patterns | Shipped |
-| **`@helios/blitz`** | NATS JetStream-backed stream & batch processing engine | Planned |
-| **`@helios/s3`** | S3-backed MapStore for IMap persistence | Planned |
-| **`@helios/mongodb`** | MongoDB-backed MapStore for IMap persistence | Planned |
-| **`@helios/turso`** | Turso/SQLite-backed MapStore for IMap persistence | Planned |
-
----
-
-## `@helios/core`
-
-| Feature | Description |
-|---|---|
-| **IMap** | Distributed key-value map — CRUD, putIfAbsent, getAll/putAll, entry processors, partition-wide ops, predicate queries, aggregations |
-| **Near-Cache** | Client-side read cache — TTL, LRU/LFU eviction, size limits, single + batch invalidation, preloader, anti-entropy repair, TCP cross-node invalidation |
-| **Predicate Queries** | Filter map entries — equal, notEqual, greaterThan, lessThan, between, like, ilike, regex, in, and, or, not |
-| **Aggregations** | count, sum, avg, min, max, distinct — all types with BigDecimal/BigInteger/Double/Integer/Long variants |
-| **IQueue / ISet / IList** | Distributed collections with full Collection-equivalent API |
-| **ITopic** | Pub/sub messaging with message listeners |
-| **MultiMap** | One key, many values |
-| **ReplicatedMap** | Fully replicated map with vector clock conflict resolution |
-| **Ringbuffer** | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies |
-| **Cache (JCache)** | CacheRecordStore, eviction checker, deferred values |
-| **Transactions** | ACID across data structures — ONE_PHASE + TWO_PHASE commit |
-| **Security** | Password/token credentials, permission collection with wildcard matching |
-| **Binary Serialization** | Zero-copy wire format — HeapData, DataSerializable, Portable, GenericRecord |
-| **Client Protocol** | Binary client codec layer — ClientMessage encode/decode, frame splitting |
-| **TCP Clustering** | Peer-to-peer TCP transport, data replication, cluster join |
-| **HyperLogLog** | Cardinality estimation — dense + sparse representation, merge support |
-| **Config Model** | Typed configuration — MapConfig, NearCacheConfig, NetworkConfig, JoinConfig, EvictionConfig |
-| **Standalone Server** | Run headless from CLI — `bun run helios-server.ts --port 5701` |
-
-## `@helios/nestjs`
-
-| Feature | Description |
-|---|---|
-| **HeliosModule** | `forRoot()` / `forRootAsync()` via `ConfigurableModuleBuilder` — supports `useFactory`, `useClass`, `useExisting` |
-| **`@InjectHelios()`** | Convenience decorator for injecting `HeliosInstance` |
-| **`@InjectMap()` / `@InjectQueue()` / `@InjectTopic()`** | Typed injection of individual data structures by name |
-| **`@Cacheable` / `@CacheEvict` / `@CachePut`** | Method-level cache decorators (Spring Cache equivalent) |
-| **`@Transactional`** | DI-based transaction decorator — resolves via `AsyncLocalStorage`, no static singleton |
-| **`registerAsync`** | Async factory support for `HeliosCacheModule` and `HeliosTransactionModule` |
-| **HeliosHealthIndicator** | Health check integration for `@nestjs/terminus` |
-| **Event Bridge** | Bridge Helios map/topic/lifecycle events to `@nestjs/event-emitter` |
-| **Lifecycle Safety** | `OnModuleDestroy` → `instance.shutdown()` — no leaked connections |
-| **Symbol Tokens** | Collision-safe `Symbol()` injection tokens |
-
-## `@helios/blitz` (Planned)
-
-NATS JetStream-backed stream and batch processing engine — replaces Hazelcast Jet with a TypeScript-idiomatic pipeline API.
-
-| Feature | Description |
-|---|---|
-| **Pipeline API** | Fluent DAG builder — source, map, filter, flatMap, merge, branch, sink |
-| **Windowing** | Tumbling, sliding, and session windows with NATS KV-backed state |
-| **Aggregations** | count, sum, min, max, avg, distinct — windowed and grouped |
-| **Stream Joins** | Hash join (stream-table via IMap) + windowed stream-stream join |
-| **Fault Tolerance** | At-least-once delivery, configurable retry, dead-letter routing, checkpoint/restart |
-| **Batch Mode** | Bounded pipelines with `BatchResult` — file, IMap snapshot, JetStream replay |
-| **Sources** | NATS subject, JetStream stream, Helios IMap/ITopic, file, HTTP webhook |
-| **Sinks** | NATS subject/stream, Helios IMap/ITopic, file |
-| **NestJS Module** | `HeliosBlitzModule.forRoot()` / `forRootAsync()` + `@InjectBlitz()` |
-
-## Planned Extensions
-
-| Package | Description |
-|---|---|
-| **Built-in REST API** | K8s health probes, cluster info, IMap CRUD, IQueue ops — via `Bun.serve()`, zero dependencies |
-| **MapStore SPI** | Pluggable persistence layer for IMap — write-through, write-behind with batching and retry |
-| **`@helios/s3`** | S3-backed MapStore with per-map key prefix scoping |
-| **`@helios/mongodb`** | MongoDB-backed MapStore with per-map collection scoping |
-| **`@helios/turso`** | Turso/LibSQL-backed MapStore with per-map table scoping |
-
-## Deferred to v2
-
-| Feature | Reason |
-|---|---|
-| SQL Engine | Requires porting Apache Calcite (~500k lines) |
-| CP Subsystem (Raft) | Strong consistency via Raft consensus |
-| Scheduled Executor | Distributed scheduled task execution |
-
-## Not Porting
-
-OSGi, WAN replication, CRDT, vector search, durable executor, flake ID generator,
-data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise).
+| [`@helios/core`](#helioscore) | Distributed data structures, clustering, serialization, near-cache | **Shipped** |
+| [`@helios/nestjs`](#heliosnestjs) | NestJS 11 integration — DI, decorators, health checks | **Shipped** |
+| [`@helios/blitz`](#heliosblitz) | NATS JetStream-backed stream & batch processing engine | **Shipped** |
+| [`@helios/s3`](#helios-mapstore-packages) | S3-backed MapStore for IMap persistence | **Shipped** |
+| [`@helios/mongodb`](#helios-mapstore-packages) | MongoDB-backed MapStore for IMap persistence | **Shipped** |
+| [`@helios/turso`](#helios-mapstore-packages) | Turso/SQLite-backed MapStore for IMap persistence | **Shipped** |
 
 ---
 
 ## Quick Start
 
+```bash
+bun add @helios/core
+```
+
 ```typescript
 import { Helios } from '@helios/core';
 
 const hz = Helios.newInstance();
-const map = hz.getMap<string, number>('my-map');
-map.put('key', 42);
-console.log(map.get('key')); // 42
+const map = hz.getMap<string, number>('scores');
+
+map.put('alice', 42);
+map.put('bob', 99);
+
+console.log(map.get('alice'));           // 42
+console.log(map.values(Predicates.greaterThan('', 50))); // [99]
+
 hz.shutdown();
 ```
 
 ---
 
-## Multi-Node TCP Cluster
+## Multi-Node Cluster
+
+Spin up a TCP cluster in a few lines. Nodes auto-discover each other and replicate data across partitions.
 
 ```typescript
 import { Helios, HeliosConfig, NetworkConfig, TcpIpConfig } from '@helios/core';
 
 const cfg = new HeliosConfig();
 cfg.setInstanceName('node-1');
+
 const net = new NetworkConfig();
 net.setPort(5701);
+
 const tcp = new TcpIpConfig();
 tcp.setEnabled(true);
-tcp.addMember('127.0.0.1:5702');
+tcp.addMember('127.0.0.1:5702'); // peer address
 net.setTcpIpConfig(tcp);
 cfg.setNetworkConfig(net);
 
 const hz = Helios.newInstance(cfg);
 ```
 
+Run a second node on port 5702 pointing back at 5701 — they'll form a cluster, split partitions between them, and replicate backups automatically.
+
 ---
 
-## Near-Cache
+## Standalone Server
 
-```typescript
-import { Helios, HeliosConfig, MapConfig, NearCacheConfig } from '@helios/core';
+Run Helios headless from the CLI, with a REST API included:
 
-const cfg = new HeliosConfig();
-const mapCfg = new MapConfig();
-const ncCfg = new NearCacheConfig();
-ncCfg.setTimeToLiveSeconds(300);
-ncCfg.setMaxIdleSeconds(60);
-ncCfg.setMaxSize(10_000);
-mapCfg.setNearCacheConfig(ncCfg);
-cfg.addMapConfig('hot-data', mapCfg);
+```bash
+bun run helios-server.ts --port 5701
+```
 
-const hz = Helios.newInstance(cfg);
-const map = hz.getMap<string, unknown>('hot-data');
+Or with the demo app (two nodes + REST):
 
-map.put('k', 'v');     // stored in map + replicated
-map.get('k');           // near-cache MISS (fetched from store, cached locally)
-map.get('k');           // near-cache HIT (served from local cache)
+```bash
+# Terminal 1
+bun run examples/native-app/src/app.ts --name node1 --tcp-port 5701 --rest-port 8081
+
+# Terminal 2
+bun run examples/native-app/src/app.ts --name node2 --tcp-port 5702 --rest-port 8082 --peer localhost:5701
+
+# Write on node1, read from node2
+curl -X POST http://localhost:8081/hazelcast/rest/maps/demo/user1 \
+     -H 'Content-Type: application/json' -d '{"name":"Alice"}'
+curl http://localhost:8082/hazelcast/rest/maps/demo/user1
+
+# K8s health probes
+curl http://localhost:8081/hazelcast/health/ready
+curl http://localhost:8081/hazelcast/rest/cluster
 ```
 
 ---
 
-## Predicate Queries
+## `@helios/core`
+
+### Data Structures
+
+| Structure | Description |
+|---|---|
+| **IMap** | Distributed key-value map — CRUD, putIfAbsent, getAll/putAll, entry processors, predicate queries, aggregations |
+| **IQueue** | Distributed FIFO queue with blocking offer/poll |
+| **ISet** | Distributed set — add, remove, contains, iteration |
+| **IList** | Distributed list with index-based access |
+| **ITopic** | Pub/sub messaging with async message listeners |
+| **MultiMap** | One key, many values — add/get/remove per value |
+| **ReplicatedMap** | Fully replicated map on every node — vector clock conflict resolution |
+| **Ringbuffer** | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies |
+| **Cache (JCache)** | CacheRecordStore, eviction policies, deferred values |
+
+### Querying & Aggregations
 
 ```typescript
 import { Predicates } from '@helios/core';
 
-const map = hz.getMap<string, { name: string; age: number; dept: string }>('employees');
+const map = hz.getMap<string, Employee>('employees');
 
-// Simple predicates
+// Filter with predicates
 const engineers = map.values(Predicates.equal('dept', 'Engineering'));
-const seniors = map.values(Predicates.greaterThan('age', 30));
-
-// Compound predicates
-const seniorEngineers = map.values(
+const seniors    = map.values(Predicates.greaterThan('age', 30));
+const top        = map.values(
   Predicates.and(
     Predicates.equal('dept', 'Engineering'),
-    Predicates.greaterEqual('age', 30)
+    Predicates.greaterEqual('age', 30),
   )
 );
 
@@ -177,19 +138,123 @@ const seniorEngineers = map.values(
 const aNames = map.values(Predicates.like('name', 'A%'));
 ```
 
+Supported predicates: `equal`, `notEqual`, `greaterThan`, `greaterEqual`, `lessThan`, `lessEqual`, `between`, `like`, `ilike`, `regex`, `in`, `and`, `or`, `not`.
+
+Aggregations: `count`, `sum`, `avg`, `min`, `max`, `distinct` — all with BigDecimal / BigInteger / Double / Integer / Long variants.
+
+### Near-Cache
+
+Cache hot data client-side to eliminate round trips. Supports TTL, max-idle, LRU/LFU eviction, size limits, TCP cross-node invalidation, and anti-entropy repair.
+
+```typescript
+const ncCfg = new NearCacheConfig();
+ncCfg.setTimeToLiveSeconds(300);
+ncCfg.setMaxIdleSeconds(60);
+ncCfg.setMaxSize(10_000);
+
+const mapCfg = new MapConfig();
+mapCfg.setNearCacheConfig(ncCfg);
+
+const cfg = new HeliosConfig();
+cfg.addMapConfig('hot-data', mapCfg);
+
+const hz = Helios.newInstance(cfg);
+const map = hz.getMap<string, unknown>('hot-data');
+
+map.put('k', 'v');  // written to map + propagated
+map.get('k');       // near-cache MISS — fetched and cached locally
+map.get('k');       // near-cache HIT — served instantly from memory
+```
+
+### Transactions
+
+ACID transactions across data structures — ONE_PHASE for single-partition, TWO_PHASE for cross-partition.
+
+```typescript
+const ctx = hz.newTransactionContext();
+ctx.beginTransaction();
+try {
+  const map = ctx.getMap<string, number>('accounts');
+  map.put('alice', map.get('alice') - 100);
+  map.put('bob',   map.get('bob')   + 100);
+  ctx.commitTransaction();
+} catch (e) {
+  ctx.rollbackTransaction();
+}
+```
+
+### Serialization
+
+Full binary wire format — HeapData, built-in type serializers (all Java primitives + arrays + UUID + JSON), DataSerializable, Portable, GenericRecord. Custom serializers supported via `SerializerConfig`.
+
+```typescript
+const cfg = new HeliosConfig();
+cfg.getSerializationConfig().addCustomSerializer(MySerializer);
+```
+
+> **Note:** Plain Java `DataSerializable` objects (without `IdentifiedDataSerializable`) are not wire-compatible — Helios v1 uses `JavaScriptJsonSerializer` for complex objects by default.
+
+### Clustering
+
+| Feature | Description |
+|---|---|
+| **TCP Peer-to-Peer** | Nodes discover and connect via configured member addresses |
+| **Partition Replication** | Data split across N partitions; backups replicated to peer nodes |
+| **Anti-Entropy Repair** | Background reconciliation detects and heals partition divergence |
+| **Vector Clock Resolution** | ReplicatedMap conflict resolution on concurrent writes |
+| **Cluster Events** | Member join/leave lifecycle events |
+
+### REST API
+
+Built-in HTTP REST server via `Bun.serve()` — zero extra dependencies.
+
+| Endpoint group | Examples |
+|---|---|
+| `HEALTH_CHECK` | `GET /hazelcast/health/ready`, `/hazelcast/health/live` |
+| `CLUSTER_READ` | `GET /hazelcast/rest/cluster` |
+| `DATA` | `GET/POST/DELETE /hazelcast/rest/maps/{name}/{key}` |
+
+```typescript
+import { HeliosRestServer, RestEndpointGroup } from '@helios/core';
+
+const server = new HeliosRestServer(hz, {
+  port: 8080,
+  groups: [RestEndpointGroup.HEALTH_CHECK, RestEndpointGroup.DATA],
+});
+server.start();
+```
+
+### Other
+
+| Feature | Description |
+|---|---|
+| **HyperLogLog** | Cardinality estimation — dense + sparse representation, merge support |
+| **Security** | Password/token credentials, permission collection with wildcard matching |
+| **Config Model** | Typed config — MapConfig, NearCacheConfig, NetworkConfig, JoinConfig, EvictionConfig |
+
 ---
 
-## NestJS Integration
+## `@helios/nestjs`
+
+First-class NestJS 11 integration.
+
+```bash
+bun add @helios/nestjs
+```
 
 ```typescript
 import { Module, Injectable } from '@nestjs/common';
-import { HeliosModule, HeliosCacheModule, InjectHelios, InjectMap, Cacheable } from '@helios/nestjs';
+import {
+  HeliosModule, HeliosCacheModule,
+  InjectHelios, InjectMap,
+  Cacheable, CacheEvict, Transactional,
+} from '@helios/nestjs';
 
 @Module({
   imports: [
     HeliosModule.forRootAsync({
       useFactory: (config: ConfigService) => ({
-        config: new HeliosConfig(config.get('HELIOS_NAME')),
+        instanceConfig: new HeliosConfig(config.get('NODE_NAME')),
       }),
       inject: [ConfigService],
     }),
@@ -211,33 +276,74 @@ class UserService {
   async getUser(id: string): Promise<User> {
     return this.db.findUser(id); // only called on cache miss
   }
+
+  @CacheEvict({ mapName: 'users', key: (id: string) => `user:${id}` })
+  async updateUser(id: string, data: Partial<User>): Promise<void> {
+    await this.db.updateUser(id, data);
+  }
+
+  @Transactional()
+  async transfer(from: string, to: string, amount: number): Promise<void> {
+    // runs inside a Helios transaction — auto-commit or rollback
+  }
 }
 ```
 
----
-
-## Demo App
-
-The `app/` directory contains a runnable demo with two Helios nodes communicating over TCP:
-
-```bash
-# Terminal 1
-bun run app/src/app.ts --name node1 --tcp-port 5701 --http-port 3001
-
-# Terminal 2
-bun run app/src/app.ts --name node2 --tcp-port 5702 --http-port 3002 --peer localhost:5701
-
-# Run the demo script
-bash app/demo.sh
-```
+| Feature | Description |
+|---|---|
+| **HeliosModule** | `forRoot()` / `forRootAsync()` via `ConfigurableModuleBuilder` — supports `useFactory`, `useClass`, `useExisting` |
+| **`@InjectHelios()`** | Inject the `HeliosInstance` directly |
+| **`@InjectMap()` / `@InjectQueue()` / `@InjectTopic()`** | Typed injection of individual data structures by name |
+| **`@Cacheable` / `@CacheEvict` / `@CachePut`** | Method-level cache decorators (Spring Cache equivalent) |
+| **`@Transactional`** | DI-based transaction decorator — resolves context via `AsyncLocalStorage`, no static singleton |
+| **HeliosHealthIndicator** | Health check integration for `@nestjs/terminus` |
+| **Event Bridge** | Bridge Helios map/topic/lifecycle events to `@nestjs/event-emitter` |
+| **Lifecycle Safety** | `OnModuleDestroy` → `instance.shutdown()` — no leaked connections |
 
 ---
 
-## Standalone Server
+## `@helios/blitz`
+
+NATS JetStream-backed stream and batch processing — an embedded, TypeScript-native replacement for Hazelcast Jet. Includes an embedded NATS server, so no separate broker is needed.
 
 ```bash
-bun run helios-server.ts --port 5701
+bun add @helios/blitz
 ```
+
+```typescript
+import { BlitzService } from '@helios/blitz';
+
+// Start with embedded single-node NATS (no external broker needed)
+const blitz = await BlitzService.start();
+
+// Or connect to an existing cluster
+const blitz = await BlitzService.start({
+  servers: ['nats://localhost:4222'],
+});
+
+// Build a pipeline
+const pipeline = blitz.newPipeline()
+  .source(Sources.natsSubject('orders'))
+  .filter(order => order.total > 100)
+  .map(order => ({ ...order, vip: true }))
+  .sink(Sinks.heliosMap(hz, 'vip-orders'));
+
+await pipeline.submit();
+await blitz.shutdown();
+```
+
+| Feature | Description |
+|---|---|
+| **Embedded NATS** | Auto-spins up a `nats-server` process — zero broker setup for dev/test |
+| **Pipeline API** | Fluent DAG builder — source, map, filter, flatMap, merge, branch, sink |
+| **Windowing** | Tumbling, sliding, and session windows with NATS KV-backed state |
+| **Aggregations** | count, sum, min, max, avg, distinct — windowed and grouped |
+| **Stream Joins** | Hash join (stream-table via IMap) + windowed stream-stream join |
+| **Fault Tolerance** | At-least-once delivery, configurable retry, dead-letter routing |
+| **Batch Mode** | Bounded pipelines with `BatchResult` — file, IMap snapshot, JetStream replay |
+| **Sources** | NATS subject, JetStream stream, Helios IMap/ITopic, file, HTTP webhook |
+| **Sinks** | NATS subject/stream, Helios IMap/ITopic, file |
+| **NestJS Module** | `HeliosBlitzModule.forRoot()` / `forRootAsync()` + `@InjectBlitz()` |
 
 ---
 
@@ -247,8 +353,15 @@ bun run helios-server.ts --port 5701
 git clone <repo-url>
 cd helios
 bun install
-bun test                # ~2,471 tests
-bun run tsc --noEmit    # typecheck
+bun test              # 3,461 tests across 287 files
+bun run tsc --noEmit  # type-check only
+```
+
+### Per-package tests
+
+```bash
+bun test packages/nestjs/   # 315 tests
+bun test packages/blitz/    # 393 tests
 ```
 
 ---
@@ -257,24 +370,81 @@ bun run tsc --noEmit    # typecheck
 
 ```
 helios/
-├── src/             # @helios/core library
-├── test/            # Core tests (~2,271 tests)
+├── src/                    # @helios/core source
+│   ├── internal/           # Serialization, NIO, partitioning, near-cache internals
+│   ├── cluster/            # Cluster join, member management
+│   ├── map/ queue/ topic/  # Distributed data structure implementations
+│   ├── rest/               # Built-in REST API server
+│   └── instance/           # HeliosInstance lifecycle
+├── test/                   # Core tests
 ├── packages/
-│   ├── nestjs/      # @helios/nestjs NestJS integration (~175 tests)
-│   └── blitz/       # @helios/blitz stream processing (planned)
-├── app/             # Demo app (HTTP + near-cache + predicates, 25 tests)
-├── scripts/         # Build and test tooling
-├── examples/        # Smoke test example
-└── plans/           # Implementation plans and roadmap
+│   ├── nestjs/             # @helios/nestjs — NestJS integration (315 tests)
+│   ├── blitz/              # @helios/blitz — stream processing (393 tests)
+│   ├── s3/                 # @helios/s3 — S3 MapStore (14 tests)
+│   ├── mongodb/            # @helios/mongodb — MongoDB MapStore (15 tests)
+│   └── turso/              # @helios/turso — Turso/SQLite MapStore (18 tests)
+├── examples/
+│   ├── native-app/         # Two-node demo with REST API
+│   └── nestjs-app/         # NestJS demo application
+├── scripts/                # Build tooling, Java test converter
+├── plans/                  # Implementation plans and architecture docs
+└── helios-server.ts        # Standalone server entry point
 ```
 
 ---
 
-## Runtime
+## Helios MapStore Packages
 
-- **Bun** 1.x
-- **TypeScript** 6.0 beta (ES2025 target)
-- **NestJS** 11.x (for `@helios/nestjs`)
+Plug persistent storage into any `IMap` via the MapStore SPI — write-through on every `put`, or write-behind with batching and retry. Three backends are available out of the box.
+
+```typescript
+import { S3MapStore } from '@helios/s3';
+
+const cfg = new HeliosConfig();
+const mapCfg = new MapConfig();
+mapCfg.setMapStoreConfig(
+  new MapStoreConfig()
+    .setEnabled(true)
+    .setImplementation(new S3MapStore({ bucket: 'my-bucket', region: 'us-east-1' }))
+    .setWriteDelaySeconds(5) // 0 = write-through, >0 = write-behind
+);
+cfg.addMapConfig('persistent-map', mapCfg);
+```
+
+| Package | Backend | Install |
+|---|---|---|
+| **`@helios/s3`** | AWS S3 / S3-compatible | `bun add @helios/s3` |
+| **`@helios/mongodb`** | MongoDB | `bun add @helios/mongodb` |
+| **`@helios/turso`** | Turso / LibSQL / SQLite | `bun add @helios/turso` |
+
+All three implement the same `MapStore` interface — swap backends without changing application code.
+
+---
+
+## Runtime Requirements
+
+| Requirement | Version |
+|---|---|
+| **Bun** | 1.x |
+| **TypeScript** | 6.0 beta (ES2025 target) |
+| **NestJS** | 11.x (for `@helios/nestjs` only) |
+| **nats-server** | Auto-downloaded by `@helios/blitz` via npm |
+
+---
+
+## Roadmap
+
+### Deferred to v2
+
+| Item | Reason |
+|---|---|
+| **SQL Engine** | Requires porting Apache Calcite (~500k lines of Java) |
+| **CP Subsystem (Raft)** | Strong consistency via Raft consensus — significant protocol work |
+| **Scheduled Executor** | Distributed cron-style task execution |
+
+### Not Porting
+
+OSGi, WAN replication, CRDT, vector search, durable executor, flake ID generator, data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise).
 
 ---
 

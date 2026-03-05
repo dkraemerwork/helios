@@ -4757,7 +4757,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 14.5** — Remove `skipIf` guards from all 4 blitz integration test files (`BlitzServiceTest`, `PipelineTest`, `SourceSinkTest`, `WindowingTest`) — 0 new tests (test hygiene)
 - [x] **Phase 14 checkpoint**: `bun test packages/blitz/` — **0 skip, 0 fail** ✅
 
-### Phase 15 — Production SerializationServiceImpl ← **CURRENT**
+### Phase 15 — Production SerializationServiceImpl ✅
 
 > Cross-ref: `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (reviewed in `plans/SERIALIZATION_SERVICE_IMPL_PLAN_REVIEW.md`)
 > Goal: Replace `TestSerializationService` (JSON-only placeholder that throws on `writeObject`/`readObject`) with a full production `SerializationServiceImpl`. All 14 review issues (B1–B4, K1–K8, W2–W5) plus Round 2 issues (N2, N3, N5, N10, N11, N17, N18, N19) are incorporated into the implementation spec. The two broken production paths (`ByteArrayObjectDataOutput.writeObject` and `ByteArrayObjectDataInput.readObject`) will become functional.
@@ -4767,7 +4767,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 15.3** — `DataSerializableSerializer` (typeId -2): IDS write/read with EE version byte skipping, factory registry, `registerFactory()`, error on non-IDS header — 7 tests
 - [x] **Block 15.4** — `SerializationServiceImpl`: dispatch chain (`serializerFor` + `serializerForTypeId`), `toData`/`toObject`/`writeObject`/`readObject`, `BufferPool` wiring, factory hook registration — 36 tests
 - [x] **Block 15.5** — Wire `SerializationServiceImpl` into `HeliosInstanceImpl` (single shared instance for `NodeEngineImpl` + `DefaultNearCacheManager`); full regression — all tests green (N12 FIX: do NOT hardcode a test count here — Phase 14 adds ~60 tests and Phase 15 itself adds ~53; the gate command is authoritative)
-- [ ] **Phase 15 checkpoint**: `bun test` at root — 0 fail, 0 error (all tests green including Phase 14 + 15 additions), `writeObject`/`readObject` no longer throw in production paths
+- [x] **Phase 15 checkpoint**: `bun test` at root — 0 fail, 0 error (all tests green including Phase 14 + 15 additions), `writeObject`/`readObject` no longer throw in production paths ✅
 
 ### Phase 16 — Multi-Node Resilience (Cluster Runtime + Partition Replication + Anti-Entropy)
 
@@ -4807,7 +4807,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.F3** — `MapReplicationOperation` (composes all three state holders) — 4 tests
 - [x] **Block 16.F4** — Write-behind queue serialization support (`asList`, `reset`, `getFlushSequences`, `setFlushSequences`) — 3 tests (new; core methods already implemented in F2)
 - [x] **Block 16.INT** — Integration tests (3-node write-behind resilience, 2-node replication, anti-entropy, chaos test harness) — 15 tests
-- [ ] **Phase 16 checkpoint**: All multi-node resilience tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. Minimum 300 tests across Phase 16.
+- [x] **Phase 16 checkpoint**: All multi-node resilience tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. 3461 tests across all phases ✅
 
 ---
 
@@ -4866,4 +4866,4 @@ bun run build
 
 ---
 
-*Plan v14.0 — updated 2026-03-04 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–13 complete — 2845 tests green (2845 pass, 0 fail, 0 error) | Phase 14 CURRENT: Blocks 14.1-14.5 (Blitz Embedded NATS Server) — ~60 new tests planned | Phase 15 QUEUED: Blocks 15.1-15.5 (Production SerializationServiceImpl) — ~53 new tests planned | Phase 16 QUEUED: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy) — ~300+ tests planned, 26 audit findings remediated | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16)*
+*Plan v17.0 — updated 2026-03-05 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–16 complete — 3461 tests green (3461 pass, 0 fail, 0 error) | Phase 14 DONE: Blocks 14.1-14.5 (Blitz Embedded NATS Server) | Phase 15 DONE: Blocks 15.1-15.5 (Production SerializationServiceImpl — Round 3 post-review fixes applied: R3-C1 cross-plan Buffer.isBuffer, R3-C2 UUID BigInt.asUintN, R3-C3 readObject useBigEndianForTypeId, R3-C4 JSON.stringify undefined guard, R3-B1 ss.destroy()) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16)*
