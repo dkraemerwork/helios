@@ -4,12 +4,14 @@
  * Holds the instance name and any per-map configurations.
  * Use HeliosConfig as the entry point when constructing a HeliosInstanceImpl.
  */
+import { ExecutorConfig } from '@helios/config/ExecutorConfig';
 import { MapConfig } from '@helios/config/MapConfig';
 import { NetworkConfig } from '@helios/config/NetworkConfig';
 
 export class HeliosConfig {
     private readonly _name: string;
     private readonly _mapConfigs = new Map<string, MapConfig>();
+    private readonly _executorConfigs = new Map<string, ExecutorConfig>();
     private readonly _network: NetworkConfig = new NetworkConfig();
 
     constructor(name?: string) {
@@ -52,5 +54,22 @@ export class HeliosConfig {
      */
     getMapConfigs(): ReadonlyMap<string, MapConfig> {
         return this._mapConfigs;
+    }
+
+    addExecutorConfig(executorConfig: ExecutorConfig): this {
+        this._executorConfigs.set(executorConfig.getName(), executorConfig);
+        return this;
+    }
+
+    /**
+     * Returns the ExecutorConfig for the given name. If none is registered,
+     * returns a new default ExecutorConfig with that name (fallback behavior).
+     */
+    getExecutorConfig(name: string): ExecutorConfig {
+        return this._executorConfigs.get(name) ?? new ExecutorConfig(name);
+    }
+
+    getExecutorConfigs(): ReadonlyMap<string, ExecutorConfig> {
+        return this._executorConfigs;
     }
 }
