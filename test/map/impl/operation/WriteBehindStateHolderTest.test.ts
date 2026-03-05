@@ -8,6 +8,7 @@ import { WriteBehindStateHolder } from '@helios/map/impl/operation/WriteBehindSt
 import { WriteBehindStore } from '@helios/map/impl/mapstore/writebehind/WriteBehindStore';
 import { ArrayWriteBehindQueue } from '@helios/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
 import { CoalescedWriteBehindQueue } from '@helios/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
+import { BoundedWriteBehindQueue } from '@helios/map/impl/mapstore/writebehind/BoundedWriteBehindQueue';
 import { WriteBehindProcessor } from '@helios/map/impl/mapstore/writebehind/WriteBehindProcessor';
 import { MapStoreWrapper } from '@helios/map/impl/mapstore/MapStoreWrapper';
 import { addedEntry } from '@helios/map/impl/mapstore/writebehind/DelayedEntry';
@@ -200,6 +201,80 @@ describe('WriteBehindQueue.asList', () => {
 
         expect(snapshot.length).toBe(1);
         expect(queue.size()).toBe(2);
+    });
+});
+
+describe('WriteBehindStateHolder data loss window (H-4)', () => {
+    const stores: WriteBehindStore<string, string>[] = [];
+
+    afterEach(() => {
+        for (const s of stores) s.destroy();
+        stores.length = 0;
+    });
+
+    function track(s: WriteBehindStore<string, string>): WriteBehindStore<string, string> {
+        stores.push(s);
+        return s;
+    }
+
+    test('entries written before asList() snapshot are present on destination', async () => {
+        const { store: src } = createStore();
+        track(src);
+        await src.add('before1', 'val1', Date.now());
+        await src.add('before2', 'val2', Date.now());
+
+        // Capture snapshot — entries added before are captured
+        const holder = new WriteBehindStateHolder();
+        holder.prepare(new Map([['myMap', src]]));
+
+        const { store: dst } = createStore();
+        track(dst);
+        holder.applyState(new Map([['myMap', dst]]));
+
+        const entries = dst.asList();
+        expect(entries.length).toBe(2);
+        expect(entries.some(e => e.key === 'before1')).toBe(true);
+        expect(entries.some(e => e.key === 'before2')).toBe(true);
+    });
+
+    test('entries written after asList() snapshot are absent on destination', async () => {
+        const { store: src } = createStore();
+        track(src);
+        await src.add('before', 'val1', Date.now());
+
+        // Capture snapshot
+        const holder = new WriteBehindStateHolder();
+        holder.prepare(new Map([['myMap', src]]));
+
+        // Write AFTER snapshot — this simulates the data loss window
+        await src.add('after', 'val2', Date.now());
+
+        // Source now has 2 entries, but snapshot only has 1
+        expect(src.asList().length).toBe(2);
+
+        const { store: dst } = createStore();
+        track(dst);
+        holder.applyState(new Map([['myMap', dst]]));
+
+        const entries = dst.asList();
+        expect(entries.length).toBe(1);
+        expect(entries.some(e => e.key === 'before')).toBe(true);
+        expect(entries.some(e => e.key === 'after')).toBe(false);
+    });
+});
+
+describe('BoundedWriteBehindQueue.asList', () => {
+    test('delegates to underlying queue and returns snapshot', () => {
+        const inner = new ArrayWriteBehindQueue<string, string>();
+        const bounded = new BoundedWriteBehindQueue<string, string>(inner, 100);
+        bounded.offer(addedEntry('k1', 'v1', 1000));
+        bounded.offer(addedEntry('k2', 'v2', 2000));
+
+        const snapshot = bounded.asList();
+        bounded.offer(addedEntry('k3', 'v3', 3000));
+
+        expect(snapshot.length).toBe(2);
+        expect(bounded.size()).toBe(3);
     });
 });
 
