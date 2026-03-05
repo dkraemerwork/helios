@@ -22,7 +22,7 @@ export const enum TaskState {
     TASK_LOST = 'TASK_LOST',
 }
 
-interface TaskRequest {
+export interface TaskRequest {
     readonly taskUuid: string;
     readonly taskType: string;
     readonly registrationFingerprint: string;

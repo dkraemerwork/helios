@@ -1,14 +1,16 @@
 /**
  * Distributed executor operation for partition-targeted task execution.
  *
- * Validates task registration + fingerprint before execution.
- * Returns a typed {@link ExecutorOperationResult} envelope.
+ * Validates task registration + fingerprint before delegating to
+ * {@link ExecutorContainerService} for bounded execution.
+ * Falls back to direct factory execution when no container is set (backward compat).
  *
  * @see MemberCallableOperation for member-targeted variant with no-retry semantics
  */
 import { Operation } from '@helios/spi/impl/operationservice/Operation.js';
 import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
 import type { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
+import type { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService.js';
 import { HeapData } from '@helios/internal/serialization/impl/HeapData.js';
 import { Bits } from '@helios/internal/nio/Bits.js';
 import {
@@ -30,6 +32,7 @@ export interface TaskDescriptor {
 export class ExecuteCallableOperation extends Operation {
     readonly descriptor: TaskDescriptor;
     private _registry: TaskTypeRegistry | null = null;
+    private _containerService: ExecutorContainerService | null = null;
     private _originMemberUuid: string = '';
 
     constructor(descriptor: TaskDescriptor) {
@@ -40,6 +43,10 @@ export class ExecuteCallableOperation extends Operation {
 
     setRegistry(registry: TaskTypeRegistry): void {
         this._registry = registry;
+    }
+
+    setContainerService(container: ExecutorContainerService): void {
+        this._containerService = container;
     }
 
     setOriginMemberUuid(uuid: string): void {
@@ -79,7 +86,22 @@ export class ExecuteCallableOperation extends Operation {
             throw e;
         }
 
-        // Execute the task
+        // Delegate to container service if available (hot path)
+        if (this._containerService) {
+            const result = await this._containerService.executeTask({
+                taskUuid: descriptor.taskUuid,
+                taskType: descriptor.taskType,
+                registrationFingerprint: descriptor.registrationFingerprint,
+                inputData: descriptor.inputData,
+                executorName: descriptor.executorName,
+                submitterMemberUuid: descriptor.submitterMemberUuid,
+                timeoutMillis: descriptor.timeoutMillis,
+            });
+            this.sendResponse(result);
+            return;
+        }
+
+        // Fallback: direct factory execution (backward compat for tests without container)
         const desc = registry.get(descriptor.taskType)!;
         try {
             const input = JSON.parse(descriptor.inputData.toString('utf8'));
@@ -111,11 +133,9 @@ export class ExecuteCallableOperation extends Operation {
     }
 
     /** Wrap raw payload bytes into a HeapData (8-byte header + payload). */
-    private static _wrapAsHeapData(payload: Buffer): HeapData {
+    static _wrapAsHeapData(payload: Buffer): HeapData {
         const buf = Buffer.alloc(HeapData.HEAP_DATA_OVERHEAD + payload.length);
-        // partition hash = 0
         Bits.writeIntB(buf, HeapData.PARTITION_HASH_OFFSET, 0);
-        // type = JAVASCRIPT_JSON (-130)
         Bits.writeIntB(buf, HeapData.TYPE_OFFSET, -130);
         payload.copy(buf, HeapData.DATA_OFFSET);
         return new HeapData(buf);
