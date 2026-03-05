@@ -4798,7 +4798,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.D1** — `BackupAwareOperation` interface — 5 tests
 - [x] **Block 16.D2** — `OperationBackupHandler` (version increment, backup wrapper creation, sync/async routing) — 9 tests
 - [x] **Block 16.D3** — `Backup` execution (ownership validation, version staleness check, BackupAck) — 10 tests
-- [ ] **Block 16.D4** — Map operations as `BackupAwareOperation` (Put/Remove/Set/Delete backup ops) — ~23 tests
+- [x] **Block 16.D4** — Map operations as `BackupAwareOperation` (Put/Remove/Set/Delete backup ops) — 25 tests
 - [ ] **Block 16.E1** — `PartitionReplicaManager` (version tracking per partition, staleness detection, sync triggering) — ~8 tests
 - [ ] **Block 16.E2** — Anti-entropy task + `PartitionBackupReplicaAntiEntropyOp` — ~6 tests
 - [ ] **Block 16.E3** — Replica sync (full state transfer with per-namespace chunking, OOM prevention) — ~18 tests
