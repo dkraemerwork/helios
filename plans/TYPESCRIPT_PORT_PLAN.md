@@ -4784,7 +4784,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.A3** — `ClusterHeartbeatManager` (deadline failure detection, clock drift, cooperative yield, split-brain detection with quorum gate) — 22 tests
 - [x] **Block 16.A4** — `ClusterJoinManager` enhanced (full join protocol with pre-join op, ConfigCheck, master self-election, master crash recovery) — 18 tests
 - [x] **Block 16.A5** — TCP protocol upgrade (new message types: JoinRequest/FinalizeJoin/MembersUpdate/Heartbeat/FetchMembersView/Operation/Backup, SerializationStrategy interface) — 12 tests
-- [ ] **Block 16.B1** — `PartitionStateManager` (partition assignment, repartition, state stamp) — ~12 tests
+- [x] **Block 16.B1** — `PartitionStateManager` (partition assignment, repartition, state stamp) — 12 tests
 - [ ] **Block 16.B2** — `InternalPartitionServiceImpl` (partition table lifecycle, membership-triggered rebalancing) — ~15 tests
 - [ ] **Block 16.B3a** — `MigrationManager` local planning (triggerControlTask, ControlTask, RedoPartitioningTask, pause/resume — NO remote sends) — ~12 tests
 - [ ] **Block 16.B4** — `PartitionContainer` (partition→namespace→RecordStore hierarchy) — ~6 tests
