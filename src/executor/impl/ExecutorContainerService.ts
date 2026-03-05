@@ -8,6 +8,7 @@
 import type { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
 import type { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
 import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
+import type { LocalExecutorStats } from '@helios/executor/IExecutorService.js';
 import { HeapData } from '@helios/internal/serialization/impl/HeapData.js';
 import { Bits } from '@helios/internal/nio/Bits.js';
 
@@ -35,6 +36,7 @@ interface TaskHandle {
     state: TaskState;
     resolve: (result: ExecutorOperationResult) => void;
     timeoutTimer?: ReturnType<typeof setTimeout>;
+    enqueuedAt: number;
 }
 
 interface PoolEntry {
@@ -51,7 +53,11 @@ export class ExecutorContainerService {
     private readonly _pools = new Map<string, PoolEntry>();
     private readonly _handles = new Map<string, TaskHandle>();
     private _shutdown = false;
-    private _stats = { started: 0, completed: 0, cancelled: 0, rejected: 0, timedOut: 0, taskLost: 0, pending: 0 };
+    private _stats = {
+        started: 0, completed: 0, cancelled: 0, rejected: 0, timedOut: 0,
+        taskLost: 0, pending: 0, lateResultsDropped: 0,
+        totalStartLatencyMs: 0, totalExecutionTimeMs: 0,
+    };
 
     constructor(name: string, config: ExecutorConfig, registry: TaskTypeRegistry) {
         this._name = name;
@@ -96,7 +102,7 @@ export class ExecutorContainerService {
             }
             // Queue the task
             return new Promise<ExecutorOperationResult>((resolve) => {
-                const handle: TaskHandle = { state: TaskState.QUEUED, resolve };
+                const handle: TaskHandle = { state: TaskState.QUEUED, resolve, enqueuedAt: Date.now() };
                 this._handles.set(request.taskUuid, handle);
                 pool!.queuedTasks.push({ request, handle });
                 this._stats.pending++;
@@ -204,92 +210,26 @@ export class ExecutorContainerService {
         this._pools.clear();
     }
 
-    getStats(): { started: number; completed: number; cancelled: number; rejected: number; timedOut: number; taskLost: number; pending: number } {
-        return { ...this._stats };
+    getStats(): LocalExecutorStats {
+        let activeWorkers = 0;
+        for (const pool of this._pools.values()) {
+            activeWorkers += pool.activeCount;
+        }
+        return { ...this._stats, activeWorkers };
     }
 
     private async _executeNow(request: TaskRequest, pool: PoolEntry): Promise<ExecutorOperationResult> {
+        const enqueuedAt = Date.now();
         return new Promise<ExecutorOperationResult>((resolve) => {
-            const handle: TaskHandle = { state: TaskState.RUNNING, resolve };
+            const now = Date.now();
+            const handle: TaskHandle = { state: TaskState.RUNNING, resolve, enqueuedAt };
             this._handles.set(request.taskUuid, handle);
             pool.activeCount++;
-            pool.lastUsed = Date.now();
+            pool.lastUsed = now;
             this._stats.started++;
+            this._stats.totalStartLatencyMs += now - enqueuedAt;
 
-            // Set up timeout
-            if (request.timeoutMillis > 0) {
-                handle.timeoutTimer = setTimeout(() => {
-                    if (handle.state !== TaskState.RUNNING) return;
-                    handle.state = TaskState.TIMED_OUT;
-                    this._stats.timedOut++;
-                    pool.activeCount--;
-                    handle.resolve({
-                        taskUuid: request.taskUuid,
-                        status: 'timeout',
-                        originMemberUuid: '',
-                        resultData: null,
-                        errorName: 'ExecutorTaskTimeoutException',
-                        errorMessage: `Task "${request.taskUuid}" timed out after ${request.timeoutMillis}ms`,
-                    });
-                    this._handles.delete(request.taskUuid);
-                    this._drainQueue(pool);
-                }, request.timeoutMillis);
-            }
-
-            // Execute
-            const desc = this._registry.get(request.taskType)!;
-            const runTask = async (): Promise<void> => {
-                try {
-                    const input = JSON.parse(request.inputData.toString('utf8'));
-                    const result = await desc.factory(input);
-
-                    // Check if cancelled/timed out while running
-                    if (!this._handles.has(request.taskUuid)) return;
-
-                    if (handle.timeoutTimer) clearTimeout(handle.timeoutTimer);
-                    handle.state = TaskState.COMPLETED;
-                    this._stats.completed++;
-                    pool.activeCount--;
-                    pool.lastUsed = Date.now();
-
-                    const json = JSON.stringify(result) ?? 'null';
-                    const jsonBytes = Buffer.from(json);
-                    const resultData = ExecutorContainerService._wrapAsHeapData(jsonBytes);
-
-                    handle.resolve({
-                        taskUuid: request.taskUuid,
-                        status: 'success',
-                        originMemberUuid: request.submitterMemberUuid,
-                        resultData,
-                        errorName: null,
-                        errorMessage: null,
-                    });
-                    this._handles.delete(request.taskUuid);
-                    this._drainQueue(pool);
-                } catch (e) {
-                    if (!this._handles.has(request.taskUuid)) return;
-
-                    if (handle.timeoutTimer) clearTimeout(handle.timeoutTimer);
-                    handle.state = TaskState.FAILED;
-                    pool.activeCount--;
-                    pool.lastUsed = Date.now();
-
-                    const err = e instanceof Error ? e : new Error(String(e));
-                    handle.resolve({
-                        taskUuid: request.taskUuid,
-                        status: 'rejected',
-                        originMemberUuid: request.submitterMemberUuid,
-                        resultData: null,
-                        errorName: err.name,
-                        errorMessage: err.message,
-                    });
-                    this._handles.delete(request.taskUuid);
-                    this._drainQueue(pool);
-                }
-            };
-
-            // Fire and forget — the promise resolves through the handle
-            runTask();
+            this._setupTimeoutAndRun(request, pool, handle);
         });
     }
 
@@ -310,17 +250,26 @@ export class ExecutorContainerService {
     private _executeNowWithExistingHandle(request: TaskRequest, pool: PoolEntry, handle: TaskHandle): void {
         if (handle.state === TaskState.CANCELLED) return;
 
+        const now = Date.now();
         handle.state = TaskState.RUNNING;
         pool.activeCount++;
-        pool.lastUsed = Date.now();
+        pool.lastUsed = now;
         this._stats.started++;
+        this._stats.totalStartLatencyMs += now - handle.enqueuedAt;
         this._handles.set(request.taskUuid, handle);
+
+        this._setupTimeoutAndRun(request, pool, handle);
+    }
+
+    private _setupTimeoutAndRun(request: TaskRequest, pool: PoolEntry, handle: TaskHandle): void {
+        const execStart = Date.now();
 
         if (request.timeoutMillis > 0) {
             handle.timeoutTimer = setTimeout(() => {
                 if (handle.state !== TaskState.RUNNING) return;
                 handle.state = TaskState.TIMED_OUT;
                 this._stats.timedOut++;
+                this._stats.totalExecutionTimeMs += Date.now() - execStart;
                 pool.activeCount--;
                 handle.resolve({
                     taskUuid: request.taskUuid,
@@ -341,15 +290,21 @@ export class ExecutorContainerService {
                 const input = JSON.parse(request.inputData.toString('utf8'));
                 const result = await desc.factory(input);
 
-                if (!this._handles.has(request.taskUuid)) return;
+                // Check if cancelled/timed out while running — late result
+                if (!this._handles.has(request.taskUuid)) {
+                    this._stats.lateResultsDropped++;
+                    return;
+                }
 
                 if (handle.timeoutTimer) clearTimeout(handle.timeoutTimer);
                 handle.state = TaskState.COMPLETED;
                 this._stats.completed++;
+                this._stats.totalExecutionTimeMs += Date.now() - execStart;
                 pool.activeCount--;
                 pool.lastUsed = Date.now();
 
-                const jsonBytes = Buffer.from(JSON.stringify(result));
+                const json = JSON.stringify(result) ?? 'null';
+                const jsonBytes = Buffer.from(json);
                 const resultData = ExecutorContainerService._wrapAsHeapData(jsonBytes);
 
                 handle.resolve({
@@ -363,10 +318,14 @@ export class ExecutorContainerService {
                 this._handles.delete(request.taskUuid);
                 this._drainQueue(pool);
             } catch (e) {
-                if (!this._handles.has(request.taskUuid)) return;
+                if (!this._handles.has(request.taskUuid)) {
+                    this._stats.lateResultsDropped++;
+                    return;
+                }
 
                 if (handle.timeoutTimer) clearTimeout(handle.timeoutTimer);
                 handle.state = TaskState.FAILED;
+                this._stats.totalExecutionTimeMs += Date.now() - execStart;
                 pool.activeCount--;
                 pool.lastUsed = Date.now();
 

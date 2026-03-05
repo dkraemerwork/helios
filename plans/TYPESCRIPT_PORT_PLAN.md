@@ -4849,7 +4849,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 17.6** — `ExecutorServiceProxy` (routing via OperationService, future/result unwrapping, fan-out, local inline fast path) — 17 tests ✅
 - [x] **Block 17.7** — `CancellationOperation` + `ShutdownOperation` (task cancel routing, cluster-wide executor close, shutdown timeout behavior) — 8 tests ✅
 - [x] **Block 17.8** — `HeliosInstance` wiring (`getExecutorService(name)`, lifecycle integration, graceful shutdown hook, NodeEngine registration) — 10 tests ✅
-- [ ] **Block 17.9** — `ExecutorStats` + monitoring (pending/started/completed/cancelled/rejected/timedOut/taskLost, pool health snapshots) — ~8 tests
+- [x] **Block 17.9** — `ExecutorStats` + monitoring (pending/started/completed/cancelled/rejected/timedOut/taskLost/lateResultsDropped/totalStartLatencyMs/totalExecutionTimeMs/activeWorkers, pool health snapshots) — 10 tests ✅
 - [ ] **Block 17.10** — Multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — ~18 tests
 - [ ] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — ~12 tests
 - [ ] **Phase 17 checkpoint**: All distributed executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error. ~3600 tests across all phases

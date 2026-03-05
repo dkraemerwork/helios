@@ -13,7 +13,7 @@ import type { InvocationFuture } from '@helios/spi/impl/operationservice/Invocat
 import type { Member } from '@helios/cluster/Member.js';
 import type { TaskCallable, InlineTaskCallable } from './TaskCallable.js';
 
-/** Snapshot of local executor statistics. Created by Block 17.9. */
+/** Snapshot of local executor statistics. */
 export interface LocalExecutorStats {
     readonly pending: number;
     readonly started: number;
@@ -22,6 +22,10 @@ export interface LocalExecutorStats {
     readonly rejected: number;
     readonly timedOut: number;
     readonly taskLost: number;
+    readonly lateResultsDropped: number;
+    readonly totalStartLatencyMs: number;
+    readonly totalExecutionTimeMs: number;
+    readonly activeWorkers: number;
 }
 
 /** Registration options for a task type. */

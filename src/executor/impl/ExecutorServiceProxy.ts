@@ -36,7 +36,8 @@ export class ExecutorServiceProxy implements IExecutorService {
     private _shutdown = false;
     private _stats: LocalExecutorStats = {
         pending: 0, started: 0, completed: 0, cancelled: 0,
-        rejected: 0, timedOut: 0, taskLost: 0,
+        rejected: 0, timedOut: 0, taskLost: 0, lateResultsDropped: 0,
+        totalStartLatencyMs: 0, totalExecutionTimeMs: 0, activeWorkers: 0,
     };
 
     constructor(
