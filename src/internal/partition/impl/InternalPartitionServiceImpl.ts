@@ -10,6 +10,7 @@ import type { PartitionTableView } from '@helios/internal/partition/PartitionTab
 import type { Address } from '@helios/cluster/Address';
 import type { Member } from '@helios/cluster/Member';
 import type { Data } from '@helios/internal/serialization/Data';
+import type { MigrationAwareService } from '@helios/internal/partition/MigrationAwareService';
 
 /**
  * Represents the partition runtime state received from the master.
@@ -25,6 +26,7 @@ export interface PartitionRuntimeState {
 export class InternalPartitionServiceImpl {
     private readonly _stateManager: PartitionStateManager;
     private readonly _partitionCount: number;
+    private readonly _migrationAwareServices = new Map<string, MigrationAwareService>();
     private _initialized: boolean;
 
     constructor(partitionCount: number = 271) {
@@ -121,6 +123,14 @@ export class InternalPartitionServiceImpl {
 
     toPartitionTableView(): PartitionTableView {
         return this._stateManager.toPartitionTableView();
+    }
+
+    registerMigrationAwareService(serviceName: string, service: MigrationAwareService): void {
+        this._migrationAwareServices.set(serviceName, service);
+    }
+
+    getMigrationAwareServices(): ReadonlyMap<string, MigrationAwareService> {
+        return this._migrationAwareServices;
     }
 
     private _applyNewAssignment(newAssignment: (PartitionReplica | null)[][]): void {
