@@ -38,6 +38,7 @@ export class TestHeliosInstance {
 
     constructor(nodeEngine?: TestNodeEngine) {
         this.nodeEngine = nodeEngine ?? new TestNodeEngine();
+        this.nodeEngine.registerService('hz:impl:mapService', this._mapContainerService);
     }
 
     getName(): string {

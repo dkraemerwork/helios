@@ -109,11 +109,13 @@ export class MapContainerService {
                 // EAGER load: pre-populate RecordStore via NodeEngine serialization
                 const initial = (created as unknown as MapStoreContext<K, V>).getInitialEntries();
                 if (initial && this._nodeEngine) {
-                    const recordStore = this.getOrCreateRecordStore(mapName, 0);
+                    const ps = this._nodeEngine.getPartitionService();
                     for (const [k, v] of initial) {
                         const kd = this._nodeEngine.toData(k);
                         const vd = this._nodeEngine.toData(v);
                         if (kd !== null && vd !== null) {
+                            const partitionId = ps.getPartitionId(kd);
+                            const recordStore = this.getOrCreateRecordStore(mapName, partitionId);
                             recordStore.put(kd, vd, -1, -1);
                         }
                     }

@@ -53,6 +53,7 @@ function makeProxy(): IMap<string, number> {
     const ne = new TestNodeEngine();
     const cs = new MapContainerService();
     cs.setRecordStore('test', 0, store);
+    ne.registerService('hz:impl:mapService', cs);
     return new MapProxy<string, number>('test', store, ne, cs);
 }
 

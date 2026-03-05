@@ -4793,7 +4793,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 16.C1** — `InvocationRegistry` (callId correlation, backpressure) — 13 tests
 - [x] **Block 16.C2** — `Invocation` + `PartitionInvocation` + `TargetInvocation` (invocation lifecycle, retry, backup ack tracking with timeout) — 20 tests
 - [x] **Block 16.C3** — `OperationServiceImpl` upgrade (partition routing, migration guards, remote invocation, `localMode` for backward compat) — 21 tests
-- [ ] **Block 16.C4** — MapProxy migration to OperationService (all map ops route through `invokeOnPartition`, retire broadcast path) — ~10 tests
+- [x] **Block 16.C4** — MapProxy migration to OperationService (all map ops route through `invokeOnPartition`, retire broadcast path) — 10 tests
 - [ ] **Block 16.B3b** — `MigrationManager` remote execution (MigrationRequestOp, commitMigration with infinite retry + version +1 delta, FinalizeMigration, PublishCompletedMigrations with version gap rejection — requires Phase C) — ~20 tests
 - [ ] **Block 16.D1** — `BackupAwareOperation` interface — ~2 tests
 - [ ] **Block 16.D2** — `OperationBackupHandler` (version increment, backup wrapper creation, sync/async routing) — ~8 tests

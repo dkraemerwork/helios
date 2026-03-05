@@ -20,7 +20,15 @@ import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
 
 /** Minimal single-node partition service: 271 partitions, all local. */
 class SingleNodePartitionService implements PartitionService {
-    getPartitionCount(): number { return 271; }
+    private static readonly PARTITION_COUNT = 271;
+
+    getPartitionCount(): number { return SingleNodePartitionService.PARTITION_COUNT; }
+
+    getPartitionId(key: Data): number {
+        const hash = key.getPartitionHash();
+        const mod = hash % SingleNodePartitionService.PARTITION_COUNT;
+        return mod < 0 ? mod + SingleNodePartitionService.PARTITION_COUNT : mod;
+    }
 }
 
 export class NodeEngineImpl implements NodeEngine {

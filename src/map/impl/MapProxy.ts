@@ -1,18 +1,19 @@
 /**
  * Full IMap implementation — Block 7.4.
  * Block 12.A3: methods made async + MapDataStore field + lazy wiring.
+ * Block 16.C4: core ops route through OperationService.invokeOnPartition().
  *
- * Wraps a RecordStore and NodeEngine to provide a typed, user-facing
- * distributed-map proxy with:
+ * Wraps NodeEngine, OperationService, and MapContainerService to provide a typed,
+ * user-facing distributed-map proxy with:
+ *   - Operation-routed core ops (put, get, remove, set, delete, putIfAbsent, clear)
  *   - Predicate-based queries (keySet/values/entrySet with Predicate)
  *   - Aggregation (aggregate / aggregate with Predicate)
  *   - Entry listeners (addEntryListener / removeEntryListener)
  *   - Locking (lock / tryLock / unlock / isLocked)
  *   - Async variants (putAsync / getAsync / removeAsync)
- *   - Extended ops (set / delete / containsValue / replace / replaceIfSame)
  *   - MapStore integration (write-through / write-behind / load-on-miss)
  *
- * Port of com.hazelcast.map.impl.proxy.MapProxyImpl (single-node subset).
+ * Port of com.hazelcast.map.impl.proxy.MapProxyImpl.
  */
 import type { IMap } from '@helios/map/IMap';
 import type { RecordStore } from '@helios/map/impl/recordstore/RecordStore';
@@ -27,6 +28,15 @@ import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
 import type { MapDataStore } from '@helios/map/impl/mapstore/MapDataStore';
 import { EmptyMapDataStore } from '@helios/map/impl/mapstore/EmptyMapDataStore';
 import type { MapStoreConfig } from '@helios/config/MapStoreConfig';
+import { MapService } from '@helios/map/impl/MapService';
+import type { Operation } from '@helios/spi/impl/operationservice/Operation';
+import { PutOperation } from '@helios/map/impl/operation/PutOperation';
+import { GetOperation } from '@helios/map/impl/operation/GetOperation';
+import { RemoveOperation } from '@helios/map/impl/operation/RemoveOperation';
+import { DeleteOperation } from '@helios/map/impl/operation/DeleteOperation';
+import { SetOperation } from '@helios/map/impl/operation/SetOperation';
+import { PutIfAbsentOperation } from '@helios/map/impl/operation/PutIfAbsentOperation';
+import { ClearOperation } from '@helios/map/impl/operation/ClearOperation';
 
 /** Registration record stored per listenerId. */
 interface ListenerEntry<K, V> {
@@ -72,15 +82,14 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     /** Lazily initialize MapDataStore on first store-touching call (singleflight). */
     private async _ensureMapDataStore(): Promise<void> {
-        if (this._mapDataStore.isWithStore()) return; // already wired
-        if (this._mapStoreConfig === null || !this._mapStoreConfig.isEnabled()) return; // no store
+        if (this._mapDataStore.isWithStore()) return;
+        if (this._mapStoreConfig === null || !this._mapStoreConfig.isEnabled()) return;
 
         if (this._mapStoreInitPromise !== null) {
             await this._mapStoreInitPromise;
             return;
         }
 
-        // Create singleflight promise
         this._mapStoreInitPromise = (async () => {
             const store = await this._containerService.getOrCreateMapDataStore<K, V>(
                 this._name,
@@ -102,14 +111,31 @@ export class MapProxy<K, V> implements IMap<K, V> {
         return this._name;
     }
 
+    // ── Operation routing helpers ─────────────────────────────────────────
+
+    private async _invokeOnKeyPartition<T>(op: Operation, key: Data): Promise<T> {
+        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(key);
+        const future = this._nodeEngine.getOperationService()
+            .invokeOnPartition<T>(MapService.SERVICE_NAME, op, partitionId);
+        return future.get();
+    }
+
+    private async _invokeOnPartition<T>(op: Operation, partitionId: number): Promise<T> {
+        const future = this._nodeEngine.getOperationService()
+            .invokeOnPartition<T>(MapService.SERVICE_NAME, op, partitionId);
+        return future.get();
+    }
+
     // ── Core point ops ────────────────────────────────────────────────────
 
     async put(key: K, value: V): Promise<V | null> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
-        const oldData = this._store.put(kd, vd, -1, -1);
-        const oldValue = oldData !== null ? this._toObject<V>(oldData) : null;
+        const oldData = await this._invokeOnKeyPartition<Data | null>(
+            new PutOperation(this._name, kd, vd, -1, -1), kd,
+        );
+        const oldValue = oldData !== null && oldData !== undefined ? this._toObject<V>(oldData) : null;
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.add(key, value, Date.now());
         }
@@ -125,8 +151,10 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
-        const hadOld = this._store.containsKey(kd);
-        this._store.set(kd, vd, -1, -1);
+        const hadOld = this.containsKey(key);
+        await this._invokeOnKeyPartition<void>(
+            new SetOperation(this._name, kd, vd, -1, -1), kd,
+        );
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.add(key, value, Date.now());
         }
@@ -140,16 +168,20 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async get(key: K): Promise<V | null> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
-        const data = this._store.get(kd);
-        if (data !== null) {
+        const data = await this._invokeOnKeyPartition<Data | null>(
+            new GetOperation(this._name, kd), kd,
+        );
+        if (data !== null && data !== undefined) {
             return this._toObject<V>(data);
         }
         // load-on-miss
         if (this._mapDataStore.isWithStore()) {
             const loaded = await this._mapDataStore.load(key);
             if (loaded !== null) {
-                // back-fill cache — use store.put with no TTL
-                this._store.put(kd, this._toData(loaded), -1, -1);
+                const loadedData = this._toData(loaded);
+                await this._invokeOnKeyPartition<Data | null>(
+                    new PutOperation(this._name, kd, loadedData, -1, -1), kd,
+                );
                 return loaded;
             }
         }
@@ -159,11 +191,13 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async remove(key: K): Promise<V | null> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
-        const oldData = this._store.remove(kd);
+        const oldData = await this._invokeOnKeyPartition<Data | null>(
+            new RemoveOperation(this._name, kd), kd,
+        );
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.remove(key, Date.now());
         }
-        if (oldData === null) return null;
+        if (oldData === null || oldData === undefined) return null;
         const oldValue = this._toObject<V>(oldData);
         this._fireRemoved(key, oldValue);
         return oldValue;
@@ -172,7 +206,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async delete(key: K): Promise<void> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
-        const removed = this._store.delete(kd);
+        const removed = await this._invokeOnKeyPartition<boolean>(
+            new DeleteOperation(this._name, kd), kd,
+        );
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.remove(key, Date.now());
         }
@@ -182,24 +218,42 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     containsKey(key: K): boolean {
-        return this._store.containsKey(this._toData(key));
+        const kd = this._toData(key);
+        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+        const store = this._containerService.getOrCreateRecordStore(this._name, partitionId);
+        return store.containsKey(kd);
     }
 
     containsValue(value: V): boolean {
-        return this._store.containsValue(this._toData(value));
+        const vd = this._toData(value);
+        for (const [, entryValue] of this._containerService.getAllEntries(this._name)) {
+            if (this._dataEquals(vd, entryValue)) return true;
+        }
+        return false;
     }
 
     size(): number {
-        return this._store.size();
+        let total = 0;
+        const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
+        for (let i = 0; i < partitionCount; i++) {
+            const store = this._containerService.getRecordStore(this._name, i);
+            if (store !== null) total += store.size();
+        }
+        return total;
     }
 
     isEmpty(): boolean {
-        return this._store.isEmpty();
+        return this.size() === 0;
     }
 
     async clear(): Promise<void> {
         await this._ensureMapDataStore();
-        this._store.clear();
+        const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
+        const promises: Promise<void>[] = [];
+        for (let i = 0; i < partitionCount; i++) {
+            promises.push(this._invokeOnPartition<void>(new ClearOperation(this._name), i));
+        }
+        await Promise.all(promises);
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.clear();
         }
@@ -210,11 +264,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
-        const existing = this._store.putIfAbsent(kd, vd, -1, -1);
-        if (existing !== null) {
+        const existing = await this._invokeOnKeyPartition<Data | null>(
+            new PutIfAbsentOperation(this._name, kd, vd, -1, -1), kd,
+        );
+        if (existing !== null && existing !== undefined) {
             return this._toObject<V>(existing);
         }
-        // key was absent — added, sync to store
         if (this._mapDataStore.isWithStore()) {
             await this._mapDataStore.add(key, value, Date.now());
         }
@@ -225,12 +280,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._ensureMapDataStore();
         const pairs: [K, V][] = Array.from(entries);
         for (const [k, v] of pairs) {
-            this._store.put(this._toData(k), this._toData(v), -1, -1);
-        }
-        if (this._mapDataStore.isWithStore()) {
-            for (const [k, v] of pairs) {
-                await this._mapDataStore.add(k, v, Date.now());
-            }
+            await this.put(k, v);
         }
     }
 
@@ -239,10 +289,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
         const result = new Map<K, V | null>();
         const missing: K[] = [];
         for (const k of keys) {
-            const kd = this._toData(k);
-            const data = this._store.get(kd);
-            if (data !== null) {
-                result.set(k, this._toObject<V>(data));
+            const val = await this.get(k);
+            if (val !== null) {
+                result.set(k, val);
             } else {
                 missing.push(k);
             }
@@ -251,7 +300,11 @@ export class MapProxy<K, V> implements IMap<K, V> {
             const loaded = await this._mapDataStore.loadAll(missing);
             for (const [k, v] of loaded) {
                 result.set(k, v);
-                this._store.put(this._toData(k), this._toData(v), -1, -1);
+                const kd = this._toData(k);
+                const vd = this._toData(v);
+                await this._invokeOnKeyPartition<Data | null>(
+                    new PutOperation(this._name, kd, vd, -1, -1), kd,
+                );
             }
             for (const k of missing) {
                 if (!result.has(k)) result.set(k, null);
@@ -281,7 +334,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     values(predicate: Predicate<K, V>): V[];
     values(predicate?: Predicate<K, V>): V[] {
         const result: V[] = [];
-        for (const [kd, vd] of this._store.entries()) {
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
@@ -296,7 +349,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     keySet(predicate: Predicate<K, V>): Set<K>;
     keySet(predicate?: Predicate<K, V>): Set<K> {
         const result = new Set<K>();
-        for (const [kd, vd] of this._store.entries()) {
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
@@ -311,7 +364,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     entrySet(predicate: Predicate<K, V>): Map<K, V>;
     entrySet(predicate?: Predicate<K, V>): Map<K, V> {
         const result = new Map<K, V>();
-        for (const [kd, vd] of this._store.entries()) {
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
@@ -327,7 +380,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     aggregate<R>(aggregator: Aggregator<[K, V], R>): R;
     aggregate<R>(aggregator: Aggregator<[K, V], R>, predicate: Predicate<K, V>): R;
     aggregate<R>(aggregator: Aggregator<[K, V], R>, predicate?: Predicate<K, V>): R {
-        for (const [kd, vd] of this._store.entries()) {
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
@@ -406,8 +459,18 @@ export class MapProxy<K, V> implements IMap<K, V> {
         return this._nodeEngine.toObject<T>(data);
     }
 
+    private _dataEquals(a: Data, b: Data): boolean {
+        const aBuf = a.toByteArray();
+        const bBuf = b.toByteArray();
+        if (aBuf === null || bBuf === null) return aBuf === bBuf;
+        if (aBuf.length !== bBuf.length) return false;
+        for (let i = 0; i < aBuf.length; i++) {
+            if (aBuf[i] !== bBuf[i]) return false;
+        }
+        return true;
+    }
+
     private _lockKey(key: K): string {
-        // Stable string representation for lock tracking
         return JSON.stringify(key);
     }
 
@@ -418,7 +481,6 @@ export class MapProxy<K, V> implements IMap<K, V> {
             getAttributeValue: (attr: string) => {
                 if (attr === '__key') return k;
                 if (attr === 'this') return v;
-                // Resolve nested properties on the value object (e.g. "age", "address.city")
                 if (v !== null && v !== undefined && typeof v === 'object') {
                     const parts = attr.split('.');
                     let current: unknown = v;
@@ -437,7 +499,6 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     private _equals(a: unknown, b: unknown): boolean {
         if (a === b) return true;
-        // Deep equality for plain objects/arrays via JSON (sufficient for primitive-value maps)
         try {
             return JSON.stringify(a) === JSON.stringify(b);
         } catch {

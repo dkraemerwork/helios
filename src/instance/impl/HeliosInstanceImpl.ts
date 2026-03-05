@@ -197,11 +197,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
         if (proxy instanceof NetworkedMapProxy) {
             proxy.applyRemotePut(key as never, value as never);
         } else {
-            // Map not yet accessed locally — apply directly to the record store.
-            const store = this._mapService.getOrCreateRecordStore(mapName, 0);
+            // Map not yet accessed locally — apply directly to the correct partition store.
             const kd = this._nodeEngine.toData(key);
             const vd = this._nodeEngine.toData(value);
             if (kd !== null && vd !== null) {
+                const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+                const store = this._mapService.getOrCreateRecordStore(mapName, partitionId);
                 store.put(kd, vd, -1, -1);
             }
         }
@@ -212,9 +213,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
         if (proxy instanceof NetworkedMapProxy) {
             proxy.applyRemoteRemove(key as never);
         } else {
-            const store = this._mapService.getOrCreateRecordStore(mapName, 0);
             const kd = this._nodeEngine.toData(key);
-            if (kd !== null) store.remove(kd);
+            if (kd !== null) {
+                const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+                const store = this._mapService.getOrCreateRecordStore(mapName, partitionId);
+                store.remove(kd);
+            }
         }
     }
 
@@ -223,8 +227,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
         if (proxy instanceof NetworkedMapProxy) {
             proxy.applyRemoteClear();
         } else {
-            const store = this._mapService.getOrCreateRecordStore(mapName, 0);
-            store.clear();
+            // Clear all partitions for this map
+            const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
+            for (let i = 0; i < partitionCount; i++) {
+                const store = this._mapService.getRecordStore(mapName, i);
+                if (store !== null) store.clear();
+            }
         }
     }
 
