@@ -4889,7 +4889,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 17.9B** — Put `ExecutorContainerService` on the hot path (no direct factory execution from operations, container delegation only) — 10 tests ✅
 - [x] **Block 17.9C** — Harden task registration for worker materialization (worker-safe metadata, fingerprint inputs, inline-vs-distributed enforcement) — 9 tests ✅
 - [x] **Block 17.9D** — Finish real cancel/shutdown/task-lost runtime semantics (container-backed control ops, accepted-task ownership, shutdown timeout behavior) — 11 tests ✅
-- [ ] **Block 17.9E** — Add internal execution-backend seam + parity flag (`inline` vs `scatter`, backend-independent stats/lifecycle) — ~8 tests
+- [x] **Block 17.9E** — Add internal execution-backend seam + parity flag (`inline` vs `scatter`, backend-independent stats/lifecycle) — 9 tests ✅
 - [ ] **Block 17.9F** — Freeze executor semantics with prerequisite tests before final Scatter integration (single-node + multi-node semantic gates) — ~14 tests
 - [ ] **Block 17.10** — Scatter-backed multi-node integration tests (routing, registry mismatch, queue rejection, member-left no-retry, post-acceptance task-loss semantics) — ~18 tests
 - [ ] **Block 17.INT** — End-to-end rollout acceptance (config → register → submit → result/cancel → shutdown, bounded backpressure, full regression) — ~12 tests

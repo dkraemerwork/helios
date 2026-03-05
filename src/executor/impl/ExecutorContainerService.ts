@@ -11,6 +11,8 @@ import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperation
 import type { LocalExecutorStats } from '@helios/executor/IExecutorService.js';
 import { HeapData } from '@helios/internal/serialization/impl/HeapData.js';
 import { Bits } from '@helios/internal/nio/Bits.js';
+import type { ExecutionBackend } from '@helios/executor/impl/ExecutionBackend.js';
+import { InlineExecutionBackend } from '@helios/executor/impl/InlineExecutionBackend.js';
 
 export const enum TaskState {
     QUEUED = 'QUEUED',
@@ -50,6 +52,7 @@ export class ExecutorContainerService {
     private readonly _name: string;
     private readonly _config: ExecutorConfig;
     private readonly _registry: TaskTypeRegistry;
+    private readonly _backend: ExecutionBackend;
     private readonly _pools = new Map<string, PoolEntry>();
     private readonly _handles = new Map<string, TaskHandle>();
     private readonly _requestsByUuid = new Map<string, TaskRequest>();
@@ -60,10 +63,15 @@ export class ExecutorContainerService {
         totalStartLatencyMs: 0, totalExecutionTimeMs: 0,
     };
 
-    constructor(name: string, config: ExecutorConfig, registry: TaskTypeRegistry) {
+    constructor(name: string, config: ExecutorConfig, registry: TaskTypeRegistry, backend?: ExecutionBackend) {
         this._name = name;
         this._config = config;
         this._registry = registry;
+        this._backend = backend ?? new InlineExecutionBackend();
+    }
+
+    getBackend(): ExecutionBackend {
+        return this._backend;
     }
 
     async executeTask(request: TaskRequest): Promise<ExecutorOperationResult> {
@@ -274,6 +282,7 @@ export class ExecutorContainerService {
         this._handles.clear();
         this._requestsByUuid.clear();
         this._pools.clear();
+        this._backend.destroy();
     }
 
     getStats(): LocalExecutorStats {
@@ -355,8 +364,7 @@ export class ExecutorContainerService {
         const desc = this._registry.get(request.taskType)!;
         const runTask = async (): Promise<void> => {
             try {
-                const input = JSON.parse(request.inputData.toString('utf8'));
-                const result = await desc.factory(input);
+                const result = await this._backend.execute(desc.factory, request.inputData);
 
                 // Check if cancelled/timed out while running — late result
                 if (!this._handles.has(request.taskUuid)) {

@@ -22,6 +22,7 @@ export class ExecutorConfig {
     private _shutdownTimeoutMillis: number = DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
     private _statisticsEnabled: boolean = true;
     private _splitBrainProtectionName: string | null = null;
+    private _executionBackend: 'inline' | 'scatter' = 'inline';
 
     constructor(name: string) {
         this._name = name;
@@ -114,6 +115,18 @@ export class ExecutorConfig {
 
     getSplitBrainProtectionName(): string | null {
         return this._splitBrainProtectionName;
+    }
+
+    getExecutionBackend(): 'inline' | 'scatter' {
+        return this._executionBackend;
+    }
+
+    setExecutionBackend(backend: 'inline' | 'scatter'): this {
+        if (backend !== 'inline' && backend !== 'scatter') {
+            throw new Error(`Unsupported execution backend: "${backend}". Must be "inline" or "scatter".`);
+        }
+        this._executionBackend = backend;
+        return this;
     }
 
     /** @throws Error Split-brain protection is not supported in Phase 17 Tier 1. */
