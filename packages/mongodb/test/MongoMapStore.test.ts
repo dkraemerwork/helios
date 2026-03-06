@@ -67,10 +67,11 @@ describe('MongoMapStore', () => {
     expect(db.collection.mock.calls[0][0]).toBe('custom_coll');
   });
 
-  test('destroy() closes the MongoClient', async () => {
+  test('destroy() does not close an injected MongoClient', async () => {
     const { store, client } = await makeStore();
     await store.destroy();
-    expect(client.close.mock.calls).toHaveLength(1);
+    // Injected clients are not owned by the store, so close is NOT called
+    expect(client.close.mock.calls).toHaveLength(0);
   });
 
   test('store(k, v) calls updateOne with upsert', async () => {
@@ -164,7 +165,10 @@ describe('MongoMapStore', () => {
       toArray: mock(async () => [{ _id: 'alice' }, { _id: 'bob' }]),
     }));
     const { store } = await makeStore(coll);
-    const keys = await store.loadAllKeys();
+    const stream = await store.loadAllKeys();
+    const keys: string[] = [];
+    for await (const k of stream) keys.push(k);
+    await stream.close();
 
     expect(keys.sort()).toEqual(['alice', 'bob']);
     const [, opts] = coll.find.mock.calls[0] as any[];

@@ -22,7 +22,9 @@ export class MongoMapStore<T = unknown> {
   readonly _serializer: Serializer<T>;
   private readonly _clientOptions: object;
   private _client: MongoClient | undefined;
+  private _ownsClient: boolean;
   private _coll: any | undefined;
+  private _destroyed = false;
 
   constructor(config: MongoConfig<T>, client?: MongoClient) {
     this._uri = config.uri;
@@ -32,23 +34,33 @@ export class MongoMapStore<T = unknown> {
     this._clientOptions = config.clientOptions ?? {};
     if (client !== undefined) {
       this._client = client;
+      this._ownsClient = false;
+    } else {
+      this._ownsClient = true;
     }
   }
 
   // MapLoaderLifecycleSupport
 
-  async init(_properties: Map<string, string>, mapName: string): Promise<void> {
+  async init(properties: Map<string, string>, mapName: string): Promise<void> {
     if (this._client === undefined) {
       this._client = new MongoClient(this._uri, this._clientOptions as any);
+      this._ownsClient = true;
     }
     await this._client.connect();
     const db = this._client.db(this._database);
-    const collectionName = this._collection ?? mapName;
+
+    // Collection resolution: external-name (from properties) > config.collection > mapName
+    const externalName = properties.get('external-name');
+    const collectionName = externalName ?? this._collection ?? mapName;
     this._coll = db.collection(collectionName);
+    this._destroyed = false;
   }
 
   async destroy(): Promise<void> {
-    if (this._client !== undefined) {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    if (this._ownsClient && this._client !== undefined) {
       await this._client.close();
     }
   }

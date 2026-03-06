@@ -10,6 +10,8 @@ import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
+import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry";
+import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
 
 export class HeliosConfig {
   private readonly _name: string;
@@ -18,6 +20,7 @@ export class HeliosConfig {
   private readonly _topicConfigs = new Map<string, TopicConfig>();
   private readonly _executorConfigs = new Map<string, ExecutorConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
+  private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
   private _configOrigin: string | null = null;
 
@@ -122,5 +125,18 @@ export class HeliosConfig {
   setBlitzConfig(config: HeliosBlitzRuntimeConfig): this {
     this._blitzConfig = config;
     return this;
+  }
+
+  registerMapStoreProvider(name: string, factory: MapStoreFactory<unknown, unknown>): this {
+    this._mapStoreProviderRegistry.register(name, factory);
+    return this;
+  }
+
+  getMapStoreProvider(name: string): MapStoreFactory<unknown, unknown> | null {
+    return this._mapStoreProviderRegistry.get(name);
+  }
+
+  getMapStoreProviderRegistry(): MapStoreProviderRegistry {
+    return this._mapStoreProviderRegistry;
   }
 }
