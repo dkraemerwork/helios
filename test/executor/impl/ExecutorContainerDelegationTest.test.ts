@@ -223,19 +223,21 @@ describe('Block 17.9B — ExecutorContainerService on the hot path', () => {
         expect(executeSpy).not.toHaveBeenCalled();
     });
 
-    test('operation without container falls back to direct execution (backward compat)', async () => {
+    test('operation without container rejects (no fallback behavior)', async () => {
         const registry = makeRegistry();
         const desc = makeDescriptor();
         const op = new ExecuteCallableOperation(desc);
         op.setRegistry(registry);
-        // No container set — should still work via direct factory call
+        // No container set — should reject (no fallback to direct execution)
 
         const { handler, getResponse } = captureHandler();
         op.setResponseHandler(handler);
         await op.run();
 
         const result = getResponse();
-        expect(result.status).toBe('success');
+        expect(result.status).toBe('rejected');
+        expect(result.errorName).toBe('ExecutorRejectedExecutionException');
+        expect(result.errorMessage).toContain('No ExecutorContainerService registered');
     });
 
     test('container executeTask result is forwarded as the operation response', async () => {

@@ -133,16 +133,16 @@ service-backed, fail-closed, and production ready.
 
 Tasks:
 
-- [ ] Bind this block to `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md` as the authoritative implementation detail.
-- [ ] Wire real member-local executor registry and container ownership in `HeliosInstanceImpl`, including shutdown lifecycle ownership for named executors.
-- [ ] Remove any distributed direct-factory fallback from executor operation classes so no distributed task body can run inline on the main event loop.
-- [ ] Add a Helios-owned Scatter-backed execution engine behind `ExecutionBackend`, preferring sibling Scatter worker classes only if they preserve module-backed registration, per-task-type pool ownership, deterministic recycle or shutdown behavior, and fail-closed health semantics; otherwise use a bounded `scatter.pool()` adapter.
-- [ ] Make distributed task registration module-backed and worker-materializable only, while preserving `submitLocal()` and `executeLocal()` as the only inline-function path.
-- [ ] Make `scatter` the production default backend, keep `inline` explicit for tests or development only, and fail closed when Scatter is unavailable or unhealthy instead of silently falling back.
-- [ ] Wire explicit member-loss handling so accepted tasks transition to deterministic `task-lost` results, queued work drains or fails from real membership signals, and no member-departure path remains plan-only.
-- [ ] Recycle degraded task-type pools after worker crash or task timeout, while preserving deterministic cancellation, shutdown, late-result-drop, and task-lost semantics.
-- [ ] Update executor docs/examples/exports/config/test-support so module-backed distributed registration, scatter-default behavior, fail-closed semantics, and explicit inline test/dev-only behavior are described honestly.
-- [ ] Run a verification task that proves distributed executor work never silently runs on the main event loop, the Scatter-backed path is real in single-node and multi-node runtime flows, and the feature is production ready end to end.
+- [x] Bind this block to `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md` as the authoritative implementation detail.
+- [x] Wire real member-local executor registry and container ownership in `HeliosInstanceImpl`, including shutdown lifecycle ownership for named executors.
+- [x] Remove any distributed direct-factory fallback from executor operation classes so no distributed task body can run inline on the main event loop.
+- [x] Add a Helios-owned Scatter-backed execution engine behind `ExecutionBackend`, preferring sibling Scatter worker classes only if they preserve module-backed registration, per-task-type pool ownership, deterministic recycle or shutdown behavior, and fail-closed health semantics; otherwise use a bounded `scatter.pool()` adapter.
+- [x] Make distributed task registration module-backed and worker-materializable only, while preserving `submitLocal()` and `executeLocal()` as the only inline-function path.
+- [x] Make `scatter` the production default backend, keep `inline` explicit for tests or development only, and fail closed when Scatter is unavailable or unhealthy instead of silently falling back.
+- [x] Wire explicit member-loss handling so accepted tasks transition to deterministic `task-lost` results, queued work drains or fails from real membership signals, and no member-departure path remains plan-only.
+- [x] Recycle degraded task-type pools after worker crash or task timeout, while preserving deterministic cancellation, shutdown, late-result-drop, and task-lost semantics.
+- [x] Update executor docs/examples/exports/config/test-support so module-backed distributed registration, scatter-default behavior, fail-closed semantics, and explicit inline test/dev-only behavior are described honestly.
+- [x] Run a verification task that proves distributed executor work never silently runs on the main event loop, the Scatter-backed path is real in single-node and multi-node runtime flows, and the feature is production ready end to end.
 
 ## Phase 18 Task Breakdown
 
@@ -494,7 +494,7 @@ Tasks:
 
 > Canonical loop-selection source: only the `- [ ] **Block ...` lines in this file.
 
-- [ ] **Block 17R.1** — Executor Scatter production closure (`plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`, real member-local executor registry/container ownership, no distributed direct-factory fallback, Scatter-backed off-main-thread execution, module-backed worker-materializable registration only, scatter default with inline explicit-only for tests/dev, deterministic cancel/shutdown/task-lost/member-loss semantics, fail-closed backend health, recycle-on-crash-or-timeout behavior, docs/examples/config/test-support honesty) — ~24 tests
+- [x] **Block 17R.1** — Executor Scatter production closure (`plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`, real member-local executor registry/container ownership, no distributed direct-factory fallback, Scatter-backed off-main-thread execution, module-backed worker-materializable registration only, scatter default with inline explicit-only for tests/dev, deterministic cancel/shutdown/task-lost/member-loss semantics, fail-closed backend health, recycle-on-crash-or-timeout behavior, docs/examples/config/test-support honesty) — ~24 tests
 - [ ] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution and explicit inline test/dev usage; 0 fail, 0 error
 - [ ] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
 - [ ] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, explicit expected-registrant sweep rules after master change) — ~18 tests

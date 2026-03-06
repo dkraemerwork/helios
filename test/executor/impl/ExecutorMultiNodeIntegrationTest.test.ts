@@ -70,6 +70,7 @@ function createCluster(
         const ne = new NodeEngineImpl(ss, { localAddress: addresses[i] });
 
         const config = new ExecutorConfig('default');
+        config.setExecutionBackend('inline');
         if (executorConfigOverrides?.poolSize != null) config.setPoolSize(executorConfigOverrides.poolSize);
         if (executorConfigOverrides?.queueCapacity != null) config.setQueueCapacity(executorConfigOverrides.queueCapacity);
         if (executorConfigOverrides?.maxPools != null) config.setMaxActiveTaskTypePools(executorConfigOverrides.maxPools);

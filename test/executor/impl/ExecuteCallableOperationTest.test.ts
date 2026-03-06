@@ -8,6 +8,8 @@ import { describe, it, expect } from 'bun:test';
 import { ExecuteCallableOperation } from '@zenystx/helios-core/executor/impl/ExecuteCallableOperation.js';
 import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
 import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
 import { ExecutorTaskLostException } from '@zenystx/helios-core/executor/ExecutorExceptions.js';
 import type { Operation, ResponseHandler } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
@@ -31,6 +33,12 @@ function makeRegistry(): TaskTypeRegistry {
     const reg = new TaskTypeRegistry();
     reg.register('double', (n) => Number(n) * 2, { version: 'v1' });
     return reg;
+}
+
+function makeContainer(name: string, registry: TaskTypeRegistry): ExecutorContainerService {
+    const config = new ExecutorConfig(name);
+    config.setExecutionBackend('inline');
+    return new ExecutorContainerService(name, config, registry);
 }
 
 function captureHandler(): { handler: ResponseHandler; getResponse: () => ExecutorOperationResult } {
@@ -57,8 +65,10 @@ describe('ExecuteCallableOperation', () => {
     it('validates against registry and returns success envelope', async () => {
         const desc = makeDescriptor();
         const registry = makeRegistry();
+        const container = makeContainer('default', registry);
         const op = new ExecuteCallableOperation(desc);
         op.setRegistry(registry);
+        op.setContainerService(container);
 
         const { handler, getResponse } = captureHandler();
         op.setResponseHandler(handler);
@@ -105,9 +115,11 @@ describe('ExecuteCallableOperation', () => {
     it('returns error envelope when task factory throws', async () => {
         const registry = new TaskTypeRegistry();
         registry.register('fail', () => { throw new Error('boom'); }, { version: 'v1' });
+        const container = makeContainer('default', registry);
         const desc = makeDescriptor({ taskType: 'fail', registrationFingerprint: 'v1' });
         const op = new ExecuteCallableOperation(desc);
         op.setRegistry(registry);
+        op.setContainerService(container);
 
         const { handler, getResponse } = captureHandler();
         op.setResponseHandler(handler);
@@ -138,10 +150,12 @@ describe('ExecuteCallableOperation', () => {
             await new Promise(r => setTimeout(r, 1));
             return Number(n) * 2;
         }, { version: 'v1' });
+        const container = makeContainer('default', registry);
 
         const desc = makeDescriptor({ taskType: 'async-double', registrationFingerprint: 'v1' });
         const op = new ExecuteCallableOperation(desc);
         op.setRegistry(registry);
+        op.setContainerService(container);
 
         const { handler, getResponse } = captureHandler();
         op.setResponseHandler(handler);
@@ -195,13 +209,14 @@ describe('TaskDescriptor wire format', () => {
         expect(desc.timeoutMillis).toBeGreaterThan(0);
     });
 
-    it('result envelope contains originMemberUuid from operation', async () => {
+    it('result envelope contains originMemberUuid from descriptor submitterMemberUuid', async () => {
         const memberUuid = crypto.randomUUID();
-        const desc = makeDescriptor();
+        const desc = makeDescriptor({ submitterMemberUuid: memberUuid });
         const registry = makeRegistry();
+        const container = makeContainer('default', registry);
         const op = new ExecuteCallableOperation(desc);
         op.setRegistry(registry);
-        op.setOriginMemberUuid(memberUuid);
+        op.setContainerService(container);
 
         const { handler, getResponse } = captureHandler();
         op.setResponseHandler(handler);

@@ -202,6 +202,14 @@ export class ExecutorServiceProxy implements IExecutorService {
         if (task.taskType === '__inline__') {
             throw new Error('Inline tasks cannot be submitted for distributed execution');
         }
+        // Reject non-worker-safe tasks when backend is scatter (no distributed closure execution)
+        if (this._config.getExecutionBackend() === 'scatter' && !this._registry.isWorkerSafe(task.taskType)) {
+            throw new Error(
+                `Task "${task.taskType}" is not worker-safe (no modulePath). ` +
+                'Distributed tasks require module-backed registration with modulePath and exportName. ' +
+                'Use submitLocal()/executeLocal() for closure-only tasks.',
+            );
+        }
     }
 
     private _validateAndBuildDescriptor(task: TaskCallable<unknown>): TaskDescriptor {

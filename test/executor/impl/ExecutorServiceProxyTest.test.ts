@@ -175,6 +175,7 @@ describe('ExecutorServiceProxy', () => {
 
     beforeEach(() => {
         config = new ExecutorConfig(executorName).setPoolSize(4).setQueueCapacity(16);
+        config.setExecutionBackend('inline');
         registry = new TaskTypeRegistry();
         localAddr = makeAddress('127.0.0.1', 5701);
         localMember = makeMember('local-uuid', localAddr, true);

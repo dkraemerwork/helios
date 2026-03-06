@@ -22,7 +22,7 @@ export class ExecutorConfig {
     private _shutdownTimeoutMillis: number = DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
     private _statisticsEnabled: boolean = true;
     private _splitBrainProtectionName: string | null = null;
-    private _executionBackend: 'inline' | 'scatter' = 'inline';
+    private _executionBackend: 'inline' | 'scatter' = 'scatter';
 
     constructor(name: string) {
         this._name = name;

@@ -61,6 +61,9 @@ import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorSe
 import { ExecutorServiceProxy } from "@zenystx/helios-core/executor/impl/ExecutorServiceProxy";
 import { TaskTypeRegistry } from "@zenystx/helios-core/executor/impl/TaskTypeRegistry";
 import { ExecutorRejectedExecutionException } from "@zenystx/helios-core/executor/ExecutorExceptions";
+import { ExecutorContainerService } from "@zenystx/helios-core/executor/impl/ExecutorContainerService";
+import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/ScatterExecutionBackend";
+import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/InlineExecutionBackend";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 
@@ -381,8 +384,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   shutdown(): void {
     this._running = false;
-    // Shut down all executor services (fire-and-forget the promises)
-    for (const exec of Array.from(this._executors.values())) {
+    // Shut down all executor containers + proxies (fire-and-forget the promises)
+    for (const [name, exec] of Array.from(this._executors.entries())) {
+      const containerKey = `helios:executor:container:${name}`;
+      const container = this._nodeEngine.getServiceOrNull<ExecutorContainerService>(containerKey);
+      if (container) container.shutdown().catch(() => {});
       exec.shutdown().catch(() => {});
     }
     this._executors.clear();
@@ -745,6 +751,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (!proxy) {
       const config = this._config.getExecutorConfig(name);
       const registry = new TaskTypeRegistry();
+
+      // Create the execution backend based on config
+      const backend = config.getExecutionBackend() === 'scatter'
+        ? new ScatterExecutionBackend({ poolSize: config.getPoolSize() })
+        : new InlineExecutionBackend();
+
+      // Create and register container service in NodeEngine for operation routing
+      const container = new ExecutorContainerService(name, config, registry, backend);
+      this._nodeEngine.registerService(`helios:executor:container:${name}`, container);
+      this._nodeEngine.registerService(`helios:executor:registry:${name}`, registry);
+
       proxy = new ExecutorServiceProxy(
         name,
         this._nodeEngine,
@@ -753,7 +770,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._name,
       );
       // Register shutdown hook so shutdownAsync() drains executors
-      this.registerShutdownHook(() => proxy!.shutdown());
+      this.registerShutdownHook(async () => {
+        await container.shutdown();
+        await proxy!.shutdown();
+      });
       this._executors.set(name, proxy);
     }
     return proxy;

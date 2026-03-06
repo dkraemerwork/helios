@@ -3,7 +3,7 @@
  *
  * Validates task registration + fingerprint before delegating to
  * {@link ExecutorContainerService} for bounded execution.
- * Falls back to direct factory execution when no container is set (backward compat).
+ * Rejects if no container is registered — no fallback to direct factory execution.
  *
  * @see MemberCallableOperation for member-targeted variant with no-retry semantics
  */
@@ -102,50 +102,25 @@ export class ExecuteCallableOperation extends Operation {
             throw e;
         }
 
-        // Delegate to container service if available (hot path)
-        if (this._containerService) {
-            const result = await this._containerService.executeTask({
-                taskUuid: descriptor.taskUuid,
-                taskType: descriptor.taskType,
-                registrationFingerprint: descriptor.registrationFingerprint,
-                inputData: descriptor.inputData,
-                executorName: descriptor.executorName,
-                submitterMemberUuid: descriptor.submitterMemberUuid,
-                timeoutMillis: descriptor.timeoutMillis,
-            });
-            this.sendResponse(result);
+        // Container is required — no fallback to direct factory execution.
+        if (!this._containerService) {
+            this.sendResponse(this._rejectEnvelope(
+                'ExecutorRejectedExecutionException',
+                `No ExecutorContainerService registered for executor "${descriptor.executorName}"`,
+            ));
             return;
         }
 
-        // Fallback: direct factory execution (backward compat for tests without container)
-        const desc = registry.get(descriptor.taskType)!;
-        try {
-            const input = JSON.parse(descriptor.inputData.toString('utf8'));
-            const result = await desc.factory(input);
-            const jsonBytes = Buffer.from(JSON.stringify(result));
-            const resultData = ExecuteCallableOperation._wrapAsHeapData(jsonBytes);
-
-            const envelope: ExecutorOperationResult = {
-                taskUuid: descriptor.taskUuid,
-                status: 'success',
-                originMemberUuid: this._originMemberUuid,
-                resultData,
-                errorName: null,
-                errorMessage: null,
-            };
-            this.sendResponse(envelope);
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            const envelope: ExecutorOperationResult = {
-                taskUuid: descriptor.taskUuid,
-                status: 'rejected',
-                originMemberUuid: this._originMemberUuid,
-                resultData: null,
-                errorName: err.name,
-                errorMessage: err.message,
-            };
-            this.sendResponse(envelope);
-        }
+        const result = await this._containerService.executeTask({
+            taskUuid: descriptor.taskUuid,
+            taskType: descriptor.taskType,
+            registrationFingerprint: descriptor.registrationFingerprint,
+            inputData: descriptor.inputData,
+            executorName: descriptor.executorName,
+            submitterMemberUuid: descriptor.submitterMemberUuid,
+            timeoutMillis: descriptor.timeoutMillis,
+        });
+        this.sendResponse(result);
     }
 
     /** Wrap raw payload bytes into HeapData with 4-byte length prefix. */

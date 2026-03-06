@@ -11,6 +11,7 @@ describe('Block 17.9E — Execution Backend Seam', () => {
 
     beforeEach(() => {
         config = new ExecutorConfig('test-exec');
+        config.setExecutionBackend('inline');
         registry = new TaskTypeRegistry();
         registry.register('echo', (input: unknown) => Promise.resolve(input), { version: 'fp-echo' });
     });
@@ -30,12 +31,13 @@ describe('Block 17.9E — Execution Backend Seam', () => {
     });
 
     test('backend selection is config-driven and deterministic', () => {
-        // Default should be 'inline'
-        expect(config.getExecutionBackend()).toBe('inline');
-        config.setExecutionBackend('scatter');
-        expect(config.getExecutionBackend()).toBe('scatter');
-        config.setExecutionBackend('inline');
-        expect(config.getExecutionBackend()).toBe('inline');
+        // Default should be 'scatter' (production default)
+        const freshConfig = new ExecutorConfig('test-backend');
+        expect(freshConfig.getExecutionBackend()).toBe('scatter');
+        freshConfig.setExecutionBackend('inline');
+        expect(freshConfig.getExecutionBackend()).toBe('inline');
+        freshConfig.setExecutionBackend('scatter');
+        expect(freshConfig.getExecutionBackend()).toBe('scatter');
     });
 
     test('unsupported backend values fail fast', () => {
@@ -91,9 +93,9 @@ describe('Block 17.9E — Execution Backend Seam', () => {
         expect(result.errorName).toBe('ExecutorRejectedExecutionException');
     });
 
-    test('parity flag defaults to inline for current rollout stage', () => {
+    test('parity flag defaults to scatter for production', () => {
         const freshConfig = new ExecutorConfig('fresh');
-        expect(freshConfig.getExecutionBackend()).toBe('inline');
+        expect(freshConfig.getExecutionBackend()).toBe('scatter');
     });
 
     test('InlineExecutionBackend executes factory directly', async () => {

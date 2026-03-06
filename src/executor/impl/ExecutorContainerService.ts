@@ -79,6 +79,12 @@ export class ExecutorContainerService {
             return this._rejectEnvelope(request.taskUuid, 'ExecutorRejectedExecutionException', `Executor "${this._name}" is shut down`);
         }
 
+        // Fail closed if backend is unhealthy
+        if (this._backend.isHealthy && !this._backend.isHealthy()) {
+            this._stats.rejected++;
+            return this._rejectEnvelope(request.taskUuid, 'ExecutorRejectedExecutionException', `Backend for executor "${this._name}" is unhealthy — fail closed`);
+        }
+
         // Validate registration
         const desc = this._registry.get(request.taskType);
         if (!desc) {
@@ -364,7 +370,10 @@ export class ExecutorContainerService {
         const desc = this._registry.get(request.taskType)!;
         const runTask = async (): Promise<void> => {
             try {
-                const result = await this._backend.execute(desc.factory, request.inputData);
+                // Use module-backed execution when worker meta is available and backend supports it
+                const result = desc.workerMeta && this._backend.executeModule
+                    ? await this._backend.executeModule(desc.workerMeta.modulePath, desc.workerMeta.exportName, request.inputData)
+                    : await this._backend.execute(desc.factory, request.inputData);
 
                 // Check if cancelled/timed out while running — late result
                 if (!this._handles.has(request.taskUuid)) {
