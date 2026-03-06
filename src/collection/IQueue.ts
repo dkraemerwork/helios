@@ -1,25 +1,46 @@
-import type { ICollection } from './ICollection';
+import type { ItemListener } from "@helios/collection/ItemListener";
+import type { LocalQueueStats } from "@helios/collection/LocalQueueStats";
+import type { MaybePromise } from "@helios/util/MaybePromise";
 
 /**
  * Distributed queue interface.
- * Port of com.hazelcast.collection.IQueue (blocking subset, single-node).
+ * TypeScript-native port of Hazelcast IQueue semantics.
  */
-export interface IQueue<E> extends ICollection<E> {
-    /** Inserts element at tail; returns false if queue is full. */
-    offer(element: E): boolean;
+export interface IQueue<E> {
+  getName(): string;
 
-    /** Retrieves and removes the head; returns null if empty. */
-    poll(): E | null;
+  offer(element: E): MaybePromise<boolean>;
+  offer(element: E, timeoutMs: number): Promise<boolean>;
+  put(element: E): Promise<void>;
 
-    /** Retrieves but does not remove the head; returns null if empty. */
-    peek(): E | null;
+  poll(): MaybePromise<E | null>;
+  poll(timeoutMs: number): Promise<E | null>;
+  take(): Promise<E>;
 
-    /** Inserts element at tail; throws IllegalStateException if full. */
-    add(element: E): boolean;
+  peek(): MaybePromise<E | null>;
+  element(): Promise<E>;
 
-    /** Drains all elements into collection; returns number drained. */
-    drainTo(collection: E[]): number;
+  add(element: E): MaybePromise<boolean>;
+  remove(element: E): MaybePromise<boolean>;
+  contains(element: E): MaybePromise<boolean>;
+  containsAll(elements: E[]): MaybePromise<boolean>;
 
-    /** Drains at most maxElements into collection. Negative maxElements → drain all. */
-    drainTo(collection: E[], maxElements: number): number;
+  size(): MaybePromise<number>;
+  isEmpty(): MaybePromise<boolean>;
+  remainingCapacity(): Promise<number>;
+
+  addAll(elements: E[]): MaybePromise<boolean>;
+  removeAll(elements: E[]): MaybePromise<boolean>;
+  retainAll(elements: E[]): MaybePromise<boolean>;
+  clear(): MaybePromise<void>;
+
+  toArray(): MaybePromise<E[]>;
+  iterator(): MaybePromise<Iterator<E> & { remove(): never }>;
+
+  addItemListener(listener: ItemListener<E>, includeValue?: boolean): string;
+  removeItemListener(registrationId: string): boolean;
+  getLocalQueueStats(): LocalQueueStats;
+
+  drainTo(collection: E[]): MaybePromise<number>;
+  drainTo(collection: E[], maxElements: number): MaybePromise<number>;
 }

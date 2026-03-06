@@ -4,72 +4,102 @@
  * Holds the instance name and any per-map configurations.
  * Use HeliosConfig as the entry point when constructing a HeliosInstanceImpl.
  */
-import { ExecutorConfig } from '@helios/config/ExecutorConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import { NetworkConfig } from '@helios/config/NetworkConfig';
+import { ExecutorConfig } from "@helios/config/ExecutorConfig";
+import { MapConfig } from "@helios/config/MapConfig";
+import { NetworkConfig } from "@helios/config/NetworkConfig";
+import { QueueConfig } from "@helios/config/QueueConfig";
+import { TopicConfig } from "@helios/config/TopicConfig";
 
 export class HeliosConfig {
-    private readonly _name: string;
-    private readonly _mapConfigs = new Map<string, MapConfig>();
-    private readonly _executorConfigs = new Map<string, ExecutorConfig>();
-    private readonly _network: NetworkConfig = new NetworkConfig();
+  private readonly _name: string;
+  private readonly _mapConfigs = new Map<string, MapConfig>();
+  private readonly _queueConfigs = new Map<string, QueueConfig>();
+  private readonly _topicConfigs = new Map<string, TopicConfig>();
+  private readonly _executorConfigs = new Map<string, ExecutorConfig>();
+  private readonly _network: NetworkConfig = new NetworkConfig();
 
-    constructor(name?: string) {
-        this._name = name ?? 'helios';
-    }
+  constructor(name?: string) {
+    this._name = name ?? "helios";
+  }
 
-    getName(): string {
-        return this._name;
-    }
+  getName(): string {
+    return this._name;
+  }
 
-    /**
-     * Returns the network configuration (port, join strategy, etc.).
-     */
-    getNetworkConfig(): NetworkConfig {
-        return this._network;
-    }
+  /**
+   * Returns the network configuration (port, join strategy, etc.).
+   */
+  getNetworkConfig(): NetworkConfig {
+    return this._network;
+  }
 
-    /**
-     * Register a MapConfig. The config's name (from MapConfig.getName()) is used
-     * as the lookup key. Throws if the MapConfig has no name set.
-     */
-    addMapConfig(mapConfig: MapConfig): this {
-        const name = mapConfig.getName();
-        if (name == null) {
-            throw new Error('MapConfig must have a name when added to HeliosConfig');
-        }
-        this._mapConfigs.set(name, mapConfig);
-        return this;
+  /**
+   * Register a MapConfig. The config's name (from MapConfig.getName()) is used
+   * as the lookup key. Throws if the MapConfig has no name set.
+   */
+  addMapConfig(mapConfig: MapConfig): this {
+    const name = mapConfig.getName();
+    if (name == null) {
+      throw new Error("MapConfig must have a name when added to HeliosConfig");
     }
+    this._mapConfigs.set(name, mapConfig);
+    return this;
+  }
 
-    /**
-     * Returns the MapConfig registered for the given map name, or null.
-     */
-    getMapConfig(name: string): MapConfig | null {
-        return this._mapConfigs.get(name) ?? null;
-    }
+  /**
+   * Returns the MapConfig registered for the given map name, or null.
+   */
+  getMapConfig(name: string): MapConfig | null {
+    return this._mapConfigs.get(name) ?? null;
+  }
 
-    /**
-     * Returns all registered MapConfigs.
-     */
-    getMapConfigs(): ReadonlyMap<string, MapConfig> {
-        return this._mapConfigs;
-    }
+  /**
+   * Returns all registered MapConfigs.
+   */
+  getMapConfigs(): ReadonlyMap<string, MapConfig> {
+    return this._mapConfigs;
+  }
 
-    addExecutorConfig(executorConfig: ExecutorConfig): this {
-        this._executorConfigs.set(executorConfig.getName(), executorConfig);
-        return this;
-    }
+  addQueueConfig(queueConfig: QueueConfig): this {
+    this._queueConfigs.set(queueConfig.getName(), queueConfig);
+    return this;
+  }
 
-    /**
-     * Returns the ExecutorConfig for the given name. If none is registered,
-     * returns a new default ExecutorConfig with that name (fallback behavior).
-     */
-    getExecutorConfig(name: string): ExecutorConfig {
-        return this._executorConfigs.get(name) ?? new ExecutorConfig(name);
-    }
+  getQueueConfig(name: string): QueueConfig {
+    return this._queueConfigs.get(name) ?? new QueueConfig(name);
+  }
 
-    getExecutorConfigs(): ReadonlyMap<string, ExecutorConfig> {
-        return this._executorConfigs;
-    }
+  getQueueConfigs(): ReadonlyMap<string, QueueConfig> {
+    return this._queueConfigs;
+  }
+
+  addTopicConfig(topicConfig: TopicConfig): this {
+    this._topicConfigs.set(topicConfig.getName(), topicConfig);
+    return this;
+  }
+
+  getTopicConfig(name: string): TopicConfig {
+    return this._topicConfigs.get(name) ?? new TopicConfig(name);
+  }
+
+  getTopicConfigs(): ReadonlyMap<string, TopicConfig> {
+    return this._topicConfigs;
+  }
+
+  addExecutorConfig(executorConfig: ExecutorConfig): this {
+    this._executorConfigs.set(executorConfig.getName(), executorConfig);
+    return this;
+  }
+
+  /**
+   * Returns the ExecutorConfig for the given name. If none is registered,
+   * returns a new default ExecutorConfig with that name (fallback behavior).
+   */
+  getExecutorConfig(name: string): ExecutorConfig {
+    return this._executorConfigs.get(name) ?? new ExecutorConfig(name);
+  }
+
+  getExecutorConfigs(): ReadonlyMap<string, ExecutorConfig> {
+    return this._executorConfigs;
+  }
 }

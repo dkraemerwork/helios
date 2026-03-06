@@ -202,11 +202,105 @@ Minimum additions:
 - `src/config/TopicConfig.ts`
 - optional `src/config/ReliableTopicConfig.ts` if the API stays separate
 
+### Gap D - HeliosInstance still boots a local-only node engine path
+
+The current production instance path is not yet using the richer cluster/partition runtime for
+distributed objects:
+
+- `src/instance/impl/HeliosInstanceImpl.ts` builds `new NodeEngineImpl(this._ss)` with no
+  cluster-aware options
+- `src/spi/impl/NodeEngineImpl.ts` still wires a `SingleNodePartitionService`
+- `src/spi/impl/operationservice/impl/OperationServiceImpl.ts` is constructed in default
+  local mode there
+- `src/cluster/tcp/TcpClusterTransport.ts` is currently used as a map-specific broadcast path,
+  not as the generic distributed-object transport
+
+That means queue/topic cannot become truly distributed just by adding proxy classes. The
+instance bootstrap must also switch from the current map-specific transport shortcuts to the
+shared cluster-aware runtime path.
+
+Files that will need changes:
+
+- `src/instance/impl/HeliosInstanceImpl.ts`
+- `src/spi/impl/NodeEngineImpl.ts`
+- `src/spi/NodeEngine.ts`
+- `src/spi/impl/operationservice/impl/OperationServiceImpl.ts`
+- cluster/partition runtime wiring under `src/internal/cluster/` and `src/internal/partition/`
+
+### Gap E - `IQueue` public API does not yet expose Hazelcast-style blocking methods
+
+Current `src/collection/IQueue.ts` exposes only:
+
+- `offer(element)`
+- `poll()`
+- `peek()`
+- `add(element)`
+- `drainTo(...)`
+
+It does not currently expose timed or blocking methods like:
+
+- `offer(element, timeout)`
+- `poll(timeout)`
+- `put(element)`
+- `take()`
+
+So the plan needs an explicit public API decision:
+
+1. keep the current narrow API and defer blocking queue methods, or
+2. extend `IQueue` toward Hazelcast parity before implementing wait-notify-backed blocking ops
+
+Recommendation:
+
+- extend `IQueue` now, because otherwise the runtime wait-notify work has no public consumer in
+  the queue API and the implementation will be internally inconsistent
+
+### Gap F - `IQueue` is synchronous while Helios distributed invocation is promise-based
+
+Helios distributed operations complete through `InvocationFuture.get(): Promise<T>` in
+`src/spi/impl/operationservice/InvocationFuture.ts`.
+
+That means a real non-local queue proxy cannot be implemented cleanly behind the current
+synchronous `IQueue` methods.
+
+Current mismatch:
+
+- queue API methods are synchronous
+- distributed operation invocation is asynchronous
+- a correct remote queue proxy would need `await` for non-local owner execution
+
+Recommendation:
+
+- migrate `IQueue` to async for all operation-routed methods before implementing the real
+  distributed proxy
+
+Suggested shape:
+
+- `offer(...) -> Promise<boolean>`
+- `poll(...) -> Promise<E | null>`
+- `peek() -> Promise<E | null>`
+- `add(...) -> Promise<boolean>`
+- `drainTo(...) -> Promise<number>`
+
+And if blocking/timed methods are added, those must also be async.
+
+This is the same direction Helios already took for `IMap` mutating methods.
+
 ---
 
 ## Recommended Delivery Order
 
 ## Phase 1 - Distributed Queue Runtime
+
+### 1.0 Fix runtime bootstrapping prerequisites
+
+Before queue proxy work starts, wire the real distributed-object runtime path:
+
+- register queue/topic/ringbuffer services with the node engine
+- stop relying on `HeliosInstanceImpl`'s map-only shortcut path for cluster behavior
+- route distributed-object operations through the cluster-aware partition + operation runtime
+- ensure `getDistributedObject()` can resolve queue/topic/ringbuffer service names, not only maps
+
+This is the prerequisite that makes the rest of Phase 1 meaningful.
 
 ### 1.1 Add queue config and service skeleton
 
@@ -296,7 +390,22 @@ Add queue service hooks for:
 This should follow the same general partition migration rules already used by map/ringbuffer
 subsystems.
 
-### 1.5 Add runtime wait-notify support
+### 1.5 Finalize the queue public API
+
+Update `src/collection/IQueue.ts` with the chosen public contract.
+
+Recommended additions for parity and correctness:
+
+- async operation-routed return types
+- timed `offer`
+- timed `poll`
+- blocking `put`
+- blocking `take`
+
+If this API expansion is rejected, then blocking semantics must be removed from the first queue
+delivery scope entirely.
+
+### 1.6 Add runtime wait-notify support
 
 The queue cannot be correct without this.
 
@@ -317,7 +426,7 @@ Upgrade `OperationServiceImpl` so it can:
 
 This runtime work should be shared by queue and ringbuffer operations.
 
-### 1.6 Phase 1 exit gate
+### 1.7 Phase 1 exit gate
 
 `IQueue` is considered real only when all of these pass:
 
