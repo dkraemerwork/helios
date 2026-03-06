@@ -3,6 +3,7 @@ import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/wri
 import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
 import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 import type { DelayedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 function makeMapStore(storeAllFn?: (...args: any[]) => any, deleteAllFn?: (...args: any[]) => any) {
   return {
@@ -12,7 +13,7 @@ function makeMapStore(storeAllFn?: (...args: any[]) => any, deleteAllFn?: (...ar
     deleteAll: mock(deleteAllFn ?? (async () => {})),
     load: mock(async () => null),
     loadAll: mock(async () => new Map()),
-    loadAllKeys: mock(async () => []),
+    loadAllKeys: mock(async () => MapKeyStream.fromIterable([])),
   };
 }
 

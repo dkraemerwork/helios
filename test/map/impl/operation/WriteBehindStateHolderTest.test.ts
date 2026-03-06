@@ -12,6 +12,7 @@ import { BoundedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/
 import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
 import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
 import { addedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 function makeWrapper(storeFn?: (key: string, value: string) => Promise<void>): MapStoreWrapper<string, string> {
     const impl = {
@@ -21,7 +22,7 @@ function makeWrapper(storeFn?: (key: string, value: string) => Promise<void>): M
         deleteAll: mock(async () => {}),
         load: mock(async () => null as string | null),
         loadAll: mock(async () => new Map<string, string>()),
-        loadAllKeys: mock(async () => [] as string[]),
+        loadAllKeys: mock(async () => MapKeyStream.fromIterable([] as string[])),
     };
     return new MapStoreWrapper<string, string>(impl as any);
 }
@@ -155,7 +156,7 @@ describe('WriteBehindStateHolder', () => {
             deleteAll: mock(async () => {}),
             load: mock(async () => null as string | null),
             loadAll: mock(async () => new Map<string, string>()),
-            loadAllKeys: mock(async () => [] as string[]),
+            loadAllKeys: mock(async () => MapKeyStream.fromIterable([] as string[])),
         };
         const wrapper = new MapStoreWrapper<string, string>(impl as any);
         const queue = new ArrayWriteBehindQueue<string, string>();

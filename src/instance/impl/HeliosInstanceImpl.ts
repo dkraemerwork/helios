@@ -408,6 +408,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   async shutdownAsync(): Promise<void> {
     // Await all registered hooks (e.g., executor drain)
     await Promise.allSettled(this._shutdownHooks.map((h) => h()));
+    // Await MapStore flush before tearing down (write-behind queues drain deterministically)
+    await this._mapService.flushAll();
     this.shutdown();
   }
 

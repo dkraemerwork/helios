@@ -8,6 +8,7 @@ export class EmptyMapDataStore<K, V> implements MapDataStore<K, V> {
   }
 
   async add(_key: K, _value: V, _now: number): Promise<void> {}
+  async addAll(_entries: Map<K, V>): Promise<void> {}
   async remove(_key: K, _now: number): Promise<void> {}
   async load(_key: K): Promise<V | null> { return null; }
   async loadAll(_keys: K[]): Promise<Map<K, V>> { return new Map(); }

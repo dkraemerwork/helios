@@ -4,6 +4,7 @@ import { CoalescedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstor
 import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
 import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
 import { addedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 function makeProcessor(processFn?: (...args: any[]) => any) {
   const impl = {
@@ -13,7 +14,7 @@ function makeProcessor(processFn?: (...args: any[]) => any) {
     deleteAll: mock(async () => {}),
     load: mock(async () => null),
     loadAll: mock(async () => new Map()),
-    loadAllKeys: mock(async () => []),
+    loadAllKeys: mock(async () => MapKeyStream.fromIterable([])),
   };
   const wrapper = new MapStoreWrapper<string, string>(impl as any);
   const processor = new WriteBehindProcessor(wrapper, 1000);

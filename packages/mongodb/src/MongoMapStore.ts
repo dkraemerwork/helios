@@ -1,5 +1,6 @@
 import { MongoClient } from 'mongodb';
 import type { MongoConfig, Serializer } from './MongoConfig.js';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 const defaultSerializer: Serializer<unknown> = {
   serialize: (v) => JSON.stringify(v),
@@ -105,9 +106,9 @@ export class MongoMapStore<T = unknown> {
     return map;
   }
 
-  async loadAllKeys(): Promise<string[]> {
+  async loadAllKeys(): Promise<MapKeyStream<string>> {
     const docs = await this._coll!.find({}, { projection: { _id: 1 } }).toArray();
-    return docs.map((d: any) => d._id as string);
+    return MapKeyStream.fromIterable(docs.map((d: any) => d._id as string));
   }
 
   // Static factory for per-map collection scoping

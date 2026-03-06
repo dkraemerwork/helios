@@ -7,6 +7,7 @@ import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
 import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 class SeedingMapStore implements MapStore<string, string> {
     private readonly _seed: Map<string, string>;
@@ -36,9 +37,9 @@ class SeedingMapStore implements MapStore<string, string> {
         return result;
     }
 
-    async loadAllKeys(): Promise<string[]> {
+    async loadAllKeys(): Promise<MapKeyStream<string>> {
         this.loadAllKeysCalled = true;
-        return Array.from(this._seed.keys());
+        return MapKeyStream.fromIterable(Array.from(this._seed.keys()));
     }
 }
 

@@ -12,6 +12,7 @@ import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 import type { MapLoader } from '@zenystx/helios-core/map/MapLoader';
 import type { MapLoaderLifecycleSupport } from '@zenystx/helios-core/map/MapLoaderLifecycleSupport';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 // ── Mock store implementations ─────────────────────────────────────────────
 
@@ -62,8 +63,8 @@ class MockMapStore<K extends string, V> implements MapStore<K, V> {
         return result;
     }
 
-    async loadAllKeys(): Promise<K[]> {
-        return Array.from(this.stored.keys());
+    async loadAllKeys(): Promise<MapKeyStream<K>> {
+        return MapKeyStream.fromIterable(Array.from(this.stored.keys()));
     }
 }
 
@@ -100,8 +101,8 @@ class MockMapLoader<K extends string, V> implements MapLoader<K, V> {
         return result;
     }
 
-    async loadAllKeys(): Promise<K[]> {
-        return Array.from(this.data.keys());
+    async loadAllKeys(): Promise<MapKeyStream<K>> {
+        return MapKeyStream.fromIterable(Array.from(this.data.keys()));
     }
 }
 

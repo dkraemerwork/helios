@@ -14,6 +14,7 @@
  *   - Multi-map replication
  */
 import { describe, test, expect, afterEach } from 'bun:test';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 import { TestCluster } from '@zenystx/helios-core/test-support/TestCluster';
 import { ChaosRunner } from '@zenystx/helios-core/test-support/ChaosRunner';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
@@ -61,8 +62,8 @@ function createMockMapStore<K, V>(): MapStore<K, V> & { stored: Map<K, V>; delet
             }
             return result;
         },
-        async loadAllKeys(): Promise<K[]> {
-            return [...stored.keys()];
+        async loadAllKeys(): Promise<MapKeyStream<K>> {
+            return MapKeyStream.fromIterable([...stored.keys()]);
         },
         async store(key: K, value: V): Promise<void> {
             stored.set(key, value);

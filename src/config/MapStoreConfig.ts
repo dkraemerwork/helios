@@ -20,6 +20,7 @@ export class MapStoreConfig {
     private _factoryImplementation: unknown = null;
     private _properties: Map<string, string> = new Map();
     private _initialLoadMode: InitialLoadMode = InitialLoadMode.LAZY;
+    private _loadAllKeys: boolean = true;
 
     isEnabled(): boolean {
         return this._enabled;
@@ -128,6 +129,15 @@ export class MapStoreConfig {
 
     setInitialLoadMode(initialLoadMode: InitialLoadMode): this {
         this._initialLoadMode = initialLoadMode;
+        return this;
+    }
+
+    isLoadAllKeys(): boolean {
+        return this._loadAllKeys;
+    }
+
+    setLoadAllKeys(loadAllKeys: boolean): this {
+        this._loadAllKeys = loadAllKeys;
         return this;
     }
 }

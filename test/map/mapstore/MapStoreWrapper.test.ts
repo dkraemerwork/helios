@@ -3,12 +3,13 @@ import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStore
 import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 import type { MapLoader } from '@zenystx/helios-core/map/MapLoader';
 import type { MapLoaderLifecycleSupport } from '@zenystx/helios-core/map/MapLoaderLifecycleSupport';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 // A full MapStore implementation
 const makeMapStore = (): MapStore<string, string> & MapLoaderLifecycleSupport => ({
   load: async (key) => key === 'exists' ? 'value' : null,
   loadAll: async (keys) => new Map(keys.map(k => [k, k + '-loaded'])),
-  loadAllKeys: async () => ['a', 'b'],
+  loadAllKeys: async () => MapKeyStream.fromIterable(['a', 'b']),
   store: async (_key, _value) => {},
   storeAll: async (_entries) => {},
   delete: async (_key) => {},
@@ -21,7 +22,7 @@ const makeMapStore = (): MapStore<string, string> & MapLoaderLifecycleSupport =>
 const makeMapLoader = (): MapLoader<string, string> => ({
   load: async (key) => key === 'exists' ? 'value' : null,
   loadAll: async (keys) => new Map(keys.map(k => [k, k + '-loaded'])),
-  loadAllKeys: async () => ['a', 'b'],
+  loadAllKeys: async () => MapKeyStream.fromIterable(['a', 'b']),
 });
 
 describe('MapStoreWrapper', () => {

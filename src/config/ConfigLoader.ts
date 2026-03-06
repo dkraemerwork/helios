@@ -50,14 +50,16 @@ export async function loadConfig(filePath: string): Promise<HeliosConfig> {
         throw new Error(`Unsupported config file format: "${ext}". Use .json or .yml/.yaml`);
     }
 
-    return parseRawConfig(raw);
+    return parseRawConfig(raw, filePath);
 }
 
 /**
  * Parses a raw (deserialized) config object into a HeliosConfig.
+ * @param raw The raw deserialized config object.
+ * @param configOrigin Optional file path origin for relative specifier resolution.
  * @throws Error with a descriptive message if validation fails.
  */
-export function parseRawConfig(raw: unknown): HeliosConfig {
+export function parseRawConfig(raw: unknown, configOrigin?: string): HeliosConfig {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
         throw new Error('Config must be an object');
     }
@@ -71,6 +73,11 @@ export function parseRawConfig(raw: unknown): HeliosConfig {
     }
 
     const config = new HeliosConfig(name);
+
+    // --- config origin (file path for relative specifier resolution) ---
+    if (configOrigin !== undefined) {
+        config.setConfigOrigin(configOrigin);
+    }
 
     // --- rest-api config ---
     if ('rest-api' in obj && obj['rest-api'] !== null && typeof obj['rest-api'] === 'object') {

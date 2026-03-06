@@ -2,11 +2,12 @@ import { describe, test, expect } from 'bun:test';
 import { LoadOnlyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/LoadOnlyMapDataStore';
 import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
 import type { MapLoader } from '@zenystx/helios-core/map/MapLoader';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 const makeLoader = (): MapLoader<string, string> => ({
   load: async (key) => key === 'k' ? 'v' : null,
   loadAll: async (keys) => new Map(keys.filter(k => k === 'k').map(k => [k, 'v'])),
-  loadAllKeys: async () => ['k'],
+  loadAllKeys: async () => MapKeyStream.fromIterable(['k']),
 });
 
 describe('LoadOnlyMapDataStore', () => {

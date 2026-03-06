@@ -68,7 +68,18 @@ export class MapStoreContext<K, V> {
     // EAGER initial load
     let initialEntries: Map<K, V> | null = null;
     if (config.getInitialLoadMode() === InitialLoadMode.EAGER) {
-      const keys = await wrapper.loadAllKeys();
+      if (!config.isLoadAllKeys()) {
+        throw new Error(
+          `MapStoreConfig for '${mapName}': EAGER initial-load mode requires load-all-keys=true`,
+        );
+      }
+      const stream = await wrapper.loadAllKeys();
+      const keys: K[] = [];
+      try {
+        for await (const k of stream) keys.push(k);
+      } finally {
+        await stream.close();
+      }
       if (keys.length > 0) {
         initialEntries = await wrapper.loadAll(keys);
       } else {

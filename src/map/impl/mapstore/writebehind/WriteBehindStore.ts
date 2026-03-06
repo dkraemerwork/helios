@@ -42,6 +42,15 @@ export class WriteBehindStore<K, V> implements MapDataStore<K, V> {
     this._stagingArea.set(JSON.stringify(key), entry);
   }
 
+  async addAll(entries: Map<K, V>): Promise<void> {
+    const now = Date.now();
+    for (const [key, value] of entries) {
+      const entry = addedEntry(key, value, now + this._writeDelayMs);
+      this._queue.offer(entry);
+      this._stagingArea.set(JSON.stringify(key), entry);
+    }
+  }
+
   async remove(key: K, now: number): Promise<void> {
     const entry = deletedEntry<K, V>(key, now + this._writeDelayMs);
     this._queue.offer(entry);
@@ -93,15 +102,24 @@ export class WriteBehindStore<K, V> implements MapDataStore<K, V> {
   }
 
   async clear(): Promise<void> {
+    // 1. Quiesce: stop worker, drain and process pending writes
     this._worker.stop();
     const pending = this._queue.drainAll();
     if (pending.length > 0) {
       await this._processor.process(pending);
     }
-    const keys = await this._wrapper.loadAllKeys();
+    // 2. Execute: collect keys from external store, then delete
+    const stream = await this._wrapper.loadAllKeys();
+    const keys: K[] = [];
+    try {
+      for await (const k of stream) keys.push(k);
+    } finally {
+      await stream.close();
+    }
     if (keys.length > 0) {
       await this._wrapper.deleteAll(keys);
     }
+    // 3. Block: clear queue and staging to prevent post-clear replay
     this._queue.clear();
     this._stagingArea.clear();
     this._worker.start();

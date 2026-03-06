@@ -19,9 +19,19 @@ export class HeliosConfig {
   private readonly _executorConfigs = new Map<string, ExecutorConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
+  private _configOrigin: string | null = null;
 
   constructor(name?: string) {
     this._name = name ?? "helios";
+  }
+
+  getConfigOrigin(): string | null {
+    return this._configOrigin;
+  }
+
+  setConfigOrigin(origin: string | null): this {
+    this._configOrigin = origin;
+    return this;
   }
 
   getName(): string {

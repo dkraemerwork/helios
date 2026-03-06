@@ -1,5 +1,6 @@
 import type { MapLoader } from '../../MapLoader.js';
 import type { MapStore } from '../../MapStore.js';
+import { MapKeyStream } from '../../MapKeyStream.js';
 
 type AnyStore<K, V> = MapStore<K, V> | MapLoader<K, V>;
 
@@ -25,8 +26,13 @@ export class MapStoreWrapper<K = unknown, V = unknown> {
     return this._impl.loadAll(keys);
   }
 
-  async loadAllKeys(): Promise<K[]> {
-    return this._impl.loadAllKeys();
+  async loadAllKeys(): Promise<MapKeyStream<K>> {
+    const result = await this._impl.loadAllKeys();
+    // Support legacy adapters returning K[] by wrapping in MapKeyStream
+    if (result instanceof MapKeyStream) {
+      return result;
+    }
+    return MapKeyStream.fromIterable(result as unknown as K[]);
   }
 
   async store(key: K, value: V): Promise<void> {

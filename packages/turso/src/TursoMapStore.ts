@@ -1,6 +1,7 @@
  import { createClient } from '@libsql/client';
 import type { Client, InStatement } from '@libsql/client';
 import type { TursoConfig, Serializer } from './TursoConfig.js';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 const BULK_CHUNK_SIZE = 500;
 
@@ -140,11 +141,11 @@ export class TursoMapStore<T = unknown> {
     return map;
   }
 
-  async loadAllKeys(): Promise<string[]> {
+  async loadAllKeys(): Promise<MapKeyStream<string>> {
     const result = await this._client!.execute(
       `SELECT key FROM "${this._tableName}"`,
     );
-    return result.rows.map((row) => row[0] as string);
+    return MapKeyStream.fromIterable(result.rows.map((row) => row[0] as string));
   }
 
   // Static factory for per-map table scoping

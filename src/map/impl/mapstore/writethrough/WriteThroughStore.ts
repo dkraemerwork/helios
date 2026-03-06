@@ -8,6 +8,10 @@ export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
     await this._wrapper.store(key, value);
   }
 
+  async addAll(entries: Map<K, V>): Promise<void> {
+    await this._wrapper.storeAll(entries);
+  }
+
   async remove(key: K, _now: number): Promise<void> {
     await this._wrapper.delete(key);
   }
@@ -25,7 +29,13 @@ export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
   }
 
   async clear(): Promise<void> {
-    const keys = await this._wrapper.loadAllKeys();
+    const stream = await this._wrapper.loadAllKeys();
+    const keys: K[] = [];
+    try {
+      for await (const k of stream) keys.push(k);
+    } finally {
+      await stream.close();
+    }
     if (keys.length > 0) {
       await this._wrapper.deleteAll(keys);
     }

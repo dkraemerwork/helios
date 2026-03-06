@@ -5,6 +5,7 @@ export class LoadOnlyMapDataStore<K, V> implements MapDataStore<K, V> {
   constructor(private readonly _wrapper: MapStoreWrapper<K, V>) {}
 
   async add(_key: K, _value: V, _now: number): Promise<void> {}
+  async addAll(_entries: Map<K, V>): Promise<void> {}
   async remove(_key: K, _now: number): Promise<void> {}
 
   async load(key: K): Promise<V | null> {

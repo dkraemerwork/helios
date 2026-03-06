@@ -4,6 +4,7 @@ import { CoalescedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstor
 import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
 import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
 import { StoreWorker } from '@zenystx/helios-core/map/impl/mapstore/writebehind/StoreWorker';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 function makeFullStack(storeAllFn?: (...args: any[]) => any) {
   const impl = {
@@ -13,7 +14,7 @@ function makeFullStack(storeAllFn?: (...args: any[]) => any) {
     deleteAll: mock(async () => {}),
     load: mock(async (_key: string) => 'loaded' as string | null),
     loadAll: mock(async (keys: string[]) => new Map<string, string>(keys.map(k => [k, 'v']))),
-    loadAllKeys: mock(async () => ['k1', 'k2'] as string[]),
+    loadAllKeys: mock(async () => MapKeyStream.fromIterable(['k1', 'k2'])),
   };
   const wrapper = new MapStoreWrapper<string, string>(impl as any);
   const queue = new CoalescedWriteBehindQueue<string, string>();

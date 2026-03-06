@@ -7,13 +7,14 @@ import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 // Compile-time smoke test — verify root-barrel exports
 import type { MapLoader } from '@zenystx/helios-core/map/MapLoader';
 import type { MapLoaderLifecycleSupport } from '@zenystx/helios-core/map/MapLoaderLifecycleSupport';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 // (if these lines compile, the exports are wired)
 
 const fakeFactory: MapStoreFactory<string, string> = {
   newMapStore: async (_mapName, _props): Promise<MapStore<string, string>> => ({
     load: async () => null,
     loadAll: async () => new Map(),
-    loadAllKeys: async () => [],
+    loadAllKeys: async () => MapKeyStream.fromIterable([]),
     store: async () => {},
     storeAll: async () => {},
     delete: async () => {},
@@ -24,7 +25,7 @@ const fakeFactory: MapStoreFactory<string, string> = {
 const fakeImpl = {
   load: async () => null,
   loadAll: async () => new Map(),
-  loadAllKeys: async () => [],
+  loadAllKeys: async () => MapKeyStream.fromIterable([]),
   store: async () => {},
   storeAll: async () => {},
   delete: async () => {},

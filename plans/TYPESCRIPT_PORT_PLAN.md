@@ -232,12 +232,12 @@ adapter only partially wired.
 
 Tasks:
 
-- [ ] Bind this block to `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` as the authoritative Mongo implementation detail, and keep any touched shared clustered owner-authoritative core aligned with `plans/CLUSTER_SAFE_MAPSTORE_PLAN.md`.
-- [ ] Freeze the Mongo acceptance matrix and runtime scope to the document-mode contract in `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md`, including supported wiring paths and exact selector precedence.
-- [ ] Wire `shutdownAsync()` to await MapStore flush completion and make EAGER preload timing explicit so preload completes before the first map read/write operation resolves.
-- [ ] Close the remaining core runtime gaps touched by Mongo work: query/index rebuild after EAGER preload, `MapKeyStream<K>` as the only in-repo `loadAllKeys()` contract, real `putAll()` / `getAll()` bulk runtime paths, `load-all-keys` legality, and deterministic `clear()` ordering with queued/offloaded work.
-- [ ] Preserve config-origin metadata and JSON/YAML file-config resolution rules for dynamic-loading config paths.
-- [ ] Run a verification task that proves no core runtime gap remains that would leave Mongo MapStore partially wired after adapter work.
+- [x] Bind this block to `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` as the authoritative Mongo implementation detail, and keep any touched shared clustered owner-authoritative core aligned with `plans/CLUSTER_SAFE_MAPSTORE_PLAN.md`.
+- [x] Freeze the Mongo acceptance matrix and runtime scope to the document-mode contract in `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md`, including supported wiring paths and exact selector precedence.
+- [x] Wire `shutdownAsync()` to await MapStore flush completion and make EAGER preload timing explicit so preload completes before the first map read/write operation resolves.
+- [x] Close the remaining core runtime gaps touched by Mongo work: query/index rebuild after EAGER preload, `MapKeyStream<K>` as the only in-repo `loadAllKeys()` contract, real `putAll()` / `getAll()` bulk runtime paths, `load-all-keys` legality, and deterministic `clear()` ordering with queued/offloaded work.
+- [x] Preserve config-origin metadata and JSON/YAML file-config resolution rules for dynamic-loading config paths.
+- [x] Run a verification task that proves no core runtime gap remains that would leave Mongo MapStore partially wired after adapter work.
 
 ### Block 19.2 — Mongo config/property resolution + document mapping + lifecycle hardening
 
@@ -502,7 +502,7 @@ Tasks:
 - [x] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS) — ~16 tests
 - [x] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, current-master handoff, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
 - [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error
-- [ ] **Block 19.1** — MongoDB MapStore parity/scope freeze + core runtime closure (`plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` binding, document-only scope freeze, `shutdownAsync()` flush await, realistic EAGER timing, `MapKeyStream<K>` closure, bulk/clear/loadAllKeys legality, query/index rebuild, JSON/YAML config-origin wiring) — ~18 tests
+- [x] **Block 19.1** — MongoDB MapStore parity/scope freeze + core runtime closure (`plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` binding, document-only scope freeze, `shutdownAsync()` flush await, realistic EAGER timing, `MapKeyStream<K>` closure, bulk/clear/loadAllKeys legality, query/index rebuild, JSON/YAML config-origin wiring) — ~18 tests
 - [ ] **Block 19.2** — Mongo config/property resolution + document mapping + lifecycle hardening (`MapStoreConfig.properties` resolution, document-only mode, `id-column`, `columns`, `single-column-as-value`, `replace-strategy`, registry/provider bootstrap, dynamic loading, owned vs injected client lifecycle, read-only vs writable collection ownership) — ~20 tests
 - [ ] **Block 19.3** — Bulk I/O + Helios integration + real MongoDB proof (`storeAll`/`deleteAll` batching, retry ownership, offload behavior, write-through/write-behind integration, restart/shutdown/eager/lazy/clear/bulk/loadAllKeys proof, exact Mongo harness/proof commands, supported docs/examples) — ~22 tests
 - [ ] **Phase 19 checkpoint** — root and `packages/mongodb` typechecks green; Mongo package tests green; exact Mongo unit/core/offload/cluster/e2e proof commands from `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` are green; supported wiring paths, document-mode mapping, shutdown flush, restart persistence, eager/lazy load, clear, bulk, and `loadAllKeys()` streaming semantics are all exercised; 0 fail, 0 error

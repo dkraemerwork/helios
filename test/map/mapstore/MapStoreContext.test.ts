@@ -4,6 +4,7 @@ import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/Map
 import { WriteThroughStore } from '@zenystx/helios-core/map/impl/mapstore/writethrough/WriteThroughStore';
 import { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
 import { LoadOnlyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/LoadOnlyMapDataStore';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 function makeFullMapStore() {
   return {
@@ -13,7 +14,7 @@ function makeFullMapStore() {
     deleteAll: mock(async () => {}),
     load: mock(async () => null),
     loadAll: mock(async () => new Map()),
-    loadAllKeys: mock(async () => []),
+    loadAllKeys: mock(async () => MapKeyStream.fromIterable([])),
   };
 }
 
@@ -21,7 +22,7 @@ function makeMapLoader() {
   return {
     load: mock(async () => null),
     loadAll: mock(async () => new Map()),
-    loadAllKeys: mock(async () => []),
+    loadAllKeys: mock(async () => MapKeyStream.fromIterable([])),
   };
 }
 
@@ -122,7 +123,7 @@ describe('MapStoreContext', () => {
   it('getInitialEntries() returns entries for EAGER mode', async () => {
     const eagerImpl = {
       ...makeFullMapStore(),
-      loadAllKeys: mock(async () => ['k1', 'k2']),
+      loadAllKeys: mock(async () => MapKeyStream.fromIterable(['k1', 'k2'])),
       loadAll: mock(async (keys: string[]) => new Map<string, string>(keys.map(k => [k, 'val-' + k]))),
     };
 

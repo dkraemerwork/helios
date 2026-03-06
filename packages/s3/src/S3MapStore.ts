@@ -8,6 +8,7 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import type { S3Config, Serializer } from './S3Config.js';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 const DEFAULT_SUFFIX = '.json';
 
@@ -140,7 +141,7 @@ export class S3MapStore<T = unknown> {
     return map;
   }
 
-  async loadAllKeys(): Promise<string[]> {
+  async loadAllKeys(): Promise<MapKeyStream<string>> {
     const keys: string[] = [];
     let continuationToken: string | undefined;
     do {
@@ -156,7 +157,7 @@ export class S3MapStore<T = unknown> {
       }
       continuationToken = resp.IsTruncated ? resp.NextContinuationToken : undefined;
     } while (continuationToken != null);
-    return keys;
+    return MapKeyStream.fromIterable(keys);
   }
 
   // Static factory for per-map prefix scoping
