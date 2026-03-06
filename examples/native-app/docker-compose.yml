@@ -1,0 +1,59 @@
+name: helios-native-demo
+
+x-helios-node: &helios-node
+  build:
+    context: ../../..
+    dockerfile: helios/examples/native-app/Dockerfile
+  working_dir: /app/helios
+  restart: unless-stopped
+  command: ["bun", "run", "examples/native-app/src/app.ts"]
+
+services:
+  node3:
+    <<: *helios-node
+    environment:
+      HELIOS_NAME: node3
+      HELIOS_TCP_PORT: 5703
+      HELIOS_REST_PORT: 8083
+      HELIOS_CONTROL_PORT: 9093
+      HELIOS_EXPECTED_CLUSTER_SIZE: 3
+      HELIOS_OBSERVED_TOPICS: demo-events
+    ports:
+      - "5703:5703"
+      - "8083:8083"
+      - "9093:9093"
+
+  node2:
+    <<: *helios-node
+    depends_on:
+      - node3
+    environment:
+      HELIOS_NAME: node2
+      HELIOS_TCP_PORT: 5702
+      HELIOS_REST_PORT: 8082
+      HELIOS_CONTROL_PORT: 9092
+      HELIOS_EXPECTED_CLUSTER_SIZE: 3
+      HELIOS_OBSERVED_TOPICS: demo-events
+      HELIOS_PEERS: node3:5703
+    ports:
+      - "5702:5702"
+      - "8082:8082"
+      - "9092:9092"
+
+  node1:
+    <<: *helios-node
+    depends_on:
+      - node2
+      - node3
+    environment:
+      HELIOS_NAME: node1
+      HELIOS_TCP_PORT: 5701
+      HELIOS_REST_PORT: 8081
+      HELIOS_CONTROL_PORT: 9091
+      HELIOS_EXPECTED_CLUSTER_SIZE: 3
+      HELIOS_OBSERVED_TOPICS: demo-events
+      HELIOS_PEERS: node2:5702,node3:5703
+    ports:
+      - "5701:5701"
+      - "8081:8081"
+      - "9091:9091"
