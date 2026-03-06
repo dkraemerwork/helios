@@ -5,7 +5,7 @@
  * subsequent Phase 16 integration tests.
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { TestCluster } from '@zenystx/core/test-support/TestCluster';
+import { TestCluster } from '@zenystx/helios-core/test-support/TestCluster';
 
 describe('TestCluster', () => {
     let cluster: TestCluster;

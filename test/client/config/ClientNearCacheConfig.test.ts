@@ -4,8 +4,8 @@
  * Tests NearCacheConfig wildcard pattern matching via ClientConfig.
  */
 import { describe, test, expect } from 'bun:test';
-import { ClientConfig } from '@zenystx/core/client/config/ClientConfig';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { ClientConfig } from '@zenystx/helios-core/client/config/ClientConfig';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 
 describe('ClientNearCacheConfigTest', () => {
     test('testSpecificNearCacheConfig_whenAsteriskAtTheEnd', () => {

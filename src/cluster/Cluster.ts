@@ -1,4 +1,4 @@
-import type { Member } from '@zenystx/core/cluster/Member';
+import type { Member } from '@zenystx/helios-core/cluster/Member';
 
 /**
  * Cluster interface — provides access to cluster membership info.

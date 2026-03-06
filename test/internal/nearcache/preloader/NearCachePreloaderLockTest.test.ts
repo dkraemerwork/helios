@@ -7,9 +7,9 @@ import { describe, it, expect, afterEach } from 'bun:test';
 import { mkdirSync, existsSync, unlinkSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { NearCachePreloaderLock } from '@zenystx/core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
-import type { ILogger } from '@zenystx/core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
-import { HeliosException } from '@zenystx/core/core/exception/HeliosException';
+import { NearCachePreloaderLock } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
+import type { ILogger } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
+import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
 
 const noopLogger: ILogger = {
     warning: () => {},

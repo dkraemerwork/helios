@@ -8,9 +8,9 @@ import {
     BIG_ENDIAN,
     LITTLE_ENDIAN,
     type ByteOrder,
-} from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
-import { Bits } from '@zenystx/core/internal/nio/Bits';
-import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
+} from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
+import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
 
 const INIT_DATA = Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xff]);
 

@@ -1,9 +1,9 @@
 /**
- * @zenystx/nestjs/health — Health subpath barrel.
+ * @zenystx/helios-nestjs/health — Health subpath barrel.
  *
  * Import health-check symbols from this subpath to reduce bundle size:
  * ```typescript
- * import { HeliosHealthIndicator, HeliosHealthModule } from '@zenystx/nestjs/health';
+ * import { HeliosHealthIndicator, HeliosHealthModule } from '@zenystx/helios-nestjs/health';
  * ```
  */
 

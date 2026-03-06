@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.util.ClientMessageSplitter}.
  */
-import { ClientMessage, ClientMessageFrame } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 
 let fragmentationIdSequence = 0n;
 

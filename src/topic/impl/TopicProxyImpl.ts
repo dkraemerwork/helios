@@ -1,9 +1,9 @@
-import type { Data } from "@zenystx/core/internal/serialization/Data";
-import type { SerializationService } from "@zenystx/core/internal/serialization/SerializationService";
-import type { ITopic } from "@zenystx/core/topic/ITopic";
-import type { LocalTopicStats } from "@zenystx/core/topic/LocalTopicStats";
-import type { MessageListener } from "@zenystx/core/topic/MessageListener";
-import { DistributedTopicService } from "@zenystx/core/topic/impl/DistributedTopicService";
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats";
+import type { MessageListener } from "@zenystx/helios-core/topic/MessageListener";
+import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
 
 export class TopicProxyImpl<T> implements ITopic<T> {
   constructor(

@@ -2,9 +2,9 @@
  * Port of {@code com.hazelcast.map.impl.record.AbstractRecordTest}.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Record } from '@zenystx/core/map/impl/record/Record';
-import { ObjectRecordWithStats } from '@zenystx/core/map/impl/record/ObjectRecordWithStats';
-import { SystemClock } from '@zenystx/core/internal/util/time/Clock';
+import { Record } from '@zenystx/helios-core/map/impl/record/Record';
+import { ObjectRecordWithStats } from '@zenystx/helios-core/map/impl/record/ObjectRecordWithStats';
+import { SystemClock } from '@zenystx/helios-core/internal/util/time/Clock';
 
 describe('AbstractRecordTest', () => {
     const VALUE = {};

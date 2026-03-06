@@ -1,6 +1,6 @@
-import type { ItemListener } from "@zenystx/core/collection/ItemListener";
-import type { LocalQueueStats } from "@zenystx/core/collection/LocalQueueStats";
-import type { MaybePromise } from "@zenystx/core/util/MaybePromise";
+import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
+import type { LocalQueueStats } from "@zenystx/helios-core/collection/LocalQueueStats";
+import type { MaybePromise } from "@zenystx/helios-core/util/MaybePromise";
 
 /**
  * Distributed queue interface.

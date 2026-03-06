@@ -3,7 +3,7 @@
  *
  * This is the baseline backend used before Scatter worker-thread integration.
  */
-import type { ExecutionBackend } from '@zenystx/core/executor/impl/ExecutionBackend.js';
+import type { ExecutionBackend } from '@zenystx/helios-core/executor/impl/ExecutionBackend.js';
 
 export class InlineExecutionBackend implements ExecutionBackend {
     async execute(factory: (input: unknown) => unknown | Promise<unknown>, inputData: Buffer): Promise<unknown> {

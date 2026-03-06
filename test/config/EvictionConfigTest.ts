@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test';
-import { EvictionConfig } from '@zenystx/core/config/EvictionConfig';
-import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
-import { MaxSizePolicy } from '@zenystx/core/config/MaxSizePolicy';
+import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
 
 describe('EvictionConfigTest', () => {
 

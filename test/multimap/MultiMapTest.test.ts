@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { MultiMapImpl } from '@zenystx/core/multimap/impl/MultiMapImpl';
-import { ValueCollectionType } from '@zenystx/core/multimap/MultiMapConfig';
+import { MultiMapImpl } from '@zenystx/helios-core/multimap/impl/MultiMapImpl';
+import { ValueCollectionType } from '@zenystx/helios-core/multimap/MultiMapConfig';
 
 function makeMultiMap<K, V>(type: ValueCollectionType = ValueCollectionType.LIST) {
     return new MultiMapImpl<K, V>(type);

@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.internal.partition.AbstractInternalPartition}.
  * Base implementation of InternalPartition.
  */
-import type { Address } from '@zenystx/core/cluster/Address';
-import type { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import { MAX_REPLICA_COUNT } from '@zenystx/core/internal/partition/InternalPartition';
+import type { Address } from '@zenystx/helios-core/cluster/Address';
+import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
 
 export abstract class AbstractInternalPartition implements InternalPartition {
     protected readonly partitionId: number;

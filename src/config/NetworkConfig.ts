@@ -1,7 +1,7 @@
-import { JoinConfig } from '@zenystx/core/config/JoinConfig';
-import { InterfacesConfig } from '@zenystx/core/config/InterfacesConfig';
-import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
-import { MemcacheProtocolConfig } from '@zenystx/core/config/MemcacheProtocolConfig';
+import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
+import { InterfacesConfig } from '@zenystx/helios-core/config/InterfacesConfig';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { MemcacheProtocolConfig } from '@zenystx/helios-core/config/MemcacheProtocolConfig';
 
 export class NetworkConfig {
     static readonly DEFAULT_PORT = 5701;

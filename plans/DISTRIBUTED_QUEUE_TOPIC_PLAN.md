@@ -5,6 +5,19 @@
 Promote `IQueue` and `ITopic` from local-only placeholders to real cluster-backed
 distributed objects in `../helios`.
 
+## Status Note
+
+This plan is partially stale relative to the current repo.
+
+- `IQueue` is no longer purely local-only; the repo already has `DistributedQueueService`
+  wiring and multi-node queue tests.
+- `ITopic` is no longer purely local-only; the repo already has `DistributedTopicService`
+  wiring and multi-node classic-topic tests.
+- `ReliableTopic` is still missing.
+
+Use this file mainly for queue-runtime and ringbuffer/public-surface gaps. For topic-specific
+completion work, the canonical topic document is now `plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`.
+
 For the trading rewrite, the intended split is:
 
 - `IQueue` for single-consumer work distribution
@@ -22,6 +35,19 @@ This plan focuses on the missing queue/topic primitives only.
 
 The public surface already claims distributed queue/topic support, but the current runtime is
 still local-only for both structures.
+
+## Repo-Reality Amendments
+
+Before executing this plan, rewrite or reinterpret any step that assumes queue/topic are still
+stub-only. The implementation must also include:
+
+- a cutover strategy for `HeliosInstanceImpl` so new runtime work replaces or subsumes the
+  existing `DistributedQueueService` / `DistributedTopicService` paths instead of creating a
+  second competing implementation
+- `HeliosConfig` plumbing for any required ringbuffer config
+- `getDistributedObject()` and destroy-path updates for queue/topic/ringbuffer
+- repo-wide async `IQueue` call-site updates, including examples and tests
+- updates to tests that currently assert `getReliableTopic()` throws
 
 ### Verified current state
 

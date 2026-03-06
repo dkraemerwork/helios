@@ -1,4 +1,4 @@
-import type { DistributedObject } from '@zenystx/core/core/DistributedObject';
+import type { DistributedObject } from '@zenystx/helios-core/core/DistributedObject';
 
 /**
  * A DistributedObject that has a prefixed name (used by JCache objects).

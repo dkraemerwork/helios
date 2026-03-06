@@ -9,13 +9,13 @@ import { HeliosModule } from '../../src/HeliosModule';
 import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
 import { HeliosEventBridge } from '../../src/events/helios-event-bridge';
 import { HeliosEventBridgeModule } from '../../src/events/helios-event-bridge.module';
-import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
-import type { EntryListener, EntryEvent } from '@zenystx/core/map/EntryListener';
-import type { MessageListener } from '@zenystx/core/topic/MessageListener';
-import type { LifecycleListener } from '@zenystx/core/instance/lifecycle/LifecycleListener';
-import { EntryEventImpl } from '@zenystx/core/map/EntryListener';
-import { Message } from '@zenystx/core/topic/Message';
-import { LifecycleEvent, LifecycleState } from '@zenystx/core/instance/lifecycle/LifecycleEvent';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import type { EntryListener, EntryEvent } from '@zenystx/helios-core/map/EntryListener';
+import type { MessageListener } from '@zenystx/helios-core/topic/MessageListener';
+import type { LifecycleListener } from '@zenystx/helios-core/instance/lifecycle/LifecycleListener';
+import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
+import { Message } from '@zenystx/helios-core/topic/Message';
+import { LifecycleEvent, LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

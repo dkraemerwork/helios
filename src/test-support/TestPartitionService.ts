@@ -6,8 +6,8 @@
  *
  * Port of the test-support pattern from Java integration tests.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { Address } from '@zenystx/core/cluster/Address';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { Address } from '@zenystx/helios-core/cluster/Address';
 
 export const PARTITION_COUNT = 271;
 

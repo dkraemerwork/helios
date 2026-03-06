@@ -5,12 +5,12 @@
  * Uses stub NodeEngine to avoid needing a full cluster.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { BatchInvalidator } from '@zenystx/core/internal/nearcache/impl/invalidation/BatchInvalidator';
-import { NonStopInvalidator } from '@zenystx/core/internal/nearcache/impl/invalidation/NonStopInvalidator';
-import type { Invalidator } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidator';
-import type { BatchInvalidatorNodeEngine } from '@zenystx/core/internal/nearcache/impl/invalidation/BatchInvalidator';
-import type { InvalidatorNodeEngine } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidator';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { BatchInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
+import { NonStopInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/NonStopInvalidator';
+import type { Invalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import type { BatchInvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
+import type { InvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 // Minimal stub for BatchInvalidatorNodeEngine (no real cluster needed)
 function makeBatchNodeEngine(): BatchInvalidatorNodeEngine {

@@ -1,9 +1,9 @@
 import { describe, test, expect } from 'bun:test';
-import type { Predicate } from '@zenystx/core/query/Predicate';
-import { Predicates } from '@zenystx/core/query/Predicates';
-import { AndPredicate } from '@zenystx/core/query/impl/predicates/AndPredicate';
-import { OrPredicate } from '@zenystx/core/query/impl/predicates/OrPredicate';
-import type { CompoundPredicate } from '@zenystx/core/query/impl/predicates/CompoundPredicate';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import { Predicates } from '@zenystx/helios-core/query/Predicates';
+import { AndPredicate } from '@zenystx/helios-core/query/impl/predicates/AndPredicate';
+import { OrPredicate } from '@zenystx/helios-core/query/impl/predicates/OrPredicate';
+import type { CompoundPredicate } from '@zenystx/helios-core/query/impl/predicates/CompoundPredicate';
 
 type CompoundPredicateCtor = new () => CompoundPredicate;
 

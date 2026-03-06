@@ -14,7 +14,7 @@ import { describe, it, expect } from 'bun:test';
 // export has been forgotten, every `expect(X).toBeDefined()` assertion below
 // will fail — keeping the RED gate strict.
 
-import * as HeliosBarrel from '@zenystx/core/index';
+import * as HeliosBarrel from '@zenystx/helios-core/index';
 
 // ── 2. Package metadata ─────────────────────────────────────────────────────
 
@@ -212,6 +212,6 @@ describe('Block 7.8 — package.json distribution config', () => {
     });
 
     it('has a name', () => {
-        expect((pkg as Record<string, unknown>).name).toBe('@zenystx/core');
+        expect((pkg as Record<string, unknown>).name).toBe('@zenystx/helios-core');
     });
 });

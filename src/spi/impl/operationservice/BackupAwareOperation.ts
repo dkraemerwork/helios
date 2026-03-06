@@ -7,7 +7,7 @@
  *
  * Total sync + async backup count must not exceed MAX_BACKUP_COUNT (6).
  */
-import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export interface BackupAwareOperation {
     /** Whether a backup should be sent after this operation executes. */

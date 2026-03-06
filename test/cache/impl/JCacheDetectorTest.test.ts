@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.cache.impl.JCacheDetectorTest}.
  */
 import { describe, expect, test } from 'bun:test';
-import { JCacheDetector } from '@zenystx/core/cache/impl/JCacheDetector';
+import { JCacheDetector } from '@zenystx/helios-core/cache/impl/JCacheDetector';
 
 describe('JCacheDetectorTest', () => {
     test('testIsJCacheAvailable_withCorrectVersion', () => {

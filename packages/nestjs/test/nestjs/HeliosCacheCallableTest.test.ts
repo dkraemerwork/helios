@@ -12,8 +12,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
-import { HeliosCache, type IHeliosCacheMap } from '@zenystx/nestjs/HeliosCache';
-import { HeliosCacheModule } from '@zenystx/nestjs/HeliosCacheModule';
+import { HeliosCache, type IHeliosCacheMap } from '@zenystx/helios-nestjs/HeliosCache';
+import { HeliosCacheModule } from '@zenystx/helios-nestjs/HeliosCacheModule';
 
 // ---------------------------------------------------------------------------
 // Helpers

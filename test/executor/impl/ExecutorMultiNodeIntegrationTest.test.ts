@@ -7,20 +7,20 @@
  * semantics, local inline isolation, stats accumulation, and shutdown propagation.
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
-import { NodeEngineImpl } from '@zenystx/core/spi/impl/NodeEngineImpl';
-import { Address } from '@zenystx/core/cluster/Address';
-import { SerializationServiceImpl } from '@zenystx/core/internal/serialization/impl/SerializationServiceImpl';
-import { SerializationConfig } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
-import { ExecutorServiceProxy } from '@zenystx/core/executor/impl/ExecutorServiceProxy';
-import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService';
-import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry';
-import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig';
-import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/core/executor/impl/ExecuteCallableOperation';
-import { MemberCallableOperation } from '@zenystx/core/executor/impl/MemberCallableOperation';
-import { ShutdownOperation } from '@zenystx/core/executor/impl/ShutdownOperation';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { Member } from '@zenystx/core/cluster/Member';
+import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { ExecutorServiceProxy } from '@zenystx/helios-core/executor/impl/ExecutorServiceProxy';
+import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService';
+import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
+import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/helios-core/executor/impl/ExecuteCallableOperation';
+import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation';
+import { ShutdownOperation } from '@zenystx/helios-core/executor/impl/ShutdownOperation';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { Member } from '@zenystx/helios-core/cluster/Member';
 
 // ── Multi-node simulation ───────────────────────────────────────────────────
 

@@ -5,10 +5,10 @@
  * RecordStore for (mapName, partitionId) from the MapContainerService
  * registered in NodeEngine under MapService.SERVICE_NAME.
  */
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { RecordStore } from '@zenystx/core/map/impl/recordstore/RecordStore';
-import type { MapContainerService } from '@zenystx/core/map/impl/MapContainerService';
-import { MapService } from '@zenystx/core/map/impl/MapService';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 
 export abstract class MapOperation extends Operation {
     protected readonly mapName: string;

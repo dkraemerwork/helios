@@ -4,7 +4,7 @@
  * Runs atomically on the partition thread that owns the entry's key.
  * Call entry.setValue() to modify the entry; return a result of type R.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 /**
  * An entry view passed to {@link EntryProcessor.process}.

@@ -1,11 +1,11 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapPutCodec}.
  */
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { DataCodec } from './builtin/DataCodec';
 import { StringCodec } from './builtin/StringCodec';
 import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class MapPutCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x010100; // 65792

@@ -3,8 +3,8 @@
  *
  * Sends true if the key exists in the partition's record store, false otherwise.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
 
 export class ContainsKeyOperation extends MapOperation {
     private readonly _key: Data;

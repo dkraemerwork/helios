@@ -5,41 +5,41 @@
  * Production implementation of InternalSerializationService with full dispatch chain,
  * BufferPool wiring, and DataSerializerHook registration.
  */
-import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { SerializerAdapter } from '@zenystx/core/internal/serialization/impl/SerializerAdapter';
-import { SerializationConfig } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
-import { SerializationConstants } from '@zenystx/core/internal/serialization/impl/SerializationConstants';
-import { HazelcastSerializationError } from '@zenystx/core/internal/serialization/impl/HazelcastSerializationError';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
-import { BufferPool } from '@zenystx/core/internal/serialization/impl/bufferpool/BufferPool';
-import { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { ByteArrayObjectDataInput, type ByteOrder } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
-import { Bits } from '@zenystx/core/internal/nio/Bits';
+import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
+import { HazelcastSerializationError } from '@zenystx/helios-core/internal/serialization/impl/HazelcastSerializationError';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { BufferPool } from '@zenystx/helios-core/internal/serialization/impl/bufferpool/BufferPool';
+import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { ByteArrayObjectDataInput, type ByteOrder } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 
 // ── Built-in serializers ──
-import { NullSerializer } from '@zenystx/core/internal/serialization/impl/serializers/NullSerializer';
-import { BooleanSerializer } from '@zenystx/core/internal/serialization/impl/serializers/BooleanSerializer';
-import { ByteSerializer } from '@zenystx/core/internal/serialization/impl/serializers/ByteSerializer';
-import { CharSerializer } from '@zenystx/core/internal/serialization/impl/serializers/CharSerializer';
-import { ShortSerializer } from '@zenystx/core/internal/serialization/impl/serializers/ShortSerializer';
-import { IntegerSerializer } from '@zenystx/core/internal/serialization/impl/serializers/IntegerSerializer';
-import { LongSerializer } from '@zenystx/core/internal/serialization/impl/serializers/LongSerializer';
-import { FloatSerializer } from '@zenystx/core/internal/serialization/impl/serializers/FloatSerializer';
-import { DoubleSerializer } from '@zenystx/core/internal/serialization/impl/serializers/DoubleSerializer';
-import { StringSerializer } from '@zenystx/core/internal/serialization/impl/serializers/StringSerializer';
-import { ByteArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/ByteArraySerializer';
-import { BooleanArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/BooleanArraySerializer';
-import { CharArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/CharArraySerializer';
-import { ShortArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/ShortArraySerializer';
-import { IntegerArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/IntegerArraySerializer';
-import { LongArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/LongArraySerializer';
-import { FloatArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/FloatArraySerializer';
-import { DoubleArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/DoubleArraySerializer';
-import { StringArraySerializer } from '@zenystx/core/internal/serialization/impl/serializers/StringArraySerializer';
-import { UuidSerializer } from '@zenystx/core/internal/serialization/impl/serializers/UuidSerializer';
-import { JavaScriptJsonSerializer } from '@zenystx/core/internal/serialization/impl/serializers/JavaScriptJsonSerializer';
-import { DataSerializableSerializer } from '@zenystx/core/internal/serialization/impl/serializers/DataSerializableSerializer';
+import { NullSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/NullSerializer';
+import { BooleanSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/BooleanSerializer';
+import { ByteSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/ByteSerializer';
+import { CharSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/CharSerializer';
+import { ShortSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/ShortSerializer';
+import { IntegerSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/IntegerSerializer';
+import { LongSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/LongSerializer';
+import { FloatSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/FloatSerializer';
+import { DoubleSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/DoubleSerializer';
+import { StringSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/StringSerializer';
+import { ByteArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/ByteArraySerializer';
+import { BooleanArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/BooleanArraySerializer';
+import { CharArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/CharArraySerializer';
+import { ShortArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/ShortArraySerializer';
+import { IntegerArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/IntegerArraySerializer';
+import { LongArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/LongArraySerializer';
+import { FloatArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/FloatArraySerializer';
+import { DoubleArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/DoubleArraySerializer';
+import { StringArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/StringArraySerializer';
+import { UuidSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/UuidSerializer';
+import { JavaScriptJsonSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/JavaScriptJsonSerializer';
+import { DataSerializableSerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/DataSerializableSerializer';
 
 export class SerializationServiceImpl implements InternalSerializationService {
     private readonly byteOrder: ByteOrder;

@@ -1,9 +1,9 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { StoreWorker } from '@zenystx/core/map/impl/mapstore/writebehind/StoreWorker';
-import { CoalescedWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
-import { WriteBehindProcessor } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindProcessor';
-import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
-import { addedEntry } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
+import { StoreWorker } from '@zenystx/helios-core/map/impl/mapstore/writebehind/StoreWorker';
+import { CoalescedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
+import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
+import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
+import { addedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 
 function makeProcessor(processFn?: (...args: any[]) => any) {
   const impl = {

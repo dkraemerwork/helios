@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { CacheGetInvalidationMetaDataOperation } from '@zenystx/core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
-import { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { CacheGetInvalidationMetaDataOperation } from '@zenystx/helios-core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
+import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 describe('CacheGetInvalidationMetaDataOperation', () => {
     it('run() includes partition UUIDs for each owned partition', () => {

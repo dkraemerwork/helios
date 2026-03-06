@@ -14,23 +14,23 @@
 
 | Package                                        | Description                                                        | Status      |
 | ---------------------------------------------- | ------------------------------------------------------------------ | ----------- |
-| [`@zenystx/core`](#helioscore)                  | Distributed data structures, clustering, serialization, near-cache | **Shipped** |
-| [`@zenystx/nestjs`](#heliosnestjs)              | NestJS 11 integration — DI, decorators, health checks              | **Shipped** |
-| [`@zenystx/blitz`](#heliosblitz)                | NATS JetStream-backed stream & batch processing engine             | **Shipped** |
-| [`@zenystx/s3`](#helios-mapstore-packages)      | S3-backed MapStore for IMap persistence                            | **Shipped** |
-| [`@zenystx/mongodb`](#helios-mapstore-packages) | MongoDB-backed MapStore for IMap persistence                       | **Shipped** |
-| [`@zenystx/turso`](#helios-mapstore-packages)   | Turso/SQLite-backed MapStore for IMap persistence                  | **Shipped** |
+| [`@zenystx/helios-core`](#helioscore)                  | Distributed data structures, clustering, serialization, near-cache | **Shipped** |
+| [`@zenystx/helios-nestjs`](#heliosnestjs)              | NestJS 11 integration — DI, decorators, health checks              | **Shipped** |
+| [`@zenystx/helios-blitz`](#heliosblitz)                | NATS JetStream-backed stream & batch processing engine             | **Shipped** |
+| [`@zenystx/helios-s3`](#helios-mapstore-packages)      | S3-backed MapStore for IMap persistence                            | **Shipped** |
+| [`@zenystx/helios-mongodb`](#helios-mapstore-packages) | MongoDB-backed MapStore for IMap persistence                       | **Shipped** |
+| [`@zenystx/helios-turso`](#helios-mapstore-packages)   | Turso/SQLite-backed MapStore for IMap persistence                  | **Shipped** |
 
 ---
 
 ## Quick Start
 
 ```bash
-bun add @zenystx/core
+bun add @zenystx/helios-core
 ```
 
 ```typescript
-import { Helios } from "@zenystx/core";
+import { Helios } from "@zenystx/helios-core";
 
 const hz = Helios.newInstance();
 const map = hz.getMap<string, number>("scores");
@@ -51,7 +51,7 @@ hz.shutdown();
 Spin up a TCP cluster in a few lines. Nodes auto-discover each other and replicate data across partitions.
 
 ```typescript
-import { Helios, HeliosConfig, NetworkConfig, TcpIpConfig } from "@zenystx/core";
+import { Helios, HeliosConfig, NetworkConfig, TcpIpConfig } from "@zenystx/helios-core";
 
 const cfg = new HeliosConfig();
 cfg.setInstanceName("node-1");
@@ -119,7 +119,7 @@ curl http://localhost:8081/hazelcast/rest/cluster
 
 ---
 
-## `@zenystx/core`
+## `@zenystx/helios-core`
 
 ### Data Structures
 
@@ -138,7 +138,7 @@ curl http://localhost:8081/hazelcast/rest/cluster
 ### Querying & Aggregations
 
 ```typescript
-import { Predicates } from "@zenystx/core";
+import { Predicates } from "@zenystx/helios-core";
 
 const map = hz.getMap<string, Employee>("employees");
 
@@ -233,7 +233,7 @@ Built-in HTTP REST server via `Bun.serve()` — zero extra dependencies.
 | `DATA`         | `GET/POST/DELETE /hazelcast/rest/maps/{name}/{key}`     |
 
 ```typescript
-import { HeliosRestServer, RestEndpointGroup } from "@zenystx/core";
+import { HeliosRestServer, RestEndpointGroup } from "@zenystx/helios-core";
 
 const server = new HeliosRestServer(hz, {
   port: 8080,
@@ -252,12 +252,12 @@ server.start();
 
 ---
 
-## `@zenystx/nestjs`
+## `@zenystx/helios-nestjs`
 
 First-class NestJS 11 integration.
 
 ```bash
-bun add @zenystx/nestjs
+bun add @zenystx/helios-nestjs
 ```
 
 ```typescript
@@ -270,7 +270,7 @@ import {
   Cacheable,
   CacheEvict,
   Transactional,
-} from "@zenystx/nestjs";
+} from "@zenystx/helios-nestjs";
 
 @Module({
   imports: [
@@ -324,16 +324,16 @@ class UserService {
 
 ---
 
-## `@zenystx/blitz`
+## `@zenystx/helios-blitz`
 
 NATS JetStream-backed stream and batch processing — an embedded, TypeScript-native replacement for Hazelcast Jet. Includes an embedded NATS server, so no separate broker is needed.
 
 ```bash
-bun add @zenystx/blitz
+bun add @zenystx/helios-blitz
 ```
 
 ```typescript
-import { BlitzService } from "@zenystx/blitz";
+import { BlitzService } from "@zenystx/helios-blitz";
 
 // Start with embedded single-node NATS (no external broker needed)
 const blitz = await BlitzService.start();
@@ -393,7 +393,7 @@ bun test packages/blitz/    # 393 tests
 
 ```
 helios/
-├── src/                    # @zenystx/core source
+├── src/                    # @zenystx/helios-core source
 │   ├── internal/           # Serialization, NIO, partitioning, near-cache internals
 │   ├── cluster/            # Cluster join, member management
 │   ├── map/ queue/ topic/  # Distributed data structure implementations
@@ -401,11 +401,11 @@ helios/
 │   └── instance/           # HeliosInstance lifecycle
 ├── test/                   # Core tests
 ├── packages/
-│   ├── nestjs/             # @zenystx/nestjs — NestJS integration (315 tests)
-│   ├── blitz/              # @zenystx/blitz — stream processing (393 tests)
-│   ├── s3/                 # @zenystx/s3 — S3 MapStore (14 tests)
-│   ├── mongodb/            # @zenystx/mongodb — MongoDB MapStore (15 tests)
-│   └── turso/              # @zenystx/turso — Turso/SQLite MapStore (18 tests)
+│   ├── nestjs/             # @zenystx/helios-nestjs — NestJS integration (315 tests)
+│   ├── blitz/              # @zenystx/helios-blitz — stream processing (393 tests)
+│   ├── s3/                 # @zenystx/helios-s3 — S3 MapStore (14 tests)
+│   ├── mongodb/            # @zenystx/helios-mongodb — MongoDB MapStore (15 tests)
+│   └── turso/              # @zenystx/helios-turso — Turso/SQLite MapStore (18 tests)
 ├── examples/
 │   ├── native-app/         # Two-node demo with REST API
 │   └── nestjs-app/         # NestJS demo application
@@ -421,7 +421,7 @@ helios/
 Plug persistent storage into any `IMap` via the MapStore SPI — write-through on every `put`, or write-behind with batching and retry. Three backends are available out of the box.
 
 ```typescript
-import { S3MapStore } from "@zenystx/s3";
+import { S3MapStore } from "@zenystx/helios-s3";
 
 const cfg = new HeliosConfig();
 const mapCfg = new MapConfig();
@@ -438,9 +438,9 @@ cfg.addMapConfig("persistent-map", mapCfg);
 
 | Package               | Backend                 | Install                   |
 | --------------------- | ----------------------- | ------------------------- |
-| **`@zenystx/s3`**      | AWS S3 / S3-compatible  | `bun add @zenystx/s3`      |
-| **`@zenystx/mongodb`** | MongoDB                 | `bun add @zenystx/mongodb` |
-| **`@zenystx/turso`**   | Turso / LibSQL / SQLite | `bun add @zenystx/turso`   |
+| **`@zenystx/helios-s3`**      | AWS S3 / S3-compatible  | `bun add @zenystx/helios-s3`      |
+| **`@zenystx/helios-mongodb`** | MongoDB                 | `bun add @zenystx/helios-mongodb` |
+| **`@zenystx/helios-turso`**   | Turso / LibSQL / SQLite | `bun add @zenystx/helios-turso`   |
 
 All three implement the same `MapStore` interface — swap backends without changing application code.
 
@@ -452,8 +452,8 @@ All three implement the same `MapStore` interface — swap backends without chan
 | --------------- | ------------------------------------------ |
 | **Bun**         | 1.x                                        |
 | **TypeScript**  | 6.0 beta (ES2025 target)                   |
-| **NestJS**      | 11.x (for `@zenystx/nestjs` only)           |
-| **nats-server** | Auto-downloaded by `@zenystx/blitz` via npm |
+| **NestJS**      | 11.x (for `@zenystx/helios-nestjs` only)           |
+| **nats-server** | Auto-downloaded by `@zenystx/helios-blitz` via npm |
 
 ---
 

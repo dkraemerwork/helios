@@ -6,8 +6,8 @@
  *
  * **v1 limitation (Finding 21):** Version tracking is per-partition, not per-namespace.
  */
-import { MAX_REPLICA_COUNT } from '@zenystx/core/internal/partition/InternalPartition';
-import type { PartitionReplicaManager } from '@zenystx/core/internal/partition/impl/PartitionReplicaManager';
+import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 
 export interface AntiEntropyResult {
     /** Whether a sync was triggered due to version mismatch. */

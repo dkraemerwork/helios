@@ -4,9 +4,9 @@
  * Abstract implementation of NearCacheRecord with value and expiration time as internal state.
  * Uses TimeStripUtil to compress timestamps into 32-bit seconds offsets.
  */
-import type { NearCacheRecord } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import { TIME_NOT_SET, READ_PERMITTED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/core/internal/util/TimeStripUtil';
+import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { TIME_NOT_SET, READ_PERMITTED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/helios-core/internal/util/TimeStripUtil';
 
 // Byte-cost constants matching AbstractNearCacheRecord.java
 export const NUMBER_OF_LONG_FIELD_TYPES = 2;   // reservationId, invalidationSequence

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachePreloaderConfig } from '@zenystx/core/config/NearCachePreloaderConfig';
+import { NearCachePreloaderConfig } from '@zenystx/helios-core/config/NearCachePreloaderConfig';
 
 describe('NearCachePreloaderConfigTest', () => {
     let config: NearCachePreloaderConfig;

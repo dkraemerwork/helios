@@ -2,9 +2,9 @@
  * Port of {@code com.hazelcast.internal.cluster.impl.MemberMap}.
  * Immutable member map allowing lookup by Address or UUID.
  */
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { Address } from '@zenystx/core/cluster/Address';
-import type { Member } from '@zenystx/core/cluster/Member';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import type { Member } from '@zenystx/helios-core/cluster/Member';
 
 class UnmodifiableSet<T> implements Iterable<T> {
     private readonly items: T[];
@@ -232,9 +232,9 @@ export class MemberMap {
         }
     }
 
-    toMembersView(): import('@zenystx/core/internal/cluster/impl/MembersView').MembersView {
+    toMembersView(): import('@zenystx/helios-core/internal/cluster/impl/MembersView').MembersView {
         // lazy import to avoid circular
-        const { MembersView } = require('@zenystx/core/internal/cluster/impl/MembersView');
+        const { MembersView } = require('@zenystx/helios-core/internal/cluster/impl/MembersView');
         return MembersView.createNew(this._version, this._members);
     }
 }

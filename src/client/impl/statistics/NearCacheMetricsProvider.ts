@@ -4,8 +4,8 @@
  * Collects NearCacheStats from all near caches across all registered
  * NearCacheManagers, keyed by near cache name.
  */
-import type { NearCacheManager } from '@zenystx/core/internal/nearcache/NearCacheManager';
-import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { NearCacheManager } from '@zenystx/helios-core/internal/nearcache/NearCacheManager';
+import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
 
 export class NearCacheMetricsProvider {
     private readonly _managers: NearCacheManager[];

@@ -5,10 +5,10 @@
  * invalidator selection, and repairing handler registration.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { MapNearCacheManager } from '@zenystx/core/map/impl/nearcache/MapNearCacheManager';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import type { MapNearCacheNodeEngine } from '@zenystx/core/map/impl/nearcache/MapNearCacheManager';
+import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import type { MapNearCacheNodeEngine } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
 
 function makeNodeEngine(overrides: Partial<MapNearCacheNodeEngine> = {}): MapNearCacheNodeEngine {
     const partitionService = {

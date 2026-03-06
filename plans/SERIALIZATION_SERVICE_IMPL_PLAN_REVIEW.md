@@ -5,6 +5,19 @@
 **Date:** 2026-03-03
 **Verdict:** **Not ready — rework required**
 
+## Status Note
+
+This document is now a historical review artifact, not the sole execution authority.
+
+- The current implementation plan is `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md`.
+- The master execution queue is `plans/TYPESCRIPT_PORT_PLAN.md`.
+- Any finding in this review must be interpreted as one of: historical context, still-open gap,
+  or already-resolved issue in the paired implementation plan/code.
+
+Before using this file for execution or signoff, add a status matrix for each finding and link it
+to the current plan sections, code, and tests. Do not treat stale line references here as live
+instructions.
+
 ---
 
 ## [BLOCKING] Issues

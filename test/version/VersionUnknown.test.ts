@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { Version } from '@zenystx/core/version/Version';
+import { Version } from '@zenystx/helios-core/version/Version';
 
 describe('VersionUnknownTest', () => {
   const UNKNOWN = Version.UNKNOWN;

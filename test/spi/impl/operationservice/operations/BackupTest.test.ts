@@ -5,11 +5,11 @@
  * execution, BackupAck sending (sync vs async), and migration edge cases (H-11).
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Backup, type BackupAckSender, type BackupReplicaVersionManager } from '@zenystx/core/spi/impl/operationservice/operations/Backup';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import { Address } from '@zenystx/core/cluster/Address';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import type { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
+import { Backup, type BackupAckSender, type BackupReplicaVersionManager } from '@zenystx/helios-core/spi/impl/operationservice/operations/Backup';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

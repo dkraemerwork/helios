@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
 import { HELIOS_INSTANCE_TOKEN } from '../HeliosInstanceDefinition';
-import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 
 /**
  * Health indicator for a Helios instance — usable with @nestjs/terminus HealthCheckService.

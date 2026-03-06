@@ -3,7 +3,7 @@
  * Manages migration tasks and migration status flags.
  * In single-threaded Bun runtime, uses a plain array instead of LinkedBlockingQueue.
  */
-import type { MigrationRunnable } from '@zenystx/core/internal/partition/impl/MigrationRunnable';
+import type { MigrationRunnable } from '@zenystx/helios-core/internal/partition/impl/MigrationRunnable';
 
 export class MigrationQueue {
     private _migrateTaskCount = 0;

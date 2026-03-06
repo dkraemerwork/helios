@@ -10,13 +10,13 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { Test, TestingModule } from '@nestjs/testing';
-import { HeliosTransactionManager } from '@zenystx/nestjs/HeliosTransactionManager';
-import { HeliosTransactionModule } from '@zenystx/nestjs/HeliosTransactionModule';
-import { ManagedTransactionalTaskContext } from '@zenystx/nestjs/ManagedTransactionalTaskContext';
-import { TransactionSystemException, NoTransactionException } from '@zenystx/nestjs/TransactionExceptions';
-import { TransactionTimedOutException } from '@zenystx/core/transaction/TransactionTimedOutException';
-import type { TransactionContext, TransactionalMap } from '@zenystx/core/transaction/TransactionContext';
-import type { TransactionContextFactory } from '@zenystx/nestjs/HeliosTransactionManager';
+import { HeliosTransactionManager } from '@zenystx/helios-nestjs/HeliosTransactionManager';
+import { HeliosTransactionModule } from '@zenystx/helios-nestjs/HeliosTransactionModule';
+import { ManagedTransactionalTaskContext } from '@zenystx/helios-nestjs/ManagedTransactionalTaskContext';
+import { TransactionSystemException, NoTransactionException } from '@zenystx/helios-nestjs/TransactionExceptions';
+import { TransactionTimedOutException } from '@zenystx/helios-core/transaction/TransactionTimedOutException';
+import type { TransactionContext, TransactionalMap } from '@zenystx/helios-core/transaction/TransactionContext';
+import type { TransactionContextFactory } from '@zenystx/helios-nestjs/HeliosTransactionManager';
 
 // ---------------------------------------------------------------------------
 // Mock infrastructure

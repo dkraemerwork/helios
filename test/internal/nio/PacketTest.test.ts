@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.serialization.impl.PacketTest}.
  */
 import { describe, test, expect } from 'bun:test';
-import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { Packet } from '@zenystx/helios-core/internal/nio/Packet';
 
 const { FLAG_4_0, FLAG_OP_CONTROL, FLAG_URGENT } = Packet;
 

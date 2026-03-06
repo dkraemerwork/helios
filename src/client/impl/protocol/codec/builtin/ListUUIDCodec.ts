@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.ListUUIDCodec}.
  */
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { FixedSizeTypesCodec, UUID_SIZE_IN_BYTES } from './FixedSizeTypesCodec';
 
 export class ListUUIDCodec {

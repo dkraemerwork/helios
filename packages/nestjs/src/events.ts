@@ -1,9 +1,9 @@
 /**
- * @zenystx/nestjs/events — Event bridge subpath barrel.
+ * @zenystx/helios-nestjs/events — Event bridge subpath barrel.
  *
  * Import event bridge symbols from this subpath to reduce bundle size:
  * ```typescript
- * import { HeliosEventBridge, HeliosEventBridgeModule } from '@zenystx/nestjs/events';
+ * import { HeliosEventBridge, HeliosEventBridgeModule } from '@zenystx/helios-nestjs/events';
  * ```
  */
 

@@ -1,6 +1,6 @@
-import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
-import { OutOfMemoryHandler } from '@zenystx/core/instance/impl/OutOfMemoryHandler';
-import { DefaultOutOfMemoryHandler } from '@zenystx/core/instance/impl/DefaultOutOfMemoryHandler';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import { OutOfMemoryHandler } from '@zenystx/helios-core/instance/impl/OutOfMemoryHandler';
+import { DefaultOutOfMemoryHandler } from '@zenystx/helios-core/instance/impl/DefaultOutOfMemoryHandler';
 
 const MAX_REGISTERED_INSTANCES = 50;
 

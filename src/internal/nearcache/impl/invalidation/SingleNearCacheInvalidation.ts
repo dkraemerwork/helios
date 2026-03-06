@@ -3,8 +3,8 @@
  *
  * Represents a single Near Cache invalidation event.
  */
-import { Invalidation } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidation';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { Invalidation } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidation';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class SingleNearCacheInvalidation extends Invalidation {
     private readonly _key: Data | null;

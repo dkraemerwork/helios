@@ -1,6 +1,6 @@
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { AbstractRingBufferOperation } from '@zenystx/core/ringbuffer/impl/operations/AbstractRingBufferOperation';
-import { OverflowPolicy } from '@zenystx/core/ringbuffer/OverflowPolicy';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { AbstractRingBufferOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AbstractRingBufferOperation';
+import { OverflowPolicy } from '@zenystx/helios-core/ringbuffer/OverflowPolicy';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.operations.AddOperation}.

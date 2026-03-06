@@ -3,18 +3,18 @@
  *
  * NearCacheRecordStore for BINARY in-memory-format.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { BaseHeapNearCacheRecordStore } from '@zenystx/core/internal/nearcache/impl/store/BaseHeapNearCacheRecordStore';
-import { NearCacheDataRecord } from '@zenystx/core/internal/nearcache/impl/record/NearCacheDataRecord';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { BaseHeapNearCacheRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/BaseHeapNearCacheRecordStore';
+import { NearCacheDataRecord } from '@zenystx/helios-core/internal/nearcache/impl/record/NearCacheDataRecord';
 import {
     NUMBER_OF_LONG_FIELD_TYPES,
     NUMBER_OF_INTEGER_FIELD_TYPES,
     NUMBER_OF_BOOLEAN_FIELD_TYPES,
-} from '@zenystx/core/internal/nearcache/impl/record/AbstractNearCacheRecord';
-import { TIME_NOT_SET } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+} from '@zenystx/helios-core/internal/nearcache/impl/record/AbstractNearCacheRecord';
+import { TIME_NOT_SET } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
 
 // Mirrors JVMUtil constants from Block 3.2a
 const REFERENCE_COST_IN_BYTES = 4;

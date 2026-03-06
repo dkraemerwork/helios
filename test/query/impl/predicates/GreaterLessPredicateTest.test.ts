@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { GreaterLessPredicate } from '@zenystx/core/query/impl/predicates/GreaterLessPredicate';
+import { GreaterLessPredicate } from '@zenystx/helios-core/query/impl/predicates/GreaterLessPredicate';
 import { entry } from './PredicateTestUtils';
 
 describe('GreaterLessPredicate', () => {

@@ -1,5 +1,5 @@
 import { expect } from 'bun:test';
-import type { InstancePermission } from '@zenystx/core/security/permission/InstancePermission';
+import type { InstancePermission } from '@zenystx/helios-core/security/permission/InstancePermission';
 
 /** Port of Java PermissionTestSupport + CheckPermission builder */
 export type PermissionFactory = (name: string, ...actions: string[]) => InstancePermission;

@@ -5,8 +5,8 @@
  * default fallback, and unsupported split-brain rejection.
  */
 import { describe, test, expect } from 'bun:test';
-import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig';
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 
 describe('ExecutorConfig', () => {
 

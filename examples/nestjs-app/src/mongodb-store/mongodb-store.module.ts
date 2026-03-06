@@ -1,5 +1,5 @@
 /**
- * MongoDbStoreModule — demonstrates @zenystx/mongodb as a write-through MapStore.
+ * MongoDbStoreModule — demonstrates @zenystx/helios-mongodb as a write-through MapStore.
  *
  * The 'user-profiles' IMap is backed by a MongoMapStore. Every put() writes
  * to both the in-memory map and MongoDB. Every get() for a key not in memory
@@ -10,7 +10,7 @@
  */
 
 import { Module } from '@nestjs/common';
-import { HeliosObjectExtractionModule } from '@zenystx/nestjs';
+import { HeliosObjectExtractionModule } from '@zenystx/helios-nestjs';
 import { MongoDbStoreService } from './mongodb-store.service';
 
 @Module({

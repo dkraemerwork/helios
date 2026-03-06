@@ -28,7 +28,7 @@
     // baseUrl intentionally omitted (deprecated in TS 6.0).
     // All path aliases use explicit relative prefixes below.
     "paths": {
-      "@zenystx/core/*": ["./src/*"]
+      "@zenystx/helios-core/*": ["./src/*"]
     },
 
     "outDir": "dist",

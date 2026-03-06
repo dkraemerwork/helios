@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { Sha256Util } from '@zenystx/core/internal/util/Sha256Util';
+import { Sha256Util } from '@zenystx/helios-core/internal/util/Sha256Util';
 
 describe('Sha256UtilTest', () => {
   it('testBytesToHex', () => {

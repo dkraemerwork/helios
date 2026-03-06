@@ -7,12 +7,12 @@
  *  - HeliosInstanceImpl REST wiring (starts/stops with instance)
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
-import { RestEndpointGroup } from '@zenystx/core/rest/RestEndpointGroup';
-import { HeliosRestServer } from '@zenystx/core/rest/HeliosRestServer';
-import { RestApiFilter } from '@zenystx/core/rest/RestApiFilter';
-import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { HeliosRestServer } from '@zenystx/helios-core/rest/HeliosRestServer';
+import { RestApiFilter } from '@zenystx/helios-core/rest/RestApiFilter';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 
 // ─── RestApiFilter — group routing ────────────────────────────────────────────
 

@@ -4,12 +4,12 @@
  * Tests NearCacheManager lifecycle: create, get, list, clear, destroy.
  */
 import { describe, it, expect } from 'bun:test';
-import { DefaultNearCacheManager } from '@zenystx/core/internal/nearcache/impl/DefaultNearCacheManager';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import { DefaultNearCacheManager } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 
 const DEFAULT_NEAR_CACHE_COUNT = 5;
 const DEFAULT_NEAR_CACHE_NAME = 'TestNearCache';

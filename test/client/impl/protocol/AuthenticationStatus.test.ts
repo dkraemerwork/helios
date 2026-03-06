@@ -2,7 +2,7 @@
  * Port of com.hazelcast.client.impl.protocol.AuthenticationStatusTest
  */
 import { describe, it, expect } from 'bun:test';
-import { AuthenticationStatus } from '@zenystx/core/client/impl/protocol/AuthenticationStatus';
+import { AuthenticationStatus } from '@zenystx/helios-core/client/impl/protocol/AuthenticationStatus';
 
 describe('AuthenticationStatus', () => {
     it('testGetId — AUTHENTICATED=0, CREDENTIALS_FAILED=1, SERIALIZATION_VERSION_MISMATCH=2', () => {

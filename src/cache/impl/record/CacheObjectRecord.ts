@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.cache.impl.record.CacheObjectRecord}.
  * Record that stores the value as a deserialized object (OBJECT in-memory format).
  */
-import type { CacheRecord } from '@zenystx/core/cache/impl/record/CacheRecord';
+import type { CacheRecord } from '@zenystx/helios-core/cache/impl/record/CacheRecord';
 
 export class CacheObjectRecord implements CacheRecord<unknown, unknown> {
     readonly TIME_NOT_AVAILABLE = -1 as const;

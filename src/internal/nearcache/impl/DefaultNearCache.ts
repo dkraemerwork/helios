@@ -3,21 +3,21 @@
  *
  * Default NearCache implementation that delegates to a NearCacheRecordStore.
  */
-import type { NearCache, UpdateSemantic } from '@zenystx/core/internal/nearcache/NearCache';
-import type { NearCacheRecordStore } from '@zenystx/core/internal/nearcache/NearCacheRecordStore';
-import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
-import type { TaskScheduler, ScheduledTask } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
-import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { NearCacheDataRecordStore } from '@zenystx/core/internal/nearcache/impl/store/NearCacheDataRecordStore';
-import { NearCacheObjectRecordStore } from '@zenystx/core/internal/nearcache/impl/store/NearCacheObjectRecordStore';
-import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import { NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import type { NearCache, UpdateSemantic } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import type { NearCacheRecordStore } from '@zenystx/helios-core/internal/nearcache/NearCacheRecordStore';
+import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
+import type { TaskScheduler, ScheduledTask } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { NearCacheDataRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/NearCacheDataRecordStore';
+import { NearCacheObjectRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/NearCacheObjectRecordStore';
+import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 
 export class DefaultNearCache<K, V> implements NearCache<K, V> {
 

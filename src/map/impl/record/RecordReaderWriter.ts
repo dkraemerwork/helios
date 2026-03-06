@@ -5,9 +5,9 @@
  * and replication operations.
  */
 import type { Record } from './Record';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
-import type { ByteArrayObjectDataInput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import type { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 
 export type RecordReadFn = (inp: ByteArrayObjectDataInput) => Record<unknown>;
 export type RecordWriteFn = (out: ByteArrayObjectDataOutput, record: Record<unknown>, dataValue: Data) => void;

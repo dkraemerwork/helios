@@ -2,12 +2,12 @@
  * Port of com.hazelcast.internal.partition.PartitionTableViewTest
  */
 import { describe, it, expect } from 'bun:test';
-import { Address } from '@zenystx/core/cluster/Address';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
-import { ReadonlyInternalPartition } from '@zenystx/core/internal/partition/ReadonlyInternalPartition';
-import { PartitionTableView } from '@zenystx/core/internal/partition/PartitionTableView';
-import { PartitionStampUtil } from '@zenystx/core/internal/partition/PartitionStampUtil';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { ReadonlyInternalPartition } from '@zenystx/helios-core/internal/partition/ReadonlyInternalPartition';
+import { PartitionTableView } from '@zenystx/helios-core/internal/partition/PartitionTableView';
+import { PartitionStampUtil } from '@zenystx/helios-core/internal/partition/PartitionStampUtil';
 
 const MAX_REPLICA_COUNT = 7; // InternalPartition.MAX_REPLICA_COUNT
 

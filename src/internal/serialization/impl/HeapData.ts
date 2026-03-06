@@ -3,10 +3,10 @@
  *
  * A {@link Data} implementation where the content lives on the heap (Buffer).
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { Bits } from '@zenystx/core/internal/nio/Bits';
-import { HashUtil } from '@zenystx/core/internal/util/HashUtil';
-import { SerializationConstants } from '@zenystx/core/internal/serialization/impl/SerializationConstants';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
+import { HashUtil } from '@zenystx/helios-core/internal/util/HashUtil';
+import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
 
 export class HeapData implements Data {
     static readonly PARTITION_HASH_OFFSET = 0;

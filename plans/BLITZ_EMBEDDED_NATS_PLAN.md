@@ -1,13 +1,24 @@
 # Blitz Embedded NATS Plan
 
 > **Purpose:** Design and implementation reference for embedding a NATS JetStream server
-> natively inside `@zenystx/blitz` so that users never need to provision or manage an external
+> natively inside `@zenystx/helios-blitz` so that users never need to provision or manage an external
 > NATS process. `BlitzService.start()` owns the full server lifecycle — binary resolution,
 > spawn, health-poll, cluster formation, and shutdown — with zero user configuration required
 > for single-node use and a concise options object for production cluster use.
 >
 > **Relates to:** `HELIOS_BLITZ_IMPLEMENTATION.md` (Issue 7 / Phase 10 test infrastructure),
 > `TYPESCRIPT_PORT_PLAN.md` Block 10.0.
+
+## Execution-Readiness Amendments
+
+This plan is only considered complete if it also closes these repo-specific gaps:
+
+- Update `packages/blitz/src/nestjs/HeliosBlitzModule.ts` so embedded and cluster configs call `BlitzService.start(...)`, while external-server configs keep using `BlitzService.connect(...)`.
+- Export any new public config types from `packages/blitz/src/index.ts`.
+- Align docs and packaging surfaces: update root `README.md`, and either create `packages/blitz/README.md` or remove it from `packages/blitz/package.json` publish files.
+- Define `dataDir` semantics per mode explicitly: single-node without `dataDir` may be in-memory, but cluster-without-`dataDir` must either use temp per-node storage plus cleanup or be rejected.
+- Add real runtime tests for cluster node config building and NestJS module startup; config-only tests are not sufficient.
+- Scope done gates to Blitz-owned suites or explicitly list any known unrelated root failures.
 
 ---
 
@@ -125,7 +136,7 @@ Move `nats-server` from `devDependencies` to `dependencies`:
 ```json
 {
   "dependencies": {
-    "@zenystx/core": "file:../..",
+    "@zenystx/helios-core": "file:../..",
     "@nats-io/jetstream": "^3.3.1",
     "@nats-io/kv": "^3.3.1",
     "@nats-io/transport-node": "^3.3.1",
@@ -850,7 +861,7 @@ await blitz.shutdown();
 - `FaultHandler`, `CheckpointManager`, `RetryPolicy`, `DeadLetterSink` — untouched
 - `HeliosBlitzModule` (NestJS) — `forRoot()` can pass any `BlitzConfig` including `embedded`
 - Wire format, codec, subject routing — untouched
-- `@zenystx/core` — zero changes
+- `@zenystx/helios-core` — zero changes
 
 ---
 
@@ -1007,10 +1018,11 @@ BLITZ_WAIT_FOR_CLUSTER_REQUIRED=false
 
 Notes:
 
-- `BLITZ_MODE=cluster-node` means "start one local embedded NATS node and join a remote/shared NATS cluster".
+- `BLITZ_MODE=cluster-node` means "start one local embedded NATS node using explicit primitive-level route config".
 - No `BLITZ_MASTER=true/false` flag exists.
 - `BLITZ_NATS_ROUTES` can list all nodes; the library should filter self after deriving this node's own route URL from `advertiseHost` + `clusterPort`.
 - `BLITZ_DEFAULT_REPLICAS` controls how many JetStream replicas Blitz requests for its own buckets/streams; it does not control NATS cluster formation.
+- `BlitzService.startFromEnv()` in raw Blitz should support only primitive-level modes (`servers`, `embedded`, `cluster`, `cluster-node`); Helios-aware distributed auto-join belongs in Helios integration.
 
 ### Three-replica deployment example
 
@@ -1130,124 +1142,269 @@ BLITZ_DEFAULT_REPLICAS=3
 
 ## Appendix B - Distributed-by-Default Helios Blitz Flow (Phase 18)
 
-> Purpose: make the Helios-integrated Blitz experience distributed by default. Once a second
-> Helios node joins the cluster, the local embedded NATS nodes should automatically form a
-> shared JetStream cluster.
+> Purpose: make the Helios-integrated Blitz experience distributed by default and fully
+> implementable end-to-end. Once a second Helios node joins the cluster, the local embedded NATS
+> nodes should automatically form a shared JetStream cluster through a concrete Helios control
+> plane, with no manual master env flag.
 
-### Default behavior
+### Final architecture
 
 - every Helios node hosts one local embedded `nats-server`
-- every app instance connects to its own local NATS server
-- the oldest/current Helios master member is the Blitz bootstrap master for topology + seed routing
-- all nodes are still NATS/JetStream replicas; the master is a control-plane role, not the only data node
-- no manual `BLITZ_MASTER=true/false` flag exists
+- every app instance connects to its own local NATS server on `127.0.0.1:<port>`
+- raw Blitz only owns the local embedded NATS lifecycle and primitive clustered-node startup
+- Helios owns the distributed orchestration layer: config, topology metadata, request/response protocol, bootstrap-master handoff, and lifecycle wiring
+- the bootstrap authority is the **current Helios cluster master**, not a separate Blitz-only concept
+- the first node is therefore the initial bootstrap master; after failover, the current Helios master takes over for future joins
+- NATS still elects its own JetStream/Raft data-plane leader; Helios master is only the control-plane seed authority
 
-### Automatic flow
+### Why this split is required
 
-1. first Helios node boots, starts one local embedded NATS node, and is the initial Blitz bootstrap master
-2. the first node registers its Blitz node metadata in a Helios-owned cluster metadata service
-3. when a second Helios node joins, it asks the oldest/master Helios member for the current Blitz seed/topology snapshot
-4. the joining node starts its own local NATS node in `clusterNode` mode and routes to the seed node(s)
-5. once connected, the NATS nodes form a cluster automatically; both app instances continue connecting locally
-6. when later nodes join, they repeat the same flow
-7. if the oldest/master Helios member leaves, the next oldest member becomes the Blitz bootstrap master for future joins; the existing NATS cluster continues running
+- raw `packages/blitz` does not have Helios membership/master context
+- `BLITZ_MODE=auto` therefore belongs in Helios integration, not raw Blitz env parsing
+- the low-level `clusterNode` primitive from Appendix A remains necessary, but it is not enough by itself to deliver automatic cluster formation in a Helios deployment
 
-### Important distinction
+### Concrete integration surface
 
-- Helios oldest/master member = Blitz bootstrap master / control plane coordinator
-- NATS cluster leader = JetStream/Raft data-plane leader elected by NATS
+The implementation must add these Helios-owned surfaces explicitly:
 
-These are related but not the same role.
+- `src/config/BlitzConfig.ts` or `src/config/BlitzRuntimeConfig.ts` for Helios-side Blitz runtime config
+- `src/config/HeliosConfig.ts` gains Blitz config accessors
+- `src/instance/impl/HeliosInstanceImpl.ts` owns Blitz startup/shutdown lifecycle
+- a new Helios runtime service, recommended path: `src/instance/impl/blitz/HeliosBlitzCoordinator.ts`
+- a new Helios metadata model, recommended path: `src/instance/impl/blitz/BlitzClusterTopology.ts`
+- explicit cluster protocol messages in `src/cluster/tcp/ClusterMessage.ts`
+- explicit message handling in `src/instance/impl/HeliosClusterCoordinator.ts` and `src/instance/impl/HeliosInstanceImpl.ts`
+- mandatory NestJS bridge changes so `packages/blitz/src/nestjs/HeliosBlitzModule.ts` reuses the Helios-owned Blitz instance in distributed-auto mode
 
-### Distributed default policy
+### Required protocol
 
-For Helios-integrated deployments, the default startup policy should be `distributed-auto`:
+The distributed flow must not rely on hand-wavy "ask the master" behavior. Add explicit request/
+response messages to `src/cluster/tcp/ClusterMessage.ts`:
 
-- if Helios TCP clustering is disabled -> Blitz falls back to local embedded mode
-- if Helios TCP clustering is enabled and the node is alone -> start one local embedded NATS node and wait for future peers
-- if Helios TCP clustering is enabled and peers exist -> auto-join the Blitz cluster through the current oldest/master Helios member
+- `BLITZ_NODE_REGISTER`
+- `BLITZ_NODE_REMOVE`
+- `BLITZ_TOPOLOGY_REQUEST`
+- `BLITZ_TOPOLOGY_RESPONSE`
+- `BLITZ_TOPOLOGY_ANNOUNCE`
 
-The raw `packages/blitz` primitives stay usable directly, but the Helios-facing default should
-be the distributed flow above.
+Minimum payload for topology records:
 
-### Env and bootstrap contract
+- `memberId`
+- `memberListVersion`
+- `serverName`
+- `clientPort`
+- `clusterPort`
+- `advertiseHost`
+- `clusterName`
+- `ready`
+- `startedAt`
 
-Recommended operator contract:
+Authoritative topology responses must also include the concrete clustered restart input the joiner uses:
 
-```text
-BLITZ_MODE=auto
-BLITZ_NATS_PORT=4222
-BLITZ_NATS_CLUSTER_PORT=6222
-BLITZ_NATS_CLUSTER_NAME=helios-blitz
-BLITZ_NATS_DATA_DIR=/var/lib/blitz/${HOSTNAME}
-BLITZ_DEFAULT_REPLICAS=3
+- `routes`: ordered list of `nats://<advertiseHost>:<clusterPort>` seed routes to configure into final `clusterNode` startup
+- `clientConnectUrl`: local connect target for the node itself after restart (normally `nats://127.0.0.1:<clientPort>`)
+
+Request/response messages must also carry:
+
+- `requestId` on `BLITZ_TOPOLOGY_REQUEST`
+- `requestId` on `BLITZ_TOPOLOGY_RESPONSE`
+- `masterMemberId` on `BLITZ_TOPOLOGY_RESPONSE`
+- `registrationsComplete` on `BLITZ_TOPOLOGY_RESPONSE`
+- `retryAfterMs` on retryable `BLITZ_TOPOLOGY_RESPONSE`
+
+### Topology source of truth
+
+- the current Helios master is the source of truth for Blitz topology snapshots
+- the snapshot generation should be derived from Helios membership state, preferably `memberListVersion`, instead of an unrelated mutable counter
+- topology data is rebuilt from live members plus active Blitz registrations; it must not depend on a single in-memory counter surviving master failover
+- when master changes, the new master cannot infer Blitz metadata from Helios membership alone; every Blitz-ready node must re-send `BLITZ_NODE_REGISTER` after master change or membership-version change under a new master
+- the expected registrant set for a re-registration sweep is: every currently joined Helios member with Blitz distributed-auto enabled and a locally started Blitz node for the current `memberListVersion`
+- the new master must treat that re-registration sweep as mandatory before serving authoritative future topology snapshots; if the sweep timeout expires, it may serve a degraded retryable response only, never an authoritative snapshot with `registrationsComplete=true`
+
+### Deterministic startup flow
+
+1. Helios node boots
+2. `HeliosInstanceImpl` determines whether Blitz distributed-auto mode is enabled in Helios config
+3. if Helios TCP clustering is disabled, Helios starts Blitz in local embedded mode only
+4. if Helios TCP clustering is enabled, Helios starts the local embedded NATS node using Appendix A `clusterNode` primitive in local-only readiness mode
+5. `HeliosBlitzCoordinator` waits until `HeliosClusterCoordinator` has either established self-master status or completed join and exposed a concrete current-master/member-list view
+6. only after that gate does the local node register its Blitz metadata with the current Helios master via `BLITZ_NODE_REGISTER`
+7. if the node is not the current Helios master, it requests the current seed topology via `BLITZ_TOPOLOGY_REQUEST`
+8. the current Helios master returns a deterministic `BLITZ_TOPOLOGY_RESPONSE` with `requestId`, routable peers, `masterMemberId`, and `memberListVersion`
+9. the joining node reconciles that snapshot with its local node config and, if authoritative routes differ from bootstrap-local config, performs one controlled restart into final clustered `clusterNode` config
+10. after successful clustered local JetStream readiness, the node marks itself ready and the master may publish `BLITZ_TOPOLOGY_ANNOUNCE` to newer joiners
+
+### Cluster-node cutover rule
+
+- `clusterNode` is startup-configured; live route reconfiguration is **not** part of v1
+- a node may boot a temporary local-only embedded NATS process before topology is known
+- once authoritative topology is received, the node performs at most one controlled restart into its final clustered config before it is allowed to mark itself `ready`
+- after a node is marked `ready`, later topology changes do not force restart; they only affect future joiners and reconciliation work
+- if authoritative routes differ from bootstrap-local config, restart is mandatory; silent live mutation is forbidden in v1
+
+### Master handoff behavior
+
+- the first node is the initial Helios master and therefore the initial Blitz bootstrap master
+- after that, the active bootstrap authority is simply the **current Helios master**
+- on master loss, existing NATS nodes continue running unchanged
+- the newly elected/current Helios master becomes the authority for future joins only after a mandatory Blitz node re-registration sweep repopulates topology metadata
+- no already-running node should need to reconnect just because Helios master changed
+
+### Retryable topology responses during failover
+
+- if the current Helios master has not yet completed the mandatory re-registration sweep, it must not serve an authoritative topology snapshot
+- instead it returns `BLITZ_TOPOLOGY_RESPONSE` with `registrationsComplete=false`, `masterMemberId`, `memberListVersion`, and `retryAfterMs`
+- that retryable response represents either "waiting for expected registrations" or "operating in degraded post-failover mode"; in both cases the joiner must retry rather than proceed
+- joiners back off and retry against the current master instead of guessing peers locally
+- joiners reject stale responses where `masterMemberId` or `memberListVersion` no longer matches the current Helios view
+
+### Topology announce semantics
+
+- `BLITZ_TOPOLOGY_ANNOUNCE` is emitted by the current Helios master after topology changes that affect future joiners
+- receivers use it as an invalidation/re-registration signal, not as an instruction to reconnect an already healthy local NATS node
+- on receiving an announce from a new master or newer `memberListVersion`, Blitz-ready nodes re-send `BLITZ_NODE_REGISTER`
+
+### Replication policy
+
+`defaultReplicas` alone is not sufficient unless creation-time semantics are defined.
+
+Required policy:
+
+- Helios-side Blitz config exposes `defaultReplicas`
+- Blitz-owned resources created while cluster size is below `defaultReplicas` must follow an explicit policy
+- recommended v1 policy: create with `replicas = min(defaultReplicas, currentReadyNodeCount)` and mark the resource as under-replicated in metadata
+- when the cluster grows, a reconciliation step upgrades Blitz-owned resources to the target replica count where JetStream supports it, or recreates them deterministically if required
+- this reconciliation behavior must be part of the plan, not left to implementation-time invention
+- the **current Helios master** is the sole reconciliation authority for under-replicated Blitz-owned resources
+- under-replicated markers are advisory only; the authoritative source of truth must be recomputable from Helios config (`defaultReplicas`), current ready-node count, and live JetStream/KV state after master failover
+- coordinator metadata may cache under-replicated work, but reconciliation must be restart-safe and refailover-safe by recomputing pending work before acting
+- any cached reconciliation work is fenced by `memberListVersion` so duplicate upgrade/recreate work cannot race across members
+
+### Helios config and env contract
+
+Helios, not raw Blitz, owns distributed-auto configuration.
+
+Recommended Helios config shape:
+
+```typescript
+export interface HeliosBlitzRuntimeConfig {
+    enabled?: boolean;
+    mode?: 'embedded-local' | 'distributed-auto' | 'external';
+    localPort?: number;
+    localClusterPort?: number;
+    clusterName?: string;
+    dataDir?: string;
+    advertiseHost?: string;
+    bindHost?: string;
+    startTimeoutMs?: number;
+    defaultReplicas?: number;
+}
 ```
 
-Meaning:
+Recommended env contract for Helios-owned auto mode:
 
-- `BLITZ_MODE=auto` is the default
-- no explicit master flag is required
-- stable per-node identity comes from Helios member identity / hostname
-- the oldest/master Helios member supplies or confirms the current seed topology
-- explicit `BLITZ_NATS_ROUTES` remains available as an override, but is not the primary Helios path
+```text
+HELIOS_BLITZ_ENABLED=true
+HELIOS_BLITZ_MODE=distributed-auto
+HELIOS_BLITZ_NATS_PORT=4222
+HELIOS_BLITZ_NATS_CLUSTER_PORT=6222
+HELIOS_BLITZ_CLUSTER_NAME=helios-blitz
+HELIOS_BLITZ_DATA_DIR=/var/lib/blitz/${HOSTNAME}
+HELIOS_BLITZ_ADVERTISE_HOST=${HOSTNAME}.svc.cluster.local
+HELIOS_BLITZ_DEFAULT_REPLICAS=3
+```
+
+Notes:
+
+- no `BLITZ_MASTER=true/false` env var exists
+- raw Blitz env helpers stay primitive-level only
+- Helios env/config resolution translates `distributed-auto` into the appropriate `clusterNode` primitive plus Helios control-plane calls
+- distributed-auto mode requires unique Helios member identities; multiple nodes must not boot with the default instance name unchanged
+
+### Lifecycle ownership
+
+The plan must wire lifecycle explicitly:
+
+- `HeliosInstanceImpl` owns Blitz service creation and shutdown
+- `shutdownAsync()` must await Blitz drain + embedded NATS shutdown
+- `shutdown()` is defined as the immediate legacy shutdown path; Blitz-integrated callers must use `shutdownAsync()` for graceful teardown and tests must assert that contract explicitly
+- Blitz child processes must never outlive Helios instance shutdown
+- `HeliosBlitzModule` must reuse an injected Helios-owned Blitz instance in `distributed-auto` mode; it must not call `BlitzService.connect()` independently in that mode
 
 ### Canonical queue mapping
 
 Appendix B maps to canonical master-plan blocks `18.1`-`18.5` in
 `plans/TYPESCRIPT_PORT_PLAN.md`.
 
-### Block 18.1 - `clusterNode` primitive + replication defaults
+### Block 18.1 - Raw Blitz `clusterNode` primitive + replication hooks
 
-Goal: finish the low-level Blitz package support needed for one embedded NATS node per app replica.
+Goal: finish the low-level Blitz package support needed by Helios integration.
 
 - add `ClusterNodeNatsConfig` and `clusterNode` to `packages/blitz/src/BlitzConfig.ts`
-- add `defaultReplicas` to Blitz config and resolved config
+- add typed `bindHost`, `advertiseHost`, `routes`, and cluster wait options to `packages/blitz/src/server/NatsServerConfig.ts`
 - support a single spawned clustered node in `packages/blitz/src/BlitzService.ts`
-- extend `packages/blitz/src/server/NatsServerConfig.ts` for bind host, advertise host, and seed routes
-- normalize routes, dedupe entries, and drop self-routes
+- normalize routes with stable ordering, dedupe entries, and self-route removal
+- add `defaultReplicas` to raw Blitz config and thread it into Blitz-owned KV/stream creation hooks
+- keep raw `startFromEnv()` limited to primitive modes only
 
-### Block 18.2 - Helios Blitz bootstrap-master control plane
+### Block 18.2 - Helios config, protocol, and topology service
 
-Goal: let the oldest/current Helios master member coordinate Blitz cluster metadata automatically.
+Goal: define the missing Helios-owned control plane concretely.
 
-- add a Helios-owned Blitz cluster metadata service that tracks member UUID, server name, advertise host, client port, cluster port, and generation
-- define the oldest/current Helios master member as the Blitz bootstrap master for topology snapshots and future joins
-- publish deterministic topology snapshots for joining nodes
-- define master handoff behavior when the oldest member leaves
+- add Helios Blitz runtime config to `src/config/HeliosConfig.ts`
+- add `BlitzClusterTopology` / `BlitzNodeRegistration` models under `src/instance/impl/blitz/`
+- add `HeliosBlitzCoordinator` under `src/instance/impl/blitz/`
+- add `BLITZ_NODE_REGISTER`, `BLITZ_NODE_REMOVE`, `BLITZ_TOPOLOGY_REQUEST`, `BLITZ_TOPOLOGY_RESPONSE`, and `BLITZ_TOPOLOGY_ANNOUNCE` to `src/cluster/tcp/ClusterMessage.ts`
+- route and handle those messages in `src/instance/impl/HeliosClusterCoordinator.ts` and `src/instance/impl/HeliosInstanceImpl.ts`
+- use current Helios master plus `memberListVersion` as the topology authority mechanism
+- require deterministic re-registration after master change or newer `memberListVersion` under a new master
+- make retryable `BLITZ_TOPOLOGY_RESPONSE` semantics explicit for incomplete post-failover registration windows
 
-### Block 18.3 - Distributed-auto startup, join, and rejoin flow
+### Block 18.3 - Helios runtime wiring and distributed-auto startup flow
 
-Goal: make distributed Blitz the default Helios behavior, not an opt-in manual role assignment.
+Goal: wire the Helios-owned control plane into real instance startup/shutdown.
 
-- on first-node startup, boot local embedded NATS without requiring peers
-- on later-node startup, fetch seed topology from the current bootstrap master and auto-join
-- keep every app instance connected locally to `127.0.0.1:<port>`
-- support node restart/rejoin without manual reconfiguration
-- keep Helios cluster join independent from NATS data-plane leadership
+- instantiate `HeliosBlitzCoordinator` from `src/instance/impl/HeliosInstanceImpl.ts`
+- start local Blitz embedded NATS at Helios startup when distributed-auto mode is enabled
+- gate Blitz control-plane registration on concrete Helios join/master readiness
+- register local node metadata with the current Helios master
+- request topology snapshot from the current Helios master on join
+- join/rejoin using `clusterNode` primitive plus returned topology, using the one-time controlled restart rule when authoritative routes differ from bootstrap-local config
+- wire shutdown and member-left cleanup so `BLITZ_NODE_REMOVE` and local shutdown behavior are deterministic
 
-### Block 18.4 - Env helpers, NestJS wiring, and replicated Blitz-owned state
+### Block 18.4 - Replication reconciliation, env helpers, and NestJS bridge
 
-Goal: make the default path easy to operate and actually replicated.
+Goal: make the distributed flow operable and self-consistent after dynamic cluster growth.
 
-- add `resolveBlitzConfigFromEnv()` / `BlitzService.startFromEnv()` with `BLITZ_MODE=auto`
-- add a Helios/NestJS bootstrap path that uses the distributed-auto default when clustering is enabled
-- propagate `defaultReplicas` into Blitz-owned JetStream/KV creation points
-- start with `packages/blitz/src/window/WindowState.ts` so KV-backed window state replicates across nodes
+- add Helios-owned env helper for `HELIOS_BLITZ_MODE=distributed-auto`
+- add replication reconciliation logic for Blitz-owned resources created before the full cluster is present
+- assign reconciliation ownership to the current Helios master and fence it with `memberListVersion`
+- start with `packages/blitz/src/window/WindowState.ts` and any other Blitz-owned KV/stream creation points
+- make `HeliosBlitzModule` reuse the Helios-owned Blitz instance in `distributed-auto` mode instead of creating its own standalone connection
+- ensure routable `advertiseHost` behavior is tested and documented; no localhost-only assumptions remain in the distributed flow
+- require explicit unique Helios node identity in config/env notes; default instance name reuse is not acceptable for distributed-auto mode
 
-### Block 18.5 - Multi-node HA verification
+### Block 18.5 - Multi-node HA and failover verification
 
-Goal: prove the full user story works with real Helios members.
+Goal: prove the full user story works with real Helios members and no plan-time gaps remain.
 
 - start 3 Helios/API replicas, each hosting one local NATS node, and verify they form one cluster
-- verify node 1 alone boots successfully and node 2 auto-joins without manual master flags
-- verify the oldest/master Helios member changeover after member loss does not break future joins
-- verify Blitz-owned KV/window state honors `defaultReplicas=3`
-- verify restart/rejoin and shutdown semantics stay deterministic
+- verify first-node-alone boot, second-node auto-join, and later-node joins
+- verify current Helios master handoff does not break future Blitz joins
+- verify retryable topology responses during post-failover re-registration windows
+- verify restart/rejoin works after a node leaves and comes back
+- verify Blitz-owned state reaches target replica count after cluster growth
+- verify `shutdownAsync()` and the chosen `shutdown()` semantics leave no embedded NATS processes behind
 
 ### Done gate for Appendix B / Phase 18
 
 - [ ] starting a second Helios node automatically forms a Blitz cluster with the first node
-- [ ] the oldest/current Helios master member acts as Blitz bootstrap master with no manual env toggle
+- [ ] the current Helios master acts as Blitz bootstrap authority with no manual env toggle
 - [ ] every Helios node hosts its own local embedded NATS node and connects locally
-- [ ] Blitz-owned state is replicated by default in multi-node deployments
-- [ ] a 3-node Helios deployment survives bootstrap-master loss and allows new nodes to join afterward
+- [ ] the topology protocol and metadata service are fully wired with concrete message types and handlers
+- [ ] master change triggers deterministic Blitz node re-registration before future topology snapshots are served
+- [ ] the bootstrap-local -> final-clustered cutover path is deterministic and never relies on live route mutation
+- [ ] Blitz-owned state reaches the configured replica count after cluster growth
+- [ ] reconciliation ownership is master-only and fenced against duplicate upgrades/recreates
+- [ ] Helios master failover does not block future node joins
+- [ ] no embedded NATS child processes leak after Helios shutdown

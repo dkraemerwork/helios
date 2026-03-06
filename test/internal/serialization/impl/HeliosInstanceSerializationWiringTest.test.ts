@@ -8,10 +8,10 @@
  * - writeObject/readObject work through NodeEngine's serialization service
  */
 import { describe, expect, test, spyOn } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
-import { SerializationServiceImpl } from '@zenystx/core/internal/serialization/impl/SerializationServiceImpl';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 describe('HeliosInstanceImpl serialization wiring (Block 15.5)', () => {
 

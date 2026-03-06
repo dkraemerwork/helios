@@ -3,7 +3,7 @@
  *
  * Multi-writer counter. In single-threaded Bun, identical to SwCounter.
  */
-import type { Counter } from '@zenystx/core/internal/util/counters/Counter';
+import type { Counter } from '@zenystx/helios-core/internal/util/counters/Counter';
 
 export class MwCounter implements Counter {
     private _value: bigint;

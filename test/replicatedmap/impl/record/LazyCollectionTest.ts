@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { LazyCollection } from '@zenystx/core/replicatedmap/impl/record/LazyCollection';
-import { InternalReplicatedMapStorage } from '@zenystx/core/replicatedmap/impl/record/InternalReplicatedMapStorage';
+import { LazyCollection } from '@zenystx/helios-core/replicatedmap/impl/record/LazyCollection';
+import { InternalReplicatedMapStorage } from '@zenystx/helios-core/replicatedmap/impl/record/InternalReplicatedMapStorage';
 
 describe('LazyCollectionTest', () => {
   // Use a real InternalReplicatedMapStorage with a no-op iterator factory

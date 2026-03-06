@@ -1,4 +1,4 @@
-import { MutableLong } from '@zenystx/core/internal/util/MutableLong';
+import { MutableLong } from '@zenystx/helios-core/internal/util/MutableLong';
 
 /**
  * Non thread-safe counter of items.

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { ListImpl } from '@zenystx/core/collection/impl/ListImpl';
+import { ListImpl } from '@zenystx/helios-core/collection/impl/ListImpl';
 
 function makeList(maxSize = 0) {
     return new ListImpl<string>(maxSize);

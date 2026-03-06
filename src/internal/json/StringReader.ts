@@ -1,4 +1,4 @@
-import type { Reader } from '@zenystx/core/internal/json/Reader';
+import type { Reader } from '@zenystx/helios-core/internal/json/Reader';
 
 /** Reads from a string (mirrors java.io.StringReader). */
 export class StringReader implements Reader {

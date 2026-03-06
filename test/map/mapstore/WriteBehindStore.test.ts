@@ -1,9 +1,9 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { WriteBehindStore } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindStore';
-import { CoalescedWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
-import { WriteBehindProcessor } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindProcessor';
-import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
-import { StoreWorker } from '@zenystx/core/map/impl/mapstore/writebehind/StoreWorker';
+import { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
+import { CoalescedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
+import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
+import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
+import { StoreWorker } from '@zenystx/helios-core/map/impl/mapstore/writebehind/StoreWorker';
 
 function makeFullStack(storeAllFn?: (...args: any[]) => any) {
   const impl = {

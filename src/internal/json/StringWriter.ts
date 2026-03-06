@@ -1,4 +1,4 @@
-import { Writer } from '@zenystx/core/internal/json/Writer';
+import { Writer } from '@zenystx/helios-core/internal/json/Writer';
 
 /** Accumulates all written characters into a string (mirrors java.io.StringWriter). */
 export class StringWriter extends Writer {

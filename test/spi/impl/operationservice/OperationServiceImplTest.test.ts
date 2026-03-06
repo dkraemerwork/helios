@@ -5,8 +5,8 @@
  * correctly with the operation's sendResponse() value.
  */
 import { describe, it, expect } from 'bun:test';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 // ── test operations ────────────────────────────────────────────────────────
 

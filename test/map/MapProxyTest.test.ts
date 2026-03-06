@@ -6,15 +6,15 @@
  * and all new IMap methods added in Block 7.4.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MapProxy } from '@zenystx/core/map/impl/MapProxy';
-import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
-import { MapContainerService } from '@zenystx/core/map/impl/MapContainerService';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
-import type { IMap } from '@zenystx/core/map/IMap';
-import type { Predicate } from '@zenystx/core/query/Predicate';
-import type { Aggregator } from '@zenystx/core/aggregation/Aggregator';
-import type { EntryListener } from '@zenystx/core/map/EntryListener';
-import type { QueryableEntry } from '@zenystx/core/query/impl/QueryableEntry';
+import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
+import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
+import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
+import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 

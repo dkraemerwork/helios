@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { WeightedEvictableList } from '@zenystx/core/internal/util/collection/WeightedEvictableList';
+import { WeightedEvictableList } from '@zenystx/helios-core/internal/util/collection/WeightedEvictableList';
 
 describe('WeightedEvictableListTest', () => {
   it('testNewItemStartsWithOneVote', () => {

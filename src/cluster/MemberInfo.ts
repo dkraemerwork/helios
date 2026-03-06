@@ -1,10 +1,10 @@
 /**
  * Port of {@code com.hazelcast.internal.cluster.MemberInfo}.
  */
-import type { Address } from '@zenystx/core/cluster/Address';
-import type { MemberVersion } from '@zenystx/core/version/MemberVersion';
-import type { EndpointQualifier } from '@zenystx/core/instance/EndpointQualifier';
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import type { Address } from '@zenystx/helios-core/cluster/Address';
+import type { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import type { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 
 export class MemberInfo {
     readonly #address: Address;

@@ -7,16 +7,16 @@
  *
  * @see MemberCallableOperation for member-targeted variant with no-retry semantics
  */
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation.js';
-import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
-import type { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
-import type { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData.js';
-import { Bits } from '@zenystx/core/internal/nio/Bits.js';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
+import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
+import type { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
+import type { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData.js';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits.js';
 import {
     UnknownTaskTypeException,
     TaskRegistrationMismatchException,
-} from '@zenystx/core/executor/ExecutorExceptions.js';
+} from '@zenystx/helios-core/executor/ExecutorExceptions.js';
 
 /** Wire-format descriptor sent by the executor proxy. */
 export interface TaskDescriptor {

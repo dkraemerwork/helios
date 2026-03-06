@@ -2,12 +2,12 @@
  * Tests for Block 16.E3 — Replica sync (full state transfer with per-namespace chunking).
  */
 import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
-import { PartitionReplicaSyncRequest, collectNamespaceStates } from '@zenystx/core/internal/partition/operation/PartitionReplicaSyncRequest';
-import { PartitionReplicaSyncResponse } from '@zenystx/core/internal/partition/operation/PartitionReplicaSyncResponse';
-import type { ReplicationNamespaceState } from '@zenystx/core/internal/partition/operation/PartitionReplicaSyncResponse';
-import { PartitionReplicaManager } from '@zenystx/core/internal/partition/impl/PartitionReplicaManager';
-import { PartitionContainer } from '@zenystx/core/internal/partition/impl/PartitionContainer';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { PartitionReplicaSyncRequest, collectNamespaceStates } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest';
+import { PartitionReplicaSyncResponse } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
+import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
+import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 /** Create a valid HeapData with 8+ bytes (4 partition hash + 4 type + payload). */
 function makeData(id: number): HeapData {

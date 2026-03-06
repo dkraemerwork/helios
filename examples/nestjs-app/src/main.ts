@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * main.ts — @zenystx/nestjs example entry point.
+ * main.ts — @zenystx/helios-nestjs example entry point.
  *
  * Bootstraps a NestJS application context (no HTTP server) and runs six demos:
  *
@@ -36,14 +36,14 @@ import "reflect-metadata";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { NestFactory } from "@nestjs/core";
-import { Helios } from "@zenystx/core/Helios";
-import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import { MapConfig } from "@zenystx/core/config/MapConfig";
-import { MapStoreConfig } from "@zenystx/core/config/MapStoreConfig";
-import { NearCacheConfig } from "@zenystx/core/config/NearCacheConfig";
-import { MongoMapStore } from "@zenystx/mongodb";
-import { S3MapStore } from "@zenystx/s3";
-import { TursoMapStore } from "@zenystx/turso";
+import { Helios } from "@zenystx/helios-core/Helios";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { MapStoreConfig } from "@zenystx/helios-core/config/MapStoreConfig";
+import { NearCacheConfig } from "@zenystx/helios-core/config/NearCacheConfig";
+import { MongoMapStore } from "@zenystx/helios-mongodb";
+import { S3MapStore } from "@zenystx/helios-s3";
+import { TursoMapStore } from "@zenystx/helios-turso";
 import { AppModule } from "./app.module";
 import { MongoDbStoreService } from "./mongodb-store/mongodb-store.service";
 import { NearCacheService } from "./near-cache/near-cache.service";

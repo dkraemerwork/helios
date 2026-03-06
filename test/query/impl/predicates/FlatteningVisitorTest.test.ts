@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'bun:test';
-import type { Predicate } from '@zenystx/core/query/Predicate';
-import { Predicates } from '@zenystx/core/query/Predicates';
-import { AndPredicate } from '@zenystx/core/query/impl/predicates/AndPredicate';
-import { OrPredicate } from '@zenystx/core/query/impl/predicates/OrPredicate';
-import { NotPredicate } from '@zenystx/core/query/impl/predicates/NotPredicate';
-import { FlatteningVisitor } from '@zenystx/core/query/impl/predicates/FlatteningVisitor';
-import type { NegatablePredicate } from '@zenystx/core/query/impl/predicates/NegatablePredicate';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import { Predicates } from '@zenystx/helios-core/query/Predicates';
+import { AndPredicate } from '@zenystx/helios-core/query/impl/predicates/AndPredicate';
+import { OrPredicate } from '@zenystx/helios-core/query/impl/predicates/OrPredicate';
+import { NotPredicate } from '@zenystx/helios-core/query/impl/predicates/NotPredicate';
+import { FlatteningVisitor } from '@zenystx/helios-core/query/impl/predicates/FlatteningVisitor';
+import type { NegatablePredicate } from '@zenystx/helios-core/query/impl/predicates/NegatablePredicate';
 
 const mockIndexes = {} as never;
 

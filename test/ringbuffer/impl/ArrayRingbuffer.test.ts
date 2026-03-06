@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { ArrayRingbuffer } from '@zenystx/core/ringbuffer/impl/ArrayRingbuffer';
-import { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
+import { ArrayRingbuffer } from '@zenystx/helios-core/ringbuffer/impl/ArrayRingbuffer';
+import { StaleSequenceException } from '@zenystx/helios-core/ringbuffer/StaleSequenceException';
 
 function fullRingbuffer(): ArrayRingbuffer<string> {
     const rb = new ArrayRingbuffer<string>(5);

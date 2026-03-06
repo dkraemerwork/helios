@@ -1,4 +1,4 @@
-import { QuickMath } from '@zenystx/core/internal/util/QuickMath';
+import { QuickMath } from '@zenystx/helios-core/internal/util/QuickMath';
 
 const MISSING_VALUE = -2147483648; // sentinel for empty slot (Integer.MIN_VALUE)
 

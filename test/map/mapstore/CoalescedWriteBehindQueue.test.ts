@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { CoalescedWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
-import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
+import { CoalescedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
+import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 
 describe('CoalescedWriteBehindQueue', () => {
   it('offer adds entry and size() increases', () => {

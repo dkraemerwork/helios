@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.map.impl.record.ObjectRecordWithStatsTest}.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { DataRecordWithStats } from '@zenystx/core/map/impl/record/DataRecordWithStats';
-import { ObjectRecordWithStats } from '@zenystx/core/map/impl/record/ObjectRecordWithStats';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { DataRecordWithStats } from '@zenystx/helios-core/map/impl/record/DataRecordWithStats';
+import { ObjectRecordWithStats } from '@zenystx/helios-core/map/impl/record/ObjectRecordWithStats';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 function mockData(id: number): Data {
     const buf = Buffer.allocUnsafe(12);

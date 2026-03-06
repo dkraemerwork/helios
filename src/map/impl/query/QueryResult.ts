@@ -3,12 +3,12 @@
  *
  * Represents a result of a query execution as an iterable collection of rows.
  */
-import type { PartitionIdSet } from '@zenystx/core/internal/util/collection/PartitionIdSet';
-import type { QueryableEntry } from '@zenystx/core/query/impl/QueryableEntry';
-import type { LocalMapStatsImpl } from '@zenystx/core/internal/monitor/impl/LocalMapStatsImpl';
-import { IterationType } from '@zenystx/core/internal/util/IterationType';
-import { QueryResultRow } from '@zenystx/core/map/impl/query/QueryResultRow';
-import { QueryResultSizeExceededException } from '@zenystx/core/map/QueryResultSizeExceededException';
+import type { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
+import type { LocalMapStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
+import { IterationType } from '@zenystx/helios-core/internal/util/IterationType';
+import { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
+import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
 
 export class QueryResult implements Iterable<QueryResultRow> {
     private _rows: QueryResultRow[] = [];
@@ -99,10 +99,10 @@ export class QueryResult implements Iterable<QueryResultRow> {
 
     private _convertEntryToRow(entry: QueryableEntry): QueryResultRow {
         const key = this._iterationType === IterationType.KEY || this._iterationType === IterationType.ENTRY
-            ? (entry.getKey() as import('@zenystx/core/internal/serialization/Data').Data ?? null)
+            ? (entry.getKey() as import('@zenystx/helios-core/internal/serialization/Data').Data ?? null)
             : null;
         const value = this._iterationType === IterationType.VALUE || this._iterationType === IterationType.ENTRY
-            ? (entry.getValue() as import('@zenystx/core/internal/serialization/Data').Data ?? null)
+            ? (entry.getValue() as import('@zenystx/helios-core/internal/serialization/Data').Data ?? null)
             : null;
         return new QueryResultRow(key, value);
     }

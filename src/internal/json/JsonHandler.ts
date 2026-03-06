@@ -1,5 +1,5 @@
-import type { JsonParser } from '@zenystx/core/internal/json/JsonParser';
-import type { Location } from '@zenystx/core/internal/json/Location';
+import type { JsonParser } from '@zenystx/helios-core/internal/json/JsonParser';
+import type { Location } from '@zenystx/helios-core/internal/json/Location';
 
 /**
  * Abstract SAX-style event handler for the JSON parser.

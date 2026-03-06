@@ -17,11 +17,11 @@
  */
 
 import { describe, it, expect, afterEach, mock } from 'bun:test';
-import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
-import { RestEndpointGroup } from '@zenystx/core/rest/RestEndpointGroup';
-import { HeliosRestServer } from '@zenystx/core/rest/HeliosRestServer';
-import { ClusterReadHandler } from '@zenystx/core/rest/handler/ClusterReadHandler';
-import { ClusterWriteHandler } from '@zenystx/core/rest/handler/ClusterWriteHandler';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { HeliosRestServer } from '@zenystx/helios-core/rest/HeliosRestServer';
+import { ClusterReadHandler } from '@zenystx/helios-core/rest/handler/ClusterReadHandler';
+import { ClusterWriteHandler } from '@zenystx/helios-core/rest/handler/ClusterWriteHandler';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

@@ -8,10 +8,10 @@
  * Cache names in Hazelcast are stored with a "/hz/" prefix in the metadata generator.
  * The caller is responsible for passing the prefixed name when registering handlers.
  */
-import { AbstractInvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import type { InvalidationMetaDataResponse } from '@zenystx/core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import { CacheGetInvalidationMetaDataOperation } from '@zenystx/core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
-import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { AbstractInvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
+import type { InvalidationMetaDataResponse } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
+import { CacheGetInvalidationMetaDataOperation } from '@zenystx/helios-core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
+import type { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 /** Represents one cluster data member as seen by the client cache metadata fetcher. */
 export interface ClientCacheDataMember {

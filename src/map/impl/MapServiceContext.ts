@@ -4,10 +4,10 @@
  * Context object provided to map-related services and infrastructure.
  * Carries the NodeEngine, per-partition RecordStore access, and stats.
  */
-import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
-import type { RecordStore } from '@zenystx/core/map/impl/recordstore/RecordStore';
-import type { PartitionIdSet } from '@zenystx/core/internal/util/collection/PartitionIdSet';
-import type { LocalMapStatsProvider } from '@zenystx/core/map/impl/LocalMapStatsProvider';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
+import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import type { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
+import type { LocalMapStatsProvider } from '@zenystx/helios-core/map/impl/LocalMapStatsProvider';
 
 export interface MapServiceContext {
     getNodeEngine(): NodeEngine;

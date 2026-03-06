@@ -9,9 +9,9 @@
  * Write path: put()/remove() write to the backing store and then invalidate
  * the corresponding near cache entry so the next read gets fresh data.
  */
-import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
-import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
 
 /** Minimal backing store interface — matches DefaultRecordStore's public surface. */
 export interface MapBackingStore<K, V> {

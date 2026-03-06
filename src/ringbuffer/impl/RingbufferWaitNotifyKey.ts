@@ -1,5 +1,5 @@
-import type { ObjectNamespace } from '@zenystx/core/internal/services/ObjectNamespace';
-import { DistributedObjectNamespace } from '@zenystx/core/internal/services/DistributedObjectNamespace';
+import type { ObjectNamespace } from '@zenystx/helios-core/internal/services/ObjectNamespace';
+import { DistributedObjectNamespace } from '@zenystx/helios-core/internal/services/DistributedObjectNamespace';
 
 /**
  * A key to enable waiting for an item to be published in the ringbuffer.

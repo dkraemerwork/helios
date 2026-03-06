@@ -1,8 +1,8 @@
 /**
- * @zenystx/blitz — NATS-backed stream & batch processing engine.
+ * @zenystx/helios-blitz — NATS-backed stream & batch processing engine.
  *
  * Entry point exports for the public API.
- * NOTE: NestJS integration is exported from '@zenystx/blitz/nestjs' (NOT from this barrel).
+ * NOTE: NestJS integration is exported from '@zenystx/helios-blitz/nestjs' (NOT from this barrel).
  */
 
 export { BlitzService } from './BlitzService.ts';

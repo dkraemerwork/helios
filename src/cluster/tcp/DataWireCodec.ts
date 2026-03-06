@@ -1,5 +1,5 @@
-import type { Data } from "@zenystx/core/internal/serialization/Data";
-import { HeapData } from "@zenystx/core/internal/serialization/impl/HeapData";
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
 
 export interface EncodedData {
   readonly bytes: string;

@@ -1,4 +1,4 @@
-import { Writer } from '@zenystx/core/internal/json/Writer';
+import { Writer } from '@zenystx/helios-core/internal/json/Writer';
 
 /**
  * A lightweight writing buffer to reduce the number of write operations on the

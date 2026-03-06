@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
+import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 
 describe('DelayedEntry', () => {
   test('addedEntry() sets type=ADD and value', () => {

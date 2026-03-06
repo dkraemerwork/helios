@@ -11,7 +11,7 @@ import {
   GcpDiscoveryProvider,
   K8sDiscoveryProvider,
   StaticDiscoveryProvider,
-} from '@zenystx/core/discovery/HeliosDiscovery';
+} from '@zenystx/helios-core/discovery/HeliosDiscovery';
 
 // ---------------------------------------------------------------------------
 // Helpers

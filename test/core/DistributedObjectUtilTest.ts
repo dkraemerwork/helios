@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
-import { DistributedObjectUtil } from '@zenystx/core/core/DistributedObjectUtil';
-import type { DistributedObject } from '@zenystx/core/core/DistributedObject';
-import type { PrefixedDistributedObject } from '@zenystx/core/core/PrefixedDistributedObject';
+import { DistributedObjectUtil } from '@zenystx/helios-core/core/DistributedObjectUtil';
+import type { DistributedObject } from '@zenystx/helios-core/core/DistributedObject';
+import type { PrefixedDistributedObject } from '@zenystx/helios-core/core/PrefixedDistributedObject';
 
 describe('DistributedObjectUtil', () => {
   test('getName returns object name', () => {

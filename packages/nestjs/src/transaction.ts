@@ -1,9 +1,9 @@
 /**
- * @zenystx/nestjs/transaction — Transaction subpath barrel.
+ * @zenystx/helios-nestjs/transaction — Transaction subpath barrel.
  *
  * Import transaction-related symbols from this subpath to reduce bundle size:
  * ```typescript
- * import { HeliosTransactionModule, Transactional, Propagation } from '@zenystx/nestjs/transaction';
+ * import { HeliosTransactionModule, Transactional, Propagation } from '@zenystx/helios-nestjs/transaction';
  * ```
  */
 

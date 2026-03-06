@@ -10,7 +10,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { TransactionContext } from '@zenystx/core/transaction/TransactionContext';
+import type { TransactionContext } from '@zenystx/helios-core/transaction/TransactionContext';
 import {
     NoTransactionException,
     TransactionSystemException,

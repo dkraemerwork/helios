@@ -10,9 +10,9 @@
  * Write path:
  *   Put / remove — write to backing store, then invalidate the near cache entry.
  */
-import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
-import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
 
 /** Minimal backing store interface for a client map proxy. */
 export interface ClientMapBackingStore<K, V> {

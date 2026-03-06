@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.map.impl.LocalMapStatsProvider} (minimal surface).
  */
-import type { LocalMapStatsImpl } from '@zenystx/core/internal/monitor/impl/LocalMapStatsImpl';
+import type { LocalMapStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 
 export interface LocalMapStatsProvider {
     hasLocalMapStatsImpl(mapName: string): boolean;

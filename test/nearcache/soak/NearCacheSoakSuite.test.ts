@@ -13,18 +13,18 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 
-import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig, LocalUpdatePolicy } from '@zenystx/core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
-import { NearCachedClientMapProxy } from '@zenystx/core/client/map/impl/nearcache/NearCachedClientMapProxy';
-import { NearCachedClientCacheProxy } from '@zenystx/core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
-import { RepairingTask } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingTask';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
-import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig, LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import { NearCachedClientMapProxy } from '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy';
+import { NearCachedClientCacheProxy } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 

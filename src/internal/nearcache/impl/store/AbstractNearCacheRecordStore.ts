@@ -3,21 +3,21 @@
  *
  * Abstract implementation of NearCacheRecordStore.
  */
-import type { NearCacheRecordStore } from '@zenystx/core/internal/nearcache/NearCacheRecordStore';
-import type { NearCacheRecord } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
-import type { UpdateSemantic } from '@zenystx/core/internal/nearcache/NearCache';
-import type { EvictionChecker } from '@zenystx/core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
-import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import type { EvictionListener } from '@zenystx/core/internal/nearcache/impl/store/HeapNearCacheRecordMap';
-import type { StaleReadDetector } from '@zenystx/core/internal/nearcache/impl/invalidation/StaleReadDetector';
-import { NearCacheStatsImpl } from '@zenystx/core/internal/monitor/impl/NearCacheStatsImpl';
-import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
-import { CACHED_AS_NULL } from '@zenystx/core/internal/nearcache/NearCache';
-import { NOT_RESERVED, READ_PERMITTED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import { ALWAYS_FRESH } from '@zenystx/core/internal/nearcache/impl/invalidation/StaleReadDetector';
+import type { NearCacheRecordStore } from '@zenystx/helios-core/internal/nearcache/NearCacheRecordStore';
+import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
+import type { UpdateSemantic } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import type { EvictionChecker } from '@zenystx/helios-core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
+import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { EvictionListener } from '@zenystx/helios-core/internal/nearcache/impl/store/HeapNearCacheRecordMap';
+import type { StaleReadDetector } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/StaleReadDetector';
+import { NearCacheStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/NearCacheStatsImpl';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import { CACHED_AS_NULL } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_RESERVED, READ_PERMITTED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { ALWAYS_FRESH } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/StaleReadDetector';
 
 const MILLI_SECONDS_IN_A_SECOND = 1000;
 

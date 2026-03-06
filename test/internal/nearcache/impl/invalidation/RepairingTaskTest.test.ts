@@ -4,12 +4,12 @@
  * Tests config validation for RepairingTask.
  */
 import { describe, it, expect } from 'bun:test';
-import { RepairingTask } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingTask';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { TaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 
 const NANOS_PER_SECOND = 1_000_000_000;
 

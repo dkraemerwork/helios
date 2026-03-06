@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { Aggregators } from '@zenystx/core/aggregation/Aggregators';
+import { Aggregators } from '@zenystx/helios-core/aggregation/Aggregators';
 import {
   createEntryWithValue,
   createExtractableEntryWithValue,

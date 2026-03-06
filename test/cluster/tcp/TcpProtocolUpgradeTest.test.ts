@@ -6,12 +6,12 @@
  * interface (JSON default, swappable).
  */
 import { describe, it, expect, afterEach } from "bun:test";
-import type { ClusterMessage } from "@zenystx/core/cluster/tcp/ClusterMessage";
+import type { ClusterMessage } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
 import {
   type SerializationStrategy,
   JsonSerializationStrategy,
-} from "@zenystx/core/cluster/tcp/SerializationStrategy";
-import { TcpClusterTransport } from "@zenystx/core/cluster/tcp/TcpClusterTransport";
+} from "@zenystx/helios-core/cluster/tcp/SerializationStrategy";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 

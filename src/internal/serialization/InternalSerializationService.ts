@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.internal.serialization.InternalSerializationService}.
  */
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export interface InternalSerializationService extends SerializationService {
     readObject<T>(inp: unknown, aClass?: unknown): T;

@@ -3,17 +3,17 @@
  * and related codec round-trip tests.
  */
 import { describe, it, expect } from 'bun:test';
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
-import { ClientMessageReader } from '@zenystx/core/client/impl/protocol/ClientMessageReader';
-import { ClientMessageWriter } from '@zenystx/core/client/impl/protocol/ClientMessageWriter';
-import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
-import { MapPutCodec } from '@zenystx/core/client/impl/protocol/codec/MapPutCodec';
-import { ClientAuthenticationCodec } from '@zenystx/core/client/impl/protocol/codec/ClientAuthenticationCodec';
-import { MapAddEntryListenerCodec } from '@zenystx/core/client/impl/protocol/codec/MapAddEntryListenerCodec';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
-import { MemberInfo } from '@zenystx/core/cluster/MemberInfo';
-import { Address } from '@zenystx/core/cluster/Address';
-import { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/ClientMessageReader';
+import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
+import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
+import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
+import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec';
+import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 
 function roundTrip(msg: ClientMessage): ClientMessage {
     const bufSize = msg.getFrameLength() + 64;

@@ -2,7 +2,21 @@
 
 **Replaces:** `TestSerializationService` (temporary placeholder in `HeliosInstanceImpl`)  
 **Scheduled as:** Block 7.2+ (referenced in `HeliosInstanceImpl.ts` line 109)  
-**Scope:** `src/internal/serialization/impl/` — new files only; no changes to existing interfaces
+**Scope:** serialization runtime and its immediate callers; this plan now requires targeted edits
+to existing interfaces and files where necessary for correctness
+
+## Execution-Readiness Amendments
+
+This plan is not complete unless it also includes:
+
+- a byte-order-safe read path for `typeId` header parsing; little-endian mode cannot rely on
+  `HeapData.getType()` as-is
+- an explicit UUID strategy: either true write-path detection/serialization or a documented
+  read-only compatibility scope
+- any required interface updates for `readObject(...)` if mixed-endian type-id handling needs
+  an extra parameter or alternate entrypoint
+- full normalization to `HazelcastSerializationError` on serialization failures
+- a real `destroy()` path that clears the buffer pool and is wired into instance/test teardown
 
 ---
 

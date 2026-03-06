@@ -1,9 +1,9 @@
 import { describe, test, expect } from 'bun:test';
-import type { Predicate } from '@zenystx/core/query/Predicate';
-import { Predicates } from '@zenystx/core/query/Predicates';
-import { OrPredicate } from '@zenystx/core/query/impl/predicates/OrPredicate';
-import { AndPredicate } from '@zenystx/core/query/impl/predicates/AndPredicate';
-import { NotPredicate } from '@zenystx/core/query/impl/predicates/NotPredicate';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import { Predicates } from '@zenystx/helios-core/query/Predicates';
+import { OrPredicate } from '@zenystx/helios-core/query/impl/predicates/OrPredicate';
+import { AndPredicate } from '@zenystx/helios-core/query/impl/predicates/AndPredicate';
+import { NotPredicate } from '@zenystx/helios-core/query/impl/predicates/NotPredicate';
 import { createMockNegatablePredicate } from './PredicateTestUtils';
 
 function mockPredicate(): Predicate {

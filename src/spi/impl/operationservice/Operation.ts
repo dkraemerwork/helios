@@ -7,7 +7,7 @@
  * Java uses VarHandle for thread-safe callId management; TypeScript uses plain fields
  * since Bun is single-threaded.
  */
-import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
 /** Partition ID for generic (non-partition-specific) operations. */
 export const GENERIC_PARTITION_ID = -1;

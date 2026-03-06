@@ -12,10 +12,10 @@
  *  - All responses carry Content-Type: application/json
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
-import { HeliosRestServer } from '@zenystx/core/rest/HeliosRestServer';
-import { HealthCheckHandler } from '@zenystx/core/rest/handler/HealthCheckHandler';
-import { NodeState } from '@zenystx/core/instance/lifecycle/NodeState';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { HeliosRestServer } from '@zenystx/helios-core/rest/HeliosRestServer';
+import { HealthCheckHandler } from '@zenystx/helios-core/rest/handler/HealthCheckHandler';
+import { NodeState } from '@zenystx/helios-core/instance/lifecycle/NodeState';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { ArrayWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
-import { addedEntry, deletedEntry } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
+import { ArrayWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
+import { addedEntry, deletedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 
 describe('ArrayWriteBehindQueue', () => {
   it('offer adds entry in FIFO order', () => {

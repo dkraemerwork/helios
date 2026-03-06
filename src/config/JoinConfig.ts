@@ -1,12 +1,12 @@
-import { MulticastConfig } from '@zenystx/core/config/MulticastConfig';
-import { TcpIpConfig } from '@zenystx/core/config/TcpIpConfig';
-import { AwsConfig } from '@zenystx/core/config/AwsConfig';
-import { GcpConfig } from '@zenystx/core/config/GcpConfig';
-import { AzureConfig } from '@zenystx/core/config/AzureConfig';
-import { KubernetesConfig } from '@zenystx/core/config/KubernetesConfig';
-import { EurekaConfig } from '@zenystx/core/config/EurekaConfig';
-import { DiscoveryConfig } from '@zenystx/core/config/DiscoveryConfig';
-import { AutoDetectionConfig } from '@zenystx/core/config/AutoDetectionConfig';
+import { MulticastConfig } from '@zenystx/helios-core/config/MulticastConfig';
+import { TcpIpConfig } from '@zenystx/helios-core/config/TcpIpConfig';
+import { AwsConfig } from '@zenystx/helios-core/config/AwsConfig';
+import { GcpConfig } from '@zenystx/helios-core/config/GcpConfig';
+import { AzureConfig } from '@zenystx/helios-core/config/AzureConfig';
+import { KubernetesConfig } from '@zenystx/helios-core/config/KubernetesConfig';
+import { EurekaConfig } from '@zenystx/helios-core/config/EurekaConfig';
+import { DiscoveryConfig } from '@zenystx/helios-core/config/DiscoveryConfig';
+import { AutoDetectionConfig } from '@zenystx/helios-core/config/AutoDetectionConfig';
 
 export class InvalidConfigurationException extends Error {
     constructor(message: string) {

@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapFetchNearCacheInvalidationMetadataCodec}.
  * Fetches invalidation metadata from partitions of IMap.
  */
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { StringCodec } from './builtin/StringCodec';
 import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
 import { EntryListCodec } from './builtin/EntryListCodec';

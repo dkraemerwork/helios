@@ -1,7 +1,7 @@
 {
-  "name": "@zenystx/nestjs-example",
+  "name": "@zenystx/helios-nestjs-example",
   "version": "1.0.0",
-  "description": "NestJS example demonstrating near-cache, predicates, and MapStore persistence (MongoDB, S3, Turso) using @zenystx/nestjs",
+  "description": "NestJS example demonstrating near-cache, predicates, and MapStore persistence (MongoDB, S3, Turso) using @zenystx/helios-nestjs",
   "private": true,
   "scripts": {
     "start": "bun run src/main.ts",

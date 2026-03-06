@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import { OutOfMemoryErrorDispatcher } from '@zenystx/core/instance/impl/OutOfMemoryErrorDispatcher';
-import { OutOfMemoryHandler } from '@zenystx/core/instance/impl/OutOfMemoryHandler';
-import { DefaultOutOfMemoryHandler } from '@zenystx/core/instance/impl/DefaultOutOfMemoryHandler';
-import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
+import { OutOfMemoryErrorDispatcher } from '@zenystx/helios-core/instance/impl/OutOfMemoryErrorDispatcher';
+import { OutOfMemoryHandler } from '@zenystx/helios-core/instance/impl/OutOfMemoryHandler';
+import { DefaultOutOfMemoryHandler } from '@zenystx/helios-core/instance/impl/DefaultOutOfMemoryHandler';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 
 function makeInstance(): HeliosInstance {
   return { shutdown: mock(() => {}), getName: mock(() => 'mock') } as unknown as HeliosInstance;

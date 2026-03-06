@@ -2,10 +2,10 @@
  * Tests for PartitionStateManager — Block 16.B1.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { PartitionStateManager } from '@zenystx/core/internal/partition/impl/PartitionStateManager';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import { Address } from '@zenystx/core/cluster/Address';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 function makeReplica(port: number): PartitionReplica {
     return new PartitionReplica(

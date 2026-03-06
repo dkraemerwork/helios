@@ -11,15 +11,15 @@
  * - Finding 7: Master crash between FinalizeJoinOp and MembersUpdateOp
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ClusterJoinManager, type JoinManagerConfig, type JoinTransport } from '@zenystx/core/internal/cluster/impl/ClusterJoinManager';
-import { ConfigCheck, type ConfigCheckResult } from '@zenystx/core/internal/cluster/impl/ConfigCheck';
-import { ClusterServiceImpl } from '@zenystx/core/internal/cluster/impl/ClusterServiceImpl';
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { Address } from '@zenystx/core/cluster/Address';
-import { MemberVersion } from '@zenystx/core/version/MemberVersion';
-import { MembersView } from '@zenystx/core/internal/cluster/impl/MembersView';
-import { BuildInfoProvider } from '@zenystx/core/instance/BuildInfoProvider';
-import { ClusterState } from '@zenystx/core/internal/cluster/ClusterState';
+import { ClusterJoinManager, type JoinManagerConfig, type JoinTransport } from '@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager';
+import { ConfigCheck, type ConfigCheckResult } from '@zenystx/helios-core/internal/cluster/impl/ConfigCheck';
+import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 const DEFAULT_PARTITION_COUNT = 271;

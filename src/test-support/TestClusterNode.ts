@@ -4,21 +4,21 @@
  *
  * Block 16.A0 — Multi-Node Test Infrastructure
  */
-import { Address } from "@zenystx/core/cluster/Address";
-import { MemberImpl } from "@zenystx/core/cluster/impl/MemberImpl";
-import { MemberVersion } from "@zenystx/core/version/MemberVersion";
-import { ClusterServiceImpl } from "@zenystx/core/internal/cluster/impl/ClusterServiceImpl";
+import { Address } from "@zenystx/helios-core/cluster/Address";
+import { MemberImpl } from "@zenystx/helios-core/cluster/impl/MemberImpl";
+import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
+import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import {
   ClusterJoinManager,
   type JoinTransport,
-} from "@zenystx/core/internal/cluster/impl/ClusterJoinManager";
+} from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
 import {
   ClusterHeartbeatManager,
   type HeartbeatConfig,
-} from "@zenystx/core/internal/cluster/impl/ClusterHeartbeatManager";
-import { TcpClusterTransport } from "@zenystx/core/cluster/tcp/TcpClusterTransport";
-import { MembersView } from "@zenystx/core/internal/cluster/impl/MembersView";
-import type { ClusterMessage } from "@zenystx/core/cluster/tcp/ClusterMessage";
+} from "@zenystx/helios-core/internal/cluster/impl/ClusterHeartbeatManager";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { MembersView } from "@zenystx/helios-core/internal/cluster/impl/MembersView";
+import type { ClusterMessage } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
 
 export interface TestClusterNodeConfig {
   readonly clusterName: string;

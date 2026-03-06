@@ -4,12 +4,12 @@
  * Tests ReadOneOperation: wait semantics, stale sequences, and item retrieval.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { RingbufferConfig } from '@zenystx/core/config/RingbufferConfig';
-import { RingbufferContainer } from '@zenystx/core/ringbuffer/impl/RingbufferContainer';
-import { RingbufferService } from '@zenystx/core/ringbuffer/impl/RingbufferService';
-import { ReadOneOperation } from '@zenystx/core/ringbuffer/impl/operations/ReadOneOperation';
-import { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
+import { RingbufferContainer } from '@zenystx/helios-core/ringbuffer/impl/RingbufferContainer';
+import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
+import { ReadOneOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/ReadOneOperation';
+import { StaleSequenceException } from '@zenystx/helios-core/ringbuffer/StaleSequenceException';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
 
 const CAPACITY = 10;
 const rbName = 'foo';

@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.cache.impl.DeferredValueTest}.
  */
 import { describe, expect, test, beforeEach } from 'bun:test';
-import { DeferredValue } from '@zenystx/core/cache/impl/DeferredValue';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { DeferredValue } from '@zenystx/helios-core/cache/impl/DeferredValue';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 // Minimal serialization service that JSON-encodes values
 function makeSerializationService(): SerializationService {

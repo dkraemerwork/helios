@@ -4,12 +4,12 @@
  * Tests RingbufferContainer construction, capacity, TTL, add, and read operations.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { RingbufferConfig } from '@zenystx/core/config/RingbufferConfig';
-import { RingbufferContainer } from '@zenystx/core/ringbuffer/impl/RingbufferContainer';
-import { RingbufferService } from '@zenystx/core/ringbuffer/impl/RingbufferService';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
-import { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
+import { RingbufferContainer } from '@zenystx/helios-core/ringbuffer/impl/RingbufferContainer';
+import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { StaleSequenceException } from '@zenystx/helios-core/ringbuffer/StaleSequenceException';
 
 let nodeEngine: TestNodeEngine;
 

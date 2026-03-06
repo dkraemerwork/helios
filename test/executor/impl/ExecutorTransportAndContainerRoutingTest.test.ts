@@ -12,18 +12,18 @@
  * - Instance shutdown awaits executor-aware service shutdown hooks
  */
 import { describe, test, expect } from 'bun:test';
-import { NodeEngineImpl } from '@zenystx/core/spi/impl/NodeEngineImpl';
-import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import { Address } from '@zenystx/core/cluster/Address';
-import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
-import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService';
-import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry';
-import { SerializationServiceImpl } from '@zenystx/core/internal/serialization/impl/SerializationServiceImpl';
-import { SerializationConfig } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
-import { TargetNotMemberException } from '@zenystx/core/spi/impl/operationservice/RetryableException';
-import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig';
+import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
+import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService';
+import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry';
+import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { TargetNotMemberException } from '@zenystx/helios-core/spi/impl/operationservice/RetryableException';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.networking.Channel}.
  * A Channel is a construct that can send/receive Packets/ClientMessages.
  */
-import type { OutboundFrame } from '@zenystx/core/internal/networking/OutboundFrame';
+import type { OutboundFrame } from '@zenystx/helios-core/internal/networking/OutboundFrame';
 
 export interface Channel {
     write(frame: OutboundFrame): boolean;

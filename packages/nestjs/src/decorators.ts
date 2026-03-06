@@ -1,9 +1,9 @@
 /**
- * @zenystx/nestjs/decorators — DI + cache decorator subpath barrel.
+ * @zenystx/helios-nestjs/decorators — DI + cache decorator subpath barrel.
  *
  * Import injection and cache decorator symbols from this subpath to reduce bundle size:
  * ```typescript
- * import { InjectHelios, InjectMap, Cacheable } from '@zenystx/nestjs/decorators';
+ * import { InjectHelios, InjectMap, Cacheable } from '@zenystx/helios-nestjs/decorators';
  * ```
  */
 

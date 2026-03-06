@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.internal.partition.ReadonlyInternalPartition}.
  * Immutable/readonly view of an InternalPartition.
  */
-import { AbstractInternalPartition } from '@zenystx/core/internal/partition/AbstractInternalPartition';
-import type { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
-import type { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import { MAX_REPLICA_COUNT } from '@zenystx/core/internal/partition/InternalPartition';
+import { AbstractInternalPartition } from '@zenystx/helios-core/internal/partition/AbstractInternalPartition';
+import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
 
 export class ReadonlyInternalPartition extends AbstractInternalPartition {
     private readonly _replicas: (PartitionReplica | null)[];

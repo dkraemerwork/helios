@@ -3,12 +3,12 @@
  * Tests core get/put/remove/expiryPolicy on CacheRecordStore.
  */
 import { describe, expect, test, beforeEach } from 'bun:test';
-import { CacheRecordStore } from '@zenystx/core/cache/impl/CacheRecordStore';
-import { InMemoryFormat } from '@zenystx/core/cache/impl/InMemoryFormat';
-import type { ICacheRecordStore } from '@zenystx/core/cache/impl/ICacheRecordStore';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { CacheRecordStore } from '@zenystx/helios-core/cache/impl/CacheRecordStore';
+import { InMemoryFormat } from '@zenystx/helios-core/cache/impl/InMemoryFormat';
+import type { ICacheRecordStore } from '@zenystx/helios-core/cache/impl/ICacheRecordStore';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 const RECORD_COUNT = 50;
 

@@ -17,22 +17,22 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { Test, TestingModule } from "@nestjs/testing";
 import { Inject, Injectable } from "@nestjs/common";
-import { HeliosAutoConfigurationModule } from "@zenystx/nestjs/autoconfiguration/HeliosAutoConfigurationModule";
-import { HeliosBoot4ObjectExtractionModule } from "@zenystx/nestjs/autoconfiguration/HeliosBoot4ObjectExtractionModule";
-import { HELIOS_INSTANCE_TOKEN } from "@zenystx/nestjs/HeliosInstanceDefinition";
-import type { HeliosInstance } from "@zenystx/core/core/HeliosInstance";
-import type { IMap } from "@zenystx/core/map/IMap";
-import type { IQueue } from "@zenystx/core/collection/IQueue";
-import type { IList } from "@zenystx/core/collection/IList";
-import type { ISet } from "@zenystx/core/collection/ISet";
-import type { ITopic } from "@zenystx/core/topic/ITopic";
-import type { MultiMap } from "@zenystx/core/multimap/MultiMap";
-import type { ReplicatedMap } from "@zenystx/core/replicatedmap/ReplicatedMap";
-import type { DistributedObject } from "@zenystx/core/core/DistributedObject";
-import type { LifecycleService } from "@zenystx/core/instance/lifecycle/LifecycleService";
-import type { Cluster } from "@zenystx/core/cluster/Cluster";
-import type { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import type { IExecutorService } from "@zenystx/core/executor/IExecutorService";
+import { HeliosAutoConfigurationModule } from "@zenystx/helios-nestjs/autoconfiguration/HeliosAutoConfigurationModule";
+import { HeliosBoot4ObjectExtractionModule } from "@zenystx/helios-nestjs/autoconfiguration/HeliosBoot4ObjectExtractionModule";
+import { HELIOS_INSTANCE_TOKEN } from "@zenystx/helios-nestjs/HeliosInstanceDefinition";
+import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import type { IList } from "@zenystx/helios-core/collection/IList";
+import type { ISet } from "@zenystx/helios-core/collection/ISet";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
+import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
+import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
+import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
+import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 
 // ---------------------------------------------------------------------------
 // Stub HeliosInstance with named map/ringbuffer support

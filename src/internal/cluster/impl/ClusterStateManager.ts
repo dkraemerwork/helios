@@ -4,7 +4,7 @@
  * Manages cluster state transitions (ACTIVE/NO_MIGRATION/FROZEN/PASSIVE)
  * with partition state stamp validation to prevent state changes during migrations.
  */
-import { ClusterState } from '@zenystx/core/internal/cluster/ClusterState';
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 
 export class ClusterStateManager {
     private _state: ClusterState = ClusterState.ACTIVE;

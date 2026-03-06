@@ -1,5 +1,5 @@
 import { describe, it } from 'bun:test';
-import { CachePermission } from '@zenystx/core/security/permission/CachePermission';
+import { CachePermission } from '@zenystx/helios-core/security/permission/CachePermission';
 import { CheckPermission } from './permissionTestSupport';
 
 const ALL_ACTIONS = ['put', 'read', 'remove', 'listen', 'create', 'destroy'];

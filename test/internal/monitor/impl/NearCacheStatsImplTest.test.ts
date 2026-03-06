@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.monitor.impl.NearCacheStatsImplTest}.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCacheStatsImpl } from '@zenystx/core/internal/monitor/impl/NearCacheStatsImpl';
+import { NearCacheStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/NearCacheStatsImpl';
 
 describe('NearCacheStatsImplTest', () => {
     let nearCacheStats: NearCacheStatsImpl;

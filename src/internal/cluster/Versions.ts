@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.cluster.Versions}.
  * Cluster version constants.
  */
-import { Version } from '@zenystx/core/version/Version';
+import { Version } from '@zenystx/helios-core/version/Version';
 
 export class Versions {
     static readonly V4_0: Version = Version.of(4, 0);

@@ -4,8 +4,8 @@
  * A Packet is a piece of data sent over the wire for member-to-member communication.
  * It extends HeapData and implements OutboundFrame.
  */
-import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
-import type { OutboundFrame } from '@zenystx/core/internal/networking/OutboundFrame';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import type { OutboundFrame } from '@zenystx/helios-core/internal/networking/OutboundFrame';
 
 // Packet wire header size: 1 (version) + 2 (flags/char) + 4 (partitionId) + 4 (payload size)
 const PACKET_HEADER_SIZE = 11;

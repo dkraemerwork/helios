@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { MutableLong } from '@zenystx/core/internal/util/MutableLong';
+import { MutableLong } from '@zenystx/helios-core/internal/util/MutableLong';
 
 describe('MutableLongTest', () => {
   it('testAddAndGet', () => {

@@ -4,7 +4,7 @@
  * Tests for InvocationFuture cancellation semantics.
  */
 import { describe, it, expect } from 'bun:test';
-import { InvocationFuture, CancellationException } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
+import { InvocationFuture, CancellationException } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
 
 describe('InvocationFuture.cancel()', () => {
     it('cancel returns true when future is not yet done', () => {

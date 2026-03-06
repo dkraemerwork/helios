@@ -5,13 +5,13 @@
  * local writes invalidate cached entries.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@zenystx/core/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
-import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 
 function makeProxyAndStore(mapName = 'stalenessTestMap') {
     const config = new NearCacheConfig(mapName)

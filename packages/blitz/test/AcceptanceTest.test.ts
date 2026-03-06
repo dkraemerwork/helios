@@ -1,7 +1,7 @@
 /**
  * Block 10.10 — End-to-end acceptance + feature parity gate
  *
- * Validates that @zenystx/blitz meets the 80%+ parity contract with Hazelcast Jet.
+ * Validates that @zenystx/helios-blitz meets the 80%+ parity contract with Hazelcast Jet.
  * Each describe block maps to a Hazelcast Jet integration test scenario.
  *
  * All tests are pure in-memory (no NATS required).
@@ -118,7 +118,7 @@ function makeIMapStub<K, V>(name = 'test-map') {
         put: async (k: K, v: V) => { data.set(k, v); return null as V | null; },
         size: () => data.size,
         data,
-    } as unknown as import('@zenystx/core/map/IMap').IMap<K, V> & {
+    } as unknown as import('@zenystx/helios-core/map/IMap').IMap<K, V> & {
         data: Map<K, V>;
         size(): number;
     };
@@ -639,7 +639,7 @@ describe('AtLeastOnceTest — crash mid-pipeline → restart → no data loss', 
 
 // ─── Feature Parity Gate ───────────────────────────────────────────────────────
 
-describe('Feature parity gate — @zenystx/blitz v1.0 requirements', () => {
+describe('Feature parity gate — @zenystx/helios-blitz v1.0 requirements', () => {
     it('linear pipeline (source → ops → sink) is supported', () => {
         const p = new Pipeline('parity-linear');
         p.readFrom(arraySource([1, 2, 3])).map(n => n * 2).writeTo(collectSink());
@@ -720,7 +720,7 @@ describe('Feature parity gate — @zenystx/blitz v1.0 requirements', () => {
         expect(result.recordsIn).toBe(1);
     });
 
-    it('NestJS module for @zenystx/blitz is importable', async () => {
+    it('NestJS module for @zenystx/helios-blitz is importable', async () => {
         const { HeliosBlitzModule } = await import('../src/nestjs/HeliosBlitzModule.ts');
         const { HeliosBlitzService } = await import('../src/nestjs/HeliosBlitzService.ts');
         const { InjectBlitz } = await import('../src/nestjs/InjectBlitz.decorator.ts');

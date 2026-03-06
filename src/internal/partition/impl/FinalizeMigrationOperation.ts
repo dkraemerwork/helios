@@ -7,11 +7,11 @@
  *
  * Ref: FinalizeMigrationOperation.java:97, 181-205
  */
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { MigrationInfo } from '@zenystx/core/internal/partition/MigrationInfo';
-import type { InternalPartitionImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionImpl';
-import type { PartitionContainer } from '@zenystx/core/internal/partition/impl/PartitionContainer';
-import type { MigrationAwareService } from '@zenystx/core/internal/partition/MigrationAwareService';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import type { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
+import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
+import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 
 export class FinalizeMigrationOperation extends Operation {
     private readonly _migrationInfo: MigrationInfo;

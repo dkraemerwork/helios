@@ -3,7 +3,7 @@
  *
  * NearCacheRecord implementation that stores any object (non-Data) values.
  */
-import { AbstractNearCacheRecord } from '@zenystx/core/internal/nearcache/impl/record/AbstractNearCacheRecord';
+import { AbstractNearCacheRecord } from '@zenystx/helios-core/internal/nearcache/impl/record/AbstractNearCacheRecord';
 
 export class NearCacheObjectRecord<V> extends AbstractNearCacheRecord<V> {
     constructor(value: V | null, creationTime: number, expiryTime: number) {

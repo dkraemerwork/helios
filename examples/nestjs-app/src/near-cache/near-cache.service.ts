@@ -1,5 +1,5 @@
 /**
- * NearCacheService — demonstrates two caching patterns using @zenystx/nestjs.
+ * NearCacheService — demonstrates two caching patterns using @zenystx/helios-nestjs.
  *
  * ── Pattern 1: Helios near-cache (transparent, infrastructure-level) ──────────
  *
@@ -18,9 +18,9 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { Cache } from "@nestjs/cache-manager";
-import { InjectMap } from "@zenystx/nestjs";
-import { Cacheable, CacheEvict } from "@zenystx/nestjs";
-import type { IMap } from "@zenystx/core/map/IMap";
+import { InjectMap } from "@zenystx/helios-nestjs";
+import { Cacheable, CacheEvict } from "@zenystx/helios-nestjs";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
 
 export interface Product {
   id: string;

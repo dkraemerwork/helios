@@ -9,8 +9,8 @@
     "sourceMap": false,
     "removeComments": false,
     "paths": {
-      "@zenystx/core/*": ["../../dist/src/*"],
-      "@zenystx/blitz/*": ["./src/*"]
+      "@zenystx/helios-core/*": ["../../dist/src/*"],
+      "@zenystx/helios-blitz/*": ["./src/*"]
     }
   },
   "include": ["src/**/*"],

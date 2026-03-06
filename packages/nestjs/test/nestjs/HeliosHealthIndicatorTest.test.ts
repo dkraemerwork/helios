@@ -8,7 +8,7 @@ import { HealthIndicatorService } from '@nestjs/terminus';
 import { HeliosModule } from '../../src/HeliosModule';
 import { HeliosHealthIndicator } from '../../src/health/HeliosHealthIndicator';
 import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
-import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

@@ -4,13 +4,13 @@
  * applyPartitionRuntimeState, and partition query methods.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { InternalPartitionServiceImpl, PartitionRuntimeState } from '@zenystx/core/internal/partition/impl/InternalPartitionServiceImpl';
-import { InternalPartitionImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionImpl';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import { Address } from '@zenystx/core/cluster/Address';
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { MemberVersion } from '@zenystx/core/version/MemberVersion';
-import type { Member } from '@zenystx/core/cluster/Member';
+import { InternalPartitionServiceImpl, PartitionRuntimeState } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import type { Member } from '@zenystx/helios-core/cluster/Member';
 
 function makeMember(host: string, port: number, uuid?: string, lite = false): Member {
     return new MemberImpl.Builder(new Address(host, port))

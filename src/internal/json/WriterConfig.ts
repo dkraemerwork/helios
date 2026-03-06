@@ -1,5 +1,5 @@
-import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
-import { Writer } from '@zenystx/core/internal/json/Writer';
+import { JsonWriter } from '@zenystx/helios-core/internal/json/JsonWriter';
+import { Writer } from '@zenystx/helios-core/internal/json/Writer';
 
 /** Controls the formatting of JSON output (minimal or pretty-printed). */
 export abstract class WriterConfig {

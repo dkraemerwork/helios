@@ -1,12 +1,12 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapAddEntryListenerCodec}.
  */
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { StringCodec } from './builtin/StringCodec';
 import { DataCodec } from './builtin/DataCodec';
 import { CodecUtil } from './builtin/CodecUtil';
 import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class MapAddEntryListenerCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x011900; // 71936

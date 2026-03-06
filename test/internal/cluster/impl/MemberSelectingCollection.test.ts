@@ -2,17 +2,17 @@
  * Port of com.hazelcast.internal.cluster.impl.MemberSelectingCollectionTest
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { Address } from '@zenystx/core/cluster/Address';
-import { MemberVersion } from '@zenystx/core/version/MemberVersion';
-import { MemberSelectingCollection } from '@zenystx/core/internal/cluster/impl/MemberSelectingCollection';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { MemberSelectingCollection } from '@zenystx/helios-core/internal/cluster/impl/MemberSelectingCollection';
 import {
     DATA_MEMBER_SELECTOR,
     LITE_MEMBER_SELECTOR,
     NON_LOCAL_MEMBER_SELECTOR,
     MemberSelectors,
-} from '@zenystx/core/cluster/memberselector/MemberSelectors';
-import type { MemberSelector } from '@zenystx/core/cluster/MemberSelector';
+} from '@zenystx/helios-core/cluster/memberselector/MemberSelectors';
+import type { MemberSelector } from '@zenystx/helios-core/cluster/MemberSelector';
 
 const NO_OP_MEMBER_SELECTOR: MemberSelector = { select: (_m) => true };
 

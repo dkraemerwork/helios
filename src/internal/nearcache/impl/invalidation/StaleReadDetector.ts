@@ -3,8 +3,8 @@
  *
  * Interface for detecting stale Near Cache data.
  */
-import type { NearCacheRecord } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import type { MetaDataContainer } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataContainer';
+import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import type { MetaDataContainer } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataContainer';
 
 export type { MetaDataContainer };
 

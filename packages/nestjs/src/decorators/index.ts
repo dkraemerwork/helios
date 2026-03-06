@@ -1,5 +1,5 @@
 /**
- * Barrel export for @zenystx/nestjs convenience decorators.
+ * Barrel export for @zenystx/helios-nestjs convenience decorators.
  */
 
 export { InjectHelios } from './inject-helios.decorator';

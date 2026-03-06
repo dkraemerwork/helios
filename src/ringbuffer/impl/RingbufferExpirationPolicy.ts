@@ -1,4 +1,4 @@
-import type { Ringbuffer } from '@zenystx/core/ringbuffer/impl/Ringbuffer';
+import type { Ringbuffer } from '@zenystx/helios-core/ringbuffer/impl/Ringbuffer';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.RingbufferExpirationPolicy}.

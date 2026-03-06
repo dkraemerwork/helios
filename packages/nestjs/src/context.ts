@@ -1,9 +1,9 @@
 /**
- * @zenystx/nestjs/context — NestJS-aware context subpath barrel.
+ * @zenystx/helios-nestjs/context — NestJS-aware context subpath barrel.
  *
  * Import context symbols from this subpath to reduce bundle size:
  * ```typescript
- * import { NestAware, NestManagedContext } from '@zenystx/nestjs/context';
+ * import { NestAware, NestManagedContext } from '@zenystx/helios-nestjs/context';
  * ```
  */
 

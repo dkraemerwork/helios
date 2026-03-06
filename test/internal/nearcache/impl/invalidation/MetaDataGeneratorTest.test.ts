@@ -3,7 +3,7 @@
  * Port of the generator contract from com.hazelcast.internal.nearcache.impl.invalidation.MetaDataGenerator.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 describe('MetaDataGeneratorTest', () => {
     let generator: MetaDataGenerator;

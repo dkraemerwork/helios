@@ -1,5 +1,5 @@
 import { describe, test, expect, afterEach } from 'bun:test';
-import { MobyNames } from '@zenystx/core/instance/impl/MobyNames';
+import { MobyNames } from '@zenystx/helios-core/instance/impl/MobyNames';
 
 describe('MobyNames', () => {
   afterEach(() => {

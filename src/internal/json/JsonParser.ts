@@ -1,8 +1,8 @@
-import { JsonHandler } from '@zenystx/core/internal/json/JsonHandler';
-import { Location } from '@zenystx/core/internal/json/Location';
-import { ParseException } from '@zenystx/core/internal/json/ParseException';
-import { StringReader } from '@zenystx/core/internal/json/StringReader';
-import type { Reader } from '@zenystx/core/internal/json/Reader';
+import { JsonHandler } from '@zenystx/helios-core/internal/json/JsonHandler';
+import { Location } from '@zenystx/helios-core/internal/json/Location';
+import { ParseException } from '@zenystx/helios-core/internal/json/ParseException';
+import { StringReader } from '@zenystx/helios-core/internal/json/StringReader';
+import type { Reader } from '@zenystx/helios-core/internal/json/Reader';
 
 const MAX_NESTING_LEVEL = 1000;
 const MIN_BUFFER_SIZE = 10;

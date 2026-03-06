@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
-import { WriteThroughStore } from '@zenystx/core/map/impl/mapstore/writethrough/WriteThroughStore';
-import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
+import { WriteThroughStore } from '@zenystx/helios-core/map/impl/mapstore/writethrough/WriteThroughStore';
+import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
 
 function makeMapStore(overrides: Partial<Record<string, (...args: any[]) => any>> = {}) {
   return {

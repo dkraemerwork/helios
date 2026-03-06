@@ -1,5 +1,5 @@
 {
-  "name": "@zenystx/core",
+  "name": "@zenystx/helios-core",
   "version": "1.0.0",
   "description": "Helios core — TypeScript/Bun port of Hazelcast distributed in-memory platform",
   "private": false,
@@ -54,7 +54,7 @@
   "author": "Helios Contributors",
   "license": "Apache-2.0",
   "dependencies": {
-    "scatter": "file:../scatter"
+    "@zenystx/scatterjs": "0.1.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

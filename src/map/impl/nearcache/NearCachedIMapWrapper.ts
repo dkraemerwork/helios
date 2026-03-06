@@ -9,14 +9,14 @@
  * Block 12.A3: Updated to async signatures matching the updated IMap interface.
  * Phase 8: wires DefaultNearCache into HeliosInstanceImpl.getMap().
  */
-import type { IMap } from '@zenystx/core/map/IMap';
-import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
-import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import type { Predicate } from '@zenystx/core/query/Predicate';
-import type { Aggregator } from '@zenystx/core/aggregation/Aggregator';
-import type { EntryListener } from '@zenystx/core/map/EntryListener';
-import type { IndexConfig } from '@zenystx/core/config/IndexConfig';
+import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
+import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
+import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 
 export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
     private readonly _delegate: IMap<K, V>;

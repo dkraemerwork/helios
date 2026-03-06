@@ -2,15 +2,15 @@
  * Tests for Block 16.C2 — Invocation + PartitionInvocation + TargetInvocation.
  */
 import { describe, test, expect } from 'bun:test';
-import { Invocation } from '@zenystx/core/spi/impl/operationservice/Invocation';
-import { PartitionInvocation } from '@zenystx/core/spi/impl/operationservice/PartitionInvocation';
-import { TargetInvocation } from '@zenystx/core/spi/impl/operationservice/TargetInvocation';
-import { RetryableException, WrongTargetException, PartitionMigratingException, TargetNotMemberException, MemberLeftException } from '@zenystx/core/spi/impl/operationservice/RetryableException';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { Invocation } from '@zenystx/helios-core/spi/impl/operationservice/Invocation';
+import { PartitionInvocation } from '@zenystx/helios-core/spi/impl/operationservice/PartitionInvocation';
+import { TargetInvocation } from '@zenystx/helios-core/spi/impl/operationservice/TargetInvocation';
+import { RetryableException, WrongTargetException, PartitionMigratingException, TargetNotMemberException, MemberLeftException } from '@zenystx/helios-core/spi/impl/operationservice/RetryableException';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
-import { InvocationRegistry } from '@zenystx/core/spi/impl/operationservice/InvocationRegistry';
-import { Address } from '@zenystx/core/cluster/Address';
-import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import { InvocationRegistry } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 

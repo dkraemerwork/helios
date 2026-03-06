@@ -2,11 +2,11 @@
  * Block 12.A3 — EAGER vs LAZY initial load tests.
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
-import { MapConfig } from '@zenystx/core/config/MapConfig';
-import { MapStoreConfig, InitialLoadMode } from '@zenystx/core/config/MapStoreConfig';
-import type { MapStore } from '@zenystx/core/map/MapStore';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
+import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 
 class SeedingMapStore implements MapStore<string, string> {
     private readonly _seed: Map<string, string>;

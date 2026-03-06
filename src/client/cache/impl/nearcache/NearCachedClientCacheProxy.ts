@@ -16,10 +16,10 @@
  *
  * Note: JCache does not support null values; CACHED_AS_NULL is not used here.
  */
-import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
-import { NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
-import { LocalUpdatePolicy } from '@zenystx/core/config/NearCacheConfig';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
 
 /** Minimal backing store interface for a client cache proxy. */
 export interface ClientCacheBackingStore<K, V> {

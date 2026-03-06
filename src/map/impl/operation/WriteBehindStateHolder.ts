@@ -8,8 +8,8 @@
  * for entries mid-flush. The staging area is NOT directly replicated — after applyState(),
  * entries are reconstructed from the queue via addForcibly().
  */
-import type { DelayedEntry } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
-import type { WriteBehindStore } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindStore';
+import type { DelayedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
+import type { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
 
 export class WriteBehindStateHolder {
     /** Per-map captured delayed entries. */

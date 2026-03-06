@@ -4,9 +4,9 @@
  * Covers: register, deregister, get, reset, backpressure, alive flag.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { InvocationRegistry, type Invocable } from '@zenystx/core/spi/impl/operationservice/InvocationRegistry';
-import { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { InvocationRegistry, type Invocable } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
+import { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 /** Minimal concrete Operation for testing. */
 class NoopOperation extends Operation {

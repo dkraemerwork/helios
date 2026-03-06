@@ -3,9 +3,9 @@
  *
  * Contract point to store keys and values in an underlying NearCacheRecordStore.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
 
 export const DEFAULT_EXPIRATION_TASK_INITIAL_DELAY_SECONDS = 5;
 export const DEFAULT_EXPIRATION_TASK_PERIOD_SECONDS = 5;

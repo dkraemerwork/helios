@@ -5,18 +5,18 @@
  * backpressure, backward compatibility (localMode), and response correlation.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
-import { InvocationRegistry } from '@zenystx/core/spi/impl/operationservice/InvocationRegistry';
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import { Address } from '@zenystx/core/cluster/Address';
+import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { InvocationRegistry } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { Address } from '@zenystx/helios-core/cluster/Address';
 import {
     RetryableException,
     WrongTargetException,
     PartitionMigratingException,
     TargetNotMemberException,
     MemberLeftException,
-} from '@zenystx/core/spi/impl/operationservice/RetryableException';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+} from '@zenystx/helios-core/spi/impl/operationservice/RetryableException';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
 
 // ── test helpers ───────────────────────────────────────────────────────────
 

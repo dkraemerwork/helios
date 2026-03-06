@@ -14,9 +14,9 @@
  *     backupCount: 2
  * ```
  */
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
-import { MapConfig } from '@zenystx/core/config/MapConfig';
-import { RestEndpointGroup } from '@zenystx/core/rest/RestEndpointGroup';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.

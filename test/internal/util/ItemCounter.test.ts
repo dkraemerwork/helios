@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { ItemCounter } from '@zenystx/core/internal/util/ItemCounter';
+import { ItemCounter } from '@zenystx/helios-core/internal/util/ItemCounter';
 
 describe('ItemCounterTest', () => {
   let counter: ItemCounter<string | object>;

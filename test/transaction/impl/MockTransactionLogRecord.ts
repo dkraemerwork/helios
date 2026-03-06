@@ -3,9 +3,9 @@
  *
  * Test helper that can be configured to fail prepare, commit, or rollback.
  */
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
-import { TransactionException } from '@zenystx/core/transaction/TransactionException';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
+import { TransactionException } from '@zenystx/helios-core/transaction/TransactionException';
 
 class MockOperation extends Operation {
     private readonly _fail: boolean;

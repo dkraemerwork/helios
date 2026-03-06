@@ -1,6 +1,6 @@
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { EvictionConfig } from '@zenystx/core/config/EvictionConfig';
-import { NearCachePreloaderConfig } from '@zenystx/core/config/NearCachePreloaderConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
+import { NearCachePreloaderConfig } from '@zenystx/helios-core/config/NearCachePreloaderConfig';
 
 export enum LocalUpdatePolicy {
     INVALIDATE = 'INVALIDATE',

@@ -4,10 +4,10 @@
  * Tests backup log management operations on TransactionManagerServiceImpl.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { TransactionManagerServiceImpl } from '@zenystx/core/transaction/impl/TransactionManagerServiceImpl';
-import { TransactionException } from '@zenystx/core/transaction/TransactionException';
-import { State } from '@zenystx/core/transaction/impl/Transaction';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+import { TransactionManagerServiceImpl } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl';
+import { TransactionException } from '@zenystx/helios-core/transaction/TransactionException';
+import { State } from '@zenystx/helios-core/transaction/impl/Transaction';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
 
 const TXN = crypto.randomUUID();
 

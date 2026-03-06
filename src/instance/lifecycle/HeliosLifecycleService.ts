@@ -1,5 +1,5 @@
-import { LifecycleEvent, LifecycleState } from '@zenystx/core/instance/lifecycle/LifecycleEvent';
-import type { LifecycleListener } from '@zenystx/core/instance/lifecycle/LifecycleListener';
+import { LifecycleEvent, LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
+import type { LifecycleListener } from '@zenystx/helios-core/instance/lifecycle/LifecycleListener';
 
 let _idCounter = 0;
 

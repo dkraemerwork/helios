@@ -2,11 +2,11 @@
  * Port of com.hazelcast.internal.cluster.impl.MemberMapTest
  */
 import { describe, test, expect } from 'bun:test';
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { Address } from '@zenystx/core/cluster/Address';
-import { MemberVersion } from '@zenystx/core/version/MemberVersion';
-import { MemberMap } from '@zenystx/core/internal/cluster/impl/MemberMap';
-import { BuildInfoProvider } from '@zenystx/core/instance/BuildInfoProvider';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { MemberMap } from '@zenystx/helios-core/internal/cluster/impl/MemberMap';
+import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 

@@ -9,11 +9,11 @@
  *  5. DELETE on A → GET on B returns 204 No Content
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { Helios } from '@zenystx/core/Helios';
-import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
-import { MapConfig } from '@zenystx/core/config/MapConfig';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import type { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { Helios } from '@zenystx/helios-core/Helios';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 
 // Use high ports to avoid conflicts with other tests
 const TCP_PORT_A = 16901;

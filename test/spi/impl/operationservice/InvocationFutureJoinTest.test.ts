@@ -9,7 +9,7 @@ import {
     InvocationFuture,
     CancellationException,
     CompletionException,
-} from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
+} from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
 
 describe('InvocationFuture.join()', () => {
     it('join() returns the value on normal completion', async () => {

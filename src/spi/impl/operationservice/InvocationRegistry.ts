@@ -7,8 +7,8 @@
  *
  * Single-threaded (Bun) — no synchronization needed.
  */
-import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
 
 /**
  * Minimal contract an invocation must satisfy for registry tracking.

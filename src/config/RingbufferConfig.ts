@@ -1,4 +1,4 @@
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
 
 /**
  * Port of {@code com.hazelcast.config.RingbufferConfig}.

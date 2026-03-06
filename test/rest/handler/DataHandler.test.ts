@@ -18,10 +18,10 @@
  */
 
 import { describe, it, expect, afterEach } from 'bun:test';
-import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
-import { RestEndpointGroup } from '@zenystx/core/rest/RestEndpointGroup';
-import { HeliosRestServer } from '@zenystx/core/rest/HeliosRestServer';
-import { DataHandler, type DataHandlerStore } from '@zenystx/core/rest/handler/DataHandler';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { HeliosRestServer } from '@zenystx/helios-core/rest/HeliosRestServer';
+import { DataHandler, type DataHandlerStore } from '@zenystx/helios-core/rest/handler/DataHandler';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

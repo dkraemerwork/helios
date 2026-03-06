@@ -2,7 +2,7 @@
  * Port of com.hazelcast.map.impl.query.QueryResultUtilsTest
  */
 import { describe, it, expect } from 'bun:test';
-import { QueryResultUtils } from '@zenystx/core/map/impl/query/QueryResultUtils';
+import { QueryResultUtils } from '@zenystx/helios-core/map/impl/query/QueryResultUtils';
 
 describe('QueryResultUtilsTest', () => {
     it('testConstructor — utility class is not instantiable', () => {

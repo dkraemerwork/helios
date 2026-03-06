@@ -7,23 +7,23 @@
  * This class is intentionally thin — it is a test harness, not a production
  * HeliosInstance implementation (that comes in Block 3.10).
  */
-import { TestNodeEngine } from "@zenystx/core/test-support/TestNodeEngine";
-import { MapProxy } from "@zenystx/core/map/impl/MapProxy";
-import { MapContainerService } from "@zenystx/core/map/impl/MapContainerService";
-import { QueueImpl } from "@zenystx/core/collection/impl/QueueImpl";
-import { ListImpl } from "@zenystx/core/collection/impl/ListImpl";
-import { SetImpl } from "@zenystx/core/collection/impl/SetImpl";
-import { TopicImpl } from "@zenystx/core/topic/impl/TopicImpl";
-import { MultiMapImpl } from "@zenystx/core/multimap/impl/MultiMapImpl";
-import type { IMap } from "@zenystx/core/map/IMap";
-import type { IQueue } from "@zenystx/core/collection/IQueue";
-import type { IList } from "@zenystx/core/collection/IList";
-import type { ISet } from "@zenystx/core/collection/ISet";
-import type { ITopic } from "@zenystx/core/topic/ITopic";
-import type { MultiMap } from "@zenystx/core/multimap/MultiMap";
+import { TestNodeEngine } from "@zenystx/helios-core/test-support/TestNodeEngine";
+import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
+import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
+import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
+import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
+import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
+import { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
+import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import type { IList } from "@zenystx/helios-core/collection/IList";
+import type { ISet } from "@zenystx/helios-core/collection/ISet";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
 
 /** @deprecated Use MapProxy directly. Kept for backwards compatibility. */
-export { MapProxy as SimpleMapProxy } from "@zenystx/core/map/impl/MapProxy";
+export { MapProxy as SimpleMapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
 
 export class TestHeliosInstance {
   readonly nodeEngine: TestNodeEngine;

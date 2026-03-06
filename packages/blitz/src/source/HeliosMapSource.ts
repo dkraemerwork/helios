@@ -1,4 +1,4 @@
-import type { IMap } from '@zenystx/core/map/IMap';
+import type { IMap } from '@zenystx/helios-core/map/IMap';
 import { JsonCodec, type BlitzCodec } from '../codec/BlitzCodec.ts';
 import type { Source, SourceMessage } from './Source.ts';
 

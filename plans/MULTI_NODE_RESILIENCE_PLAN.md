@@ -12,6 +12,24 @@ the primary node crashes, a backup promotes and the write-behind queue continues
 **Repo:** `/Users/zenystx/IdeaProjects/helios/`
 **Java reference:** `/Users/zenystx/IdeaProjects/helios-1/` (read-only)
 
+## Execution-Readiness Amendments
+
+This plan is not end-to-end complete unless it explicitly rewires the live repo runtime:
+
+- replace the split `LocalCluster` / `HeliosClusterCoordinator` / local `NodeEngineImpl` boot
+  path with one authoritative production runtime
+- make `OperationServiceImpl` run in real remote-routing mode in production and define where
+  inbound `OPERATION`, `OPERATION_RESPONSE`, `BACKUP`, and `BACKUP_ACK` messages are decoded
+  and dispatched
+- make `PartitionContainer` the actual source of truth for map storage if migration and
+  replication operate on it
+- redesign write-behind ownership so pending state is partition-safe for migration and failover
+- update `HeliosConfig`, `ConfigLoader`, docs, and examples so the resulting runtime is actually
+  configurable and visible to users
+
+If these are not explicit implementation blocks, the plan can still go green while the repo
+keeps a split or partially simulated runtime.
+
 ---
 
 ## Hazelcast Architecture Reference

@@ -2,11 +2,11 @@ import "reflect-metadata";
 import { afterEach, describe, expect, it } from "bun:test";
 import { Injectable } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
-import { Helios } from "@zenystx/core/Helios";
-import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import type { IQueue } from "@zenystx/core/collection/IQueue";
-import type { ITopic } from "@zenystx/core/topic/ITopic";
-import type { HeliosInstanceImpl } from "@zenystx/core/instance/impl/HeliosInstanceImpl";
+import { Helios } from "@zenystx/helios-core/Helios";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosModule } from "../../src/HeliosModule";
 import { HeliosObjectExtractionModule } from "../../src/HeliosObjectExtractionModule";
 import {

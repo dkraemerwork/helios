@@ -1,4 +1,4 @@
-import { Preconditions } from '@zenystx/core/internal/util/Preconditions';
+import { Preconditions } from '@zenystx/helios-core/internal/util/Preconditions';
 
 /** Hash utility methods. Port of com.hazelcast.internal.util.HashUtil. */
 export class HashUtil {

@@ -6,10 +6,10 @@
  *
  * Ref: MembershipManager.java (1,531 lines)
  */
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { MemberMap } from '@zenystx/core/internal/cluster/impl/MemberMap';
-import { MembersView } from '@zenystx/core/internal/cluster/impl/MembersView';
-import type { ClusterServiceImpl } from '@zenystx/core/internal/cluster/impl/ClusterServiceImpl';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { MemberMap } from '@zenystx/helios-core/internal/cluster/impl/MemberMap';
+import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import type { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
 
 type MemberListCallback = (members: MemberImpl[]) => void;
 type PartitionRepairCallback = (oldUuid: string, newUuid: string) => void;

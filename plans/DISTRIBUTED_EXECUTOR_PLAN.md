@@ -2,13 +2,21 @@
 
 ## Purpose
 
-Phase 17 delivers Tier 1 only: an immediate, non-durable, non-scheduled distributed
+This file records the detailed Tier 1 executor design that historical Phase 17 targeted.
+Active remaining executor completion is now tracked under `Phase 17R / Block 17R.1` in
+`plans/TYPESCRIPT_PORT_PLAN.md`, with `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md` as the
+current production-closure implementation detail.
+
+Use this file as supporting executor design and acceptance material, not as the canonical
+status source for whether executor work is complete.
+
+The executor runtime still targets an immediate, non-durable, non-scheduled distributed
 executor for Helios. It must support:
 
 - `submit*` calls that return results through `InvocationFuture`
 - `execute*` fire-and-forget calls
 - routing to partition owner, key owner, specific member, selected members, or all members
-- off-main-thread task execution via `scatter.pool()` worker threads
+- off-main-thread task execution via `@zenystx/scatterjs` `scatter.pool()` worker threads
 - bounded queueing, bounded worker-pool growth, cancellation, shutdown, and monitoring
 
 This phase does not deliver durable replay or scheduled execution. `IDurableExecutorService`
@@ -16,15 +24,17 @@ and `IScheduledExecutorService` stay deferred to Phase 18+.
 
 ## Loop Contract
 
-- `plans/TYPESCRIPT_PORT_PLAN.md` is the canonical queue. `loop.sh` must select the next
-  unchecked Phase 17 block from the Master Todo there.
-- This file is the authoritative implementation spec for the selected Phase 17 block.
-- Do not assume Phase 16's checked status means the current runtime is already production-ready
-  for executor work. Phase 17 must close the remaining runtime gaps explicitly.
+- `plans/TYPESCRIPT_PORT_PLAN.md` is the canonical queue.
+- Active executor closure work must map through `Phase 17R / Block 17R.1`, not by treating
+  the historical `17.x` decomposition in this file as the live master todo.
+- `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md` is the active implementation-detail file for
+  remaining executor production closure.
+- Use this file to preserve detailed design, failure semantics, and acceptance criteria that
+  still support the reopened executor closure work.
 
 ## Deliverable and Non-Goals
 
-### Phase 17 must guarantee
+### Executor runtime must guarantee
 
 - Registered task types execute on scatter worker threads, never on the main event loop.
 - Distributed submissions return typed results to callers, not raw `Data` payloads.
@@ -38,7 +48,7 @@ and `IScheduledExecutorService` stay deferred to Phase 18+.
   cancellation result and any late worker result is dropped.
 - Executor shutdown rejects new work immediately and drains or times out deterministically.
 
-### Phase 17 explicitly does not guarantee
+### Executor runtime explicitly does not guarantee
 
 - durable recovery after node crash
 - scheduled or periodic execution
@@ -46,21 +56,39 @@ and `IScheduledExecutorService` stay deferred to Phase 18+.
 - unrestricted registration of arbitrarily many active task-type pools
 - silent acceptance of unsupported split-brain or scheduling config
 
-## Reality Check: Gaps That Phase 17 Must Close
+## Reality Check: Remaining Gaps For Reopened Executor Closure
 
-The current codebase is close, but not yet end-to-end executor-ready:
+Do not treat every historical prerequisite in this file as still-open repo work. Many Phase 17
+runtime foundations have landed. The reopened executor gap is narrower and must be read against
+the current repo and `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`.
 
-- `OperationServiceImpl` still needs a real remote operation path for production executor use.
-- `NodeEngine` and `PartitionService` expose too little cluster/partition information for
-  executor routing.
-- `HeliosInstanceImpl` still uses a `LocalCluster`-style runtime surface and synchronous
-  shutdown semantics that are not sufficient for graceful executor draining.
-- The current Phase 17 draft assumed `registerTaskType()`, result unwrapping, retry hooks,
-  and cluster service access that do not exist yet in the public TypeScript surface.
-- The current scatter integration draft used unbounded defaults and promised crash/retry
-  behavior that Tier 1 cannot safely provide.
+Still-open production-closure blockers include:
 
-Phase 17 therefore starts by closing runtime prerequisites before adding executor API layers.
+- distributed executor work can still be interpreted as inline because executor operation
+  fallback and member-local ownership closure are not yet locked end to end
+- the real Scatter-backed execution path is not yet proven as the production runtime path
+- fail-closed Scatter health, recycle-on-crash-or-timeout behavior, and explicit off-main-
+  thread proof remain acceptance-critical
+- docs, examples, config defaults, and published runtime wiring must stay honest about
+  module-backed distributed registration and explicit inline test/dev-only behavior
+
+## Critical Repo-Specific Prerequisites
+
+The implementation is not end-to-end complete unless this plan explicitly wires all of the
+following:
+
+- real remote operation transport, including operation codec/factory registration, inbound
+  `OPERATION`/`OPERATION_RESPONSE` dispatch, and `callId` compatibility on the TCP wire
+- production `NodeEngineImpl` wiring against real cluster and partition services rather than
+  the current local-only surface
+- both executor container and task-type registry lifecycle wiring in `HeliosInstanceImpl`
+- member metadata on the cluster surface that includes stable UUID-bearing members, not fake
+  placeholder `Member` objects
+- public exports and docs for executor contracts, config, and supported failure semantics
+
+No block is complete if `ExecuteCallableOperation` still has a bypass fallback, if proxy
+shutdown remains local-only, or if accepted-owner tracking is not used for cancel/task-lost
+behavior end to end.
 
 ## Reference Material
 
@@ -76,14 +104,14 @@ Phase 17 therefore starts by closing runtime prerequisites before adding executo
 - `ShutdownOperation.java`
 - `ExecutorConfig.java`
 
-Use them for behavioral parity only. This is a TypeScript-first implementation using scatter,
-not a line-by-line port of Java's thread-pool internals.
+Use them for behavioral parity only. This is a TypeScript-first implementation using
+`@zenystx/scatterjs`, not a line-by-line port of Java's thread-pool internals.
 
-### Scatter realities from the current sibling repo
+### Scatter realities from the current `@zenystx/scatterjs` implementation
 
 | Scatter fact | Phase 17 rule |
 |---|---|
-| `scatter.pool()` is monomorphic | one pool per task type; never one shared generic pool |
+| `@zenystx/scatterjs` `scatter.pool()` is monomorphic | one pool per task type; never one shared generic pool |
 | `fn.toString()` cannot be executed remotely | distributed execution uses pre-registered task types only |
 | Current `AbortSignal` behavior is logical cancel, not guaranteed worker interruption | queued cancel is strong; in-flight cancel drops late result but may not reclaim CPU immediately |
 | Workers can disappear and reduce `workersAlive` | degraded pools must be detected and recycled explicitly |
@@ -197,8 +225,12 @@ The proxy unwraps this envelope and deserializes `resultData` before completing 
 
 ## Phase Structure
 
+Status note: the numbering below is retained as historical executor decomposition and support
+material. It is not the current canonical queue. Map any remaining open executor work through
+`Phase 17R / Block 17R.1` in `plans/TYPESCRIPT_PORT_PLAN.md`.
+
 ```text
-Block 17.0 - Executor runtime foundation + scatter workspace
+Block 17.0 - Executor runtime foundation + `@zenystx/scatterjs` package dependency
     -> 17.1 - ExecutorConfig + HeliosConfig extensions
     -> 17.2 - IExecutorService + TaskCallable contracts
     -> 17.3 - TaskTypeRegistry + registration fingerprinting
@@ -225,10 +257,9 @@ prerequisites and failure semantics build on one another.
 
 ## Ordered Finish-Up Checklist
 
-This checklist reflects the repository's current reality, not just the intended Phase 17 design.
-Complete these steps in order before treating Phase 17 as truly end-to-end.
-These steps map 1:1 to canonical queue blocks `17.9A`-`17.9F` in
-`plans/TYPESCRIPT_PORT_PLAN.md`.
+Use this checklist as supporting decomposition for the reopened executor production-closure
+work. It no longer maps 1:1 to the current master-plan queue blocks. The live go/no-go owner is
+`Phase 17R / Block 17R.1` in `plans/TYPESCRIPT_PORT_PLAN.md`.
 
 ### Step 1 / Block 17.9A - Make executor operations truly remote and service-backed
 
@@ -360,11 +391,16 @@ Checklist:
 Exit gate:
 
 - only after Steps 1-6 are green should Phase 17 proceed to the final Scatter-backed multi-node
-  integration and rollout gates in Blocks `17.10` and `17.INT`
+  integration and rollout gates in Blocks `17.10` and `17.INT`; use those gates as support
+  material for reopened `Phase 17R / Block 17R.1`, not as an independent status source
 
 ---
 
-## Block 17.0 - Executor Runtime Foundation + Scatter Workspace
+Historical block catalog below is retained for design and acceptance reference only. These
+`17.0`-`17.INT` sections do not replace the live queue or completion authority owned by
+`Phase 17R / Block 17R.1`.
+
+## Block 17.0 - Executor Runtime Foundation + `@zenystx/scatterjs` Package Dependency
 
 ### Goal
 
@@ -372,7 +408,7 @@ Close the runtime gaps that would otherwise make the executor plan fake-end-to-e
 
 ### Required changes
 
-- Add scatter as a workspace dependency.
+- Add `@zenystx/scatterjs` as a package dependency.
 - Finish the remote `OperationServiceImpl` path for production executor use using the existing
   cluster transport message types.
 - Extend `NodeEngine` with the cluster/runtime surfaces the executor actually needs.
@@ -994,9 +1030,12 @@ Prove the Phase 17 deliverable is rollout-ready within Tier 1's non-durable cont
 - root `bun test` remains 0 fail / 0 error after Phase 17 implementation
 - root `bun run tsc --noEmit` is clean
 
-### Rollout rules
+### Historical rollout rules (supporting acceptance reference)
 
-Phase 17 is not complete unless all of the following are true:
+Use these rollout rules as supporting acceptance reference for reopened `Phase 17R`
+executor closure. This file does not own final go/no-go status by itself.
+
+Reopened executor closure is not ready unless all of the following are true:
 
 - no unbounded queue default remains anywhere in executor code
 - no executor API returns raw `Data` to callers
@@ -1024,7 +1063,7 @@ Not accepted in Phase 17:
 - unbounded `queueCapacity = 0` semantics
 - transparent replay after accepted remote task loss
 
-## Success Criteria
+## Historical Success Criteria
 
 1. `helios.getExecutorService('compute')` returns a working executor proxy.
 2. Distributed tasks run on scatter worker threads, not the main event loop.

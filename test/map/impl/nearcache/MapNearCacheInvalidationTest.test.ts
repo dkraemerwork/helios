@@ -5,15 +5,15 @@
  * near cache entries when data structure mutations occur.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@zenystx/core/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { MapNearCacheManager } from '@zenystx/core/map/impl/nearcache/MapNearCacheManager';
-import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
-import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import type { MapNearCacheNodeEngine } from '@zenystx/core/map/impl/nearcache/MapNearCacheManager';
+import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import type { MapNearCacheNodeEngine } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
 
 function makeNodeEngine(): MapNearCacheNodeEngine {
     const partitionService = {

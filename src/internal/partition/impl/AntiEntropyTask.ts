@@ -6,8 +6,8 @@
  * generates {@link PartitionBackupReplicaAntiEntropyOp} for each backup replica,
  * carrying the primary's current version vector.
  */
-import type { PartitionReplicaManager } from '@zenystx/core/internal/partition/impl/PartitionReplicaManager';
-import { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
+import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
 
 export class AntiEntropyTask {
     private readonly _replicaManager: PartitionReplicaManager;

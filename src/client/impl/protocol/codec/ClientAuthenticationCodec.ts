@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.ClientAuthenticationCodec}.
  */
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { StringCodec } from './builtin/StringCodec';
 import { CodecUtil } from './builtin/CodecUtil';
 import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
@@ -11,8 +11,8 @@ import { AddressCodec } from './custom/AddressCodec';
 import { MemberInfoCodec } from './custom/MemberInfoCodec';
 import { EntryListUUIDListIntegerCodec } from './builtin/EntryListUUIDListIntegerCodec';
 import { MapCodec } from './builtin/MapCodec';
-import type { MemberInfo } from '@zenystx/core/cluster/MemberInfo';
-import type { Address } from '@zenystx/core/cluster/Address';
+import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import type { Address } from '@zenystx/helios-core/cluster/Address';
 
 export class ClientAuthenticationCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x000100; // 256

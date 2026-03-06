@@ -2,12 +2,12 @@
  * Port of {@code com.hazelcast.cache.impl.CacheRecordStore}.
  * Single-partition key→value cache storage. Supports BINARY and OBJECT in-memory formats.
  */
-import type { ICacheRecordStore } from '@zenystx/core/cache/impl/ICacheRecordStore';
-import { InMemoryFormat } from '@zenystx/core/cache/impl/InMemoryFormat';
-import { CacheDataRecord } from '@zenystx/core/cache/impl/record/CacheDataRecord';
-import { CacheObjectRecord } from '@zenystx/core/cache/impl/record/CacheObjectRecord';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { ICacheRecordStore } from '@zenystx/helios-core/cache/impl/ICacheRecordStore';
+import { InMemoryFormat } from '@zenystx/helios-core/cache/impl/InMemoryFormat';
+import { CacheDataRecord } from '@zenystx/helios-core/cache/impl/record/CacheDataRecord';
+import { CacheObjectRecord } from '@zenystx/helios-core/cache/impl/record/CacheObjectRecord';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 type AnyRecord = CacheDataRecord | CacheObjectRecord;
 

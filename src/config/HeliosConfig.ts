@@ -4,11 +4,11 @@
  * Holds the instance name and any per-map configurations.
  * Use HeliosConfig as the entry point when constructing a HeliosInstanceImpl.
  */
-import { ExecutorConfig } from "@zenystx/core/config/ExecutorConfig";
-import { MapConfig } from "@zenystx/core/config/MapConfig";
-import { NetworkConfig } from "@zenystx/core/config/NetworkConfig";
-import { QueueConfig } from "@zenystx/core/config/QueueConfig";
-import { TopicConfig } from "@zenystx/core/config/TopicConfig";
+import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig";
+import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
+import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
+import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 
 export class HeliosConfig {
   private readonly _name: string;

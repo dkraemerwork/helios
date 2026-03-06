@@ -6,16 +6,16 @@
  * In TypeScript (single-threaded Bun), thread-access checks are omitted.
  * Java's blocking waitWithDeadline() is replaced by Promise.all().
  */
-import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
-import type { Counter } from '@zenystx/core/internal/util/counters/Counter';
-import type { Transaction } from '@zenystx/core/transaction/impl/Transaction';
-import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
-import { State } from '@zenystx/core/transaction/impl/Transaction';
-import { TransactionLog } from '@zenystx/core/transaction/impl/TransactionLog';
-import { TransactionOptions, TransactionType } from '@zenystx/core/transaction/TransactionOptions';
-import { TransactionException } from '@zenystx/core/transaction/TransactionException';
-import { TransactionNotActiveException } from '@zenystx/core/transaction/TransactionNotActiveException';
-import { TransactionTimedOutException } from '@zenystx/core/transaction/TransactionTimedOutException';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
+import type { Counter } from '@zenystx/helios-core/internal/util/counters/Counter';
+import type { Transaction } from '@zenystx/helios-core/transaction/impl/Transaction';
+import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
+import { State } from '@zenystx/helios-core/transaction/impl/Transaction';
+import { TransactionLog } from '@zenystx/helios-core/transaction/impl/TransactionLog';
+import { TransactionOptions, TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
+import { TransactionException } from '@zenystx/helios-core/transaction/TransactionException';
+import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/TransactionNotActiveException';
+import { TransactionTimedOutException } from '@zenystx/helios-core/transaction/TransactionTimedOutException';
 
 /** Minimal interface that TransactionImpl needs from the manager service. */
 export interface TransactionManagerServiceLike {

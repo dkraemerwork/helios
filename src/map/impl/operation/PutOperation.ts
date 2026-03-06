@@ -4,11 +4,11 @@
  * Stores (key → value) and sends the previous value (or null if new).
  * Implements BackupAwareOperation — produces a PutBackupOperation.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { BackupAwareOperation } from '@zenystx/core/spi/impl/operationservice/BackupAwareOperation';
-import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
-import { PutBackupOperation } from '@zenystx/core/map/impl/operation/PutBackupOperation';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
+import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
+import { PutBackupOperation } from '@zenystx/helios-core/map/impl/operation/PutBackupOperation';
 
 export class PutOperation extends MapOperation implements BackupAwareOperation {
     private readonly _key: Data;

@@ -16,9 +16,9 @@
  * Block 16.A5: Added SerializationStrategy support, new message types,
  * send()/disconnectPeer()/onMessage, membership-driven connection management.
  */
-import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/core/internal/eventloop/Eventloop';
-import type { ClusterMessage } from '@zenystx/core/cluster/tcp/ClusterMessage';
-import { type SerializationStrategy, JsonSerializationStrategy } from '@zenystx/core/cluster/tcp/SerializationStrategy';
+import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
+import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
+import { type SerializationStrategy, JsonSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 
 export class TcpClusterTransport {
     private readonly _nodeId: string;
@@ -112,6 +112,29 @@ export class TcpClusterTransport {
     /** The actual TCP port this server is bound to (useful when port 0 was requested). */
     boundPort(): number | null {
         return this._server?.port() ?? null;
+    }
+
+    getStats(): {
+        openChannels: number;
+        peerCount: number;
+        bytesRead: number;
+        bytesWritten: number;
+    } {
+        const channels = Array.from(this._buffers.keys());
+        let bytesRead = 0;
+        let bytesWritten = 0;
+
+        for (const channel of channels) {
+            bytesRead += channel.bytesRead();
+            bytesWritten += channel.bytesWritten();
+        }
+
+        return {
+            openChannels: channels.length,
+            peerCount: this._peers.size,
+            bytesRead,
+            bytesWritten,
+        };
     }
 
     // ── Targeted send ─────────────────────────────────────────────────────

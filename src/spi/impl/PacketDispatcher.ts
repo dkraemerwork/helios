@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.spi.impl.PacketDispatcher}.
  * Dispatches Packets to the correct service handler.
  */
-import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { Packet } from '@zenystx/helios-core/internal/nio/Packet';
 
 const { FLAG_OP_RESPONSE, FLAG_OP_CONTROL } = Packet;
 

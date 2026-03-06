@@ -5,8 +5,8 @@
  * Single-threaded: uses simple compare-and-set without CAS atomics.
  */
 import { DataRecordWithStats } from './DataRecordWithStats';
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { JVMUtil } from '@zenystx/core/internal/util/JVMUtil';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { JVMUtil } from '@zenystx/helios-core/internal/util/JVMUtil';
 
 export class CachedDataRecordWithStats extends DataRecordWithStats {
     private _cachedValue: unknown = null;

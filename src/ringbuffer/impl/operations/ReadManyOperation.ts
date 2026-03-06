@@ -1,6 +1,6 @@
-import { AbstractRingBufferOperation } from '@zenystx/core/ringbuffer/impl/operations/AbstractRingBufferOperation';
-import { ReadResultSetImpl } from '@zenystx/core/ringbuffer/impl/ReadResultSetImpl';
-import { CallStatus } from '@zenystx/core/spi/impl/operationservice/CallStatus';
+import { AbstractRingBufferOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AbstractRingBufferOperation';
+import { ReadResultSetImpl } from '@zenystx/helios-core/ringbuffer/impl/ReadResultSetImpl';
+import { CallStatus } from '@zenystx/helios-core/spi/impl/operationservice/CallStatus';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.operations.ReadManyOperation}.
@@ -80,7 +80,7 @@ export class ReadManyOperation<O = unknown> extends AbstractRingBufferOperation 
         return this.resultSet.isMinSizeReached() ? CallStatus.RESPONSE : CallStatus.WAIT;
     }
 
-    private readMany(ringbuffer: import('@zenystx/core/ringbuffer/impl/RingbufferContainer').RingbufferContainer): void {
+    private readMany(ringbuffer: import('@zenystx/helios-core/ringbuffer/impl/RingbufferContainer').RingbufferContainer): void {
         this.sequence = ringbuffer.readMany(this.sequence, this.resultSet!);
         this.resultSet!.setNextSequenceToReadFrom(this.sequence);
     }

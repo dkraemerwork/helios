@@ -3,9 +3,9 @@
  *
  * Internal transaction interface representing the lifecycle of a distributed transaction.
  */
-import type { TransactionException } from '@zenystx/core/transaction/TransactionException';
-import type { TransactionType } from '@zenystx/core/transaction/TransactionOptions';
-import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
+import type { TransactionException } from '@zenystx/helios-core/transaction/TransactionException';
+import type { TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
+import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
 
 export const enum State {
     NO_TXN      = 'NO_TXN',

@@ -1,10 +1,10 @@
-import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
-import { EvictionConfig } from '@zenystx/core/config/EvictionConfig';
-import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
-import { MaxSizePolicy } from '@zenystx/core/config/MaxSizePolicy';
-import { MapStoreConfig } from '@zenystx/core/config/MapStoreConfig';
-import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
-import type { IndexConfig } from '@zenystx/core/config/IndexConfig';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
+import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 
 export class MapConfig {
     static readonly MIN_BACKUP_COUNT = 0;

@@ -2,14 +2,14 @@
  * Port of {@code com.hazelcast.transaction.impl.TransactionLogTest}.
  */
 import { describe, it, expect, mock, beforeEach } from 'bun:test';
-import { TransactionLog } from '@zenystx/core/transaction/impl/TransactionLog';
-import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
-import type { TargetAwareTransactionLogRecord } from '@zenystx/core/transaction/impl/TargetAwareTransactionLogRecord';
-import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
-import type { OperationService } from '@zenystx/core/spi/impl/operationservice/OperationService';
-import { Operation, GENERIC_PARTITION_ID } from '@zenystx/core/spi/impl/operationservice/Operation';
-import { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
-import { Address } from '@zenystx/core/cluster/Address';
+import { TransactionLog } from '@zenystx/helios-core/transaction/impl/TransactionLog';
+import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
+import type { TargetAwareTransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TargetAwareTransactionLogRecord';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
+import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
+import { Operation, GENERIC_PARTITION_ID } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
+import { Address } from '@zenystx/helios-core/cluster/Address';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { RestEndpointGroup } from '@zenystx/core/rest/RestEndpointGroup';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 
 /**
  * Configuration for the built-in Helios REST API (Bun.serve()).

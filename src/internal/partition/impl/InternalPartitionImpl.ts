@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.partition.impl.InternalPartitionImpl}.
  * Mutable implementation of InternalPartition.
  */
-import { AbstractInternalPartition } from '@zenystx/core/internal/partition/AbstractInternalPartition';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import type { PartitionReplicaInterceptor } from '@zenystx/core/internal/partition/PartitionReplicaInterceptor';
-import type { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
-import { MAX_REPLICA_COUNT } from '@zenystx/core/internal/partition/InternalPartition';
+import { AbstractInternalPartition } from '@zenystx/helios-core/internal/partition/AbstractInternalPartition';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import type { PartitionReplicaInterceptor } from '@zenystx/helios-core/internal/partition/PartitionReplicaInterceptor';
+import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
 
 export class InternalPartitionImpl extends AbstractInternalPartition {
     private _replicas: (PartitionReplica | null)[];

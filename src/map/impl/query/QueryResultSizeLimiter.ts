@@ -4,10 +4,10 @@
  * Responsible for limiting result size of queries to prevent OOM.
  * Provides a hard-coded minimum limit and a pre-check for local partitions.
  */
-import type { MapServiceContext } from '@zenystx/core/map/impl/MapServiceContext';
-import type { ILogger } from '@zenystx/core/test-support/ILogger';
-import { ClusterProperty } from '@zenystx/core/spi/properties/ClusterProperty';
-import { QueryResultSizeExceededException } from '@zenystx/core/map/QueryResultSizeExceededException';
+import type { MapServiceContext } from '@zenystx/helios-core/map/impl/MapServiceContext';
+import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
+import { ClusterProperty } from '@zenystx/helios-core/spi/properties/ClusterProperty';
+import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
 
 export class QueryResultSizeLimiter {
     /**
@@ -86,7 +86,7 @@ export class QueryResultSizeLimiter {
 
     private _getLocalPartitionSize(
         mapName: string,
-        localPartitions: import('@zenystx/core/internal/util/collection/PartitionIdSet').PartitionIdSet,
+        localPartitions: import('@zenystx/helios-core/internal/util/collection/PartitionIdSet').PartitionIdSet,
         partitionsToCheck: number,
     ): number {
         let localSize = 0;
@@ -98,7 +98,7 @@ export class QueryResultSizeLimiter {
         return localSize;
     }
 
-    private _getMaxResultLimit(props: import('@zenystx/core/spi/properties/HeliosProperties').HeliosProperties): number {
+    private _getMaxResultLimit(props: import('@zenystx/helios-core/spi/properties/HeliosProperties').HeliosProperties): number {
         const v = props.getInteger(ClusterProperty.QUERY_RESULT_SIZE_LIMIT);
         if (v === -1) return QueryResultSizeLimiter.DISABLED;
         if (v <= 0) {
@@ -111,7 +111,7 @@ export class QueryResultSizeLimiter {
     }
 
     private _getMaxLocalPartitionsLimitForPreCheck(
-        props: import('@zenystx/core/spi/properties/HeliosProperties').HeliosProperties,
+        props: import('@zenystx/helios-core/spi/properties/HeliosProperties').HeliosProperties,
     ): number {
         const v = props.getInteger(ClusterProperty.QUERY_MAX_LOCAL_PARTITION_LIMIT_FOR_PRE_CHECK);
         if (v === -1) return QueryResultSizeLimiter.DISABLED;

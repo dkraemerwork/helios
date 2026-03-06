@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { InternalReplicatedMapStorage } from '@zenystx/core/replicatedmap/impl/record/InternalReplicatedMapStorage';
-import { ReplicatedRecord } from '@zenystx/core/replicatedmap/impl/record/ReplicatedRecord';
-import { LazyCollection } from '@zenystx/core/replicatedmap/impl/record/LazyCollection';
-import { LazySet } from '@zenystx/core/replicatedmap/impl/record/LazySet';
-import { ValuesIteratorFactory } from '@zenystx/core/replicatedmap/impl/record/ValuesIteratorFactory';
-import { KeySetIteratorFactory } from '@zenystx/core/replicatedmap/impl/record/KeySetIteratorFactory';
-import { EntrySetIteratorFactory } from '@zenystx/core/replicatedmap/impl/record/EntrySetIteratorFactory';
-import type { ReplicatedRecordStore } from '@zenystx/core/replicatedmap/impl/record/ReplicatedRecordStore';
+import { InternalReplicatedMapStorage } from '@zenystx/helios-core/replicatedmap/impl/record/InternalReplicatedMapStorage';
+import { ReplicatedRecord } from '@zenystx/helios-core/replicatedmap/impl/record/ReplicatedRecord';
+import { LazyCollection } from '@zenystx/helios-core/replicatedmap/impl/record/LazyCollection';
+import { LazySet } from '@zenystx/helios-core/replicatedmap/impl/record/LazySet';
+import { ValuesIteratorFactory } from '@zenystx/helios-core/replicatedmap/impl/record/ValuesIteratorFactory';
+import { KeySetIteratorFactory } from '@zenystx/helios-core/replicatedmap/impl/record/KeySetIteratorFactory';
+import { EntrySetIteratorFactory } from '@zenystx/helios-core/replicatedmap/impl/record/EntrySetIteratorFactory';
+import type { ReplicatedRecordStore } from '@zenystx/helios-core/replicatedmap/impl/record/ReplicatedRecordStore';
 
 // Test data: 100 records
 const TEST_DATA_SIMPLE = new InternalReplicatedMapStorage<string, number>();

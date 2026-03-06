@@ -1,5 +1,5 @@
 /**
- * TursoStoreModule — demonstrates @zenystx/turso as a write-through MapStore.
+ * TursoStoreModule — demonstrates @zenystx/helios-turso as a write-through MapStore.
  *
  * The 'sessions' IMap is backed by a TursoMapStore. Every put() writes
  * to both the in-memory map and a Turso/libSQL database. Every get() for
@@ -11,7 +11,7 @@
  */
 
 import { Module } from '@nestjs/common';
-import { HeliosObjectExtractionModule } from '@zenystx/nestjs';
+import { HeliosObjectExtractionModule } from '@zenystx/helios-nestjs';
 import { TursoStoreService } from './turso-store.service';
 
 @Module({

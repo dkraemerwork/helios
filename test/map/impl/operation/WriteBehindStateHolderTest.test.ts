@@ -4,14 +4,14 @@
  * Block 16.F2 — write-behind queue + flush sequences capture/apply during partition replication.
  */
 import { describe, test, expect, mock, afterEach } from 'bun:test';
-import { WriteBehindStateHolder } from '@zenystx/core/map/impl/operation/WriteBehindStateHolder';
-import { WriteBehindStore } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindStore';
-import { ArrayWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
-import { CoalescedWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
-import { BoundedWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/BoundedWriteBehindQueue';
-import { WriteBehindProcessor } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindProcessor';
-import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
-import { addedEntry } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
+import { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/WriteBehindStateHolder';
+import { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
+import { ArrayWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
+import { CoalescedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/CoalescedWriteBehindQueue';
+import { BoundedWriteBehindQueue } from '@zenystx/helios-core/map/impl/mapstore/writebehind/BoundedWriteBehindQueue';
+import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
+import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
+import { addedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 
 function makeWrapper(storeFn?: (key: string, value: string) => Promise<void>): MapStoreWrapper<string, string> {
     const impl = {

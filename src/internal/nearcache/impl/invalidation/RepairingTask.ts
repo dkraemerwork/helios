@@ -8,16 +8,16 @@
  * - Send periodic operations to cluster members to fetch latest partition sequences/UUIDs
  *   (controlled via RECONCILIATION_INTERVAL_SECONDS).
  */
-import { HeliosProperty } from '@zenystx/core/spi/properties/HeliosProperty';
-import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { TaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
-import { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
-import { StaleReadDetectorImpl } from '@zenystx/core/internal/nearcache/impl/invalidation/StaleReadDetectorImpl';
-import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
+import { HeliosProperty } from '@zenystx/helios-core/spi/properties/HeliosProperty';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
+import { StaleReadDetectorImpl } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/StaleReadDetectorImpl';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
 
 const NANOS_PER_SECOND = 1_000_000_000;
 const RESCHEDULE_FAILED_INITIALIZATION_AFTER_MS = 500;

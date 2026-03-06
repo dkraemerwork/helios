@@ -1,5 +1,5 @@
 /**
- * S3StoreModule — demonstrates @zenystx/s3 as a write-through MapStore.
+ * S3StoreModule — demonstrates @zenystx/helios-s3 as a write-through MapStore.
  *
  * The 'documents' IMap is backed by an S3MapStore. Every put() writes
  * to both the in-memory map and S3 (or MinIO/LocalStack). Every get() for
@@ -11,7 +11,7 @@
  */
 
 import { Module } from '@nestjs/common';
-import { HeliosObjectExtractionModule } from '@zenystx/nestjs';
+import { HeliosObjectExtractionModule } from '@zenystx/helios-nestjs';
 import { S3StoreService } from './s3-store.service';
 
 @Module({

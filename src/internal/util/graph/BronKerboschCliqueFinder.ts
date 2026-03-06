@@ -1,4 +1,4 @@
-import { Graph } from '@zenystx/core/internal/util/graph/Graph';
+import { Graph } from '@zenystx/helios-core/internal/util/graph/Graph';
 
 /**
  * Bron-Kerbosch maximum clique finder algorithm.

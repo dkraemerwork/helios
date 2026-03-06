@@ -4,7 +4,7 @@
  * Represents a single row (key, value) in a query result.
  * Either key or value may be null depending on IterationType.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class QueryResultRow {
     private readonly _key: Data | null;

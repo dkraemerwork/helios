@@ -4,7 +4,7 @@
  * Runs on Near Cache side; responsible for fetching all Near Caches' remote metadata
  * like last sequence numbers and partition UUIDs.
  */
-import type { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
+import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 
 export interface InvalidationMetaDataFetcher {
     /**

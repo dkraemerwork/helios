@@ -1,21 +1,21 @@
-import { decodeData, encodeData } from "@zenystx/core/cluster/tcp/DataWireCodec";
+import { decodeData, encodeData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import type {
   ClusterMessage,
   TopicAckMsg,
   TopicMessageMsg,
-} from "@zenystx/core/cluster/tcp/ClusterMessage";
-import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import { TopicConfig } from "@zenystx/core/config/TopicConfig";
-import type { Data } from "@zenystx/core/internal/serialization/Data";
-import type { SerializationService } from "@zenystx/core/internal/serialization/SerializationService";
-import type { HeliosClusterCoordinator } from "@zenystx/core/instance/impl/HeliosClusterCoordinator";
-import { TcpClusterTransport } from "@zenystx/core/cluster/tcp/TcpClusterTransport";
-import { Message } from "@zenystx/core/topic/Message";
+} from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { Message } from "@zenystx/helios-core/topic/Message";
 import {
   LocalTopicStatsImpl,
   type LocalTopicStats,
-} from "@zenystx/core/topic/LocalTopicStats";
-import type { MessageListener } from "@zenystx/core/topic/MessageListener";
+} from "@zenystx/helios-core/topic/LocalTopicStats";
+import type { MessageListener } from "@zenystx/helios-core/topic/MessageListener";
 
 interface TopicRuntime<T = unknown> {
   listeners: Map<string, MessageListener<T>>;

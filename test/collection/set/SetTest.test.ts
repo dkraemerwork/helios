@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { SetImpl } from '@zenystx/core/collection/impl/SetImpl';
+import { SetImpl } from '@zenystx/helios-core/collection/impl/SetImpl';
 
 function makeSet(maxSize = 0) {
     return new SetImpl<string>(maxSize);

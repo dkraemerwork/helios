@@ -10,9 +10,9 @@
 
 import 'reflect-metadata';
 import { Injectable } from '@nestjs/common';
-import { InjectMap } from '@zenystx/nestjs';
-import type { IMap } from '@zenystx/core/map/IMap';
-import { Predicates } from '@zenystx/core/query/Predicates';
+import { InjectMap } from '@zenystx/helios-nestjs';
+import type { IMap } from '@zenystx/helios-core/map/IMap';
+import { Predicates } from '@zenystx/helios-core/query/Predicates';
 
 export interface Product {
     id: string;

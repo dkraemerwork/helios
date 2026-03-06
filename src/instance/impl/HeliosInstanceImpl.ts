@@ -11,57 +11,58 @@
  * Block 7.5 addition: when NetworkConfig has TCP-IP join enabled, a
  * TcpClusterTransport is started and map mutations are broadcast to peers.
  */
-import { NodeEngineImpl } from "@zenystx/core/spi/impl/NodeEngineImpl";
-import { SerializationServiceImpl } from "@zenystx/core/internal/serialization/impl/SerializationServiceImpl";
-import { SerializationConfig } from "@zenystx/core/internal/serialization/impl/SerializationConfig";
-import { MapContainerService } from "@zenystx/core/map/impl/MapContainerService";
-import { MapService } from "@zenystx/core/map/impl/MapService";
-import { MapProxy } from "@zenystx/core/map/impl/MapProxy";
-import { NetworkedMapProxy } from "@zenystx/core/map/impl/NetworkedMapProxy";
-import { NearCachedIMapWrapper } from "@zenystx/core/map/impl/nearcache/NearCachedIMapWrapper";
-import { TcpClusterTransport } from "@zenystx/core/cluster/tcp/TcpClusterTransport";
-import { DefaultNearCacheManager } from "@zenystx/core/internal/nearcache/impl/DefaultNearCacheManager";
-import { QueueImpl } from "@zenystx/core/collection/impl/QueueImpl";
-import { QueueProxyImpl } from "@zenystx/core/collection/impl/queue/QueueProxyImpl";
-import { DistributedQueueService } from "@zenystx/core/collection/impl/queue/DistributedQueueService";
-import { ListImpl } from "@zenystx/core/collection/impl/ListImpl";
-import { SetImpl } from "@zenystx/core/collection/impl/SetImpl";
-import { TopicImpl } from "@zenystx/core/topic/impl/TopicImpl";
-import { DistributedTopicService } from "@zenystx/core/topic/impl/DistributedTopicService";
-import { TopicProxyImpl } from "@zenystx/core/topic/impl/TopicProxyImpl";
-import { MultiMapImpl } from "@zenystx/core/multimap/impl/MultiMapImpl";
-import { ReplicatedMapImpl } from "@zenystx/core/replicatedmap/impl/ReplicatedMapImpl";
-import { HeliosLifecycleService } from "@zenystx/core/instance/lifecycle/HeliosLifecycleService";
-import { LocalCluster } from "@zenystx/core/cluster/impl/LocalCluster";
-import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import { HeliosRestServer } from "@zenystx/core/rest/HeliosRestServer";
-import { HealthCheckHandler } from "@zenystx/core/rest/handler/HealthCheckHandler";
-import { ClusterReadHandler } from "@zenystx/core/rest/handler/ClusterReadHandler";
-import { ClusterWriteHandler } from "@zenystx/core/rest/handler/ClusterWriteHandler";
-import { DataHandler } from "@zenystx/core/rest/handler/DataHandler";
+import { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
+import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
+import { SerializationConfig } from "@zenystx/helios-core/internal/serialization/impl/SerializationConfig";
+import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
+import { MapService } from "@zenystx/helios-core/map/impl/MapService";
+import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
+import { NetworkedMapProxy } from "@zenystx/helios-core/map/impl/NetworkedMapProxy";
+import { NearCachedIMapWrapper } from "@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
+import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
+import { QueueProxyImpl } from "@zenystx/helios-core/collection/impl/queue/QueueProxyImpl";
+import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
+import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
+import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
+import { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
+import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
+import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
+import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
+import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
+import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService";
+import { LocalCluster } from "@zenystx/helios-core/cluster/impl/LocalCluster";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
+import { HealthCheckHandler } from "@zenystx/helios-core/rest/handler/HealthCheckHandler";
+import { ClusterReadHandler } from "@zenystx/helios-core/rest/handler/ClusterReadHandler";
+import { ClusterWriteHandler } from "@zenystx/helios-core/rest/handler/ClusterWriteHandler";
+import { DataHandler } from "@zenystx/helios-core/rest/handler/DataHandler";
 import type {
   DataHandlerMap,
   DataHandlerQueue,
   DataHandlerStore,
-} from "@zenystx/core/rest/handler/DataHandler";
-import { NodeState } from "@zenystx/core/instance/lifecycle/NodeState";
-import type { HeliosInstance } from "@zenystx/core/core/HeliosInstance";
-import type { IMap } from "@zenystx/core/map/IMap";
-import type { IQueue } from "@zenystx/core/collection/IQueue";
-import type { IList } from "@zenystx/core/collection/IList";
-import type { ISet } from "@zenystx/core/collection/ISet";
-import type { ITopic } from "@zenystx/core/topic/ITopic";
-import type { MultiMap } from "@zenystx/core/multimap/MultiMap";
-import type { ReplicatedMap } from "@zenystx/core/replicatedmap/ReplicatedMap";
-import type { DistributedObject } from "@zenystx/core/core/DistributedObject";
-import type { LifecycleService } from "@zenystx/core/instance/lifecycle/LifecycleService";
-import type { Cluster } from "@zenystx/core/cluster/Cluster";
-import type { MapConfig } from "@zenystx/core/config/MapConfig";
-import type { IExecutorService } from "@zenystx/core/executor/IExecutorService";
-import { ExecutorServiceProxy } from "@zenystx/core/executor/impl/ExecutorServiceProxy";
-import { TaskTypeRegistry } from "@zenystx/core/executor/impl/TaskTypeRegistry";
-import { ExecutorRejectedExecutionException } from "@zenystx/core/executor/ExecutorExceptions";
-import { HeliosClusterCoordinator } from "@zenystx/core/instance/impl/HeliosClusterCoordinator";
+} from "@zenystx/helios-core/rest/handler/DataHandler";
+import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
+import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import type { IList } from "@zenystx/helios-core/collection/IList";
+import type { ISet } from "@zenystx/helios-core/collection/ISet";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
+import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
+import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
+import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
+import type { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
+import { ExecutorServiceProxy } from "@zenystx/helios-core/executor/impl/ExecutorServiceProxy";
+import { TaskTypeRegistry } from "@zenystx/helios-core/executor/impl/TaskTypeRegistry";
+import { ExecutorRejectedExecutionException } from "@zenystx/helios-core/executor/ExecutorExceptions";
+import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
+import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -465,10 +466,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   getClusterState(): string {
+    if (this._cluster instanceof ClusterServiceImpl) {
+      return this._cluster.getClusterState();
+    }
     return "ACTIVE";
   }
 
   isClusterSafe(): boolean {
+    if (this._cluster instanceof ClusterServiceImpl) {
+      return !this._cluster.isMigrationsInProgress();
+    }
     return true;
   }
 
@@ -477,7 +484,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   getMemberVersion(): string {
-    return "1.0.0";
+    const localMember = this._cluster.getLocalMember();
+    return localMember.getVersion().toString();
   }
 
   getInstanceName(): string {
@@ -517,6 +525,77 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Returns the near-cache manager for observability / testing. */
   getNearCacheManager(): DefaultNearCacheManager {
     return this._nearCacheManager;
+  }
+
+  getClusterMasterAddress(): string | null {
+    if (this._cluster instanceof ClusterServiceImpl) {
+      const masterAddress = this._cluster.getMasterAddress();
+      if (masterAddress !== null) {
+        return `${masterAddress.getHost()}:${masterAddress.getPort()}`;
+      }
+    }
+
+    const localMember = this._cluster.getLocalMember();
+    return `${localMember.getAddress().getHost()}:${localMember.getAddress().getPort()}`;
+  }
+
+  getClusterId(): string | null {
+    if (this._cluster instanceof ClusterServiceImpl) {
+      return this._cluster.getClusterId();
+    }
+    return null;
+  }
+
+  getPartitionCount(): number {
+    return this._nodeEngine.getPartitionService().getPartitionCount();
+  }
+
+  getPartitionIdForName(name: string): number {
+    if (this._clusterCoordinator !== null) {
+      return this._clusterCoordinator.getPartitionId(name);
+    }
+
+    const data = this._ss.toData(name);
+    if (data === null) {
+      throw new Error(`Unable to derive partition id for '${name}'`);
+    }
+    return this._nodeEngine.getPartitionService().getPartitionId(data);
+  }
+
+  getPartitionOwnerId(partitionId: number): string | null {
+    return this._clusterCoordinator?.getOwnerId(partitionId) ?? this._name;
+  }
+
+  getPartitionBackupIds(partitionId: number, replicaCount = 6): string[] {
+    return this._clusterCoordinator?.getBackupIds(partitionId, replicaCount) ?? [];
+  }
+
+  getTransportStats(): {
+    openChannels: number;
+    peerCount: number;
+    bytesRead: number;
+    bytesWritten: number;
+  } {
+    return this._transport?.getStats() ?? {
+      openChannels: 0,
+      peerCount: 0,
+      bytesRead: 0,
+      bytesWritten: 0,
+    };
+  }
+
+  getKnownDistributedObjectNames(): {
+    maps: string[];
+    queues: string[];
+    topics: string[];
+    executors: string[];
+  } {
+    return {
+      maps: Array.from(this._maps.keys()),
+      queues: Array.from(this._queues.keys()),
+      topics: Array.from(this._topics.keys()),
+      executors: Array.from(this._executors.keys()),
+    };
   }
 
   // ── Config helpers ───────────────────────────────────────────────────────

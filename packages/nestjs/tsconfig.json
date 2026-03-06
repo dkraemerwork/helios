@@ -15,8 +15,8 @@
     "emitDecoratorMetadata": true,
 
     "paths": {
-      "@zenystx/core/*": ["../../src/core/*", "../../src/*"],
-      "@zenystx/nestjs/*": ["./src/*"]
+      "@zenystx/helios-core/*": ["../../src/core/*", "../../src/*"],
+      "@zenystx/helios-nestjs/*": ["./src/*"]
     },
 
     "types": ["bun"]

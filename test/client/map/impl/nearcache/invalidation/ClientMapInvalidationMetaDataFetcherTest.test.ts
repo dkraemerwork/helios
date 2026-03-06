@@ -5,13 +5,13 @@
  * and UUIDs from a server-side MetaDataGenerator and propagates them into RepairingHandlers.
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { ClientMapInvalidationMetaDataFetcher } from '@zenystx/core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher';
-import type { ClientMapClusterService, ClientMapDataMember } from '@zenystx/core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher';
-import { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
-import { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
-import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import { ClientMapInvalidationMetaDataFetcher } from '@zenystx/helios-core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher';
+import type { ClientMapClusterService, ClientMapDataMember } from '@zenystx/helios-core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher';
+import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
+import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 
 const PARTITION_COUNT = 271;
 

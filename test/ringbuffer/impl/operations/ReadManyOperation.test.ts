@@ -4,13 +4,13 @@
  * Tests ReadManyOperation including blocking behavior, min/max size, and filtering.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { RingbufferConfig } from '@zenystx/core/config/RingbufferConfig';
-import { RingbufferContainer } from '@zenystx/core/ringbuffer/impl/RingbufferContainer';
-import { RingbufferService } from '@zenystx/core/ringbuffer/impl/RingbufferService';
-import { ReadManyOperation } from '@zenystx/core/ringbuffer/impl/operations/ReadManyOperation';
-import { ReadResultSetImpl } from '@zenystx/core/ringbuffer/impl/ReadResultSetImpl';
-import { CallStatus } from '@zenystx/core/spi/impl/operationservice/CallStatus';
-import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
+import { RingbufferContainer } from '@zenystx/helios-core/ringbuffer/impl/RingbufferContainer';
+import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
+import { ReadManyOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/ReadManyOperation';
+import { ReadResultSetImpl } from '@zenystx/helios-core/ringbuffer/impl/ReadResultSetImpl';
+import { CallStatus } from '@zenystx/helios-core/spi/impl/operationservice/CallStatus';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
 
 const rbName = 'foo';
 

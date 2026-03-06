@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.ListLongCodec}.
  */
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { FixedSizeTypesCodec, LONG_SIZE_IN_BYTES } from './FixedSizeTypesCodec';
 
 export class ListLongCodec {

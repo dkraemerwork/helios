@@ -2,9 +2,9 @@
  * Port of {@code com.hazelcast.cluster.memberselector.MemberSelectors}.
  * Utility class providing built-in MemberSelector instances and factory methods.
  */
-import type { MemberSelector } from '@zenystx/core/cluster/MemberSelector';
-import { AndMemberSelector } from '@zenystx/core/cluster/memberselector/impl/AndMemberSelector';
-import { OrMemberSelector } from '@zenystx/core/cluster/memberselector/impl/OrMemberSelector';
+import type { MemberSelector } from '@zenystx/helios-core/cluster/MemberSelector';
+import { AndMemberSelector } from '@zenystx/helios-core/cluster/memberselector/impl/AndMemberSelector';
+import { OrMemberSelector } from '@zenystx/helios-core/cluster/memberselector/impl/OrMemberSelector';
 
 /** Selects only lite members (own no partition). */
 export const LITE_MEMBER_SELECTOR: MemberSelector = { select: (m) => m.isLiteMember() };

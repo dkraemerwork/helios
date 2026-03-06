@@ -2,10 +2,10 @@
  * Port of com.hazelcast.internal.partition.impl.InternalPartitionImplTest
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { Address } from '@zenystx/core/cluster/Address';
-import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
-import { PartitionReplicaInterceptor } from '@zenystx/core/internal/partition/PartitionReplicaInterceptor';
-import { InternalPartitionImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { PartitionReplicaInterceptor } from '@zenystx/helios-core/internal/partition/PartitionReplicaInterceptor';
+import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
 
 const MAX_REPLICA_COUNT = 7;
 

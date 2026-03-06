@@ -5,7 +5,7 @@
  * GENERIC_PARTITION_ID constant, and default field values.
  */
 import { describe, it, expect } from 'bun:test';
-import { Operation, GENERIC_PARTITION_ID } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { Operation, GENERIC_PARTITION_ID } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 class TestOp extends Operation {
     async run(): Promise<void> { /* no-op */ }

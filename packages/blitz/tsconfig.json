@@ -17,8 +17,8 @@
     "noEmit": true,
 
     "paths": {
-      "@zenystx/core/*": ["../../src/core/*", "../../src/*"],
-      "@zenystx/blitz/*": ["./src/*"]
+      "@zenystx/helios-core/*": ["../../src/core/*", "../../src/*"],
+      "@zenystx/helios-blitz/*": ["./src/*"]
     },
 
     "types": ["bun"]

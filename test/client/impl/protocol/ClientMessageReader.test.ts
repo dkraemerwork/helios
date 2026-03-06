@@ -2,10 +2,10 @@
  * Port of com.hazelcast.client.impl.protocol.ClientMessageReaderTest
  */
 import { describe, it, expect } from 'bun:test';
-import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
-import { ClientMessageReader } from '@zenystx/core/client/impl/protocol/ClientMessageReader';
-import { ClientMessageWriter } from '@zenystx/core/client/impl/protocol/ClientMessageWriter';
-import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
+import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/ClientMessageReader';
+import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
+import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 
 /** Encode message to buffer using writer */
 function encodeToBuffer(msg: ClientMessage, bufSize: number): ByteBuffer {

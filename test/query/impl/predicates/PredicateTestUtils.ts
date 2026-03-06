@@ -1,10 +1,10 @@
-import type { Predicate } from '@zenystx/core/query/Predicate';
-import type { QueryableEntry } from '@zenystx/core/query/impl/QueryableEntry';
-import type { IndexRegistry } from '@zenystx/core/query/impl/IndexRegistry';
-import type { Visitor } from '@zenystx/core/query/impl/predicates/Visitor';
-import type { NegatablePredicate } from '@zenystx/core/query/impl/predicates/NegatablePredicate';
-import type { VisitablePredicate } from '@zenystx/core/query/impl/predicates/VisitablePredicate';
-import { AbstractVisitor } from '@zenystx/core/query/impl/predicates/AbstractVisitor';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
+import type { IndexRegistry } from '@zenystx/helios-core/query/impl/IndexRegistry';
+import type { Visitor } from '@zenystx/helios-core/query/impl/predicates/Visitor';
+import type { NegatablePredicate } from '@zenystx/helios-core/query/impl/predicates/NegatablePredicate';
+import type { VisitablePredicate } from '@zenystx/helios-core/query/impl/predicates/VisitablePredicate';
+import { AbstractVisitor } from '@zenystx/helios-core/query/impl/predicates/AbstractVisitor';
 
 /**
  * Creates a simple QueryableEntry that returns `value` for "this" attribute

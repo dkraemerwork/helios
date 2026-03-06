@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.cache.impl.record.CacheDataRecord}.
  * Record that stores the value in serialized {@code Data} form (BINARY in-memory format).
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { CacheRecord } from '@zenystx/core/cache/impl/record/CacheRecord';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { CacheRecord } from '@zenystx/helios-core/cache/impl/record/CacheRecord';
 
 export class CacheDataRecord implements CacheRecord<Data, Data> {
     readonly TIME_NOT_AVAILABLE = -1 as const;

@@ -1,19 +1,19 @@
-# @zenystx/nestjs
+# @zenystx/helios-nestjs
 
 NestJS integration for Helios.
 
 ## Install
 
 ```bash
-npm install @zenystx/nestjs @zenystx/core @nestjs/common @nestjs/core
+npm install @zenystx/helios-nestjs @zenystx/helios-core @nestjs/common @nestjs/core
 ```
 
 ## Quick Start
 
 ```ts
 import { Module } from '@nestjs/common';
-import { Helios } from '@zenystx/core/Helios';
-import { HeliosModule, HeliosCacheModule, HeliosTransactionModule } from '@zenystx/nestjs';
+import { Helios } from '@zenystx/helios-core/Helios';
+import { HeliosModule, HeliosCacheModule, HeliosTransactionModule } from '@zenystx/helios-nestjs';
 
 const instance = Helios.newInstance();
 
@@ -29,10 +29,10 @@ export class AppModule {}
 
 ## Subpath Exports
 
-- `@zenystx/nestjs/cache`
-- `@zenystx/nestjs/transaction`
-- `@zenystx/nestjs/health`
-- `@zenystx/nestjs/events`
-- `@zenystx/nestjs/decorators`
-- `@zenystx/nestjs/autoconfiguration`
-- `@zenystx/nestjs/context`
+- `@zenystx/helios-nestjs/cache`
+- `@zenystx/helios-nestjs/transaction`
+- `@zenystx/helios-nestjs/health`
+- `@zenystx/helios-nestjs/events`
+- `@zenystx/helios-nestjs/decorators`
+- `@zenystx/helios-nestjs/autoconfiguration`
+- `@zenystx/helios-nestjs/context`

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { MutableInteger } from '@zenystx/core/internal/util/MutableInteger';
+import { MutableInteger } from '@zenystx/helios-core/internal/util/MutableInteger';
 
 describe('MutableIntegerTest', () => {
   it('testGetAndInc', () => {

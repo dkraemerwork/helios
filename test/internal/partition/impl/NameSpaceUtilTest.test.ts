@@ -2,9 +2,9 @@
  * Port of com.hazelcast.internal.partition.impl.NameSpaceUtilTest
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { DistributedObjectNamespace } from '@zenystx/core/internal/services/DistributedObjectNamespace';
-import { NameSpaceUtil } from '@zenystx/core/internal/partition/impl/NameSpaceUtil';
-import type { ServiceNamespace } from '@zenystx/core/internal/services/ServiceNamespace';
+import { DistributedObjectNamespace } from '@zenystx/helios-core/internal/services/DistributedObjectNamespace';
+import { NameSpaceUtil } from '@zenystx/helios-core/internal/partition/impl/NameSpaceUtil';
+import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
 
 const SERVICE_NAME = 'service';
 

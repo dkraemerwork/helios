@@ -10,8 +10,8 @@
  * - {@link getDataMembers}     — returns the list of cluster members to query
  * - {@link fetchMemberResponse} — fetches metadata from a single member
  */
-import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
+import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 
 /** Shared metadata response shape — matches both Map and Cache operation responses. */
 export interface InvalidationMetaDataResponse {

@@ -4,13 +4,13 @@
  * Uses plain TypeScript stub objects instead of Mockito mocks.
  */
 import { describe, it, expect } from 'bun:test';
-import { QueryResultSizeLimiter } from '@zenystx/core/map/impl/query/QueryResultSizeLimiter';
-import { QueryResultSizeExceededException } from '@zenystx/core/map/QueryResultSizeExceededException';
-import { PartitionIdSet } from '@zenystx/core/internal/util/collection/PartitionIdSet';
-import type { MapServiceContext } from '@zenystx/core/map/impl/MapServiceContext';
-import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
-import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { ClusterProperty } from '@zenystx/core/spi/properties/ClusterProperty';
+import { QueryResultSizeLimiter } from '@zenystx/helios-core/map/impl/query/QueryResultSizeLimiter';
+import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
+import { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
+import type { MapServiceContext } from '@zenystx/helios-core/map/impl/MapServiceContext';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { ClusterProperty } from '@zenystx/helios-core/spi/properties/ClusterProperty';
 
 const ANY_MAP_NAME = 'foobar';
 const PARTITION_COUNT = parseInt(ClusterProperty.PARTITION_COUNT.defaultValue, 10); // 271
@@ -63,7 +63,7 @@ function buildContext(
             if (!next.done) lastValue = next.value;
             return {
                 size: () => lastValue,
-            } as unknown as import('@zenystx/core/map/impl/recordstore/RecordStore').RecordStore;
+            } as unknown as import('@zenystx/helios-core/map/impl/recordstore/RecordStore').RecordStore;
         },
         getCachedOwnedPartitions: () => partitionIdSet,
         getLocalMapStatsProvider: () => localMapStatsProvider,

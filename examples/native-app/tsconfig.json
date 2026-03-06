@@ -12,7 +12,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "paths": {
-      "@zenystx/core/*": ["../../src/*"]
+      "@zenystx/helios-core/*": ["../../src/*"]
     },
     "types": ["bun"],
     "noEmit": true

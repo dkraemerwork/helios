@@ -6,18 +6,18 @@
  * In Helios Phase 3 this is the only concrete NodeEngine. Phase 4 may introduce a
  * cluster-aware variant.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { NodeEngine, ClusterServiceView } from '@zenystx/core/spi/NodeEngine';
-import type { OperationService } from '@zenystx/core/spi/impl/operationservice/OperationService';
-import type { ILogger } from '@zenystx/core/test-support/ILogger';
-import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import type { PartitionService } from '@zenystx/core/spi/PartitionService';
-import { ConsoleLogger } from '@zenystx/core/test-support/ILogger';
-import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
-import { HeliosException } from '@zenystx/core/core/exception/HeliosException';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { Address } from '@zenystx/core/cluster/Address';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { NodeEngine, ClusterServiceView } from '@zenystx/helios-core/spi/NodeEngine';
+import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
+import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import type { PartitionService } from '@zenystx/helios-core/spi/PartitionService';
+import { ConsoleLogger } from '@zenystx/helios-core/test-support/ILogger';
+import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { Address } from '@zenystx/helios-core/cluster/Address';
 
 export interface NodeEngineImplOptions {
     localAddress?: Address;

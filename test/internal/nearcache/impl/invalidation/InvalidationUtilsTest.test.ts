@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.nearcache.impl.invalidation.InvalidationUtilsTest}.
  */
 import { describe, it, expect } from 'bun:test';
-import { InvalidationUtils } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationUtils';
+import { InvalidationUtils } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationUtils';
 
 describe('InvalidationUtilsTest', () => {
     it('testConstructor', () => {

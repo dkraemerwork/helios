@@ -4,11 +4,11 @@
  * Sent to destination node during migration. Collects replication operations from
  * all MigrationAwareServices and executes them on the destination to transfer state.
  */
-import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
-import type { MigrationInfo } from '@zenystx/core/internal/partition/MigrationInfo';
-import type { MigrationAwareService } from '@zenystx/core/internal/partition/MigrationAwareService';
-import type { ServiceNamespace } from '@zenystx/core/internal/services/ServiceNamespace';
-import { PartitionMigrationEvent } from '@zenystx/core/internal/partition/PartitionMigrationEvent';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
+import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
+import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
 
 export class MigrationRequestOperation extends Operation {
     private readonly _migrationInfo: MigrationInfo;

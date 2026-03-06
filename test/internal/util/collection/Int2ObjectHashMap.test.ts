@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { Int2ObjectHashMap } from '@zenystx/core/internal/util/collection/Int2ObjectHashMap';
+import { Int2ObjectHashMap } from '@zenystx/helios-core/internal/util/collection/Int2ObjectHashMap';
 
 describe('Int2ObjectHashMapTest', () => {
   let map: Int2ObjectHashMap<string>;

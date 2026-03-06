@@ -4,7 +4,7 @@
  * Verifies that all calls are correctly delegated to the wrapped partition service.
  */
 import { describe, it, expect } from 'bun:test';
-import { MemberMinimalPartitionService } from '@zenystx/core/map/impl/nearcache/MemberMinimalPartitionService';
+import { MemberMinimalPartitionService } from '@zenystx/helios-core/map/impl/nearcache/MemberMinimalPartitionService';
 
 function makePartitionService(count = 271) {
     return {

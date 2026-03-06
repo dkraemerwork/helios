@@ -1,5 +1,5 @@
-import type { SerializerAdapter } from '@zenystx/core/internal/serialization/impl/SerializerAdapter';
-import { SerializationConstants } from '@zenystx/core/internal/serialization/impl/SerializationConstants';
+import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
+import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
 
 export const StringSerializer: SerializerAdapter = {
     getTypeId: () => SerializationConstants.CONSTANT_TYPE_STRING,

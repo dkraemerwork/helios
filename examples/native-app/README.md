@@ -4,6 +4,7 @@ This demo starts three Helios members with:
 
 - built-in REST endpoints for maps and queues
 - a small control API for publishing to demo topics and inspecting received messages
+- a Hazelcast-inspired management center at `/management`
 
 ## Start the cluster
 
@@ -21,6 +22,7 @@ bash demo.sh
 
 - REST nodes: `http://localhost:8081`, `http://localhost:8082`, `http://localhost:8083`
 - Control nodes: `http://localhost:9091`, `http://localhost:9092`, `http://localhost:9093`
+- Management center: `http://localhost:9091/management` (also available on `9092` and `9093`)
 
 Examples:
 

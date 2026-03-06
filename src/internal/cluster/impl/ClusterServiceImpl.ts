@@ -5,15 +5,15 @@
  * This is the initial skeleton (Block A.1) — sub-managers (MembershipManager,
  * HeartbeatManager, JoinManager) are wired in later blocks.
  */
-import type { Cluster } from '@zenystx/core/cluster/Cluster';
-import type { Member } from '@zenystx/core/cluster/Member';
-import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
-import { Address } from '@zenystx/core/cluster/Address';
-import { MemberMap } from '@zenystx/core/internal/cluster/impl/MemberMap';
-import { MembersView } from '@zenystx/core/internal/cluster/impl/MembersView';
-import { ClusterState } from '@zenystx/core/internal/cluster/ClusterState';
-import { ClusterStateManager } from '@zenystx/core/internal/cluster/impl/ClusterStateManager';
-import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { Cluster } from '@zenystx/helios-core/cluster/Cluster';
+import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberMap } from '@zenystx/helios-core/internal/cluster/impl/MemberMap';
+import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
+import { ClusterStateManager } from '@zenystx/helios-core/internal/cluster/impl/ClusterStateManager';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export class ClusterServiceImpl implements Cluster {
     private readonly _localMember: MemberImpl;

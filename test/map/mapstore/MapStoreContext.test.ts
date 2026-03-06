@@ -1,9 +1,9 @@
 import { describe, it, expect, mock } from 'bun:test';
-import { MapStoreContext } from '@zenystx/core/map/impl/mapstore/MapStoreContext';
-import { MapStoreConfig, InitialLoadMode } from '@zenystx/core/config/MapStoreConfig';
-import { WriteThroughStore } from '@zenystx/core/map/impl/mapstore/writethrough/WriteThroughStore';
-import { WriteBehindStore } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindStore';
-import { LoadOnlyMapDataStore } from '@zenystx/core/map/impl/mapstore/LoadOnlyMapDataStore';
+import { MapStoreContext } from '@zenystx/helios-core/map/impl/mapstore/MapStoreContext';
+import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
+import { WriteThroughStore } from '@zenystx/helios-core/map/impl/mapstore/writethrough/WriteThroughStore';
+import { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
+import { LoadOnlyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/LoadOnlyMapDataStore';
 
 function makeFullMapStore() {
   return {

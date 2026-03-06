@@ -5,20 +5,20 @@ import type {
   PartitionStateMsg,
   WireMemberInfo,
   WirePartitionReplica,
-} from "@zenystx/core/cluster/tcp/ClusterMessage";
-import { Address } from "@zenystx/core/cluster/Address";
-import type { Cluster } from "@zenystx/core/cluster/Cluster";
-import { MemberImpl } from "@zenystx/core/cluster/impl/MemberImpl";
-import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import { ClusterJoinManager } from "@zenystx/core/internal/cluster/impl/ClusterJoinManager";
-import { ClusterServiceImpl } from "@zenystx/core/internal/cluster/impl/ClusterServiceImpl";
-import { MembersView } from "@zenystx/core/internal/cluster/impl/MembersView";
-import { PartitionReplica } from "@zenystx/core/internal/partition/PartitionReplica";
-import type { PartitionRuntimeState } from "@zenystx/core/internal/partition/impl/InternalPartitionServiceImpl";
-import { InternalPartitionServiceImpl } from "@zenystx/core/internal/partition/impl/InternalPartitionServiceImpl";
-import type { SerializationService } from "@zenystx/core/internal/serialization/SerializationService";
-import { TcpClusterTransport } from "@zenystx/core/cluster/tcp/TcpClusterTransport";
-import { MemberVersion } from "@zenystx/core/version/MemberVersion";
+} from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { Address } from "@zenystx/helios-core/cluster/Address";
+import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
+import { MemberImpl } from "@zenystx/helios-core/cluster/impl/MemberImpl";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { ClusterJoinManager } from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
+import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
+import { MembersView } from "@zenystx/helios-core/internal/cluster/impl/MembersView";
+import { PartitionReplica } from "@zenystx/helios-core/internal/partition/PartitionReplica";
+import type { PartitionRuntimeState } from "@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl";
+import { InternalPartitionServiceImpl } from "@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 type MembershipListener = () => void;
 const DEFAULT_CLUSTER_NAME = "helios";

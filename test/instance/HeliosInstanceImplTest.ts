@@ -9,12 +9,12 @@
  *  - Config-driven initialization (HeliosConfig with name and MapConfig)
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { HeliosInstanceImpl } from "@zenystx/core/instance/impl/HeliosInstanceImpl";
-import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
-import { MapConfig } from "@zenystx/core/config/MapConfig";
-import { MapService } from "@zenystx/core/map/impl/MapService";
-import type { MapContainerService } from "@zenystx/core/map/impl/MapContainerService";
-import type { NodeEngineImpl } from "@zenystx/core/spi/impl/NodeEngineImpl";
+import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { MapService } from "@zenystx/helios-core/map/impl/MapService";
+import type { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
+import type { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
 
 describe("HeliosInstanceImpl", () => {
   let hz: HeliosInstanceImpl;

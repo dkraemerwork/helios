@@ -1,8 +1,8 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test';
-import { WriteBehindProcessor } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindProcessor';
-import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
-import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
-import type { DelayedEntry } from '@zenystx/core/map/impl/mapstore/writebehind/DelayedEntry';
+import { WriteBehindProcessor } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindProcessor';
+import { MapStoreWrapper } from '@zenystx/helios-core/map/impl/mapstore/MapStoreWrapper';
+import { addedEntry, deletedEntry, DelayedEntryType } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
+import type { DelayedEntry } from '@zenystx/helios-core/map/impl/mapstore/writebehind/DelayedEntry';
 
 function makeMapStore(storeAllFn?: (...args: any[]) => any, deleteAllFn?: (...args: any[]) => any) {
   return {

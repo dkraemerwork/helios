@@ -7,19 +7,19 @@
  * Block 3.0 introduced this class; Block 3.1 upgraded it to formally implement
  * the NodeEngine interface with OperationService support.
  */
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
-import type { NodeEngine, ClusterServiceView } from '@zenystx/core/spi/NodeEngine';
-import type { OperationService } from '@zenystx/core/spi/impl/operationservice/OperationService';
-import type { ILogger } from '@zenystx/core/test-support/ILogger';
-import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { ConsoleLogger } from '@zenystx/core/test-support/ILogger';
-import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
-import { TestPartitionService } from '@zenystx/core/test-support/TestPartitionService';
-import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
-import { HeliosException } from '@zenystx/core/core/exception/HeliosException';
-import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
-import { Address } from '@zenystx/core/cluster/Address';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { NodeEngine, ClusterServiceView } from '@zenystx/helios-core/spi/NodeEngine';
+import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
+import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { ConsoleLogger } from '@zenystx/helios-core/test-support/ILogger';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { TestPartitionService } from '@zenystx/helios-core/test-support/TestPartitionService';
+import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { Address } from '@zenystx/helios-core/cluster/Address';
 
 export class TestNodeEngine implements NodeEngine {
     private readonly _localAddress = new Address('127.0.0.1', 5701);

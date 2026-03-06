@@ -1,6 +1,6 @@
-import type { Data } from '@zenystx/core/internal/serialization/Data';
-import { AbstractRingBufferOperation } from '@zenystx/core/ringbuffer/impl/operations/AbstractRingBufferOperation';
-import { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { AbstractRingBufferOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AbstractRingBufferOperation';
+import { StaleSequenceException } from '@zenystx/helios-core/ringbuffer/StaleSequenceException';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.operations.ReadOneOperation}.

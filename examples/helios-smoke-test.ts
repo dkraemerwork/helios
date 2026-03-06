@@ -12,7 +12,7 @@
  *
  * Run:  bun run examples/helios-smoke-test.ts
  */
-import { TestHeliosInstance } from '@zenystx/core/test-support/TestHeliosInstance';
+import { TestHeliosInstance } from '@zenystx/helios-core/test-support/TestHeliosInstance';
 
 // ─── Spin up a Helios instance ──────────────────────────────────────────────
 const hz = new TestHeliosInstance();

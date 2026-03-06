@@ -1,5 +1,5 @@
-import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
-import { RestEndpointGroup } from '@zenystx/core/rest/RestEndpointGroup';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 
 /**
  * Maps URL path prefixes to RestEndpointGroups and enforces group-level access control.

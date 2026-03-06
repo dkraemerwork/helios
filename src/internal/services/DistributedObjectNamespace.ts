@@ -1,4 +1,4 @@
-import type { ObjectNamespace } from '@zenystx/core/internal/services/ObjectNamespace';
+import type { ObjectNamespace } from '@zenystx/helios-core/internal/services/ObjectNamespace';
 
 /** Default ObjectNamespace implementation for distributed objects. */
 export class DistributedObjectNamespace implements ObjectNamespace {

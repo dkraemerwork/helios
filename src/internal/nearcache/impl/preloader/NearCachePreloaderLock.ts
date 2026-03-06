@@ -11,7 +11,7 @@
  *   - release()              → deletes the lock file
  */
 import { openSync, closeSync, unlinkSync, existsSync } from 'node:fs';
-import { HeliosException } from '@zenystx/core/core/exception/HeliosException';
+import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
 
 export interface ILogger {
     warning(msg: string): void;

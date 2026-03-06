@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
-import type { EntryEvent } from '@zenystx/core/map/EntryListener';
-import type { Message } from '@zenystx/core/topic/Message';
-import type { LifecycleEvent } from '@zenystx/core/instance/lifecycle/LifecycleEvent';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import type { EntryEvent } from '@zenystx/helios-core/map/EntryListener';
+import type { Message } from '@zenystx/helios-core/topic/Message';
+import type { LifecycleEvent } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
 import { InjectHelios } from '../decorators/inject-helios.decorator';
 
 /**

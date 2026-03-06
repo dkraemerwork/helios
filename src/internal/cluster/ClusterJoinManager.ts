@@ -1,4 +1,4 @@
-import { JoinConfig } from '@zenystx/core/config/JoinConfig';
+import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
 import {
     MemberAddress,
     DiscoveryConfig,
@@ -10,7 +10,7 @@ import {
     K8sDiscoveryProvider,
     StaticDiscoveryProvider,
     createDiscoveryResolver,
-} from '@zenystx/core/discovery/HeliosDiscovery';
+} from '@zenystx/helios-core/discovery/HeliosDiscovery';
 
 const DEFAULT_PORT = 5701;
 
