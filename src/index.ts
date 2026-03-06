@@ -30,6 +30,8 @@ export { TcpIpConfig } from "@zenystx/helios-core/config/TcpIpConfig";
 export { MulticastConfig } from "@zenystx/helios-core/config/MulticastConfig";
 export { JoinConfig } from "@zenystx/helios-core/config/JoinConfig";
 export { loadConfig } from "@zenystx/helios-core/config/ConfigLoader";
+export type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
+export { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
 
 // ── Core / Instance ───────────────────────────────────────────────────────────
 export type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";

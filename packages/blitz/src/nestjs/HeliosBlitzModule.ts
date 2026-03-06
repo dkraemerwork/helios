@@ -66,6 +66,22 @@ export class HeliosBlitzModule {
     }
 
     /**
+     * Register {@link HeliosBlitzService} by reusing an existing Helios-owned
+     * {@link BlitzService} instead of creating a parallel unmanaged instance.
+     *
+     * Use this in `distributed-auto` mode where Helios owns the Blitz
+     * lifecycle and the NestJS bridge should share the same NATS connection.
+     */
+    static forHeliosInstance(provider: FactoryProvider): DynamicModule {
+        return {
+            module: HeliosBlitzModule,
+            global: true,
+            providers: [provider],
+            exports: [HELIOS_BLITZ_SERVICE_TOKEN],
+        };
+    }
+
+    /**
      * Register {@link HeliosBlitzService} asynchronously using a factory function.
      * Supports `useFactory` with optional `inject` and `extraProviders`.
      */
