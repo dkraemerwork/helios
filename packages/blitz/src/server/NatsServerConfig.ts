@@ -21,4 +21,8 @@ export interface NatsServerNodeConfig {
     readonly extraArgs: string[];
     /** How long to wait for the server to become reachable (ms). */
     readonly startTimeoutMs: number;
+    /** Host to bind listeners to. @default '0.0.0.0' (legacy) or '127.0.0.1' (cluster-node). */
+    readonly bindHost?: string;
+    /** Host advertised to other cluster members. When set and different from bindHost, adds --client_advertise / --cluster_advertise. */
+    readonly advertiseHost?: string;
 }

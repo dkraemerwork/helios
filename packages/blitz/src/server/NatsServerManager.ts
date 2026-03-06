@@ -1,6 +1,7 @@
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstreamManager } from '@nats-io/jetstream';
 import type { NatsServerNodeConfig } from './NatsServerConfig.js';
+import type { ResolvedClusterNodeNatsConfig } from './ClusterNodeConfig.ts';
 
 /**
  * Owns the full lifecycle of one or more `nats-server` child processes.
@@ -11,6 +12,9 @@ import type { NatsServerNodeConfig } from './NatsServerConfig.js';
 export class NatsServerManager {
     private readonly _processes: ReturnType<typeof Bun.spawn>[] = [];
     private readonly _clientUrls: string[];
+
+    /** Resolved cluster-node config, set when spawned via `clusterNode()`. */
+    resolvedConfig: ResolvedClusterNodeNatsConfig | null = null;
 
     private constructor(clientUrls: string[]) {
         this._clientUrls = clientUrls;
@@ -76,20 +80,31 @@ export class NatsServerManager {
 
     /** Build the CLI args array for a single nats-server node. @internal — exposed for testing */
     static buildArgs(config: NatsServerNodeConfig): string[] {
+        const bindHost = config.bindHost ?? '0.0.0.0';
+        const advertiseHost = config.advertiseHost;
         const args = ['-p', String(config.port), '-n', config.serverName, '-js'];
 
         if (config.dataDir) {
             args.push('-sd', config.dataDir);
         }
 
-        if (config.clusterPort > 0 && config.clusterName) {
-            args.push(
-                '--cluster', `nats://0.0.0.0:${config.clusterPort}`,
-                '--cluster_name', config.clusterName,
-            );
+        // Client advertise — when advertiseHost differs from bindHost
+        if (advertiseHost && advertiseHost !== bindHost) {
+            args.push('--client_advertise', `${advertiseHost}:${config.port}`);
         }
 
-        if (config.routes.length > 0) {
+        // Only enable NATS clustering when there are actual routes to connect to.
+        // A single bootstrap node runs JetStream in standalone mode and becomes
+        // cluster-ready when routes are provided on restart/rejoin.
+        if (config.clusterPort > 0 && config.clusterName && config.routes.length > 0) {
+            args.push(
+                '--cluster', `nats://${bindHost}:${config.clusterPort}`,
+                '--cluster_name', config.clusterName,
+            );
+            // Cluster advertise — when advertiseHost is set and differs from bindHost
+            if (advertiseHost && advertiseHost !== bindHost) {
+                args.push('--cluster_advertise', `${advertiseHost}:${config.clusterPort}`);
+            }
             args.push('--routes', config.routes.join(','));
         }
 

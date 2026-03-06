@@ -29,7 +29,7 @@ ITERATION=0
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 PLAN="$ROOT/plans/TYPESCRIPT_PORT_PLAN.md"
 
-MAX_ITERATIONS=40
+MAX_ITERATIONS=109
 PROMPT_FILE="$(mktemp /tmp/helios-tdd-prompt.XXXXXX)"
 RUN_LOG="$(mktemp /tmp/helios-tdd-run.XXXXXX)"
 PLAN_BEFORE="$(mktemp /tmp/helios-plan-before.XXXXXX)"

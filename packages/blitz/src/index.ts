@@ -88,3 +88,6 @@ export type { BatchResult } from './batch/BatchResult.ts';
 export { EndOfStreamDetector } from './batch/EndOfStreamDetector.ts';
 export type { EndOfStreamDetectorOptions } from './batch/EndOfStreamDetector.ts';
 export { BatchPipeline, BatchGeneralStage } from './batch/BatchPipeline.ts';
+// Block 18.1 — Cluster node primitive
+export type { ClusterNodeNatsConfig, ResolvedClusterNodeNatsConfig } from './server/ClusterNodeConfig.ts';
+export { clusterNode, resolveClusterNodeConfig, normalizeRoutes, validateClusterNodeConfig, toNodeConfig, DEFAULT_REPLICAS } from './server/ClusterNodeConfig.ts';

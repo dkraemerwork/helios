@@ -152,13 +152,13 @@ Goal: finish the raw Blitz-side clustered embedded-node primitive so Helios can 
 
 Tasks:
 
-- [ ] Define `ClusterNodeNatsConfig` and any supporting typed config needed for one-local-node clustered startup.
-- [ ] Implement one-local-node clustered spawn path in `packages/blitz/` using stable bind/advertise settings.
-- [ ] Normalize route generation and route ordering so restarts and re-renders stay deterministic.
-- [ ] Wire `defaultReplicas` and related replication defaults into the raw Blitz clustered runtime.
-- [ ] Add validation for invalid bind/advertise/route combinations before process spawn.
-- [ ] Add unit and integration coverage proving the raw clustered node primitive works without Helios orchestration.
-- [ ] Run a verification task that proves this block is production-usable as a raw Blitz primitive, with no fake clustering shortcuts or hidden local-only fallbacks.
+- [x] Define `ClusterNodeNatsConfig` and any supporting typed config needed for one-local-node clustered startup.
+- [x] Implement one-local-node clustered spawn path in `packages/blitz/` using stable bind/advertise settings.
+- [x] Normalize route generation and route ordering so restarts and re-renders stay deterministic.
+- [x] Wire `defaultReplicas` and related replication defaults into the raw Blitz clustered runtime.
+- [x] Add validation for invalid bind/advertise/route combinations before process spawn.
+- [x] Add unit and integration coverage proving the raw clustered node primitive works without Helios orchestration.
+- [x] Run a verification task that proves this block is production-usable as a raw Blitz primitive, with no fake clustering shortcuts or hidden local-only fallbacks.
 
 ### Block 18.2 — Helios Blitz config + protocol + topology service
 
@@ -496,7 +496,7 @@ Tasks:
 
 - [x] **Block 17R.1** — Executor Scatter production closure (`plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`, real member-local executor registry/container ownership, no distributed direct-factory fallback, Scatter-backed off-main-thread execution, module-backed worker-materializable registration only, scatter default with inline explicit-only for tests/dev, deterministic cancel/shutdown/task-lost/member-loss semantics, fail-closed backend health, recycle-on-crash-or-timeout behavior, docs/examples/config/test-support honesty) — ~24 tests
 - [ ] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution and explicit inline test/dev usage; 0 fail, 0 error
-- [ ] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
+- [x] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
 - [ ] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, explicit expected-registrant sweep rules after master change) — ~18 tests
 - [ ] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, deterministic cleanup on member leave/shutdown) — ~18 tests
 - [ ] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS) — ~16 tests
