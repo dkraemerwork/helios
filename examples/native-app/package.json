@@ -1,12 +1,16 @@
 {
   "name": "helios-demo-app",
   "version": "1.0.0",
-  "description": "Distributed Helios demo — two instances with TCP replication and near-cache",
+  "description": "Distributed Helios demo with three-node Docker Compose, REST, queue, and topic playgrounds",
   "private": true,
   "scripts": {
     "start": "bun run src/app.ts",
-    "start:node1": "bun run src/app.ts --name node1 --tcp-port 5701 --http-port 3001",
-    "start:node2": "bun run src/app.ts --name node2 --tcp-port 5702 --http-port 3002 --peer localhost:5701",
+    "start:node3": "bun run src/app.ts --name node3 --tcp-port 5703 --rest-port 8083 --control-port 9093 --expected-cluster-size 3",
+    "start:node2": "bun run src/app.ts --name node2 --tcp-port 5702 --rest-port 8082 --control-port 9092 --peer localhost:5703 --expected-cluster-size 3",
+    "start:node1": "bun run src/app.ts --name node1 --tcp-port 5701 --rest-port 8081 --control-port 9091 --peer localhost:5702 --peer localhost:5703 --expected-cluster-size 3",
+    "docker:up": "docker compose -f docker-compose.yml up --build",
+    "docker:down": "docker compose -f docker-compose.yml down --remove-orphans",
+    "docker:logs": "docker compose -f docker-compose.yml logs -f",
     "test": "bun test",
     "demo": "bash demo.sh"
   },

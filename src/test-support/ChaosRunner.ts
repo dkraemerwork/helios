@@ -3,7 +3,7 @@
  *
  * Block 16.INT — Integration Test Infrastructure
  */
-import type { TestCluster } from '@helios/test-support/TestCluster';
+import type { TestCluster } from '@zenystx/core/test-support/TestCluster';
 
 export interface ChaosAction {
     readonly type: 'kill' | 'isolate';

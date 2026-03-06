@@ -5,12 +5,12 @@
  * without requiring a live cluster.
  */
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { NearCachedClientMapProxy } from '@helios/client/map/impl/nearcache/NearCachedClientMapProxy';
-import { CACHED_AS_NULL, NOT_CACHED } from '@helios/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@helios/internal/nearcache/NearCacheRecord';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import { NearCachedClientMapProxy } from '@zenystx/core/client/map/impl/nearcache/NearCachedClientMapProxy';
+import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
+import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

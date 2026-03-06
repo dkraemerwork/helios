@@ -1,4 +1,4 @@
-import { NodeState } from '@helios/instance/lifecycle/NodeState';
+import { NodeState } from '@zenystx/core/instance/lifecycle/NodeState';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 

@@ -1,11 +1,11 @@
-import { JsonValue } from '@helios/internal/json/JsonValue';
-import { JsonLiteral } from '@helios/internal/json/JsonLiteral';
-import { JsonNumber } from '@helios/internal/json/JsonNumber';
-import { JsonString } from '@helios/internal/json/JsonString';
-import { Json } from '@helios/internal/json/Json';
-import { Location } from '@helios/internal/json/Location';
-import { ParseException } from '@helios/internal/json/ParseException';
-import type { Reader } from '@helios/internal/json/Reader';
+import { JsonValue } from '@zenystx/core/internal/json/JsonValue';
+import { JsonLiteral } from '@zenystx/core/internal/json/JsonLiteral';
+import { JsonNumber } from '@zenystx/core/internal/json/JsonNumber';
+import { JsonString } from '@zenystx/core/internal/json/JsonString';
+import { Json } from '@zenystx/core/internal/json/Json';
+import { Location } from '@zenystx/core/internal/json/Location';
+import { ParseException } from '@zenystx/core/internal/json/ParseException';
+import type { Reader } from '@zenystx/core/internal/json/Reader';
 
 const DEFAULT_BUFFER_SIZE = 20;
 

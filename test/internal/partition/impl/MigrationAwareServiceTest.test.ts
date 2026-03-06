@@ -3,12 +3,12 @@
  * PartitionMigrationEvent, ServiceNamespace, and registration on InternalPartitionServiceImpl.
  */
 import { describe, test, expect } from 'bun:test';
-import { PartitionMigrationEvent } from '@helios/internal/partition/PartitionMigrationEvent';
-import type { MigrationAwareService } from '@helios/internal/partition/MigrationAwareService';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
-import { Address } from '@helios/cluster/Address';
-import { InternalPartitionServiceImpl } from '@helios/internal/partition/impl/InternalPartitionServiceImpl';
+import { PartitionMigrationEvent } from '@zenystx/core/internal/partition/PartitionMigrationEvent';
+import type { MigrationAwareService } from '@zenystx/core/internal/partition/MigrationAwareService';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
+import { Address } from '@zenystx/core/cluster/Address';
+import { InternalPartitionServiceImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionServiceImpl';
 
 // ── helpers ──
 

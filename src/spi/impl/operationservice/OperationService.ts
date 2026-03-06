@@ -4,9 +4,9 @@
  * Executes Operations locally or routes them to remote nodes.
  * In single-node in-process mode, all invocations execute locally.
  */
-import type { Operation } from '@helios/spi/impl/operationservice/Operation';
-import type { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFuture';
-import type { Address } from '@helios/cluster/Address';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
+import type { Address } from '@zenystx/core/cluster/Address';
 
 export interface OperationService {
     /**

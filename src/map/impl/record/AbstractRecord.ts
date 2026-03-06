@@ -8,9 +8,9 @@
 import type { Record } from './Record';
 import { Record as RecordNS } from './Record';
 import { RecordReaderWriter } from './RecordReaderWriter';
-import { stripBaseTime, recomputeWithBaseTime } from '@helios/internal/util/TimeStripUtil';
-import { JVMUtil } from '@helios/internal/util/JVMUtil';
-import { SystemClock } from '@helios/internal/util/time/Clock';
+import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/core/internal/util/TimeStripUtil';
+import { JVMUtil } from '@zenystx/core/internal/util/JVMUtil';
+import { SystemClock } from '@zenystx/core/internal/util/time/Clock';
 
 const INT_SIZE_IN_BYTES = 4;
 const NUMBER_OF_INTS = 6; // version, hits, lastAccessTime, lastUpdateTime, creationTime, lastStoredTime

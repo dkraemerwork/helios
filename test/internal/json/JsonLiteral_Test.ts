@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'bun:test';
-import { Json } from '@helios/internal/json/Json';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { StringWriter } from '@helios/internal/json/StringWriter';
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
+import { Json } from '@zenystx/core/internal/json/Json';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { StringWriter } from '@zenystx/core/internal/json/StringWriter';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
 
 const { NULL, TRUE, FALSE } = Json;
 

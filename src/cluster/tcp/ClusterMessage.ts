@@ -257,4 +257,4 @@ export type ClusterMessage =
   | TopicMessageMsg
   | TopicPublishRequestMsg
   | TopicAckMsg;
-import type { EncodedData } from "@helios/cluster/tcp/DataWireCodec";
+import type { EncodedData } from "@zenystx/core/cluster/tcp/DataWireCodec";

@@ -6,10 +6,10 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import type { LocalExecutorStats } from '@helios/executor/IExecutorService.js';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import type { LocalExecutorStats } from '@zenystx/core/executor/IExecutorService.js';
 
 function makeRegistry(): TaskTypeRegistry {
     const reg = new TaskTypeRegistry();

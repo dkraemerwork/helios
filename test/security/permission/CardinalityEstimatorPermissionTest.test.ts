@@ -1,5 +1,5 @@
 import { describe, it } from 'bun:test';
-import { CardinalityEstimatorPermission } from '@helios/security/permission/CardinalityEstimatorPermission';
+import { CardinalityEstimatorPermission } from '@zenystx/core/security/permission/CardinalityEstimatorPermission';
 import { CheckPermission } from './permissionTestSupport';
 
 const factory = (name: string, ...actions: string[]) => new CardinalityEstimatorPermission(name, ...actions);

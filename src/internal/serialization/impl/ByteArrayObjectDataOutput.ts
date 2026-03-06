@@ -3,10 +3,10 @@
  *
  * Dynamic byte buffer output stream with positional write methods.
  */
-import { Bits } from '@helios/internal/nio/Bits';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { InternalSerializationService } from '@helios/internal/serialization/InternalSerializationService';
-import { NULL_ARRAY_LENGTH, BIG_ENDIAN, type ByteOrder } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
+import { Bits } from '@zenystx/core/internal/nio/Bits';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
+import { NULL_ARRAY_LENGTH, BIG_ENDIAN, type ByteOrder } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
 
 /** Maximum array size (mirrors OpenJDK SOFT_MAX_ARRAY_LENGTH). */
 export const MAX_ARRAY_SIZE = 2147483647 - 64; // Integer.MAX_VALUE - 64

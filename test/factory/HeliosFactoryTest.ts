@@ -8,9 +8,9 @@
  *   await Helios.newInstance('helios-config.yml')  // file-based YAML
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { Helios } from '@helios/Helios';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { MapConfig } from '@helios/config/MapConfig';
+import { Helios } from '@zenystx/core/Helios';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { MapConfig } from '@zenystx/core/config/MapConfig';
 import path from 'path';
 import fs from 'fs';
 

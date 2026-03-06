@@ -1,5 +1,5 @@
-import type { ITopic } from '@helios/topic/ITopic';
-import type { MessageListener } from '@helios/topic/MessageListener';
+import type { ITopic } from '@zenystx/core/topic/ITopic';
+import type { MessageListener } from '@zenystx/core/topic/MessageListener';
 import { JsonCodec, type BlitzCodec } from '../codec/BlitzCodec.ts';
 import type { Source, SourceMessage } from './Source.ts';
 

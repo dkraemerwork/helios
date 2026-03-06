@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import type { ExecutionBackend } from '@helios/executor/impl/ExecutionBackend.js';
-import { InlineExecutionBackend } from '@helios/executor/impl/InlineExecutionBackend.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import type { ExecutionBackend } from '@zenystx/core/executor/impl/ExecutionBackend.js';
+import { InlineExecutionBackend } from '@zenystx/core/executor/impl/InlineExecutionBackend.js';
 
 describe('Block 17.9E — Execution Backend Seam', () => {
     let config: ExecutorConfig;

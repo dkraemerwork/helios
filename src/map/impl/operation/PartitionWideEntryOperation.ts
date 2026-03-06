@@ -8,9 +8,9 @@
  * For predicate-filtered execution see PartitionWideEntryWithPredicateOperation
  * (deferred to a later block once query infrastructure is available).
  */
-import type { EntryProcessor } from '@helios/map/EntryProcessor';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
-import type { Data } from '@helios/internal/serialization/Data';
+import type { EntryProcessor } from '@zenystx/core/map/EntryProcessor';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 export class PartitionWideEntryOperation<R = unknown> extends MapOperation {
     private readonly _processor: EntryProcessor<R>;

@@ -5,7 +5,7 @@
  * Note: fields are named with underscore prefix to avoid collision with the
  * fluent setter methods `src()` and `dst()` that match the Java API.
  */
-import type { Channel } from '@helios/internal/networking/Channel';
+import type { Channel } from '@zenystx/core/internal/networking/Channel';
 
 export abstract class ChannelHandler<S, D> {
     protected channel!: Channel;

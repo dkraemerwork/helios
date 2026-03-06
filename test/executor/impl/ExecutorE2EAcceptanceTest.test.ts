@@ -6,11 +6,11 @@
  * graceful shutdown with timeout, fingerprint mismatch, task timeout + pool recycling.
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import { ExecutorContainerService, TaskState } from '@helios/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl.js';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import { ExecutorContainerService, TaskState } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl.js';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
 
 describe('Executor E2E Acceptance (Block 17.INT)', () => {
 

@@ -1,7 +1,7 @@
 # Blitz Embedded NATS Plan
 
 > **Purpose:** Design and implementation reference for embedding a NATS JetStream server
-> natively inside `@helios/blitz` so that users never need to provision or manage an external
+> natively inside `@zenystx/blitz` so that users never need to provision or manage an external
 > NATS process. `BlitzService.start()` owns the full server lifecycle — binary resolution,
 > spawn, health-poll, cluster formation, and shutdown — with zero user configuration required
 > for single-node use and a concise options object for production cluster use.
@@ -125,7 +125,7 @@ Move `nats-server` from `devDependencies` to `dependencies`:
 ```json
 {
   "dependencies": {
-    "@helios/core": "file:../..",
+    "@zenystx/core": "file:../..",
     "@nats-io/jetstream": "^3.3.1",
     "@nats-io/kv": "^3.3.1",
     "@nats-io/transport-node": "^3.3.1",
@@ -850,4 +850,404 @@ await blitz.shutdown();
 - `FaultHandler`, `CheckpointManager`, `RetryPolicy`, `DeadLetterSink` — untouched
 - `HeliosBlitzModule` (NestJS) — `forRoot()` can pass any `BlitzConfig` including `embedded`
 - Wire format, codec, subject routing — untouched
-- `@helios/core` — zero changes
+- `@zenystx/core` — zero changes
+
+---
+
+## Appendix A - Per-Helios-Node Embedded NATS Cluster Mode
+
+> Purpose: support the production topology where each Helios/API replica starts one local
+> embedded `nats-server`, all local servers join the same JetStream cluster, and each app
+> instance connects to its own local NATS process.
+>
+> This appendix defines the low-level `clusterNode` primitive. The Helios-default distributed
+> orchestration layer that should use it automatically is specified in Appendix B.
+
+### Problem this solves
+
+Current Blitz startup supports:
+
+- `connect({ servers })` -> use an already-running external NATS cluster
+- `start({ embedded })` -> spawn one local single-node NATS server
+- `start({ cluster })` -> one process spawns many local `nats-server` children on `127.0.0.1`
+
+What it does **not** support is the real deployment shape:
+
+- replica A hosts NATS node A
+- replica B hosts NATS node B
+- replica C hosts NATS node C
+- A/B/C form one JetStream cluster
+- each replica connects locally to `127.0.0.1:<port>`
+
+There should be no app-level `master` flag. NATS should elect leaders itself.
+
+### Recommended topology
+
+```text
+Helios/API A -> embedded NATS A -> local client connect on 127.0.0.1:4222
+Helios/API B -> embedded NATS B -> local client connect on 127.0.0.1:4222
+Helios/API C -> embedded NATS C -> local client connect on 127.0.0.1:4222
+
+NATS A <-> NATS B <-> NATS C  (route mesh / seed routes)
+JetStream/KV replicas = 3
+```
+
+### Design decisions
+
+| # | Decision | Why |
+|---|---|---|
+| A1 | Add a new `clusterNode` startup mode | Existing `cluster` means "one process spawns N local nodes"; it should not be overloaded |
+| A2 | No manual `master` env flag in the low-level primitive | Helios bootstrap-master orchestration is layered above this in Appendix B; NATS still handles data-plane leadership |
+| A3 | Each app instance connects to its own local NATS URL | Lowest latency, simplest reconnect story, least cross-node client coupling |
+| A4 | v1 uses explicit seed routes, not Helios membership-driven auto-discovery | Much simpler, deterministic, works in Docker/Kubernetes/systemd immediately |
+| A5 | Cluster-node startup waits for local server readiness by default, not full cluster quorum | First node must be allowed to boot before peers exist |
+| A6 | Replication factor is a separate Blitz setting | Forming a cluster does not automatically make streams/KV replicated |
+
+### Proposed public API
+
+Add a fourth Blitz startup mode:
+
+```typescript
+export interface ClusterNodeNatsConfig {
+    readonly port?: number;                 // default 4222
+    readonly clusterPort?: number;          // default 6222
+    readonly dataDir?: string;              // strongly recommended in production
+    readonly binaryPath?: string;
+    readonly startTimeoutMs?: number;       // default 15_000
+    readonly extraArgs?: string[];
+
+    readonly clusterName?: string;          // default 'helios-blitz-cluster'
+    readonly serverName?: string;           // default HOSTNAME || random UUID
+    readonly bindHost?: string;             // default '0.0.0.0'
+    readonly advertiseHost?: string;        // host peers should route to
+    readonly routes?: string[];             // seed route URLs, may include self
+
+    readonly waitForCluster?: {
+        readonly minNodes?: number;         // default 1 (self only)
+        readonly timeoutMs?: number;        // default startTimeoutMs
+        readonly requiredForStart?: boolean;// default false
+    };
+}
+
+export interface BlitzConfig {
+    readonly servers?: string | string[];
+    readonly embedded?: EmbeddedNatsConfig;
+    readonly cluster?: NatsClusterConfig;
+    readonly clusterNode?: ClusterNodeNatsConfig;
+
+    readonly defaultReplicas?: number;      // default 1
+}
+```
+
+Usage:
+
+```typescript
+const blitz = await BlitzService.start({
+    clusterNode: {
+        port: 4222,
+        clusterPort: 6222,
+        clusterName: 'helios-prod',
+        serverName: process.env.HOSTNAME,
+        advertiseHost: `${process.env.HOSTNAME}.api-headless.default.svc.cluster.local`,
+        routes: [
+            'nats://api-0.api-headless.default.svc.cluster.local:6222',
+            'nats://api-1.api-headless.default.svc.cluster.local:6222',
+            'nats://api-2.api-headless.default.svc.cluster.local:6222',
+        ],
+        dataDir: `/var/lib/blitz/${process.env.HOSTNAME}`,
+    },
+    defaultReplicas: 3,
+});
+```
+
+### Runtime semantics
+
+- `BlitzService.start({ clusterNode })` spawns exactly one local `nats-server` child process.
+- The child process binds local client traffic on `port` and cluster routing on `clusterPort`.
+- `routes` are seed routes for peer NATS nodes; the library should normalize duplicates and drop self-routes.
+- After spawn, Blitz connects locally to `nats://127.0.0.1:<port>` unless a future `connectUrl` override is added.
+- Default readiness is: local TCP ready + local JetStream ready.
+- Optional cluster readiness is controlled by `waitForCluster`; this should inspect route/peer count but remain opt-in.
+- `defaultReplicas` is used when Blitz creates JetStream/KV resources that should be replicated by default.
+
+### Env-var contract
+
+The core library remains config-first, but we add an env helper for app deployments.
+
+```typescript
+export function resolveBlitzConfigFromEnv(
+    env: Record<string, string | undefined> = process.env,
+): BlitzConfig;
+
+export class BlitzService {
+    static async startFromEnv(
+        env: Record<string, string | undefined> = process.env,
+    ): Promise<BlitzService>;
+}
+```
+
+Recommended env contract:
+
+```text
+BLITZ_MODE=cluster-node
+
+BLITZ_NATS_PORT=4222
+BLITZ_NATS_CLUSTER_PORT=6222
+BLITZ_NATS_CLUSTER_NAME=helios-prod
+BLITZ_NATS_SERVER_NAME=api-0
+BLITZ_NATS_BIND_HOST=0.0.0.0
+BLITZ_NATS_ADVERTISE_HOST=api-0.api-headless.default.svc.cluster.local
+BLITZ_NATS_ROUTES=nats://api-0.api-headless.default.svc.cluster.local:6222,nats://api-1.api-headless.default.svc.cluster.local:6222,nats://api-2.api-headless.default.svc.cluster.local:6222
+BLITZ_NATS_DATA_DIR=/var/lib/blitz/api-0
+BLITZ_NATS_START_TIMEOUT_MS=15000
+BLITZ_DEFAULT_REPLICAS=3
+BLITZ_WAIT_FOR_CLUSTER_MIN_NODES=1
+BLITZ_WAIT_FOR_CLUSTER_REQUIRED=false
+```
+
+Notes:
+
+- `BLITZ_MODE=cluster-node` means "start one local embedded NATS node and join a remote/shared NATS cluster".
+- No `BLITZ_MASTER=true/false` flag exists.
+- `BLITZ_NATS_ROUTES` can list all nodes; the library should filter self after deriving this node's own route URL from `advertiseHost` + `clusterPort`.
+- `BLITZ_DEFAULT_REPLICAS` controls how many JetStream replicas Blitz requests for its own buckets/streams; it does not control NATS cluster formation.
+
+### Three-replica deployment example
+
+Replica `api-0`:
+
+```text
+BLITZ_MODE=cluster-node
+BLITZ_NATS_SERVER_NAME=api-0
+BLITZ_NATS_ADVERTISE_HOST=api-0.api-headless.default.svc.cluster.local
+BLITZ_NATS_ROUTES=nats://api-0.api-headless.default.svc.cluster.local:6222,nats://api-1.api-headless.default.svc.cluster.local:6222,nats://api-2.api-headless.default.svc.cluster.local:6222
+BLITZ_DEFAULT_REPLICAS=3
+```
+
+Replica `api-1`:
+
+```text
+BLITZ_MODE=cluster-node
+BLITZ_NATS_SERVER_NAME=api-1
+BLITZ_NATS_ADVERTISE_HOST=api-1.api-headless.default.svc.cluster.local
+BLITZ_NATS_ROUTES=nats://api-0.api-headless.default.svc.cluster.local:6222,nats://api-1.api-headless.default.svc.cluster.local:6222,nats://api-2.api-headless.default.svc.cluster.local:6222
+BLITZ_DEFAULT_REPLICAS=3
+```
+
+Replica `api-2`:
+
+```text
+BLITZ_MODE=cluster-node
+BLITZ_NATS_SERVER_NAME=api-2
+BLITZ_NATS_ADVERTISE_HOST=api-2.api-headless.default.svc.cluster.local
+BLITZ_NATS_ROUTES=nats://api-0.api-headless.default.svc.cluster.local:6222,nats://api-1.api-headless.default.svc.cluster.local:6222,nats://api-2.api-headless.default.svc.cluster.local:6222
+BLITZ_DEFAULT_REPLICAS=3
+```
+
+### Implementation blocks
+
+#### Block A1 - Config surface and validation
+
+- add `ClusterNodeNatsConfig` and `clusterNode` to `packages/blitz/src/BlitzConfig.ts`
+- extend mode validation from 3-way to 4-way: exactly one of `servers`, `embedded`, `cluster`, `clusterNode`
+- add `defaultReplicas` to `BlitzConfig` / `ResolvedBlitzConfig`
+- validate `clusterNode` has stable `serverName`, sane ports, and non-empty `clusterName`
+- if `waitForCluster.minNodes > 1`, validate it is sensible for the route set
+
+#### Block A2 - Single embedded cluster-node spawn path
+
+- extend `packages/blitz/src/server/NatsServerConfig.ts` so a node can describe bind host, advertise host, and seed routes cleanly
+- add `buildNodeConfigs()` support for `clusterNode` in `packages/blitz/src/BlitzService.ts`
+- emit `--cluster nats://<bindHost>:<clusterPort>` and route flags for seed peers
+- if `advertiseHost` is set, pass the equivalent NATS advertise flag via typed config or `extraArgs`
+- normalize routes: trim, dedupe, drop self
+
+#### Block A3 - Readiness and cluster waiting
+
+- keep local startup success separate from full cluster quorum
+- add optional cluster wait helper in `packages/blitz/src/server/NatsServerManager.ts`
+- default: return once local JetStream is usable
+- optional: if `requiredForStart=true`, wait until cluster peer count reaches `minNodes`
+- surface clear errors when the local node is healthy but the cluster never reaches the requested size
+
+#### Block A4 - Env helper and NestJS ergonomics
+
+- add `resolveBlitzConfigFromEnv()` in `packages/blitz/src/BlitzConfig.ts` or a new helper file
+- add `BlitzService.startFromEnv()` as a thin wrapper over `resolveBlitzConfigFromEnv()`
+- document NestJS usage via `HeliosBlitzModule.forRootAsync({ useFactory: () => resolveBlitzConfigFromEnv(process.env) })`
+- keep env parsing out of the core startup path unless the caller opts into it
+
+#### Block A5 - Replication defaults for Blitz-owned state
+
+- thread `defaultReplicas` through Blitz-owned JetStream/KV creation points
+- start with `packages/blitz/src/window/WindowState.ts`, which currently creates KV buckets without a replica count
+- audit any future stream/KV creation helpers so cluster-node deployments actually get replicated Blitz state by default
+- do not silently force `replicas > live cluster size`; fail with actionable errors from JetStream
+
+#### Block A6 - Tests and rollout
+
+- unit tests for config validation, env parsing, route normalization, and self-route removal
+- integration tests that start 3 separate cluster-node services on different ports and verify they form one cluster
+- integration tests that each service can connect to its own local NATS while sharing one KV bucket with `replicas: 3`
+- restart test: kill one node, confirm surviving nodes continue, restart it, and verify it rejoins
+- shutdown test: `await shutdown()` releases both client and route ports deterministically
+
+### Test matrix
+
+| Test | What it proves |
+|---|---|
+| `clusterNode_start_localServerReady_returns` | first node can boot without peers |
+| `clusterNode_routes_selfIncluded_selfFiltered` | callers can provide one shared route list |
+| `clusterNode_threeServices_formOneCluster` | 3 app replicas each hosting 1 NATS node work together |
+| `clusterNode_defaultReplicas_appliedToWindowKv` | Blitz-owned state is actually replicated |
+| `clusterNode_requiredClusterWait_timesOutCleanly` | optional quorum wait fails clearly |
+| `clusterNode_restart_rejoinsCluster` | a restarted replica can rejoin its peers |
+
+### Recommended rollout order
+
+1. land config/API + `clusterNode` spawn support
+2. land env helper and docs
+3. land `defaultReplicas` propagation into Blitz-owned KV/state
+4. add 3-process integration tests that model real API replicas
+5. only then document this as the preferred HA embedded deployment mode
+
+### Non-goals for Appendix A / v1 primitive
+
+- automatic route discovery from Helios member lists (handled by Appendix B)
+- Helios oldest-member bootstrap/master orchestration (handled by Appendix B)
+- coupling Blitz startup to Helios cluster join state (handled by Appendix B)
+- replacing explicit NATS routes with a full discovery/control plane outside Helios integration
+
+### Done gate for this appendix
+
+- [ ] one API replica can boot with `clusterNode` before peers exist
+- [ ] three API replicas can each host one NATS node and form one JetStream cluster
+- [ ] Blitz-owned KV/window state honors `defaultReplicas=3`
+- [ ] `startFromEnv()` works for `cluster-node` without custom app bootstrap glue
+- [ ] docs clearly recommend "one embedded NATS node per app replica" over a single embedded primary
+
+---
+
+## Appendix B - Distributed-by-Default Helios Blitz Flow (Phase 18)
+
+> Purpose: make the Helios-integrated Blitz experience distributed by default. Once a second
+> Helios node joins the cluster, the local embedded NATS nodes should automatically form a
+> shared JetStream cluster.
+
+### Default behavior
+
+- every Helios node hosts one local embedded `nats-server`
+- every app instance connects to its own local NATS server
+- the oldest/current Helios master member is the Blitz bootstrap master for topology + seed routing
+- all nodes are still NATS/JetStream replicas; the master is a control-plane role, not the only data node
+- no manual `BLITZ_MASTER=true/false` flag exists
+
+### Automatic flow
+
+1. first Helios node boots, starts one local embedded NATS node, and is the initial Blitz bootstrap master
+2. the first node registers its Blitz node metadata in a Helios-owned cluster metadata service
+3. when a second Helios node joins, it asks the oldest/master Helios member for the current Blitz seed/topology snapshot
+4. the joining node starts its own local NATS node in `clusterNode` mode and routes to the seed node(s)
+5. once connected, the NATS nodes form a cluster automatically; both app instances continue connecting locally
+6. when later nodes join, they repeat the same flow
+7. if the oldest/master Helios member leaves, the next oldest member becomes the Blitz bootstrap master for future joins; the existing NATS cluster continues running
+
+### Important distinction
+
+- Helios oldest/master member = Blitz bootstrap master / control plane coordinator
+- NATS cluster leader = JetStream/Raft data-plane leader elected by NATS
+
+These are related but not the same role.
+
+### Distributed default policy
+
+For Helios-integrated deployments, the default startup policy should be `distributed-auto`:
+
+- if Helios TCP clustering is disabled -> Blitz falls back to local embedded mode
+- if Helios TCP clustering is enabled and the node is alone -> start one local embedded NATS node and wait for future peers
+- if Helios TCP clustering is enabled and peers exist -> auto-join the Blitz cluster through the current oldest/master Helios member
+
+The raw `packages/blitz` primitives stay usable directly, but the Helios-facing default should
+be the distributed flow above.
+
+### Env and bootstrap contract
+
+Recommended operator contract:
+
+```text
+BLITZ_MODE=auto
+BLITZ_NATS_PORT=4222
+BLITZ_NATS_CLUSTER_PORT=6222
+BLITZ_NATS_CLUSTER_NAME=helios-blitz
+BLITZ_NATS_DATA_DIR=/var/lib/blitz/${HOSTNAME}
+BLITZ_DEFAULT_REPLICAS=3
+```
+
+Meaning:
+
+- `BLITZ_MODE=auto` is the default
+- no explicit master flag is required
+- stable per-node identity comes from Helios member identity / hostname
+- the oldest/master Helios member supplies or confirms the current seed topology
+- explicit `BLITZ_NATS_ROUTES` remains available as an override, but is not the primary Helios path
+
+### Canonical queue mapping
+
+Appendix B maps to canonical master-plan blocks `18.1`-`18.5` in
+`plans/TYPESCRIPT_PORT_PLAN.md`.
+
+### Block 18.1 - `clusterNode` primitive + replication defaults
+
+Goal: finish the low-level Blitz package support needed for one embedded NATS node per app replica.
+
+- add `ClusterNodeNatsConfig` and `clusterNode` to `packages/blitz/src/BlitzConfig.ts`
+- add `defaultReplicas` to Blitz config and resolved config
+- support a single spawned clustered node in `packages/blitz/src/BlitzService.ts`
+- extend `packages/blitz/src/server/NatsServerConfig.ts` for bind host, advertise host, and seed routes
+- normalize routes, dedupe entries, and drop self-routes
+
+### Block 18.2 - Helios Blitz bootstrap-master control plane
+
+Goal: let the oldest/current Helios master member coordinate Blitz cluster metadata automatically.
+
+- add a Helios-owned Blitz cluster metadata service that tracks member UUID, server name, advertise host, client port, cluster port, and generation
+- define the oldest/current Helios master member as the Blitz bootstrap master for topology snapshots and future joins
+- publish deterministic topology snapshots for joining nodes
+- define master handoff behavior when the oldest member leaves
+
+### Block 18.3 - Distributed-auto startup, join, and rejoin flow
+
+Goal: make distributed Blitz the default Helios behavior, not an opt-in manual role assignment.
+
+- on first-node startup, boot local embedded NATS without requiring peers
+- on later-node startup, fetch seed topology from the current bootstrap master and auto-join
+- keep every app instance connected locally to `127.0.0.1:<port>`
+- support node restart/rejoin without manual reconfiguration
+- keep Helios cluster join independent from NATS data-plane leadership
+
+### Block 18.4 - Env helpers, NestJS wiring, and replicated Blitz-owned state
+
+Goal: make the default path easy to operate and actually replicated.
+
+- add `resolveBlitzConfigFromEnv()` / `BlitzService.startFromEnv()` with `BLITZ_MODE=auto`
+- add a Helios/NestJS bootstrap path that uses the distributed-auto default when clustering is enabled
+- propagate `defaultReplicas` into Blitz-owned JetStream/KV creation points
+- start with `packages/blitz/src/window/WindowState.ts` so KV-backed window state replicates across nodes
+
+### Block 18.5 - Multi-node HA verification
+
+Goal: prove the full user story works with real Helios members.
+
+- start 3 Helios/API replicas, each hosting one local NATS node, and verify they form one cluster
+- verify node 1 alone boots successfully and node 2 auto-joins without manual master flags
+- verify the oldest/master Helios member changeover after member loss does not break future joins
+- verify Blitz-owned KV/window state honors `defaultReplicas=3`
+- verify restart/rejoin and shutdown semantics stay deterministic
+
+### Done gate for Appendix B / Phase 18
+
+- [ ] starting a second Helios node automatically forms a Blitz cluster with the first node
+- [ ] the oldest/current Helios master member acts as Blitz bootstrap master with no manual env toggle
+- [ ] every Helios node hosts its own local embedded NATS node and connects locally
+- [ ] Blitz-owned state is replicated by default in multi-node deployments
+- [ ] a 3-node Helios deployment survives bootstrap-master loss and allows new nodes to join afterward

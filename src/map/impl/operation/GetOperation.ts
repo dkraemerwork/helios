@@ -4,8 +4,8 @@
  * Read-only operation: fetches the serialized value for the given key.
  * Sends null if the key is absent.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
 
 export class GetOperation extends MapOperation {
     private readonly _key: Data;

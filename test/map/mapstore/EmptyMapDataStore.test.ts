@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { EmptyMapDataStore } from '@helios/map/impl/mapstore/EmptyMapDataStore';
+import { EmptyMapDataStore } from '@zenystx/core/map/impl/mapstore/EmptyMapDataStore';
 
 describe('EmptyMapDataStore', () => {
   test('singleton identity — empty() returns same instance', () => {

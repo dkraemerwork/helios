@@ -1,9 +1,9 @@
 /**
  * Port of {@code com.hazelcast.cluster.Member}.
  */
-import type { Address } from '@helios/cluster/Address';
-import type { MemberVersion } from '@helios/version/MemberVersion';
-import type { EndpointQualifier } from '@helios/instance/EndpointQualifier';
+import type { Address } from '@zenystx/core/cluster/Address';
+import type { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import type { EndpointQualifier } from '@zenystx/core/instance/EndpointQualifier';
 
 export interface Member {
     /** Returns true if this member is the local member. */

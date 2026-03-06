@@ -5,10 +5,10 @@ import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:
 import {
     ByteArrayObjectDataOutput,
     MAX_ARRAY_SIZE,
-} from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { BIG_ENDIAN, LITTLE_ENDIAN } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import { Bits } from '@helios/internal/nio/Bits';
-import type { InternalSerializationService } from '@helios/internal/serialization/InternalSerializationService';
+} from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { BIG_ENDIAN, LITTLE_ENDIAN } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { Bits } from '@zenystx/core/internal/nio/Bits';
+import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
 
 const TEST_DATA = Buffer.from([1, 2, 3]);
 

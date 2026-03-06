@@ -15,7 +15,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Inject } from '@nestjs/common';
 import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
 import { HeliosModule } from '../../src/HeliosModule';
-import type { HeliosInstance } from '@helios/core/core/HeliosInstance';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
 
 // ---------------------------------------------------------------------------
 // Helpers

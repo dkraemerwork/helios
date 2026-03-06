@@ -15,14 +15,13 @@
     "emitDecoratorMetadata": true,
 
     "paths": {
-      "@helios/core": ["../../src/index.ts"],
-      "@helios/core/*": ["../../src/core/*", "../../src/*"],
-      "@helios/nestjs": ["../../packages/nestjs/src/index.ts"],
-      "@helios/nestjs/*": ["../../packages/nestjs/src/*"],
-      "@helios/mongodb": ["../../packages/mongodb/src/index.ts"],
-      "@helios/s3": ["../../packages/s3/src/index.ts"],
-      "@helios/turso": ["../../packages/turso/src/index.ts"],
-      "@helios/*": ["../../src/*"]
+      "@zenystx/core": ["../../src/index.ts"],
+      "@zenystx/core/*": ["../../src/core/*", "../../src/*"],
+      "@zenystx/nestjs": ["../../packages/nestjs/src/index.ts"],
+      "@zenystx/nestjs/*": ["../../packages/nestjs/src/*"],
+      "@zenystx/mongodb": ["../../packages/mongodb/src/index.ts"],
+      "@zenystx/s3": ["../../packages/s3/src/index.ts"],
+      "@zenystx/turso": ["../../packages/turso/src/index.ts"]
     },
 
     "types": ["bun"]

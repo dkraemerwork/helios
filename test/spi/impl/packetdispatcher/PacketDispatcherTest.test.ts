@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.spi.impl.packetdispatcher.impl.PacketDispatcherTest}.
  */
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import { Packet } from '@helios/internal/nio/Packet';
-import { PacketDispatcher } from '@helios/spi/impl/PacketDispatcher';
+import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { PacketDispatcher } from '@zenystx/core/spi/impl/PacketDispatcher';
 
 const { FLAG_OP_CONTROL, FLAG_OP_RESPONSE, FLAG_URGENT } = Packet;
 

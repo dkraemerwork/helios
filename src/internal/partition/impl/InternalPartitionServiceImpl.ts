@@ -3,15 +3,15 @@
  * Manages the partition table lifecycle: assignment, membership-triggered rebalancing,
  * runtime state application from master, and partition queries.
  */
-import { PartitionStateManager } from '@helios/internal/partition/impl/PartitionStateManager';
-import type { InternalPartitionImpl } from '@helios/internal/partition/impl/InternalPartitionImpl';
-import type { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
-import type { PartitionTableView } from '@helios/internal/partition/PartitionTableView';
-import type { Address } from '@helios/cluster/Address';
-import type { Member } from '@helios/cluster/Member';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { MigrationAwareService } from '@helios/internal/partition/MigrationAwareService';
-import type { MigrationInfo } from '@helios/internal/partition/MigrationInfo';
+import { PartitionStateManager } from '@zenystx/core/internal/partition/impl/PartitionStateManager';
+import type { InternalPartitionImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionImpl';
+import type { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
+import type { PartitionTableView } from '@zenystx/core/internal/partition/PartitionTableView';
+import type { Address } from '@zenystx/core/cluster/Address';
+import type { Member } from '@zenystx/core/cluster/Member';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { MigrationAwareService } from '@zenystx/core/internal/partition/MigrationAwareService';
+import type { MigrationInfo } from '@zenystx/core/internal/partition/MigrationInfo';
 
 /**
  * Represents the partition runtime state received from the master.

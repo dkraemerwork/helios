@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MapStoreWrapper } from '@helios/map/impl/mapstore/MapStoreWrapper';
-import type { MapStore } from '@helios/map/MapStore';
-import type { MapLoader } from '@helios/map/MapLoader';
-import type { MapLoaderLifecycleSupport } from '@helios/map/MapLoaderLifecycleSupport';
+import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
+import type { MapStore } from '@zenystx/core/map/MapStore';
+import type { MapLoader } from '@zenystx/core/map/MapLoader';
+import type { MapLoaderLifecycleSupport } from '@zenystx/core/map/MapLoaderLifecycleSupport';
 
 // A full MapStore implementation
 const makeMapStore = (): MapStore<string, string> & MapLoaderLifecycleSupport => ({

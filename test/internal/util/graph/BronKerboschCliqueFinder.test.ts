@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { Graph } from '@helios/internal/util/graph/Graph';
-import { BronKerboschCliqueFinder } from '@helios/internal/util/graph/BronKerboschCliqueFinder';
+import { Graph } from '@zenystx/core/internal/util/graph/Graph';
+import { BronKerboschCliqueFinder } from '@zenystx/core/internal/util/graph/BronKerboschCliqueFinder';
 
 function populateFullyConnectedGraph(vertices: string[]): Graph<string> {
   const g = new Graph<string>();

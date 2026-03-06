@@ -5,9 +5,9 @@
  * timeout, degraded pool detection, handle cleanup, result deserialization.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { ExecutorContainerService, TaskState } from '@helios/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
+import { ExecutorContainerService, TaskState } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
 
 function makeConfig(overrides?: {
     poolSize?: number;

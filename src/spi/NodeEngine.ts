@@ -7,13 +7,13 @@
  * In Helios (single-node in-process), NodeEngineImpl wires all local services.
  * In multi-node mode (Phase 4+), the same interface bridges cluster-aware impls.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { ILogger } from '@helios/test-support/ILogger';
-import type { OperationService } from '@helios/spi/impl/operationservice/OperationService';
-import type { HeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import type { PartitionService } from '@helios/spi/PartitionService';
-import type { Address } from '@helios/cluster/Address';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { ILogger } from '@zenystx/core/test-support/ILogger';
+import type { OperationService } from '@zenystx/core/spi/impl/operationservice/OperationService';
+import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import type { PartitionService } from '@zenystx/core/spi/PartitionService';
+import type { Address } from '@zenystx/core/cluster/Address';
 
 /** Minimal cluster service surface exposed through NodeEngine. */
 export interface ClusterServiceView {

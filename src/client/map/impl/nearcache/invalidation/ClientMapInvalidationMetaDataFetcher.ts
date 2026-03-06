@@ -6,10 +6,10 @@
  * {@link MapGetInvalidationMetaDataOperation} in-process (single-node mode)
  * or via protocol task invocations (multi-node mode).
  */
-import { AbstractInvalidationMetaDataFetcher } from '@helios/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import type { InvalidationMetaDataResponse } from '@helios/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import { MapGetInvalidationMetaDataOperation } from '@helios/map/impl/operation/MapGetInvalidationMetaDataOperation';
-import type { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { AbstractInvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
+import type { InvalidationMetaDataResponse } from '@zenystx/core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
+import { MapGetInvalidationMetaDataOperation } from '@zenystx/core/map/impl/operation/MapGetInvalidationMetaDataOperation';
+import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 /** Represents one cluster data member as seen by the client map metadata fetcher. */
 export interface ClientMapDataMember {

@@ -10,9 +10,9 @@
  * When a second service (e.g., CacheService) adds replication support, version
  * tracking must be retrofitted to per-namespace.
  */
-import { MAX_REPLICA_COUNT } from '@helios/internal/partition/InternalPartition';
-import type { ReplicaVersionManager } from '@helios/spi/impl/operationservice/OperationBackupHandler';
-import type { BackupReplicaVersionManager } from '@helios/spi/impl/operationservice/operations/Backup';
+import { MAX_REPLICA_COUNT } from '@zenystx/core/internal/partition/InternalPartition';
+import type { ReplicaVersionManager } from '@zenystx/core/spi/impl/operationservice/OperationBackupHandler';
+import type { BackupReplicaVersionManager } from '@zenystx/core/spi/impl/operationservice/operations/Backup';
 
 /** Sentinel version meaning "needs full sync". */
 export const REQUIRES_SYNC = -1n;

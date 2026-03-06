@@ -3,8 +3,8 @@
  *
  * Root class for Near Cache invalidation data.
  */
-import { InvalidationUtils } from '@helios/internal/nearcache/impl/invalidation/InvalidationUtils';
-import type { Data } from '@helios/internal/serialization/Data';
+import { InvalidationUtils } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationUtils';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 export abstract class Invalidation {
     protected _dataStructureName: string;

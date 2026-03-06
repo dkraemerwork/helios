@@ -9,8 +9,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
-import { HeliosCache } from '@helios/nestjs/HeliosCache';
-import { HeliosCacheModule } from '@helios/nestjs/HeliosCacheModule';
+import { HeliosCache } from '@zenystx/nestjs/HeliosCache';
+import { HeliosCacheModule } from '@zenystx/nestjs/HeliosCacheModule';
 
 // ---------------------------------------------------------------------------
 // Minimal IMap stub for testing (synchronous Map-based)

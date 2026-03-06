@@ -6,16 +6,16 @@
  * multi-member operation signatures.
  */
 import { describe, test, expect } from 'bun:test';
-import type { IExecutorService } from '@helios/executor/IExecutorService';
-import type { TaskCallable, InlineTaskCallable } from '@helios/executor/TaskCallable';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult';
+import type { IExecutorService } from '@zenystx/core/executor/IExecutorService';
+import type { TaskCallable, InlineTaskCallable } from '@zenystx/core/executor/TaskCallable';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult';
 import {
     UnknownTaskTypeException,
     TaskRegistrationMismatchException,
     ExecutorRejectedExecutionException,
     ExecutorTaskLostException,
     ExecutorTaskTimeoutException,
-} from '@helios/executor/ExecutorExceptions';
+} from '@zenystx/core/executor/ExecutorExceptions';
 
 describe('IExecutorService + TaskCallable contracts', () => {
 

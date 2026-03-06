@@ -1,3 +1,3 @@
-import { AliasedDiscoveryConfig } from '@helios/config/AliasedDiscoveryConfig';
+import { AliasedDiscoveryConfig } from '@zenystx/core/config/AliasedDiscoveryConfig';
 
 export class EurekaConfig extends AliasedDiscoveryConfig {}

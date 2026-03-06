@@ -1,10 +1,10 @@
 /**
- * @helios/nestjs — public API barrel.
+ * @zenystx/nestjs — public API barrel.
  *
  * NestJS integration for Helios distributed in-memory platform.
  *
  * ```typescript
- * import { HeliosModule, HeliosCacheModule, HeliosTransactionModule } from '@helios/nestjs';
+ * import { HeliosModule, HeliosCacheModule, HeliosTransactionModule } from '@zenystx/nestjs';
  * ```
  */
 

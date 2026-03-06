@@ -3,17 +3,17 @@
  * and related codec round-trip tests.
  */
 import { describe, it, expect } from 'bun:test';
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
-import { ClientMessageReader } from '@helios/client/impl/protocol/ClientMessageReader';
-import { ClientMessageWriter } from '@helios/client/impl/protocol/ClientMessageWriter';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
-import { MapPutCodec } from '@helios/client/impl/protocol/codec/MapPutCodec';
-import { ClientAuthenticationCodec } from '@helios/client/impl/protocol/codec/ClientAuthenticationCodec';
-import { MapAddEntryListenerCodec } from '@helios/client/impl/protocol/codec/MapAddEntryListenerCodec';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import { MemberInfo } from '@helios/cluster/MemberInfo';
-import { Address } from '@helios/cluster/Address';
-import { MemberVersion } from '@helios/version/MemberVersion';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessageReader } from '@zenystx/core/client/impl/protocol/ClientMessageReader';
+import { ClientMessageWriter } from '@zenystx/core/client/impl/protocol/ClientMessageWriter';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
+import { MapPutCodec } from '@zenystx/core/client/impl/protocol/codec/MapPutCodec';
+import { ClientAuthenticationCodec } from '@zenystx/core/client/impl/protocol/codec/ClientAuthenticationCodec';
+import { MapAddEntryListenerCodec } from '@zenystx/core/client/impl/protocol/codec/MapAddEntryListenerCodec';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { MemberInfo } from '@zenystx/core/cluster/MemberInfo';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MemberVersion } from '@zenystx/core/version/MemberVersion';
 
 function roundTrip(msg: ClientMessage): ClientMessage {
     const bufSize = msg.getFrameLength() + 64;

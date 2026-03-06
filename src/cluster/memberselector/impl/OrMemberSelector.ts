@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.cluster.memberselector.impl.OrMemberSelector}.
  * Selects a member if any sub-selector succeeds (short-circuit OR).
  */
-import type { Member } from '@helios/cluster/Member';
-import type { MemberSelector } from '@helios/cluster/MemberSelector';
+import type { Member } from '@zenystx/core/cluster/Member';
+import type { MemberSelector } from '@zenystx/core/cluster/MemberSelector';
 
 export class OrMemberSelector implements MemberSelector {
     private readonly selectors: MemberSelector[];

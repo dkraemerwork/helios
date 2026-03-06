@@ -5,14 +5,14 @@
  * Uses per-task-type execution with bounded queueing and pool caps.
  */
 
-import type { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import type { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
-import type { LocalExecutorStats } from '@helios/executor/IExecutorService.js';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData.js';
-import { Bits } from '@helios/internal/nio/Bits.js';
-import type { ExecutionBackend } from '@helios/executor/impl/ExecutionBackend.js';
-import { InlineExecutionBackend } from '@helios/executor/impl/InlineExecutionBackend.js';
+import type { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import type { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
+import type { LocalExecutorStats } from '@zenystx/core/executor/IExecutorService.js';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData.js';
+import { Bits } from '@zenystx/core/internal/nio/Bits.js';
+import type { ExecutionBackend } from '@zenystx/core/executor/impl/ExecutionBackend.js';
+import { InlineExecutionBackend } from '@zenystx/core/executor/impl/InlineExecutionBackend.js';
 
 export const enum TaskState {
     QUEUED = 'QUEUED',

@@ -4,7 +4,7 @@
  * Retryable exceptions signal transient failures that the invocation framework
  * should retry with backoff rather than fail immediately.
  */
-import type { Address } from '@helios/cluster/Address';
+import type { Address } from '@zenystx/core/cluster/Address';
 
 export class RetryableException extends Error {
     constructor(message: string) {

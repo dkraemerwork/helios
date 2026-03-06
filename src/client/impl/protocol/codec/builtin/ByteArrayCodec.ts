@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.ByteArrayCodec}.
  */
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
 
 export class ByteArrayCodec {
     private constructor() {}

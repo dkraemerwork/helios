@@ -14,24 +14,24 @@
  *   - Multi-map replication
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { TestCluster } from '@helios/test-support/TestCluster';
-import { ChaosRunner } from '@helios/test-support/ChaosRunner';
-import { PartitionContainer } from '@helios/internal/partition/impl/PartitionContainer';
-import { PartitionReplicaManager } from '@helios/internal/partition/impl/PartitionReplicaManager';
-import { AntiEntropyTask } from '@helios/internal/partition/impl/AntiEntropyTask';
-import { PartitionReplicaSyncRequest, collectNamespaceStates } from '@helios/internal/partition/operation/PartitionReplicaSyncRequest';
-import { PartitionReplicaSyncResponse } from '@helios/internal/partition/operation/PartitionReplicaSyncResponse';
-import { MapReplicationStateHolder } from '@helios/map/impl/operation/MapReplicationStateHolder';
-import { WriteBehindStateHolder } from '@helios/map/impl/operation/WriteBehindStateHolder';
-import { MapNearCacheStateHolder } from '@helios/map/impl/operation/MapNearCacheStateHolder';
-import { MapReplicationOperation } from '@helios/map/impl/operation/MapReplicationOperation';
-import { WriteBehindStore } from '@helios/map/impl/mapstore/writebehind/WriteBehindStore';
-import { ArrayWriteBehindQueue } from '@helios/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
-import { WriteBehindProcessor } from '@helios/map/impl/mapstore/writebehind/WriteBehindProcessor';
-import { MapStoreWrapper } from '@helios/map/impl/mapstore/MapStoreWrapper';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { MapStore } from '@helios/map/MapStore';
+import { TestCluster } from '@zenystx/core/test-support/TestCluster';
+import { ChaosRunner } from '@zenystx/core/test-support/ChaosRunner';
+import { PartitionContainer } from '@zenystx/core/internal/partition/impl/PartitionContainer';
+import { PartitionReplicaManager } from '@zenystx/core/internal/partition/impl/PartitionReplicaManager';
+import { AntiEntropyTask } from '@zenystx/core/internal/partition/impl/AntiEntropyTask';
+import { PartitionReplicaSyncRequest, collectNamespaceStates } from '@zenystx/core/internal/partition/operation/PartitionReplicaSyncRequest';
+import { PartitionReplicaSyncResponse } from '@zenystx/core/internal/partition/operation/PartitionReplicaSyncResponse';
+import { MapReplicationStateHolder } from '@zenystx/core/map/impl/operation/MapReplicationStateHolder';
+import { WriteBehindStateHolder } from '@zenystx/core/map/impl/operation/WriteBehindStateHolder';
+import { MapNearCacheStateHolder } from '@zenystx/core/map/impl/operation/MapNearCacheStateHolder';
+import { MapReplicationOperation } from '@zenystx/core/map/impl/operation/MapReplicationOperation';
+import { WriteBehindStore } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindStore';
+import { ArrayWriteBehindQueue } from '@zenystx/core/map/impl/mapstore/writebehind/ArrayWriteBehindQueue';
+import { WriteBehindProcessor } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindProcessor';
+import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { MapStore } from '@zenystx/core/map/MapStore';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

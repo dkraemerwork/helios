@@ -3,7 +3,7 @@
  */
 import { SimpleRecord } from './SimpleRecord';
 import { RecordReaderWriter } from './RecordReaderWriter';
-import { stripBaseTime, recomputeWithBaseTime } from '@helios/internal/util/TimeStripUtil';
+import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/core/internal/util/TimeStripUtil';
 
 export class SimpleRecordWithLRUEviction extends SimpleRecord {
     private _lastAccessTime = -1;

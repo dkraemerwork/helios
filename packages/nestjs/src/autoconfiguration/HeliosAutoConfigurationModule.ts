@@ -14,7 +14,7 @@
 
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import { HELIOS_INSTANCE_TOKEN } from '../HeliosInstanceDefinition';
-import type { HeliosInstance } from '@helios/core/core/HeliosInstance';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
 
 export interface HeliosAutoConfigurationAsyncOptions {
     useFactory: (...args: unknown[]) => HeliosInstance | Promise<HeliosInstance>;

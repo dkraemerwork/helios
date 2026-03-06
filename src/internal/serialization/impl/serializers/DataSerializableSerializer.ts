@@ -4,13 +4,13 @@
  * Handles typeId -2 (IdentifiedDataSerializable). Plain DataSerializable (non-identified)
  * is NOT supported — reading a non-IDS header throws HazelcastSerializationError.
  */
-import type { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import type { ByteArrayObjectDataInput } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import type { SerializerAdapter } from '@helios/internal/serialization/impl/SerializerAdapter';
-import type { DataSerializableFactory, IdentifiedDataSerializable } from '@helios/internal/serialization/impl/SerializationConfig';
-import { DataSerializableHeader } from '@helios/internal/serialization/impl/DataSerializableHeader';
-import { SerializationConstants } from '@helios/internal/serialization/impl/SerializationConstants';
-import { HazelcastSerializationError } from '@helios/internal/serialization/impl/HazelcastSerializationError';
+import type { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import type { ByteArrayObjectDataInput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { SerializerAdapter } from '@zenystx/core/internal/serialization/impl/SerializerAdapter';
+import type { DataSerializableFactory, IdentifiedDataSerializable } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
+import { DataSerializableHeader } from '@zenystx/core/internal/serialization/impl/DataSerializableHeader';
+import { SerializationConstants } from '@zenystx/core/internal/serialization/impl/SerializationConstants';
+import { HazelcastSerializationError } from '@zenystx/core/internal/serialization/impl/HazelcastSerializationError';
 
 export class DataSerializableSerializer implements SerializerAdapter {
     private readonly factories = new Map<number, DataSerializableFactory>();

@@ -16,11 +16,11 @@ import { Injectable, Inject } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
-import { Cacheable } from '@helios/nestjs/decorators/cacheable.decorator';
-import { CacheEvict } from '@helios/nestjs/decorators/cache-evict.decorator';
-import { CachePut } from '@helios/nestjs/decorators/cache-put.decorator';
-import { CacheableRegistry, type ICacheStore } from '@helios/nestjs/decorators/cache-registry';
-import { HeliosCacheModule } from '@helios/nestjs/HeliosCacheModule';
+import { Cacheable } from '@zenystx/nestjs/decorators/cacheable.decorator';
+import { CacheEvict } from '@zenystx/nestjs/decorators/cache-evict.decorator';
+import { CachePut } from '@zenystx/nestjs/decorators/cache-put.decorator';
+import { CacheableRegistry, type ICacheStore } from '@zenystx/nestjs/decorators/cache-registry';
+import { HeliosCacheModule } from '@zenystx/nestjs/HeliosCacheModule';
 
 // ---------------------------------------------------------------------------
 // Shared in-memory cache store used across unit tests

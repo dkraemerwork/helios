@@ -4,7 +4,7 @@
  * Client-side configuration holding per-data-structure NearCacheConfigs,
  * resolved via {@link MatchingPointConfigPatternMatcher} wildcard rules.
  */
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
 
 /**
  * Port of {@code com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher}.

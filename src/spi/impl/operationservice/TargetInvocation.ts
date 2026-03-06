@@ -4,11 +4,11 @@
  * An invocation targeting a specific cluster member by address.
  * The target is fixed and does not change on retry.
  */
-import { Invocation, type InvocationOptions } from '@helios/spi/impl/operationservice/Invocation';
-import { InvocationRegistry } from '@helios/spi/impl/operationservice/InvocationRegistry';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { Address } from '@helios/cluster/Address';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
+import { Invocation, type InvocationOptions } from '@zenystx/core/spi/impl/operationservice/Invocation';
+import { InvocationRegistry } from '@zenystx/core/spi/impl/operationservice/InvocationRegistry';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { Address } from '@zenystx/core/cluster/Address';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
 
 export class TargetInvocation extends Invocation {
     constructor(

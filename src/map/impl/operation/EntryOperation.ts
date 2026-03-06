@@ -4,9 +4,9 @@
  * Executes an EntryProcessor on a single key.
  * Applies any setValue() mutation atomically and sends the processor's result.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import type { EntryProcessor } from '@helios/map/EntryProcessor';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { EntryProcessor } from '@zenystx/core/map/EntryProcessor';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
 
 export class EntryOperation<R = unknown> extends MapOperation {
     private readonly _key: Data;

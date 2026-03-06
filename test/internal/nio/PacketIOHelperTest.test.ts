@@ -5,9 +5,9 @@
  * are adapted to use raw byte payloads since the full serialization service is ported later.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Packet } from '@helios/internal/nio/Packet';
-import { PacketIOHelper } from '@helios/internal/nio/PacketIOHelper';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
+import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { PacketIOHelper } from '@zenystx/core/internal/nio/PacketIOHelper';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
 
 function generateRandomString(length: number): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

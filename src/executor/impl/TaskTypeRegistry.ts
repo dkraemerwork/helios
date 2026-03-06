@@ -8,7 +8,7 @@
  * @see IExecutorService.registerTaskType
  */
 
-import { UnknownTaskTypeException, TaskRegistrationMismatchException } from '@helios/executor/ExecutorExceptions.js';
+import { UnknownTaskTypeException, TaskRegistrationMismatchException } from '@zenystx/core/executor/ExecutorExceptions.js';
 
 /** Worker materialization metadata — describes how a task loads inside a worker thread. */
 export interface WorkerMaterializationMeta {

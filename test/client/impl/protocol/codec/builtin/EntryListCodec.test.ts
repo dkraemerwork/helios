@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'bun:test';
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
-import { EntryListCodec } from '@helios/client/impl/protocol/codec/builtin/EntryListCodec';
-import { StringCodec } from '@helios/client/impl/protocol/codec/builtin/StringCodec';
-import { ListLongCodec } from '@helios/client/impl/protocol/codec/builtin/ListLongCodec';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { EntryListCodec } from '@zenystx/core/client/impl/protocol/codec/builtin/EntryListCodec';
+import { StringCodec } from '@zenystx/core/client/impl/protocol/codec/builtin/StringCodec';
+import { ListLongCodec } from '@zenystx/core/client/impl/protocol/codec/builtin/ListLongCodec';
 
 function roundTripStringBigint(entries: Array<[string, bigint[]]>): Array<[string, bigint[]]> {
     const msg = ClientMessage.createForEncode();

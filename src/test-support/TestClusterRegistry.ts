@@ -8,7 +8,7 @@
  * No real TCP — all nodes share in-process memory. This is the foundation
  * for multi-node test scenarios (Block 4.1+).
  */
-import { TestHeliosInstance } from '@helios/test-support/TestHeliosInstance';
+import { TestHeliosInstance } from '@zenystx/core/test-support/TestHeliosInstance';
 
 export const PARTITION_COUNT = 271;
 

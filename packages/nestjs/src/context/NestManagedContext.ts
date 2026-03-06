@@ -7,7 +7,7 @@
  */
 
 import type { ModuleRef } from '@nestjs/core';
-import type { ManagedContext } from '@helios/core/spi/impl/ManagedContext';
+import type { ManagedContext } from '@zenystx/core/spi/impl/ManagedContext';
 import { isNestAware } from './NestAware';
 
 export class NestManagedContext implements ManagedContext {

@@ -5,9 +5,9 @@
  * to a specific member (identified by UUID) and returns the invalidation metadata
  * response for the requested cache names.
  */
-import { CacheGetInvalidationMetaDataOperation } from '@helios/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
-import type { InvalidationMetaDataResponse } from '@helios/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
-import type { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { CacheGetInvalidationMetaDataOperation } from '@zenystx/core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
+import type { InvalidationMetaDataResponse } from '@zenystx/core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
+import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 export interface CacheFetchNearCacheInvalidationMetadataRequestParameters {
     /** names of the caches for which metadata should be fetched */

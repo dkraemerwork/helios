@@ -4,7 +4,7 @@
  * Tests for Operation call ID lifecycle management.
  */
 import { describe, it, expect } from 'bun:test';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
 
 /** Concrete test operation — run() is a no-op. */
 class TestOp extends Operation {

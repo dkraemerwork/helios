@@ -1,5 +1,5 @@
-import type { HeliosInstance } from '@helios/core/HeliosInstance';
-import { OutOfMemoryHandler } from '@helios/instance/impl/OutOfMemoryHandler';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
+import { OutOfMemoryHandler } from '@zenystx/core/instance/impl/OutOfMemoryHandler';
 
 export interface MemoryInfoAccessor {
   getMaxMemory(): number;

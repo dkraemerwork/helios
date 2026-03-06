@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { Json } from '@helios/internal/json/Json';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { JsonObject } from '@helios/internal/json/JsonObject';
-import { Member, HashIndexTable } from '@helios/internal/json/JsonObject';
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
-import { StringWriter } from '@helios/internal/json/StringWriter';
+import { Json } from '@zenystx/core/internal/json/Json';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import { Member, HashIndexTable } from '@zenystx/core/internal/json/JsonObject';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
+import { StringWriter } from '@zenystx/core/internal/json/StringWriter';
 
 function makeObject(...namesAndValues: string[]): JsonObject {
   const obj = new JsonObject();

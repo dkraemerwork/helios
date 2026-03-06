@@ -1,8 +1,8 @@
-import type { Cluster } from '@helios/cluster/Cluster';
-import type { Member } from '@helios/cluster/Member';
-import { Address } from '@helios/cluster/Address';
-import { MemberVersion } from '@helios/version/MemberVersion';
-import type { EndpointQualifier } from '@helios/instance/EndpointQualifier';
+import type { Cluster } from '@zenystx/core/cluster/Cluster';
+import type { Member } from '@zenystx/core/cluster/Member';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import type { EndpointQualifier } from '@zenystx/core/instance/EndpointQualifier';
 
 /**
  * Minimal single-node Cluster implementation.

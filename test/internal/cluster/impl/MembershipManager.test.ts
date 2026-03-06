@@ -11,13 +11,13 @@
  * - Finding 20: UUID change triggers partition table repair
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MembershipManager } from '@helios/internal/cluster/impl/MembershipManager';
-import { ClusterServiceImpl } from '@helios/internal/cluster/impl/ClusterServiceImpl';
-import { MemberImpl } from '@helios/cluster/impl/MemberImpl';
-import { Address } from '@helios/cluster/Address';
-import { MemberVersion } from '@helios/version/MemberVersion';
-import { MembersView } from '@helios/internal/cluster/impl/MembersView';
-import { BuildInfoProvider } from '@helios/instance/BuildInfoProvider';
+import { MembershipManager } from '@zenystx/core/internal/cluster/impl/MembershipManager';
+import { ClusterServiceImpl } from '@zenystx/core/internal/cluster/impl/ClusterServiceImpl';
+import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import { MembersView } from '@zenystx/core/internal/cluster/impl/MembersView';
+import { BuildInfoProvider } from '@zenystx/core/instance/BuildInfoProvider';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 

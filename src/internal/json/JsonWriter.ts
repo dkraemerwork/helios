@@ -1,4 +1,4 @@
-import { Writer } from '@helios/internal/json/Writer';
+import { Writer } from '@zenystx/core/internal/json/Writer';
 
 const CONTROL_CHARACTERS_END = 0x001f;
 

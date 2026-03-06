@@ -5,8 +5,8 @@
  * partition owner lookup, and registry reset.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { TestClusterRegistry, PARTITION_COUNT } from '@helios/test-support/TestClusterRegistry';
-import { TestHeliosInstance } from '@helios/test-support/TestHeliosInstance';
+import { TestClusterRegistry, PARTITION_COUNT } from '@zenystx/core/test-support/TestClusterRegistry';
+import { TestHeliosInstance } from '@zenystx/core/test-support/TestHeliosInstance';
 
 describe('TestClusterRegistry', () => {
     let registry: TestClusterRegistry;

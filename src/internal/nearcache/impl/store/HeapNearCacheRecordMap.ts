@@ -4,8 +4,8 @@
  * On-heap Map for Near Cache records with sampling-based eviction support.
  * Bun is single-threaded so all operations are straightforward (no CAS/locking).
  */
-import type { NearCacheRecord } from '@helios/internal/nearcache/NearCacheRecord';
-import { READ_PERMITTED } from '@helios/internal/nearcache/NearCacheRecord';
+import type { NearCacheRecord } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import { READ_PERMITTED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
 
 export interface EvictionListener<K, R> {
     onEvict(key: K, record: R, wasExpired: boolean): void;

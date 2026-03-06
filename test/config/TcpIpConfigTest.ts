@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { TcpIpConfig } from '@helios/config/TcpIpConfig';
+import { TcpIpConfig } from '@zenystx/core/config/TcpIpConfig';
 
 describe('TcpIpConfigTest', () => {
 

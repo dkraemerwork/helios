@@ -3,7 +3,7 @@
  *
  * Thrown when a transaction exceeds its configured timeout.
  */
-import { TransactionException } from '@helios/transaction/TransactionException';
+import { TransactionException } from '@zenystx/core/transaction/TransactionException';
 
 export class TransactionTimedOutException extends TransactionException {
     constructor(causeOrMessage: Error | string = '') {

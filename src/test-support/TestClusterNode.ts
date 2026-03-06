@@ -4,21 +4,21 @@
  *
  * Block 16.A0 — Multi-Node Test Infrastructure
  */
-import { Address } from "@helios/cluster/Address";
-import { MemberImpl } from "@helios/cluster/impl/MemberImpl";
-import { MemberVersion } from "@helios/version/MemberVersion";
-import { ClusterServiceImpl } from "@helios/internal/cluster/impl/ClusterServiceImpl";
+import { Address } from "@zenystx/core/cluster/Address";
+import { MemberImpl } from "@zenystx/core/cluster/impl/MemberImpl";
+import { MemberVersion } from "@zenystx/core/version/MemberVersion";
+import { ClusterServiceImpl } from "@zenystx/core/internal/cluster/impl/ClusterServiceImpl";
 import {
   ClusterJoinManager,
   type JoinTransport,
-} from "@helios/internal/cluster/impl/ClusterJoinManager";
+} from "@zenystx/core/internal/cluster/impl/ClusterJoinManager";
 import {
   ClusterHeartbeatManager,
   type HeartbeatConfig,
-} from "@helios/internal/cluster/impl/ClusterHeartbeatManager";
-import { TcpClusterTransport } from "@helios/cluster/tcp/TcpClusterTransport";
-import { MembersView } from "@helios/internal/cluster/impl/MembersView";
-import type { ClusterMessage } from "@helios/cluster/tcp/ClusterMessage";
+} from "@zenystx/core/internal/cluster/impl/ClusterHeartbeatManager";
+import { TcpClusterTransport } from "@zenystx/core/cluster/tcp/TcpClusterTransport";
+import { MembersView } from "@zenystx/core/internal/cluster/impl/MembersView";
+import type { ClusterMessage } from "@zenystx/core/cluster/tcp/ClusterMessage";
 
 export interface TestClusterNodeConfig {
   readonly clusterName: string;

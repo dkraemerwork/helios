@@ -7,8 +7,7 @@
     "sourceMap": true,
     "removeComments": false,
     "paths": {
-      "@helios/core/*": ["../../dist/src/*"],
-      "@helios/*": ["../../dist/src/*"]
+      "@zenystx/core/*": ["../../dist/src/*"]
     }
   },
   "include": ["src/**/*"],

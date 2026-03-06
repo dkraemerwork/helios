@@ -5,8 +5,8 @@
  * records and provides the basic CRUD + batch + entry-processor operations needed
  * by the Block 3.2b map operation classes.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import type { EntryProcessor } from '@helios/map/EntryProcessor';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { EntryProcessor } from '@zenystx/core/map/EntryProcessor';
 
 export interface RecordStore {
     // ── point ops ──────────────────────────────────────────────────────────

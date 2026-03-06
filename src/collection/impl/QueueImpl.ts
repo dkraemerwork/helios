@@ -1,10 +1,10 @@
-import { ItemEvent } from "@helios/collection/ItemEvent";
-import type { ItemListener } from "@helios/collection/ItemListener";
+import { ItemEvent } from "@zenystx/core/collection/ItemEvent";
+import type { ItemListener } from "@zenystx/core/collection/ItemListener";
 import {
   LocalQueueStatsImpl,
   type LocalQueueStats,
-} from "@helios/collection/LocalQueueStats";
-import type { IQueue } from "@helios/collection/IQueue";
+} from "@zenystx/core/collection/LocalQueueStats";
+import type { IQueue } from "@zenystx/core/collection/IQueue";
 
 interface QueueEntry<E> {
   value: E;

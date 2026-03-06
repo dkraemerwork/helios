@@ -9,14 +9,14 @@
  * - Binary operation payload round-trip over transport
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { NodeEngineImpl } from '@helios/spi/impl/NodeEngineImpl';
-import { OperationServiceImpl } from '@helios/spi/impl/operationservice/impl/OperationServiceImpl';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { Address } from '@helios/cluster/Address';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import type { PartitionService } from '@helios/spi/PartitionService';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
+import { NodeEngineImpl } from '@zenystx/core/spi/impl/NodeEngineImpl';
+import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { Address } from '@zenystx/core/cluster/Address';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import type { PartitionService } from '@zenystx/core/spi/PartitionService';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
@@ -230,9 +230,9 @@ describe('ExecutorRuntimeFoundation', () => {
 // ── Factory helpers ─────────────────────────────────────────────────────────
 
 function createTestPartitionService(opts?: { migratingPartitions?: Set<number> }): PartitionService & { getPartitionOwner(id: number): Address; isMigrating(id: number): boolean } {
-    const { NodeEngineImpl: NEI } = require('@helios/spi/impl/NodeEngineImpl');
-    const { SerializationServiceImpl: SSI } = require('@helios/internal/serialization/impl/SerializationServiceImpl');
-    const { SerializationConfig: SC } = require('@helios/internal/serialization/impl/SerializationConfig');
+    const { NodeEngineImpl: NEI } = require('@zenystx/core/spi/impl/NodeEngineImpl');
+    const { SerializationServiceImpl: SSI } = require('@zenystx/core/internal/serialization/impl/SerializationServiceImpl');
+    const { SerializationConfig: SC } = require('@zenystx/core/internal/serialization/impl/SerializationConfig');
     const ne = new NEI(new SSI(new SC())) as NodeEngineImpl;
 
     const localAddr = new Address('127.0.0.1', 5701);
@@ -247,8 +247,8 @@ function createTestPartitionService(opts?: { migratingPartitions?: Set<number> }
 }
 
 function createTestNodeEngine(localAddr?: Address, opts?: { migratingPartitions?: Set<number> }): NodeEngine & { getLocalAddress(): Address; getClusterService(): { getMembers(): unknown[] } } {
-    const { SerializationServiceImpl: SSI } = require('@helios/internal/serialization/impl/SerializationServiceImpl');
-    const { SerializationConfig: SC } = require('@helios/internal/serialization/impl/SerializationConfig');
+    const { SerializationServiceImpl: SSI } = require('@zenystx/core/internal/serialization/impl/SerializationServiceImpl');
+    const { SerializationConfig: SC } = require('@zenystx/core/internal/serialization/impl/SerializationConfig');
     const ne = new NodeEngineImpl(new SSI(new SC()), {
         localAddress: localAddr ?? new Address('127.0.0.1', 5701),
         migratingPartitions: opts?.migratingPartitions,

@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.cluster.impl.MemberImpl}.
  * Concrete cluster member implementation with Builder pattern.
  */
-import { Address } from '@helios/cluster/Address';
-import type { Member } from '@helios/cluster/Member';
-import type { MemberVersion } from '@helios/version/MemberVersion';
-import type { EndpointQualifier } from '@helios/instance/EndpointQualifier';
+import { Address } from '@zenystx/core/cluster/Address';
+import type { Member } from '@zenystx/core/cluster/Member';
+import type { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import type { EndpointQualifier } from '@zenystx/core/instance/EndpointQualifier';
 
 export class MemberImpl implements Member {
     static readonly NA_MEMBER_LIST_JOIN_VERSION = -1;

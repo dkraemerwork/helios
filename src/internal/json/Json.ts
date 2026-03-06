@@ -1,13 +1,13 @@
-import { JsonValue } from '@helios/internal/json/JsonValue';
-import { JsonLiteral } from '@helios/internal/json/JsonLiteral';
-import { JsonNumber } from '@helios/internal/json/JsonNumber';
-import { JsonString } from '@helios/internal/json/JsonString';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { JsonObject } from '@helios/internal/json/JsonObject';
-import { JsonHandler } from '@helios/internal/json/JsonHandler';
-import { JsonParser } from '@helios/internal/json/JsonParser';
-import { StringReader } from '@helios/internal/json/StringReader';
-import type { Reader } from '@helios/internal/json/Reader';
+import { JsonValue } from '@zenystx/core/internal/json/JsonValue';
+import { JsonLiteral } from '@zenystx/core/internal/json/JsonLiteral';
+import { JsonNumber } from '@zenystx/core/internal/json/JsonNumber';
+import { JsonString } from '@zenystx/core/internal/json/JsonString';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import { JsonHandler } from '@zenystx/core/internal/json/JsonHandler';
+import { JsonParser } from '@zenystx/core/internal/json/JsonParser';
+import { StringReader } from '@zenystx/core/internal/json/StringReader';
+import type { Reader } from '@zenystx/core/internal/json/Reader';
 
 /** Static factory and entry point for the minimal JSON library. */
 export class Json {

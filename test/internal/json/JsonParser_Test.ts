@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { Json } from '@helios/internal/json/Json';
-import { DefaultHandler } from '@helios/internal/json/Json';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { JsonObject } from '@helios/internal/json/JsonObject';
-import { JsonNumber } from '@helios/internal/json/JsonNumber';
-import { JsonHandler } from '@helios/internal/json/JsonHandler';
-import { JsonParser } from '@helios/internal/json/JsonParser';
-import { ParseException } from '@helios/internal/json/ParseException';
-import { Location } from '@helios/internal/json/Location';
-import { StringReader } from '@helios/internal/json/StringReader';
+import { Json } from '@zenystx/core/internal/json/Json';
+import { DefaultHandler } from '@zenystx/core/internal/json/Json';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import { JsonNumber } from '@zenystx/core/internal/json/JsonNumber';
+import { JsonHandler } from '@zenystx/core/internal/json/JsonHandler';
+import { JsonParser } from '@zenystx/core/internal/json/JsonParser';
+import { ParseException } from '@zenystx/core/internal/json/ParseException';
+import { Location } from '@zenystx/core/internal/json/Location';
+import { StringReader } from '@zenystx/core/internal/json/StringReader';
 
 /** Records all parser events for assertion. */
 class TestHandler extends JsonHandler<string, string> {

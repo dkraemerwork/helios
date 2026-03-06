@@ -1,4 +1,4 @@
-import { AbstractRingBufferOperation } from '@helios/ringbuffer/impl/operations/AbstractRingBufferOperation';
+import { AbstractRingBufferOperation } from '@zenystx/core/ringbuffer/impl/operations/AbstractRingBufferOperation';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.operations.GenericOperation}.

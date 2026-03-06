@@ -4,19 +4,19 @@
  * Base implementation for on-heap Near Cache record stores.
  * Handles reservation/publication, eviction, expiration, and invalidation.
  */
-import type { NearCacheRecord } from '@helios/internal/nearcache/NearCacheRecord';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import type { UpdateSemantic } from '@helios/internal/nearcache/NearCache';
-import type { EvictionChecker } from '@helios/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
-import { AbstractNearCacheRecordStore } from '@helios/internal/nearcache/impl/store/AbstractNearCacheRecordStore';
-import { HeapNearCacheRecordMap } from '@helios/internal/nearcache/impl/store/HeapNearCacheRecordMap';
-import { EntryCountNearCacheEvictionChecker } from '@helios/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
-import { MaxSizePolicy } from '@helios/config/MaxSizePolicy';
-import { EvictionPolicy } from '@helios/config/EvictionPolicy';
-import { NOT_RESERVED, READ_PERMITTED } from '@helios/internal/nearcache/NearCacheRecord';
-import { HeliosProperties, MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
+import type { NearCacheRecord } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import type { UpdateSemantic } from '@zenystx/core/internal/nearcache/NearCache';
+import type { EvictionChecker } from '@zenystx/core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
+import { AbstractNearCacheRecordStore } from '@zenystx/core/internal/nearcache/impl/store/AbstractNearCacheRecordStore';
+import { HeapNearCacheRecordMap } from '@zenystx/core/internal/nearcache/impl/store/HeapNearCacheRecordMap';
+import { EntryCountNearCacheEvictionChecker } from '@zenystx/core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
+import { MaxSizePolicy } from '@zenystx/core/config/MaxSizePolicy';
+import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
+import { NOT_RESERVED, READ_PERMITTED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import { HeliosProperties, MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
 
 const SAMPLE_COUNT = 15;
 

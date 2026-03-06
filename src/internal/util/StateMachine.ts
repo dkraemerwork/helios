@@ -1,4 +1,4 @@
-import { Preconditions } from '@helios/internal/util/Preconditions';
+import { Preconditions } from '@zenystx/core/internal/util/Preconditions';
 
 /**
  * Simple state machine using string enum values as states.

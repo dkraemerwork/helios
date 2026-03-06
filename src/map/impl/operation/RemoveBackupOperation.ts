@@ -4,8 +4,8 @@
  * Backup operation that removes a key from the backup RecordStore.
  * Used by RemoveOperation and DeleteOperation.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
 
 export class RemoveBackupOperation extends MapOperation {
     private readonly _key: Data;

@@ -1,23 +1,23 @@
 import { describe, it, expect } from 'bun:test';
-import { ActionConstants } from '@helios/security/permission/ActionConstants';
-import { MapPermission } from '@helios/security/permission/MapPermission';
-import { CachePermission } from '@helios/security/permission/CachePermission';
-import { MultiMapPermission } from '@helios/security/permission/MultiMapPermission';
-import { ListPermission } from '@helios/security/permission/ListPermission';
-import { SetPermission } from '@helios/security/permission/SetPermission';
-import { AtomicLongPermission } from '@helios/security/permission/AtomicLongPermission';
-import { SemaphorePermission } from '@helios/security/permission/SemaphorePermission';
-import { TopicPermission } from '@helios/security/permission/TopicPermission';
-import { LockPermission } from '@helios/security/permission/LockPermission';
-import { ExecutorServicePermission } from '@helios/security/permission/ExecutorServicePermission';
-import { FlakeIdGeneratorPermission } from '@helios/security/permission/FlakeIdGeneratorPermission';
-import { ReplicatedMapPermission } from '@helios/security/permission/ReplicatedMapPermission';
-import { AtomicReferencePermission } from '@helios/security/permission/AtomicReferencePermission';
-import { CountDownLatchPermission } from '@helios/security/permission/CountDownLatchPermission';
-import { QueuePermission } from '@helios/security/permission/QueuePermission';
-import { CPMapPermission } from '@helios/security/permission/CPMapPermission';
-import { UserCodeNamespacePermission } from '@helios/security/permission/UserCodeNamespacePermission';
-import { VectorCollectionPermission } from '@helios/security/permission/VectorCollectionPermission';
+import { ActionConstants } from '@zenystx/core/security/permission/ActionConstants';
+import { MapPermission } from '@zenystx/core/security/permission/MapPermission';
+import { CachePermission } from '@zenystx/core/security/permission/CachePermission';
+import { MultiMapPermission } from '@zenystx/core/security/permission/MultiMapPermission';
+import { ListPermission } from '@zenystx/core/security/permission/ListPermission';
+import { SetPermission } from '@zenystx/core/security/permission/SetPermission';
+import { AtomicLongPermission } from '@zenystx/core/security/permission/AtomicLongPermission';
+import { SemaphorePermission } from '@zenystx/core/security/permission/SemaphorePermission';
+import { TopicPermission } from '@zenystx/core/security/permission/TopicPermission';
+import { LockPermission } from '@zenystx/core/security/permission/LockPermission';
+import { ExecutorServicePermission } from '@zenystx/core/security/permission/ExecutorServicePermission';
+import { FlakeIdGeneratorPermission } from '@zenystx/core/security/permission/FlakeIdGeneratorPermission';
+import { ReplicatedMapPermission } from '@zenystx/core/security/permission/ReplicatedMapPermission';
+import { AtomicReferencePermission } from '@zenystx/core/security/permission/AtomicReferencePermission';
+import { CountDownLatchPermission } from '@zenystx/core/security/permission/CountDownLatchPermission';
+import { QueuePermission } from '@zenystx/core/security/permission/QueuePermission';
+import { CPMapPermission } from '@zenystx/core/security/permission/CPMapPermission';
+import { UserCodeNamespacePermission } from '@zenystx/core/security/permission/UserCodeNamespacePermission';
+import { VectorCollectionPermission } from '@zenystx/core/security/permission/VectorCollectionPermission';
 
 describe('ActionConstantsTest', () => {
     it('getPermission_whenNonExistingService', () => {

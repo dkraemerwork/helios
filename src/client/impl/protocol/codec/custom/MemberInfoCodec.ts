@@ -12,16 +12,16 @@
  *   END_FRAME (addressMap list end)
  *   END_FRAME
  */
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
-import { MemberInfo } from '@helios/cluster/MemberInfo';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { MemberInfo } from '@zenystx/core/cluster/MemberInfo';
 import { AddressCodec } from './AddressCodec';
 import { MemberVersionCodec } from './MemberVersionCodec';
 import { EndpointQualifierCodec } from './EndpointQualifierCodec';
 import { MapCodec } from '../builtin/MapCodec';
 import { CodecUtil } from '../builtin/CodecUtil';
 import { FixedSizeTypesCodec, UUID_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
-import { EndpointQualifier } from '@helios/instance/EndpointQualifier';
-import { Address } from '@helios/cluster/Address';
+import { EndpointQualifier } from '@zenystx/core/instance/EndpointQualifier';
+import { Address } from '@zenystx/core/cluster/Address';
 
 const UUID_OFFSET = 0;
 const LITE_MEMBER_OFFSET = UUID_OFFSET + UUID_SIZE_IN_BYTES; // 17

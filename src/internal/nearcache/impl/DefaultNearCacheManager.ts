@@ -3,15 +3,15 @@
  *
  * Manages all NearCache instances by name.
  */
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { NearCacheManager } from '@helios/internal/nearcache/NearCacheManager';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { TaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
-import type { HeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import { DefaultNearCache } from '@helios/internal/nearcache/impl/DefaultNearCache';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import { NoOpTaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { NearCacheManager } from '@zenystx/core/internal/nearcache/NearCacheManager';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { TaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
 
 export class DefaultNearCacheManager implements NearCacheManager {
     private readonly _ss: SerializationService;

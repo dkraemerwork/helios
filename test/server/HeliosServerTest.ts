@@ -4,8 +4,8 @@
  * Block 7.7: CLI entrypoint + standalone server mode
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { HeliosServer } from '@helios/server/HeliosServer';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
+import { HeliosServer } from '@zenystx/core/server/HeliosServer';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
 
 describe('HeliosServer — lifecycle', () => {
     let server: HeliosServer;

@@ -1,5 +1,5 @@
 import { describe, it } from 'bun:test';
-import { MapPermission } from '@helios/security/permission/MapPermission';
+import { MapPermission } from '@zenystx/core/security/permission/MapPermission';
 import { CheckPermission, runMapPermissionTests } from './permissionTestSupport';
 
 const ALL_ACTIONS = ['put', 'read', 'remove', 'listen', 'lock', 'index', 'intercept', 'create', 'destroy'];

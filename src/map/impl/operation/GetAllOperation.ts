@@ -4,8 +4,8 @@
  * Batch-fetches values for the given keys from the partition's record store.
  * Sends an array of (key, value | null) pairs; null for missing keys.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
 
 export class GetAllOperation extends MapOperation {
     private readonly _keys: ReadonlyArray<Data>;

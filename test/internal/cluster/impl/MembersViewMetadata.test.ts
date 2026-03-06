@@ -2,8 +2,8 @@
  * Port of com.hazelcast.internal.cluster.impl.MembersViewMetadataTest
  */
 import { describe, test, expect } from 'bun:test';
-import { Address } from '@helios/cluster/Address';
-import { MembersViewMetadata } from '@helios/internal/cluster/impl/MembersViewMetadata';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MembersViewMetadata } from '@zenystx/core/internal/cluster/impl/MembersViewMetadata';
 
 describe('MembersViewMetadataTest', () => {
     function assertEqualAndHashCode(o1: MembersViewMetadata, o2: MembersViewMetadata): void {

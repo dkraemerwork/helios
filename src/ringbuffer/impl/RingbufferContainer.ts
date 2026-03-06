@@ -1,14 +1,14 @@
-import type { Data } from '@helios/internal/serialization/Data';
-import type { ObjectNamespace } from '@helios/internal/services/ObjectNamespace';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import { RingbufferConfig } from '@helios/config/RingbufferConfig';
-import { ArrayRingbuffer } from '@helios/ringbuffer/impl/ArrayRingbuffer';
-import { RingbufferExpirationPolicy } from '@helios/ringbuffer/impl/RingbufferExpirationPolicy';
-import { RingbufferWaitNotifyKey } from '@helios/ringbuffer/impl/RingbufferWaitNotifyKey';
-import { ReadResultSetImpl } from '@helios/ringbuffer/impl/ReadResultSetImpl';
-import { StaleSequenceException } from '@helios/ringbuffer/StaleSequenceException';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { ObjectNamespace } from '@zenystx/core/internal/services/ObjectNamespace';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import { RingbufferConfig } from '@zenystx/core/config/RingbufferConfig';
+import { ArrayRingbuffer } from '@zenystx/core/ringbuffer/impl/ArrayRingbuffer';
+import { RingbufferExpirationPolicy } from '@zenystx/core/ringbuffer/impl/RingbufferExpirationPolicy';
+import { RingbufferWaitNotifyKey } from '@zenystx/core/ringbuffer/impl/RingbufferWaitNotifyKey';
+import { ReadResultSetImpl } from '@zenystx/core/ringbuffer/impl/ReadResultSetImpl';
+import { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.RingbufferContainer}.

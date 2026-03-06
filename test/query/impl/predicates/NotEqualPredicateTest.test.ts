@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
-import { NotEqualPredicate } from '@helios/query/impl/predicates/NotEqualPredicate';
-import { EqualPredicate } from '@helios/query/impl/predicates/EqualPredicate';
-import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
+import { NotEqualPredicate } from '@zenystx/core/query/impl/predicates/NotEqualPredicate';
+import { EqualPredicate } from '@zenystx/core/query/impl/predicates/EqualPredicate';
+import type { QueryableEntry } from '@zenystx/core/query/impl/QueryableEntry';
 import { entry } from './PredicateTestUtils';
 
 /** Simple mock entry returning a specific attribute value. */

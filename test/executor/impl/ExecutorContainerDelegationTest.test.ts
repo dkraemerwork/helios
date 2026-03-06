@@ -11,13 +11,13 @@
  * - Member-targeted no-retry behavior remains intact after rewiring
  */
 import { describe, test, expect, spyOn } from 'bun:test';
-import { ExecuteCallableOperation, type TaskDescriptor } from '@helios/executor/impl/ExecuteCallableOperation.js';
-import { MemberCallableOperation } from '@helios/executor/impl/MemberCallableOperation.js';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
-import type { Operation, ResponseHandler } from '@helios/spi/impl/operationservice/Operation.js';
+import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/core/executor/impl/ExecuteCallableOperation.js';
+import { MemberCallableOperation } from '@zenystx/core/executor/impl/MemberCallableOperation.js';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
+import type { Operation, ResponseHandler } from '@zenystx/core/spi/impl/operationservice/Operation.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

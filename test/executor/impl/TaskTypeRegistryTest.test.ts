@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { TaskTypeRegistry, type TaskTypeDescriptor } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { UnknownTaskTypeException, TaskRegistrationMismatchException } from '@helios/executor/ExecutorExceptions.js';
+import { TaskTypeRegistry, type TaskTypeDescriptor } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { UnknownTaskTypeException, TaskRegistrationMismatchException } from '@zenystx/core/executor/ExecutorExceptions.js';
 
 describe('TaskTypeRegistry', () => {
     test('register and get round-trip', () => {

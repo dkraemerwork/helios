@@ -5,12 +5,12 @@
  * and task-lost semantics.
  */
 import { describe, it, expect } from 'bun:test';
-import { ExecuteCallableOperation } from '@helios/executor/impl/ExecuteCallableOperation.js';
-import { MemberCallableOperation } from '@helios/executor/impl/MemberCallableOperation.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
-import { ExecutorTaskLostException } from '@helios/executor/ExecutorExceptions.js';
-import type { Operation, ResponseHandler } from '@helios/spi/impl/operationservice/Operation.js';
+import { ExecuteCallableOperation } from '@zenystx/core/executor/impl/ExecuteCallableOperation.js';
+import { MemberCallableOperation } from '@zenystx/core/executor/impl/MemberCallableOperation.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
+import { ExecutorTaskLostException } from '@zenystx/core/executor/ExecutorExceptions.js';
+import type { Operation, ResponseHandler } from '@zenystx/core/spi/impl/operationservice/Operation.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

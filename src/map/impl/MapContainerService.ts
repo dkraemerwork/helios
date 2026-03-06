@@ -11,13 +11,13 @@
  * Port of the partition-container lookup path in
  * {@code com.hazelcast.map.impl.MapServiceContextImpl}.
  */
-import type { RecordStore } from '@helios/map/impl/recordstore/RecordStore';
-import { DefaultRecordStore } from '@helios/map/impl/recordstore/DefaultRecordStore';
-import type { MapDataStore } from '@helios/map/impl/mapstore/MapDataStore';
-import { EmptyMapDataStore } from '@helios/map/impl/mapstore/EmptyMapDataStore';
-import { MapStoreContext } from '@helios/map/impl/mapstore/MapStoreContext';
-import type { MapStoreConfig } from '@helios/config/MapStoreConfig';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
+import type { RecordStore } from '@zenystx/core/map/impl/recordstore/RecordStore';
+import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
+import type { MapDataStore } from '@zenystx/core/map/impl/mapstore/MapDataStore';
+import { EmptyMapDataStore } from '@zenystx/core/map/impl/mapstore/EmptyMapDataStore';
+import { MapStoreContext } from '@zenystx/core/map/impl/mapstore/MapStoreContext';
+import type { MapStoreConfig } from '@zenystx/core/config/MapStoreConfig';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
 
 export class MapContainerService {
     private readonly _stores = new Map<string, RecordStore>();
@@ -71,7 +71,7 @@ export class MapContainerService {
      * Iterates over all (key, value) entries across all partitions for the given map.
      * Used by MapQueryEngine to perform partition-local full scans.
      */
-    *getAllEntries(mapName: string): IterableIterator<readonly [import('@helios/internal/serialization/Data').Data, import('@helios/internal/serialization/Data').Data]> {
+    *getAllEntries(mapName: string): IterableIterator<readonly [import('@zenystx/core/internal/serialization/Data').Data, import('@zenystx/core/internal/serialization/Data').Data]> {
         const prefix = `${mapName}:`;
         for (const [storeKey, store] of this._stores) {
             if (storeKey.startsWith(prefix)) {

@@ -5,11 +5,11 @@
  * OperationService.invokeOnPartition() instead of calling RecordStore directly.
  */
 import { describe, test, expect, spyOn } from 'bun:test';
-import { MapProxy } from '@helios/map/impl/MapProxy';
-import { DefaultRecordStore } from '@helios/map/impl/recordstore/DefaultRecordStore';
-import { MapContainerService } from '@helios/map/impl/MapContainerService';
-import { TestNodeEngine } from '@helios/test-support/TestNodeEngine';
-import { MapService } from '@helios/map/impl/MapService';
+import { MapProxy } from '@zenystx/core/map/impl/MapProxy';
+import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
+import { MapContainerService } from '@zenystx/core/map/impl/MapContainerService';
+import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+import { MapService } from '@zenystx/core/map/impl/MapService';
 
 function makeFixture() {
     const ne = new TestNodeEngine();

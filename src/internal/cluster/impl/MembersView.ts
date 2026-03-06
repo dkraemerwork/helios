@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.internal.cluster.impl.MembersView}.
  * Container for a member list + version.
  */
-import { MemberImpl } from '@helios/cluster/impl/MemberImpl';
-import { MemberInfo } from '@helios/cluster/MemberInfo';
-import { Address } from '@helios/cluster/Address';
-import { MemberMap } from '@helios/internal/cluster/impl/MemberMap';
+import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import { MemberInfo } from '@zenystx/core/cluster/MemberInfo';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MemberMap } from '@zenystx/core/internal/cluster/impl/MemberMap';
 
 export class MembersView {
     private readonly _version: number;

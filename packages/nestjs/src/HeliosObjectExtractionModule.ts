@@ -31,7 +31,7 @@ import {
     getMultiMapToken,
     getReplicatedMapToken,
 } from './decorators/inject-distributed-object.decorator';
-import type { HeliosInstance } from '@helios/core/core/HeliosInstance';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
 
 export interface HeliosObjectExtractionOptions {
     /** Named map token registrations: token → map name (explicit token style). */

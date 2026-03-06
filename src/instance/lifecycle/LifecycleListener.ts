@@ -1,4 +1,4 @@
-import type { LifecycleEvent } from '@helios/instance/lifecycle/LifecycleEvent';
+import type { LifecycleEvent } from '@zenystx/core/instance/lifecycle/LifecycleEvent';
 
 /**
  * Listener for HeliosInstance lifecycle state changes.

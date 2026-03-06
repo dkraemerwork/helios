@@ -4,12 +4,12 @@
  * NearCacheRecordStore for OBJECT in-memory-format.
  * Memory cost is always 0 (objects are not measured in heap-cost terms).
  */
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import type { HeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import { BaseHeapNearCacheRecordStore } from '@helios/internal/nearcache/impl/store/BaseHeapNearCacheRecordStore';
-import { NearCacheObjectRecord } from '@helios/internal/nearcache/impl/record/NearCacheObjectRecord';
-import { TIME_NOT_SET } from '@helios/internal/nearcache/NearCacheRecord';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import { BaseHeapNearCacheRecordStore } from '@zenystx/core/internal/nearcache/impl/store/BaseHeapNearCacheRecordStore';
+import { NearCacheObjectRecord } from '@zenystx/core/internal/nearcache/impl/record/NearCacheObjectRecord';
+import { TIME_NOT_SET } from '@zenystx/core/internal/nearcache/NearCacheRecord';
 
 export class NearCacheObjectRecordStore<K, V> extends BaseHeapNearCacheRecordStore<K, V, NearCacheObjectRecord<V>> {
 

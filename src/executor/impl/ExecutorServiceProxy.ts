@@ -9,23 +9,23 @@
  * @see MemberCallableOperation
  */
 
-import type { IExecutorService, LocalExecutorStats, TaskTypeRegistration } from '@helios/executor/IExecutorService.js';
-import type { TaskCallable, InlineTaskCallable } from '@helios/executor/TaskCallable.js';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
-import type { NodeEngine } from '@helios/spi/NodeEngine.js';
-import type { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import type { Member } from '@helios/cluster/Member.js';
-import { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFuture.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecuteCallableOperation, type TaskDescriptor } from '@helios/executor/impl/ExecuteCallableOperation.js';
-import { MemberCallableOperation } from '@helios/executor/impl/MemberCallableOperation.js';
-import { CancellationOperation } from '@helios/executor/impl/CancellationOperation.js';
+import type { IExecutorService, LocalExecutorStats, TaskTypeRegistration } from '@zenystx/core/executor/IExecutorService.js';
+import type { TaskCallable, InlineTaskCallable } from '@zenystx/core/executor/TaskCallable.js';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine.js';
+import type { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import type { Member } from '@zenystx/core/cluster/Member.js';
+import { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/core/executor/impl/ExecuteCallableOperation.js';
+import { MemberCallableOperation } from '@zenystx/core/executor/impl/MemberCallableOperation.js';
+import { CancellationOperation } from '@zenystx/core/executor/impl/CancellationOperation.js';
 import {
     ExecutorRejectedExecutionException,
     ExecutorTaskLostException,
     ExecutorTaskTimeoutException,
     UnknownTaskTypeException,
-} from '@helios/executor/ExecutorExceptions.js';
+} from '@zenystx/core/executor/ExecutorExceptions.js';
 const SERVICE_NAME = 'helios:executor';
 
 export class ExecutorServiceProxy implements IExecutorService {
@@ -256,7 +256,7 @@ export class ExecutorServiceProxy implements IExecutorService {
         return resultFuture;
     }
 
-    private _deserializeResult<T>(resultData: import('@helios/internal/serialization/Data.js').Data | null): T {
+    private _deserializeResult<T>(resultData: import('@zenystx/core/internal/serialization/Data.js').Data | null): T {
         if (!resultData) return null as T;
         return this._nodeEngine.toObject<T>(resultData) as T;
     }

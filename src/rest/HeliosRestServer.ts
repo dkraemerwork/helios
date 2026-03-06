@@ -1,5 +1,5 @@
-import { RestApiConfig } from '@helios/config/RestApiConfig';
-import { RestApiFilter } from '@helios/rest/RestApiFilter';
+import { RestApiConfig } from '@zenystx/core/config/RestApiConfig';
+import { RestApiFilter } from '@zenystx/core/rest/RestApiFilter';
 
 type Handler = (req: Request) => Response | Promise<Response>;
 

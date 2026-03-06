@@ -9,14 +9,14 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { CancellationOperation } from '@helios/executor/impl/CancellationOperation.js';
-import { ShutdownOperation } from '@helios/executor/impl/ShutdownOperation.js';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService.js';
-import { ExecutorServiceProxy } from '@helios/executor/impl/ExecutorServiceProxy.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import { ExecutorTaskLostException } from '@helios/executor/ExecutorExceptions.js';
-import type { Operation } from '@helios/spi/impl/operationservice/Operation.js';
+import { CancellationOperation } from '@zenystx/core/executor/impl/CancellationOperation.js';
+import { ShutdownOperation } from '@zenystx/core/executor/impl/ShutdownOperation.js';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { ExecutorServiceProxy } from '@zenystx/core/executor/impl/ExecutorServiceProxy.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import { ExecutorTaskLostException } from '@zenystx/core/executor/ExecutorExceptions.js';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -286,8 +286,8 @@ describe('ExecutorContainerService — cancel result envelope', () => {
 
 function createFakeNodeEngine(
     onInvoke?: (serviceName: string, op: unknown) => void,
-): import('@helios/spi/NodeEngine.js').NodeEngine {
-    const { InvocationFuture } = require('@helios/spi/impl/operationservice/InvocationFuture.js');
+): import('@zenystx/core/spi/NodeEngine.js').NodeEngine {
+    const { InvocationFuture } = require('@zenystx/core/spi/impl/operationservice/InvocationFuture.js');
     const invokeStub = (sn: string, op: unknown) => {
         onInvoke?.(sn, op);
         return new InvocationFuture();
@@ -309,5 +309,5 @@ function createFakeNodeEngine(
             getMembers: () => [],
         }),
         toObject: () => null,
-    } as unknown as import('@helios/spi/NodeEngine.js').NodeEngine;
+    } as unknown as import('@zenystx/core/spi/NodeEngine.js').NodeEngine;
 }

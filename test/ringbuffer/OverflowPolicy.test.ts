@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { OverflowPolicy } from '@helios/ringbuffer/OverflowPolicy';
+import { OverflowPolicy } from '@zenystx/core/ringbuffer/OverflowPolicy';
 
 describe('OverflowPolicyTest', () => {
     test('test', () => {

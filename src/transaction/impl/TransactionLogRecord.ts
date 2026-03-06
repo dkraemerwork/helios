@@ -4,7 +4,7 @@
  * Represents a single change made within a transaction (e.g. a map.put).
  * Key-aware records can be overwritten by later records with the same key.
  */
-import type { Operation } from '@helios/spi/impl/operationservice/Operation';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
 
 export interface TransactionLogRecord {
     /**

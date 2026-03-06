@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.cache.impl.ICacheRecordStore}.
  * Per-partition key→value cache storage contract.
  */
-import type { Data } from '@helios/internal/serialization/Data';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 export interface ICacheRecordStore {
     /**

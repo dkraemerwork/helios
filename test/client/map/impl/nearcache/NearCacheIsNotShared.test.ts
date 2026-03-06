@@ -5,11 +5,11 @@
  * (or different manager instances) even when they share the same configured name.
  */
 import { describe, test, expect } from 'bun:test';
-import { NearCachedClientMapProxy } from '@helios/client/map/impl/nearcache/NearCachedClientMapProxy';
-import { NOT_CACHED } from '@helios/internal/nearcache/NearCache';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import { NearCachedClientMapProxy } from '@zenystx/core/client/map/impl/nearcache/NearCachedClientMapProxy';
+import { NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
 
 // ── helper ────────────────────────────────────────────────────────────────────
 

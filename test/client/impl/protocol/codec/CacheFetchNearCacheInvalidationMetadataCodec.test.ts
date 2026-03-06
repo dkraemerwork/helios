@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { CacheFetchNearCacheInvalidationMetadataCodec } from '@helios/client/impl/protocol/codec/CacheFetchNearCacheInvalidationMetadataCodec';
+import { CacheFetchNearCacheInvalidationMetadataCodec } from '@zenystx/core/client/impl/protocol/codec/CacheFetchNearCacheInvalidationMetadataCodec';
 
 const UUID_A = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const UUID_B = '11111111-2222-3333-4444-555555555555';

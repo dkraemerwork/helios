@@ -1,15 +1,15 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import type { BackupAwareOperation } from '@helios/spi/impl/operationservice/BackupAwareOperation';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { BackupAwareOperation } from '@zenystx/core/spi/impl/operationservice/BackupAwareOperation';
 import {
     OperationBackupHandler,
     type BackupSender,
     type ReplicaVersionManager,
     type PartitionProvider,
-} from '@helios/spi/impl/operationservice/OperationBackupHandler';
-import type { InternalPartition } from '@helios/internal/partition/InternalPartition';
-import { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
-import { Address } from '@helios/cluster/Address';
+} from '@zenystx/core/spi/impl/operationservice/OperationBackupHandler';
+import type { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
+import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
+import { Address } from '@zenystx/core/cluster/Address';
 
 /**
  * Tests for OperationBackupHandler (Block 16.D2).

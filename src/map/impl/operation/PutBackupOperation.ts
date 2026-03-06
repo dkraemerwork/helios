@@ -4,8 +4,8 @@
  * Backup operation that applies a put (key → value) on the backup RecordStore.
  * Used by PutOperation, SetOperation, and PutIfAbsentOperation.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
 
 export class PutBackupOperation extends MapOperation {
     private readonly _key: Data;

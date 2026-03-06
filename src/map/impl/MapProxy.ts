@@ -17,34 +17,34 @@
  *
  * Port of com.hazelcast.map.impl.proxy.MapProxyImpl.
  */
-import type { IMap } from '@helios/map/IMap';
-import type { RecordStore } from '@helios/map/impl/recordstore/RecordStore';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
-import type { MapContainerService } from '@helios/map/impl/MapContainerService';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { Predicate } from '@helios/query/Predicate';
-import type { Aggregator } from '@helios/aggregation/Aggregator';
-import type { EntryListener } from '@helios/map/EntryListener';
-import { EntryEventImpl } from '@helios/map/EntryListener';
-import type { QueryableEntry } from '@helios/query/impl/QueryableEntry';
-import type { MapDataStore } from '@helios/map/impl/mapstore/MapDataStore';
-import { EmptyMapDataStore } from '@helios/map/impl/mapstore/EmptyMapDataStore';
-import type { MapStoreConfig } from '@helios/config/MapStoreConfig';
-import type { MapConfig } from '@helios/config/MapConfig';
-import type { IndexConfig } from '@helios/config/IndexConfig';
-import { IndexRegistryImpl } from '@helios/query/impl/IndexRegistryImpl';
-import type { SortedIndex } from '@helios/query/impl/SortedIndex';
-import { IndexMatchHint } from '@helios/query/impl/QueryContext';
-import { canonicalizeAttribute } from '@helios/query/impl/IndexUtils';
-import { MapService } from '@helios/map/impl/MapService';
-import type { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { PutOperation } from '@helios/map/impl/operation/PutOperation';
-import { GetOperation } from '@helios/map/impl/operation/GetOperation';
-import { RemoveOperation } from '@helios/map/impl/operation/RemoveOperation';
-import { DeleteOperation } from '@helios/map/impl/operation/DeleteOperation';
-import { SetOperation } from '@helios/map/impl/operation/SetOperation';
-import { PutIfAbsentOperation } from '@helios/map/impl/operation/PutIfAbsentOperation';
-import { ClearOperation } from '@helios/map/impl/operation/ClearOperation';
+import type { IMap } from '@zenystx/core/map/IMap';
+import type { RecordStore } from '@zenystx/core/map/impl/recordstore/RecordStore';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import type { MapContainerService } from '@zenystx/core/map/impl/MapContainerService';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Predicate } from '@zenystx/core/query/Predicate';
+import type { Aggregator } from '@zenystx/core/aggregation/Aggregator';
+import type { EntryListener } from '@zenystx/core/map/EntryListener';
+import { EntryEventImpl } from '@zenystx/core/map/EntryListener';
+import type { QueryableEntry } from '@zenystx/core/query/impl/QueryableEntry';
+import type { MapDataStore } from '@zenystx/core/map/impl/mapstore/MapDataStore';
+import { EmptyMapDataStore } from '@zenystx/core/map/impl/mapstore/EmptyMapDataStore';
+import type { MapStoreConfig } from '@zenystx/core/config/MapStoreConfig';
+import type { MapConfig } from '@zenystx/core/config/MapConfig';
+import type { IndexConfig } from '@zenystx/core/config/IndexConfig';
+import { IndexRegistryImpl } from '@zenystx/core/query/impl/IndexRegistryImpl';
+import type { SortedIndex } from '@zenystx/core/query/impl/SortedIndex';
+import { IndexMatchHint } from '@zenystx/core/query/impl/QueryContext';
+import { canonicalizeAttribute } from '@zenystx/core/query/impl/IndexUtils';
+import { MapService } from '@zenystx/core/map/impl/MapService';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { PutOperation } from '@zenystx/core/map/impl/operation/PutOperation';
+import { GetOperation } from '@zenystx/core/map/impl/operation/GetOperation';
+import { RemoveOperation } from '@zenystx/core/map/impl/operation/RemoveOperation';
+import { DeleteOperation } from '@zenystx/core/map/impl/operation/DeleteOperation';
+import { SetOperation } from '@zenystx/core/map/impl/operation/SetOperation';
+import { PutIfAbsentOperation } from '@zenystx/core/map/impl/operation/PutIfAbsentOperation';
+import { ClearOperation } from '@zenystx/core/map/impl/operation/ClearOperation';
 
 /** Registration record stored per listenerId. */
 interface ListenerEntry<K, V> {

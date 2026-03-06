@@ -2,16 +2,16 @@
  * Port of com.hazelcast.cluster.memberselector.MemberSelectorsTest
  */
 import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
-import type { Member } from '@helios/cluster/Member';
+import type { Member } from '@zenystx/core/cluster/Member';
 import {
     DATA_MEMBER_SELECTOR,
     LITE_MEMBER_SELECTOR,
     LOCAL_MEMBER_SELECTOR,
     NON_LOCAL_MEMBER_SELECTOR,
     MemberSelectors,
-} from '@helios/cluster/memberselector/MemberSelectors';
-import type { Address } from '@helios/cluster/Address';
-import type { MemberVersion } from '@helios/version/MemberVersion';
+} from '@zenystx/core/cluster/memberselector/MemberSelectors';
+import type { Address } from '@zenystx/core/cluster/Address';
+import type { MemberVersion } from '@zenystx/core/version/MemberVersion';
 
 // Minimal mock member for selectors testing
 function makeMockMember(opts: { localMember?: boolean; isLiteMember?: boolean } = {}): Member {

@@ -2,7 +2,7 @@
  * Port of com.hazelcast.cluster.impl.VectorClockTest
  */
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { VectorClock } from '@helios/cluster/impl/VectorClock';
+import { VectorClock } from '@zenystx/core/cluster/impl/VectorClock';
 
 describe('VectorClockTest', () => {
     let uuidParams: string[];

@@ -1,4 +1,4 @@
-import type { LifecycleListener } from '@helios/instance/lifecycle/LifecycleListener';
+import type { LifecycleListener } from '@zenystx/core/instance/lifecycle/LifecycleListener';
 
 /**
  * LifecycleService interface — manages instance lifecycle state and listener notification.

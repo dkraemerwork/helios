@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.util.counters.SwCounter}.
  * A single-writer counter. Bun is single-threaded so no volatile/VarHandle needed.
  */
-import type { Counter } from '@helios/internal/util/counters/Counter';
+import type { Counter } from '@zenystx/core/internal/util/counters/Counter';
 
 export class SwCounter implements Counter {
     private _value: bigint;

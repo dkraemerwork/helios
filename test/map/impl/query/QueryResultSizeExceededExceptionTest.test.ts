@@ -2,7 +2,7 @@
  * Port of com.hazelcast.map.impl.query.QueryResultSizeExceededExceptionTest
  */
 import { describe, it, expect } from 'bun:test';
-import { QueryResultSizeExceededException } from '@helios/map/QueryResultSizeExceededException';
+import { QueryResultSizeExceededException } from '@zenystx/core/map/QueryResultSizeExceededException';
 
 describe('QueryResultSizeExceededExceptionTest', () => {
     it('testStringConstructor', () => {

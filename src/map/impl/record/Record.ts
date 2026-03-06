@@ -4,7 +4,7 @@
  * Generic interface for a map record value with metadata (stats, TTL, hits, etc.).
  */
 import type { RecordReaderWriter } from './RecordReaderWriter';
-import { SystemClock } from '@helios/internal/util/time/Clock';
+import { SystemClock } from '@zenystx/core/internal/util/time/Clock';
 
 export interface Record<V> {
     getValue(): V;

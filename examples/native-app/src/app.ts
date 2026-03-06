@@ -1,176 +1,455 @@
 #!/usr/bin/env bun
 /**
- * Helios Distributed Demo App
+ * Helios distributed demo app.
  *
- * Starts a single Helios instance with TCP clustering and the built-in
- * HeliosRestServer for `/hazelcast/*` endpoints.
+ * Starts one Helios member with:
+ * - TCP clustering
+ * - the built-in REST server for map/queue operations
+ * - a lightweight demo control server for topic publish/inspect endpoints
  *
- * Run two instances to see distributed replication + near-cache in action:
- *
- *   Terminal 1:  bun run src/app.ts --name node1 --tcp-port 5701 --rest-port 8081
- *   Terminal 2:  bun run src/app.ts --name node2 --tcp-port 5702 --rest-port 8082 --peer localhost:5701
- *
- * Then use curl:
- *   curl -X POST http://localhost:8081/hazelcast/rest/maps/demo/user1 \
- *        -H 'Content-Type: application/json' -d '{"name":"Alice"}'
- *   curl http://localhost:8082/hazelcast/rest/maps/demo/user1      # reads from node2
- *   curl http://localhost:8081/hazelcast/health/ready               # K8s readiness probe
- *   curl http://localhost:8081/hazelcast/rest/cluster               # cluster info
+ * This is intended for local multi-node playgrounds and Docker Compose demos.
  */
-import { Helios } from '@helios/Helios';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { RestEndpointGroup } from '@helios/rest/RestEndpointGroup';
+import { Helios } from "@zenystx/core/Helios";
+import type { HeliosInstanceImpl } from "@zenystx/core/instance/impl/HeliosInstanceImpl";
+import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
+import { MapConfig } from "@zenystx/core/config/MapConfig";
+import { NearCacheConfig } from "@zenystx/core/config/NearCacheConfig";
+import { RestEndpointGroup } from "@zenystx/core/rest/RestEndpointGroup";
+import type { Message } from "@zenystx/core/topic/Message";
 
-// ── CLI argument parsing ────────────────────────────────────────────────
+interface AppOptions {
+  name: string;
+  tcpPort: number;
+  restPort: number;
+  controlPort: number;
+  expectedClusterSize: number | null;
+  restGroups: RestEndpointGroup[];
+  peers: string[];
+  observedTopics: string[];
+}
 
-function parseArgs(args: string[]): {
-    name: string;
-    tcpPort: number;
-    restPort: number;
-    restGroups: RestEndpointGroup[];
-    peers: string[];
-} {
-    const result = {
-        name: 'helios',
-        tcpPort: 5701,
-        restPort: 8080,
-        restGroups: [
-            RestEndpointGroup.HEALTH_CHECK,
-            RestEndpointGroup.CLUSTER_READ,
-            RestEndpointGroup.DATA,
-        ] as RestEndpointGroup[],
-        peers: [] as string[],
-    };
+interface DemoTopicMessage {
+  topicName: string;
+  payload: unknown;
+  publishTime: number;
+  publishingMemberId: string | null;
+  receivedAt: number;
+}
 
-    for (let i = 0; i < args.length; i++) {
-        const arg = args[i];
-        const next = args[i + 1];
-        switch (arg) {
-            case '--name':
-                result.name = next;
-                i++;
-                break;
-            case '--tcp-port':
-                result.tcpPort = parseInt(next, 10);
-                i++;
-                break;
-            case '--rest-port':
-                result.restPort = parseInt(next, 10);
-                i++;
-                break;
-            case '--rest-groups':
-                result.restGroups = next.split(',').map((g) => g.trim() as RestEndpointGroup);
-                i++;
-                break;
-            case '--peer':
-                result.peers.push(next);
-                i++;
-                break;
-            case '--help':
-                console.log(`
-Helios Distributed Demo App
+const MAX_TOPIC_MESSAGES = 50;
+const DEFAULT_REST_GROUPS = [
+  RestEndpointGroup.HEALTH_CHECK,
+  RestEndpointGroup.CLUSTER_READ,
+  RestEndpointGroup.DATA,
+] as RestEndpointGroup[];
+
+function parseIntOrDefault(
+  value: string | undefined,
+  fallback: number,
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function parseOptionalInt(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === "") {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseList(value: string | undefined): string[] {
+  if (value === undefined || value.trim() === "") {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function parseRestGroups(value: string | undefined): RestEndpointGroup[] {
+  const values = parseList(value);
+  if (values.length === 0) {
+    return [...DEFAULT_REST_GROUPS];
+  }
+  return values.map((entry) => entry as RestEndpointGroup);
+}
+
+function clusterMembers(instance: HeliosInstanceImpl): Array<{
+  uuid: string;
+  address: string;
+  localMember: boolean;
+}> {
+  return instance
+    .getCluster()
+    .getMembers()
+    .map((member) => ({
+      uuid: member.getUuid(),
+      address: `${member.getAddress().getHost()}:${member.getAddress().getPort()}`,
+      localMember: member.localMember(),
+    }));
+}
+
+function parseArgs(args: string[]): AppOptions {
+  const result: AppOptions = {
+    name: process.env["HELIOS_NAME"] ?? "helios",
+    tcpPort: parseIntOrDefault(process.env["HELIOS_TCP_PORT"], 5701),
+    restPort: parseIntOrDefault(process.env["HELIOS_REST_PORT"], 8080),
+    controlPort: parseIntOrDefault(process.env["HELIOS_CONTROL_PORT"], 9090),
+    expectedClusterSize: parseOptionalInt(
+      process.env["HELIOS_EXPECTED_CLUSTER_SIZE"],
+    ),
+    restGroups: parseRestGroups(process.env["HELIOS_REST_GROUPS"]),
+    peers: parseList(process.env["HELIOS_PEERS"]),
+    observedTopics: parseList(process.env["HELIOS_OBSERVED_TOPICS"]),
+  };
+
+  if (result.observedTopics.length === 0) {
+    result.observedTopics = ["demo-events"];
+  }
+
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    const next = args[index + 1];
+    switch (arg) {
+      case "--name":
+        result.name = next;
+        index++;
+        break;
+      case "--tcp-port":
+        result.tcpPort = parseIntOrDefault(next, result.tcpPort);
+        index++;
+        break;
+      case "--rest-port":
+        result.restPort = parseIntOrDefault(next, result.restPort);
+        index++;
+        break;
+      case "--control-port":
+        result.controlPort = parseIntOrDefault(next, result.controlPort);
+        index++;
+        break;
+      case "--expected-cluster-size":
+        result.expectedClusterSize = parseOptionalInt(next);
+        index++;
+        break;
+      case "--rest-groups":
+        result.restGroups = parseRestGroups(next);
+        index++;
+        break;
+      case "--peer":
+        result.peers.push(next);
+        index++;
+        break;
+      case "--observed-topic":
+        result.observedTopics.push(next);
+        index++;
+        break;
+      case "--help":
+        console.log(`
+Helios distributed demo app
 
 Usage:
   bun run src/app.ts [options]
 
 Options:
-  --name <name>              Instance name (default: helios)
-  --tcp-port <port>          TCP cluster port (default: 5701)
-  --rest-port <port>         REST API port (default: 8080)
-  --rest-groups <g1,g2,...>  Comma-separated REST groups to enable
-                             (default: HEALTH_CHECK,CLUSTER_READ,DATA)
-  --peer <host:port>         Connect to peer (repeatable)
-  --help                     Show this help
-`);
-                process.exit(0);
-        }
-    }
+  --name <name>                    Instance name
+  --tcp-port <port>                TCP cluster port
+  --rest-port <port>               Built-in Helios REST port
+  --control-port <port>            Demo control server port
+  --expected-cluster-size <n>      Wait until this many members are visible
+  --rest-groups <g1,g2,...>        Enabled REST endpoint groups
+  --peer <host:port>               Cluster seed member (repeatable)
+  --observed-topic <name>          Topic to subscribe to on startup (repeatable)
+  --help                           Show this help
 
-    return result;
+Environment variables:
+  HELIOS_NAME
+  HELIOS_TCP_PORT
+  HELIOS_REST_PORT
+  HELIOS_CONTROL_PORT
+  HELIOS_EXPECTED_CLUSTER_SIZE
+  HELIOS_REST_GROUPS
+  HELIOS_PEERS                     Comma-separated seed members
+  HELIOS_OBSERVED_TOPICS           Comma-separated startup topic listeners
+`);
+        process.exit(0);
+    }
+  }
+
+  result.observedTopics = Array.from(new Set(result.observedTopics));
+  return result;
 }
 
-// ── Main ────────────────────────────────────────────────────────────────
+function createJsonResponse(payload: unknown, init?: ResponseInit): Response {
+  return Response.json(payload, init);
+}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  const body = await request.text();
+  if (body.trim() === "") {
+    return null;
+  }
+  return JSON.parse(body);
+}
+
+function createTopicBridge(instance: HeliosInstanceImpl, nodeName: string) {
+  const observedTopics = new Map<string, string>();
+  const topicMessages = new Map<string, DemoTopicMessage[]>();
+
+  const appendMessage = (
+    topicName: string,
+    message: Message<unknown>,
+  ): void => {
+    const messages = topicMessages.get(topicName) ?? [];
+    messages.push({
+      topicName,
+      payload: message.getMessageObject(),
+      publishTime: message.getPublishTime(),
+      publishingMemberId: message.getPublishingMemberId(),
+      receivedAt: Date.now(),
+    });
+    if (messages.length > MAX_TOPIC_MESSAGES) {
+      messages.splice(0, messages.length - MAX_TOPIC_MESSAGES);
+    }
+    topicMessages.set(topicName, messages);
+    console.log(
+      `[${nodeName}] topic '${topicName}' received ${JSON.stringify(message.getMessageObject())}`,
+    );
+  };
+
+  const ensureObserved = (topicName: string): void => {
+    if (observedTopics.has(topicName)) {
+      return;
+    }
+    const registrationId = instance
+      .getTopic<unknown>(topicName)
+      .addMessageListener((message) => appendMessage(topicName, message));
+    observedTopics.set(topicName, registrationId);
+    if (!topicMessages.has(topicName)) {
+      topicMessages.set(topicName, []);
+    }
+  };
+
+  const destroy = (): void => {
+    for (const [topicName, registrationId] of Array.from(
+      observedTopics.entries(),
+    )) {
+      instance.getTopic(topicName).removeMessageListener(registrationId);
+    }
+    observedTopics.clear();
+  };
+
+  const publish = async (
+    topicName: string,
+    payload: unknown,
+  ): Promise<void> => {
+    ensureObserved(topicName);
+    await instance.getTopic(topicName).publish(payload);
+  };
+
+  const getMessages = (topicName: string): DemoTopicMessage[] => {
+    ensureObserved(topicName);
+    return [...(topicMessages.get(topicName) ?? [])];
+  };
+
+  const getObservedTopics = (): string[] => Array.from(observedTopics.keys());
+
+  return {
+    destroy,
+    ensureObserved,
+    getMessages,
+    getObservedTopics,
+    publish,
+  };
+}
+
+function startControlServer(
+  instance: HeliosInstanceImpl,
+  nodeName: string,
+  port: number,
+  topicBridge: ReturnType<typeof createTopicBridge>,
+) {
+  return Bun.serve({
+    port,
+    async fetch(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      const path = url.pathname;
+
+      if (request.method === "GET" && path === "/demo") {
+        return createJsonResponse({
+          nodeName,
+          tcpPeerCount: instance.getTcpPeerCount(),
+          clusterMembers: clusterMembers(instance),
+          observedTopics: topicBridge.getObservedTopics(),
+        });
+      }
+
+      if (request.method === "GET" && path === "/demo/cluster") {
+        return createJsonResponse({
+          nodeName,
+          tcpPeerCount: instance.getTcpPeerCount(),
+          clusterMembers: clusterMembers(instance),
+        });
+      }
+
+      if (request.method === "GET" && path === "/demo/topics") {
+        return createJsonResponse({
+          observedTopics: topicBridge.getObservedTopics().map((topicName) => ({
+            topicName,
+            messageCount: topicBridge.getMessages(topicName).length,
+          })),
+        });
+      }
+
+      const publishMatch = path.match(/^\/demo\/topics\/([^/]+)\/publish$/);
+      if (request.method === "POST" && publishMatch !== null) {
+        const topicName = decodeURIComponent(publishMatch[1]);
+        const payload = await readJsonBody(request);
+        await topicBridge.publish(topicName, payload);
+        return createJsonResponse({ ok: true, topicName, payload });
+      }
+
+      const observeMatch = path.match(/^\/demo\/topics\/([^/]+)\/observe$/);
+      if (request.method === "POST" && observeMatch !== null) {
+        const topicName = decodeURIComponent(observeMatch[1]);
+        topicBridge.ensureObserved(topicName);
+        return createJsonResponse({ ok: true, topicName });
+      }
+
+      const messagesMatch = path.match(/^\/demo\/topics\/([^/]+)\/messages$/);
+      if (request.method === "GET" && messagesMatch !== null) {
+        const topicName = decodeURIComponent(messagesMatch[1]);
+        return createJsonResponse({
+          topicName,
+          messages: topicBridge.getMessages(topicName),
+        });
+      }
+
+      return createJsonResponse({ error: "Not Found" }, { status: 404 });
+    },
+    error(error) {
+      return createJsonResponse(
+        { error: error instanceof Error ? error.message : String(error) },
+        { status: 500 },
+      );
+    },
+  });
+}
+
+async function waitForExpectedClusterSize(
+  instance: HeliosInstanceImpl,
+  expectedClusterSize: number,
+): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    if (instance.getCluster().getMembers().length >= expectedClusterSize) {
+      return;
+    }
+    await Bun.sleep(100);
+  }
+  throw new Error(
+    `Timed out waiting for cluster size ${expectedClusterSize}; saw ${instance.getCluster().getMembers().length}`,
+  );
+}
 
 async function main() {
-    const opts = parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2));
 
-    // Build Helios config
-    const config = new HeliosConfig(opts.name);
-    config.getNetworkConfig()
-        .setPort(opts.tcpPort)
-        .getJoin()
-        .getTcpIpConfig()
-        .setEnabled(true);
+  const config = new HeliosConfig(options.name);
+  config
+    .getNetworkConfig()
+    .setPort(options.tcpPort)
+    .getJoin()
+    .getTcpIpConfig()
+    .setEnabled(true);
 
-    // Enable built-in REST server
-    config.getNetworkConfig()
-        .getRestApiConfig()
-        .setEnabled(true)
-        .setPort(opts.restPort)
-        .disableAllGroups()
-        .enableGroups(...opts.restGroups);
+  config
+    .getNetworkConfig()
+    .getRestApiConfig()
+    .setEnabled(true)
+    .setPort(options.restPort)
+    .disableAllGroups()
+    .enableGroups(...options.restGroups);
 
-    // Add peers
-    for (const peer of opts.peers) {
-        config.getNetworkConfig()
-            .getJoin()
-            .getTcpIpConfig()
-            .addMember(peer);
-    }
+  for (const peer of options.peers) {
+    config.getNetworkConfig().getJoin().getTcpIpConfig().addMember(peer);
+  }
 
-    // Configure "demo" map with near-cache
-    const demoMapConfig = new MapConfig('demo');
-    demoMapConfig.setNearCacheConfig(new NearCacheConfig());
-    config.addMapConfig(demoMapConfig);
+  const demoMapConfig = new MapConfig("demo");
+  demoMapConfig.setNearCacheConfig(new NearCacheConfig());
+  config.addMapConfig(demoMapConfig);
 
-    // Start Helios instance (REST server starts automatically)
-    const instance = await Helios.newInstance(config);
-    const restPort = instance.getRestServer().getBoundPort();
-    console.log(`[${opts.name}] Helios instance started (TCP: ${opts.tcpPort}, REST: ${restPort})`);
+  const instance = (await Helios.newInstance(config)) as HeliosInstanceImpl;
+  const restPort = instance.getRestServer().getBoundPort();
+  const topicBridge = createTopicBridge(instance, options.name);
+  for (const topicName of options.observedTopics) {
+    topicBridge.ensureObserved(topicName);
+  }
+  const controlServer = startControlServer(
+    instance,
+    options.name,
+    options.controlPort,
+    topicBridge,
+  );
 
-    // Wait for peer connections
-    if (opts.peers.length > 0) {
-        console.log(`[${opts.name}] Connecting to peers: ${opts.peers.join(', ')}...`);
-        const deadline = Date.now() + 5000;
-        while (instance.getTcpPeerCount() < 1 && Date.now() < deadline) {
-            await Bun.sleep(50);
-        }
-        if (instance.getTcpPeerCount() > 0) {
-            console.log(`[${opts.name}] Connected to ${instance.getTcpPeerCount()} peer(s)`);
-        } else {
-            console.log(`[${opts.name}] Warning: no peers connected yet (they may join later)`);
-        }
-    }
+  console.log(
+    `[${options.name}] started (tcp=${options.tcpPort}, rest=${restPort}, control=${options.controlPort})`,
+  );
+  if (options.peers.length > 0) {
+    console.log(`[${options.name}] seed members: ${options.peers.join(", ")}`);
+  }
 
-    console.log(`
-[${opts.name}] Ready! REST endpoints on http://localhost:${restPort}:
-  GET    /hazelcast/health/ready                             — K8s readiness probe
-  GET    /hazelcast/health                                   — full health JSON
-  GET    /hazelcast/rest/cluster                             — cluster info
-  GET    /hazelcast/rest/instance                            — instance name
-  GET    /hazelcast/rest/log-level                           — current log level
-  POST   /hazelcast/rest/maps/{name}/{key}   (JSON body)    — store a value
-  GET    /hazelcast/rest/maps/{name}/{key}                   — read a value
-  DELETE /hazelcast/rest/maps/{name}/{key}                   — remove a value
-  GET    /hazelcast/rest/queues/{name}/size                  — queue size
-  POST   /hazelcast/rest/queues/{name}       (JSON body)    — offer to queue
-  GET    /hazelcast/rest/queues/{name}/{timeout}             — poll from queue
+  if (options.expectedClusterSize !== null) {
+    console.log(
+      `[${options.name}] waiting for cluster size ${options.expectedClusterSize}...`,
+    );
+    await waitForExpectedClusterSize(instance, options.expectedClusterSize);
+  }
+
+  console.log(
+    `[${options.name}] cluster members: ${clusterMembers(instance)
+      .map((member) => member.address)
+      .join(", ")}`,
+  );
+  console.log(`
+[${options.name}] ready
+  Built-in REST: http://localhost:${restPort}/hazelcast/rest
+    GET  /maps/{name}/{key}
+    POST /maps/{name}/{key}
+    GET  /queues/{name}/size
+    POST /queues/{name}
+    GET  /queues/{name}/{timeout}
+  Demo control: http://localhost:${options.controlPort}/demo
+    GET  /demo/cluster
+    GET  /demo/topics
+    POST /demo/topics/{name}/publish
+    GET  /demo/topics/{name}/messages
 `);
 
-    // Graceful shutdown
-    const shutdown = () => {
-        console.log(`\n[${opts.name}] Shutting down...`);
-        instance.shutdown();
-        console.log(`[${opts.name}] Goodbye.`);
-        process.exit(0);
-    };
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    console.log(`\n[${options.name}] shutting down...`);
+    controlServer.stop(true);
+    topicBridge.destroy();
+    instance.shutdown();
+    console.log(`[${options.name}] goodbye.`);
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
-main().catch((err) => {
-    console.error('Fatal error:', err);
-    process.exit(1);
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
 });

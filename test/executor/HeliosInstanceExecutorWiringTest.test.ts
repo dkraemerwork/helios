@@ -6,10 +6,10 @@
  * coexist, scheduled executor stub is deterministic.
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig';
-import type { IExecutorService } from '@helios/executor/IExecutorService';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig';
+import type { IExecutorService } from '@zenystx/core/executor/IExecutorService';
 
 describe('HeliosInstance executor wiring (Block 17.8)', () => {
     const instances: HeliosInstanceImpl[] = [];

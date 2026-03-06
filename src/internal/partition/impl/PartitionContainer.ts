@@ -4,8 +4,8 @@
  * One instance per partition. Holds the partition→namespace→RecordStore hierarchy.
  * Provides lazy creation, namespace enumeration, and migration cleanup.
  */
-import { DefaultRecordStore } from '@helios/map/impl/recordstore/DefaultRecordStore';
-import type { RecordStore } from '@helios/map/impl/recordstore/RecordStore';
+import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
+import type { RecordStore } from '@zenystx/core/map/impl/recordstore/RecordStore';
 
 export class PartitionContainer {
     readonly partitionId: number;

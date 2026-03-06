@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { Json } from '@helios/internal/json/Json';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { JsonObject } from '@helios/internal/json/JsonObject';
-import { JsonValue } from '@helios/internal/json/JsonValue';
-import { StringWriter } from '@helios/internal/json/StringWriter';
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
+import { Json } from '@zenystx/core/internal/json/Json';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import { JsonValue } from '@zenystx/core/internal/json/JsonValue';
+import { StringWriter } from '@zenystx/core/internal/json/StringWriter';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
 
 function makeArray(...values: string[]): JsonArray {
   const arr = new JsonArray();

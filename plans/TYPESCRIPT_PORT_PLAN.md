@@ -155,7 +155,7 @@ integrity, bounded buffering, explicit backpressure behavior) before performance
 | Module | Why deferred |
 |---|---|
 | `hazelcast-sql/` (706 files) | Requires porting Apache Calcite — a 500k+ line SQL planning framework. Stub `SqlService` with `throw new Error("SQL: use Helios v2")`. Integrate a native TS SQL library in v2. |
-| `jet/` (520 files) | Java DAG engine — NOT ported line-by-line. **Replaced by `@helios/blitz` (Phase 10)** using NATS JetStream. See Phase 10 blocks 10.0–10.10. |
+| `jet/` (520 files) | Java DAG engine — NOT ported line-by-line. **Replaced by `@zenystx/blitz` (Phase 10)** using NATS JetStream. See Phase 10 blocks 10.0–10.10. |
 | `cp/` (66 files) | Raft-based CP subsystem for strong consistency. Complex consensus. Defer to v2. |
 | `scheduledexecutor/` (66 files) | Distributed scheduled executor. Defer to v2. |
 
@@ -333,7 +333,7 @@ Path alias: `@helios/*` → `./src/*` (tsconfig paths)
 
 ```
 helios/                                   # Standalone repo (this repo)
-├── package.json                          # @helios/core, Bun, TS beta
+├── package.json                          # @zenystx/core, Bun, TS beta
 ├── tsconfig.json                         # ES2025, bundler, strict, decorators
 ├── bunfig.toml                           # test patterns, reflect-metadata preload
 ├── helios-server.ts                      # standalone server entrypoint
@@ -404,9 +404,9 @@ helios/                                   # Standalone repo (this repo)
 │   └── TestClusterRegistry.ts            # Phase 4 — multi-node in-memory registry
 │
 ├── packages/
-│   └── nestjs/                           # @helios/nestjs (Phase 9)
-│       ├── package.json                  # @helios/nestjs, deps: @helios/core + NestJS 11
-│       ├── tsconfig.json                 # ES2025, paths: @helios/core/* → ../../src/*
+│   └── nestjs/                           # @zenystx/nestjs (Phase 9)
+│       ├── package.json                  # @zenystx/nestjs, deps: @zenystx/core + NestJS 11
+│       ├── tsconfig.json                 # ES2025, paths: @zenystx/core/* → ../../src/*
 │       ├── bunfig.toml                   # preload: reflect-metadata
 │       ├── src/
 │       │   ├── index.ts                  # barrel export
@@ -500,7 +500,7 @@ HeliosInstance + all services
   └─► nestjs/ (HeliosModule, HeliosCacheModule, HeliosTransactionModule, autoconfiguration)
 
 [Phase 9 — depends on Phase 6 + 8]
-@helios/core (repo root) + @helios/nestjs (packages/nestjs/) Bun workspace
+@zenystx/core (repo root) + @zenystx/nestjs (packages/nestjs/) Bun workspace
   └─► 9.0 package extraction (move files, no behavior change)
         └─► 9.1 ConfigurableModuleBuilder (parallel with 9.2, 9.8)
         └─► 9.2 @InjectHelios/@InjectMap decorators (parallel with 9.1, 9.8)
@@ -513,7 +513,7 @@ HeliosInstance + all services
                     └─► 9.9 final polish + publish
 
 [Phase 10 — depends on Phase 7 (HeliosInstanceImpl + IMap/ITopic) + Phase 9 (Bun workspace)]
-@helios/core IMap/ITopic + nats npm package
+@zenystx/core IMap/ITopic + nats npm package
   └─► 10.0 BlitzService (NATS connection lifecycle)
         └─► 10.1 Pipeline/DAG builder (Vertex, Edge, submit/cancel)
               ├─► 10.2 sources + sinks (parallel with 10.3)
@@ -523,7 +523,7 @@ HeliosInstance + all services
                                 └─► 10.6 stream joins (hash join + windowed join)
                     └─► 10.7 fault tolerance (AckPolicy, retry, DL, checkpoint)
                           └─► 10.8 batch processing mode
-                          └─► 10.9 NestJS module (@helios/blitz)
+                          └─► 10.9 NestJS module (@zenystx/blitz)
                                 └─► 10.10 e2e acceptance + feature parity gate
 
 [Phase 11 — depends on Phase 7.1 (HeliosInstanceImpl) + Phase 8.1 (near-cache wired)]
@@ -2093,10 +2093,10 @@ invalidation automatically evicts near-cache entries, all tests green.
 
 ---
 
-## Phase 9 — `@helios/nestjs` Package Extraction + Modern NestJS Library Patterns
+## Phase 9 — `@zenystx/nestjs` Package Extraction + Modern NestJS Library Patterns
 
-Goal: Extract NestJS integration into a separate `@helios/nestjs` package, then modernize it
-to state-of-the-art NestJS 11 library patterns. The core `@helios/core` package must have
+Goal: Extract NestJS integration into a separate `@zenystx/nestjs` package, then modernize it
+to state-of-the-art NestJS 11 library patterns. The core `@zenystx/core` package must have
 zero NestJS dependencies.
 
 ### Why — Current Gaps vs State-of-the-Art
@@ -2121,31 +2121,31 @@ Set up Bun workspaces with root `package.json`:
 { "private": true, "workspaces": [".", "packages/nestjs", "app"] }
 ```
 
-Rename root package: `"name": "helios"` → `"name": "@helios/core"`.
+Rename root package: `"name": "helios"` → `"name": "@zenystx/core"`.
 Add wildcard subpath export: `"./*": { "import": "./dist/src/*.js", "types": "./dist/src/*.d.ts" }`.
-Remove all NestJS deps from `@helios/core`.
+Remove all NestJS deps from `@zenystx/core`.
 
 ---
 
 ### Block 9.0 — Package extraction (no behavioral changes)
 
 Extract the 14 source files from `src/nestjs/` and 11 test files from
-`test/nestjs/` into `packages/nestjs/` as `@helios/nestjs`. Copy, transform
+`test/nestjs/` into `packages/nestjs/` as `@zenystx/nestjs`. Copy, transform
 imports, verify all 141 NestJS tests pass in the new location, then delete originals.
 
 Note: `packages/nestjs/` already exists with the initial extraction. This block
 completes the separation: removes NestJS deps from root, updates imports, verifies.
 
 Import transformation rules:
-- Intra-NestJS: `@helios/nestjs/X` → `./X` (relative within package)
-- Core types: `@helios/core/HeliosInstance` → `@helios/core/core/HeliosInstance`
-- Core modules: `@helios/transaction/X` → `@helios/core/transaction/X`
-- Core SPI: `@helios/spi/impl/X` → `@helios/core/spi/impl/X`
+- Intra-NestJS: `@zenystx/nestjs/X` → `./X` (relative within package)
+- Core types: `@zenystx/core/HeliosInstance` → `@zenystx/core/core/HeliosInstance`
+- Core modules: `@helios/transaction/X` → `@zenystx/core/transaction/X`
+- Core SPI: `@helios/spi/impl/X` → `@zenystx/core/spi/impl/X`
 
 ```
 packages/nestjs/
-├── package.json            # @helios/nestjs, deps: @helios/core + NestJS
-├── tsconfig.json           # paths: @helios/core/* → ../../src/*
+├── package.json            # @zenystx/nestjs, deps: @zenystx/core + NestJS
+├── tsconfig.json           # paths: @zenystx/core/* → ../../src/*
 ├── bunfig.toml             # preload: reflect-metadata
 ├── src/                    # 14 files (copied + import-transformed)
 │   ├── index.ts            # barrel export
@@ -2155,7 +2155,7 @@ packages/nestjs/
 
 **DONE — Block 9.0** ✅ (168 tests green: 2157 core + 168 nestjs):
 - [x] Create root workspace `package.json` (or convert existing)
-- [x] Rename root package to `@helios/core`, remove NestJS deps, add `./*` subpath export
+- [x] Rename root package to `@zenystx/core`, remove NestJS deps, add `./*` subpath export
 - [x] Finalize `packages/nestjs/` with package.json, tsconfig, bunfig
 - [x] Verify + transform source files (14) and test files (11)
 - [x] Create barrel `src/index.ts`
@@ -2165,7 +2165,7 @@ packages/nestjs/
 - [x] `bun test` in `packages/nestjs/` → 141 tests green
 - [x] `bun test` at root → ~1964 tests green (no NestJS tests)
 - [x] Delete `src/nestjs/` and `test/nestjs/`
-- [x] `git commit -m "refactor(nestjs): extract @helios/nestjs package — 141 tests green"`
+- [x] `git commit -m "refactor(nestjs): extract @zenystx/nestjs package — 141 tests green"`
 
 ---
 
@@ -2408,7 +2408,7 @@ export { _txManagerStorage };
 /** Thrown when @Transactional() is called outside a HeliosTransactionModule context.
  *  Indicates a misconfiguration — the module was not imported in the app module.
  *  This is always a programmer error, never a recoverable runtime error.
- *  NOTE: Does NOT extend BlitzError — @helios/nestjs must not depend on @helios/blitz. */
+ *  NOTE: Does NOT extend BlitzError — @zenystx/nestjs must not depend on @zenystx/blitz. */
 export class CannotCreateTransactionException extends Error {
   constructor(message: string) {
     super(message);
@@ -2738,7 +2738,7 @@ export class HeliosModule extends HeliosConfigurableModule
 
 ### Block 9.9 — Documentation + subpath exports + final polish
 
-Finalize the `@helios/nestjs` package for publication.
+Finalize the `@zenystx/nestjs` package for publication.
 
 Subpath exports in `packages/nestjs/package.json`:
 ```json
@@ -2761,9 +2761,9 @@ Subpath exports in `packages/nestjs/package.json`:
 - [x] Add package structure tests (verify all public exports resolve)
 - [x] Update barrel `src/index.ts` with all new exports (decorators, health, events)
 - [x] Ensure `bun run build` produces clean output for both packages
-- [x] Verify `bun publish --dry-run` for both `@helios/core` and `@helios/nestjs`
+- [x] Verify `bun publish --dry-run` for both `@zenystx/core` and `@zenystx/nestjs`
 - [x] GREEN
-- [x] `git commit -m "feat(nestjs): @helios/nestjs v1.0 — all tests green"`
+- [x] `git commit -m "feat(nestjs): @zenystx/nestjs v1.0 — all tests green"`
 
 ---
 
@@ -2771,7 +2771,7 @@ Subpath exports in `packages/nestjs/package.json`:
 > `registerAsync()`. Future migration to `ConfigurableModuleBuilder` is tracked separately —
 > not in Phase 9 scope. New `@helios/*` modules should use `ConfigurableModuleBuilder`.
 
-**Phase 9 done gate**: `@helios/nestjs` is a standalone, publishable NestJS library with:
+**Phase 9 done gate**: `@zenystx/nestjs` is a standalone, publishable NestJS library with:
 - `ConfigurableModuleBuilder`-based module registration (`forRoot` + `forRootAsync`)
 - `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators
 - `@Cacheable`, `@CacheEvict`, `@CachePut` method-level caching decorators
@@ -2787,7 +2787,7 @@ Subpath exports in `packages/nestjs/package.json`:
 
 ## Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~295 tests)
 
-Goal: deliver a `@helios/blitz` package that provides ~80%+ feature parity with Hazelcast
+Goal: deliver a `@zenystx/blitz` package that provides ~80%+ feature parity with Hazelcast
 Jet (`jet/` — 520 Java source files) using **NATS JetStream** as the durable streaming
 backbone. We do not port the Java DAG engine line-by-line. We build a TypeScript-idiomatic
 pipeline API on top of NATS primitives that preserves the same programming model and
@@ -2900,11 +2900,11 @@ which wraps the binary. Document setup in `CONTRIBUTING.md`.
 ### Package layout
 
 ```
-packages/blitz/                              # @helios/blitz
-├── package.json                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
+packages/blitz/                              # @zenystx/blitz
+├── package.json                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @zenystx/core
 │                                          # peerDeps (optional): @nestjs/common@^11, @nestjs/core@^11
 │                                          # devDeps: nats-server (binary), bun-types, typescript
-├── tsconfig.json                          # paths: @helios/core/* → ../../src/*
+├── tsconfig.json                          # paths: @zenystx/core/* → ../../src/*
 ├── bunfig.toml
 ├── src/
 │   ├── index.ts                           # barrel export (does NOT re-export src/nestjs/)
@@ -2916,7 +2916,7 @@ packages/blitz/                              # @helios/blitz
 │       ├── BlitzConfig.ts                       # NATS connection + pipeline config (Block 10.0); includes checkpointIntervalAcks (default 100) + checkpointIntervalMs (default 5000); includes maxReconnectAttempts, reconnectTimeWaitMs, connectTimeoutMs, natsPendingLimit
 │   ├── BlitzEvent.ts                      # enum: NATS_RECONNECTING, NATS_RECONNECTED, PIPELINE_ERROR, PIPELINE_CANCELLED (Block 10.0)
 │   ├── errors/                            # error hierarchy (Block 10.0)
-│   │   ├── BlitzError.ts                  # base class for all @helios/blitz errors
+│   │   ├── BlitzError.ts                  # base class for all @zenystx/blitz errors
 │   │   ├── NakError.ts                    # operator returned an error — message will be nak'd
 │   │   ├── DeadLetterError.ts             # retries exhausted — message routed to DL stream
 │   │   └── PipelineError.ts              # pipeline-level structural error (cycle, no source, etc.)
@@ -2969,7 +2969,7 @@ packages/blitz/                              # @helios/blitz
 │   ├── batch/                             # Block 10.8
 │   │   ├── BatchPipeline.ts               # bounded variant of Pipeline
 │   │   └── EndOfStreamDetector.ts         # detects JetStream stream end for batch mode
-│   └── nestjs/                            # Block 10.9 — exported via @helios/blitz/nestjs subpath
+│   └── nestjs/                            # Block 10.9 — exported via @zenystx/blitz/nestjs subpath
 │       ├── index.ts                         # barrel export for nestjs submodule
 │       ├── HeliosBlitzModule.ts             # @Module() forRoot() / forRootAsync()
 │       ├── HeliosBlitzService.ts            # @Injectable() wrapping BlitzService
@@ -2977,7 +2977,7 @@ packages/blitz/                              # @helios/blitz
 └── test/
 ```
 
-`package.json` exports field includes a `@helios/blitz/nestjs` subpath:
+`package.json` exports field includes a `@zenystx/blitz/nestjs` subpath:
 
 ```json
 {
@@ -2986,7 +2986,7 @@ packages/blitz/                              # @helios/blitz
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
     },
-    "@helios/blitz/nestjs": {
+    "@zenystx/blitz/nestjs": {
       "import": "./dist/src/nestjs/index.js",
       "types": "./dist/src/nestjs/index.d.ts"
     }
@@ -2995,7 +2995,7 @@ packages/blitz/                              # @helios/blitz
 ```
 
 The `src/nestjs/` submodule is **NOT** re-exported from `src/index.ts`. Applications that
-use `@helios/blitz` for pure stream processing without NestJS do not need `@nestjs/common`
+use `@zenystx/blitz` for pure stream processing without NestJS do not need `@nestjs/common`
 or `@nestjs/core`. Those packages are declared as **optional peer dependencies** only.
 
 > ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 16 (NestJS packages absent from package.json; NestJS submodule leaking through main barrel)
@@ -3019,7 +3019,7 @@ Block 10.0 (BlitzService / BlitzConfig / NATS connection)
 
 ### Error types (`src/errors/`)
 
-All `@helios/blitz` errors extend `BlitzError`. Operators signal recoverable failures via
+All `@zenystx/blitz` errors extend `BlitzError`. Operators signal recoverable failures via
 `NakError`; the fault policy (retry / dead-letter) consults this type at runtime.
 
 ```typescript
@@ -3070,11 +3070,11 @@ export class PipelineError extends BlitzError {}
 
 ```
 packages/blitz/
-├── package.json            # @helios/blitz
-│                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
+├── package.json            # @zenystx/blitz
+│                           # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @zenystx/core
 │                           # peerDeps (optional): @nestjs/common@^11, @nestjs/core@^11
 │                           # devDeps: nats-server (binary), bun-types, typescript
-├── tsconfig.json           # paths: @helios/core/* → ../../src/*
+├── tsconfig.json           # paths: @zenystx/core/* → ../../src/*
 ├── bunfig.toml             # no reflect-metadata needed (NestJS submodule exported separately)
 └── src/
     ├── BlitzConfig.ts        # NATS server URL(s), stream/consumer defaults, KV bucket names
@@ -3139,7 +3139,7 @@ Add `maxReconnectAttempts`, `reconnectTimeWaitMs`, `connectTimeoutMs`, `natsPend
 > ℹ️ Cross-ref: `HELIOS_BLITZ_IMPLEMENTATION.md` → Issue 18 (NATS reconnect behavior gaps)
 
 **TODO — Block 10.0**: ✅ COMPLETE
-- [x] Create `packages/blitz/` directory with `package.json` (`@helios/blitz`, deps: `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@helios/core`; peerDeps optional: `@nestjs/common@^11`, `@nestjs/core@^11`; exports: `"."` + `"@helios/blitz/nestjs"`), `tsconfig.json`, `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
+- [x] Create `packages/blitz/` directory with `package.json` (`@zenystx/blitz`, deps: `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@zenystx/core`; peerDeps optional: `@nestjs/common@^11`, `@nestjs/core@^11`; exports: `"."` + `"@zenystx/blitz/nestjs"`), `tsconfig.json`, `bunfig.toml`, `src/index.ts` — root `package.json` workspace entry already configured
 - [x] Implement `src/errors/` — `BlitzError`, `NakError`, `DeadLetterError`, `PipelineError`
 - [x] Add `nats-server` to `packages/blitz/` devDependencies (binary for integration tests — see Phase 10 test infrastructure section above)
 - [x] Implement `BlitzConfig` (NATS URL, KV bucket prefix, stream retention defaults, natsPendingLimit, checkpointIntervalAcks, checkpointIntervalMs)
@@ -3229,7 +3229,7 @@ p.readFrom(NatsSource.fromSubject<Order>('orders.raw', JsonCodec<Order>()))
 await blitz.submit(p);
 ```
 
-`JsonCodec<T>()` is from `@helios/blitz/codec` — it decodes the raw `Uint8Array` NATS payload
+`JsonCodec<T>()` is from `@zenystx/blitz/codec` — it decodes the raw `Uint8Array` NATS payload
 into `T` on receive and encodes `T` back to `Uint8Array` on send (see Block 10.2 codec spec).
 
 Internally, each `.map()` / `.filter()` / `.writeTo()` call appends a `Vertex` and
@@ -3259,7 +3259,7 @@ starts the consumer loop for each vertex.
 #### Codec contract
 
 In NATS v3, `JSONCodec`/`StringCodec` are removed. All payloads are raw `Uint8Array`.
-`@helios/blitz` introduces a `BlitzCodec<T>` interface so every source/sink has an explicit
+`@zenystx/blitz` introduces a `BlitzCodec<T>` interface so every source/sink has an explicit
 wire format:
 
 ```typescript
@@ -3342,7 +3342,7 @@ NatsSink.toStream('order-stream', JsonCodec<EnrichedOrder>())
 - [x] All NATS sources accept a `codec: BlitzCodec<T>` parameter — decode raw `Uint8Array` payload on receive
 - [x] Implement all sinks above with typed `write(value: T): Promise<void>` interface
 - [x] All NATS sinks accept a `codec: BlitzCodec<T>` parameter — encode `T` to `Uint8Array` on send
-- [x] Helios sources/sinks: wire to `@helios/core` IMap / ITopic interfaces
+- [x] Helios sources/sinks: wire to `@zenystx/core` IMap / ITopic interfaces
 - [x] FileSource: line-by-line read via `Bun.file().text()` + split
 - [x] HttpWebhookSource: `Bun.serve()` with configurable path + codec parsing
 - [x] Tests: each source produces expected messages (decoded); each sink receives + records messages (encoded)
@@ -3497,16 +3497,16 @@ export interface Aggregator<T, A, R> {
 ```
 
 The six concrete aggregators in `packages/blitz/src/aggregate/` are thin wrappers that
-delegate to the corresponding `@helios/core` implementations and add `combine()`:
+delegate to the corresponding `@zenystx/core` implementations and add `combine()`:
 
-- `CountAggregator` wraps `@helios/core/aggregation/CountAggregator` — `combine(a, b) = a + b`
-- `SumAggregator` wraps `@helios/core/aggregation/SumAggregator` — `combine(a, b) = a + b`
+- `CountAggregator` wraps `@zenystx/core/aggregation/CountAggregator` — `combine(a, b) = a + b`
+- `SumAggregator` wraps `@zenystx/core/aggregation/SumAggregator` — `combine(a, b) = a + b`
 - `MinAggregator` — `combine(a, b) = Math.min(a, b)`
 - `MaxAggregator` — `combine(a, b) = Math.max(a, b)`
 - `AvgAggregator` — accumulator is `{ sum: number; count: number }`, `combine(a, b) = { sum: a.sum + b.sum, count: a.count + b.count }`
 - `DistinctAggregator` — accumulator is `Set<T>`, `combine(a, b) = new Set([...a, ...b])`
 
-No duplicate business logic. `@helios/core` remains the authoritative implementation.
+No duplicate business logic. `@zenystx/core` remains the authoritative implementation.
 The blitz wrappers add exactly one method each.
 
 Grouped aggregations (equivalent to Jet's `groupingKey`):
@@ -3533,9 +3533,9 @@ Grouped aggregations (`byKey`) are correct by construction in two modes only:
 **Warning:** Grouped aggregations (`byKey`) MUST NOT be used with plain NATS queue groups, as queue groups distribute messages round-robin with no key-affinity. Each worker would hold only a partial count for any given key, producing silently wrong results.
 
 **DONE — Block 10.5** ✅ (34 tests green):
-- [x] Implement blitz aggregate wrappers that delegate to `@helios/core` aggregators and add `combine()` — no business logic duplication
+- [x] Implement blitz aggregate wrappers that delegate to `@zenystx/core` aggregators and add `combine()` — no business logic duplication
 - [x] Implement `Aggregator<T, A, R>` interface (extends core batch contract with `combine(a: A, b: A): A` for parallel partial aggregation — see interface spec above)
-- [x] Implement all 6 concrete aggregators as thin wrappers over `@helios/core/aggregation/` implementations (reuse core logic; add only `combine()`)
+- [x] Implement all 6 concrete aggregators as thin wrappers over `@zenystx/core/aggregation/` implementations (reuse core logic; add only `combine()`)
 - [x] Implement `AggregatingOperator`: consume closed window from `WindowOperator`, run accumulation loop, emit result
 - [x] Implement `byKey(keyFn)` grouping variant on each aggregator
 - [x] Tests: each aggregator produces correct result; grouped aggregation; streaming aggregation without windowing (whole-stream running total)
@@ -3725,7 +3725,7 @@ console.log(`Processed ${result.recordsOut} records in ${result.durationMs}ms`);
 
 ---
 
-### Block 10.9 — NestJS integration (`@helios/blitz` module) (~25 tests)
+### Block 10.9 — NestJS integration (`@zenystx/blitz` module) (~25 tests)
 
 ```
 src/nestjs/
@@ -3783,15 +3783,15 @@ class OrderProcessor implements OnModuleInit {
 
 - `@nestjs/common@^11` and `@nestjs/core@^11` are declared as **optional peer dependencies**
   in `packages/blitz/package.json`. They are only required when using the `src/nestjs/`
-  submodule. Applications that use `@helios/blitz` for pure stream processing without NestJS
+  submodule. Applications that use `@zenystx/blitz` for pure stream processing without NestJS
   do not need them.
-- `@helios/blitz` must **NOT** import from `src/nestjs/` in its main barrel `src/index.ts`.
-  The NestJS submodule is exported via a separate subpath: `@helios/blitz/nestjs`.
-- Consumers import NestJS integration as: `import { HeliosBlitzModule } from '@helios/blitz/nestjs'`
+- `@zenystx/blitz` must **NOT** import from `src/nestjs/` in its main barrel `src/index.ts`.
+  The NestJS submodule is exported via a separate subpath: `@zenystx/blitz/nestjs`.
+- Consumers import NestJS integration as: `import { HeliosBlitzModule } from '@zenystx/blitz/nestjs'`
 
 **TODO — Block 10.9**:
 - [x] Add `@nestjs/common@^11` and `@nestjs/core@^11` as optional peer dependencies in `packages/blitz/package.json`
-- [x] Export `src/nestjs/` via `@helios/blitz/nestjs` subpath export in `packages/blitz/package.json` — NOT from main barrel `src/index.ts`
+- [x] Export `src/nestjs/` via `@zenystx/blitz/nestjs` subpath export in `packages/blitz/package.json` — NOT from main barrel `src/index.ts`
 - [x] Set up `ConfigurableModuleBuilder` for `HeliosBlitzModule`
 - [x] Implement `HeliosBlitzService` as an `@Injectable()` wrapping `BlitzService`
 - [x] Implement `OnModuleDestroy` → `blitz.shutdown()` for lifecycle safety
@@ -3799,14 +3799,14 @@ class OrderProcessor implements OnModuleInit {
 - [x] Tests: `forRoot()` sync registration; `forRootAsync()` with `useFactory`; `@InjectBlitz()` resolves service; module destroy calls shutdown; pipeline survives module restart
 - [x] Verify `src/index.ts` does NOT import or re-export anything from `src/nestjs/`
 - [x] GREEN
-- [x] `git commit -m "feat(blitz): @helios/blitz NestJS module integration — 25 tests green"`
+- [x] `git commit -m "feat(blitz): @zenystx/blitz NestJS module integration — 25 tests green"`
 - ⚠️ **Known infrastructure issue**: `packages/blitz/bunfig.toml` preloads `reflect-metadata` but it is missing from `devDependencies` — `bun test` inside `packages/blitz/` fails with `preload not found`. Fixed in **Block 13.1**.
 
 ---
 
 ### Block 10.10 — End-to-end acceptance + feature parity gate (~20 tests)
 
-This block validates that the assembled `@helios/blitz` package meets the 80%+ parity
+This block validates that the assembled `@zenystx/blitz` package meets the 80%+ parity
 contract with Hazelcast Jet. Each test scenario maps to a Hazelcast Jet integration test.
 
 Required scenarios:
@@ -3825,7 +3825,7 @@ Required scenarios:
 | `CheckpointRestartTest` | Pipeline restart resumes from checkpoint, not from beginning |
 | `AtLeastOnceTest` | Simulate crash mid-pipeline → restart → verify no data loss AND dedup key prevents double-counting |
 
-**Feature parity gate** (blocks release of `@helios/blitz` v1.0):
+**Feature parity gate** (blocks release of `@zenystx/blitz` v1.0):
 
 | Feature | Required |
 |---|---|
@@ -3845,11 +3845,11 @@ Required scenarios:
 - [x] Run feature parity gate — all scenarios pass
 - [x] Verify `bun publish --dry-run` succeeds for `packages/blitz/` (187 files, 0.28MB)
 - [x] GREEN — 33 tests green
-- [x] `git commit -m "test(blitz): Block 10.10 — e2e acceptance + feature parity gate — @helios/blitz v1.0 — 33 tests green"`
+- [x] `git commit -m "test(blitz): Block 10.10 — e2e acceptance + feature parity gate — @zenystx/blitz v1.0 — 33 tests green"`
 
 ---
 
-**Phase 10 done gate**: `@helios/blitz` v1.0 is a standalone, publishable Bun/TypeScript
+**Phase 10 done gate**: `@zenystx/blitz` v1.0 is a standalone, publishable Bun/TypeScript
 stream and batch processing library with:
 - Fluent DAG pipeline builder API (Hazelcast Jet `Pipeline` model)
 - NATS JetStream as durable transport backbone
@@ -3861,14 +3861,14 @@ stream and batch processing library with:
 - Batch processing mode (bounded pipelines with `BatchResult`)
 - 6 built-in sources (NATS, JetStream, HeliosMap, HeliosTopic, File, HttpWebhook)
 - 5 built-in sinks (NATS, JetStream, HeliosMap, HeliosTopic, File)
-- `@helios/blitz` NestJS module with `forRoot`/`forRootAsync` + `@InjectBlitz()` decorator
+- `@zenystx/blitz` NestJS module with `forRoot`/`forRootAsync` + `@InjectBlitz()` decorator
 - ~80% feature parity with Hazelcast Jet, zero JVM dependency
 
 ---
 
 ## Phase 11 — Built-in REST API (Bun.serve())
 
-Goal: promote the REST API from a demo-app concern into `@helios/core` as a proper
+Goal: promote the REST API from a demo-app concern into `@zenystx/core` as a proper
 production feature. The REST API is the only way to operate a Helios node without a
 Hazelcast binary-protocol client — it is required for Kubernetes health probes, Docker
 health checks, CI/CD pipelines, and shell-based cluster management.
@@ -4232,7 +4232,7 @@ all `/hazelcast/*` paths. No proxy. No delegation. No two HTTP listeners.
 
 ---
 
-**Phase 11 done gate**: Built-in REST API is a first-class feature of `@helios/core`:
+**Phase 11 done gate**: Built-in REST API is a first-class feature of `@zenystx/core`:
 - `HeliosRestServer` (`Bun.serve()`) starts and stops with the `HeliosInstance` lifecycle
 - All 4 endpoint groups implemented and access-gated by `RestApiConfig`
 - Kubernetes health probes work out of the box via `/hazelcast/health/ready`
@@ -4322,7 +4322,7 @@ cd /Users/zenystx/IdeaProjects/helios && bun test
 ## Phase 14 — Blitz Embedded NATS Server
 
 > **Cross-ref:** `plans/BLITZ_EMBEDDED_NATS_PLAN.md` — read it before executing any Block 14.X.
-> **Goal:** Embed a NATS JetStream server natively inside `@helios/blitz` so that users never need to provision or manage an external NATS process. `BlitzService.start()` owns the full server lifecycle — binary resolution, spawn, health-poll, cluster formation, and shutdown — with zero user configuration required for single-node use and a concise options object for production cluster use.
+> **Goal:** Embed a NATS JetStream server natively inside `@zenystx/blitz` so that users never need to provision or manage an external NATS process. `BlitzService.start()` owns the full server lifecycle — binary resolution, spawn, health-poll, cluster formation, and shutdown — with zero user configuration required for single-node use and a concise options object for production cluster use.
 
 ### Block 14.1 — `package.json` + `NatsServerBinaryResolver`
 
@@ -4606,7 +4606,7 @@ query planner, or a purpose-built TS SQL engine). Do not port Calcite.
 
 ### Jet (`jet/` — 520 source files)
 
-> **No longer deferred** — implemented in **Phase 10** as `@helios/blitz`, a NATS JetStream-backed
+> **No longer deferred** — implemented in **Phase 10** as `@zenystx/blitz`, a NATS JetStream-backed
 > stream and batch processing engine with ~80% Hazelcast Jet feature parity. We do not port
 > the Java DAG engine line-by-line; instead we build a TypeScript-idiomatic pipeline API on
 > top of NATS JetStream + KV Store. See Phase 10 for the full plan.
@@ -4737,8 +4737,8 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Demo script** (`app/demo.sh`) — curl-based demo with near-cache + predicate query examples ✅
 - [x] **app checkpoint**: 25 tests green, 2,105 core tests still green ✅
 
-### Phase 9 — `@helios/nestjs` Package Extraction + Modern NestJS Library Patterns
-- [x] **Block 9.0** — Package extraction: Bun workspace, @helios/core rename, @helios/nestjs extraction — 168 tests ✅ (2157 core + 168 nestjs)
+### Phase 9 — `@zenystx/nestjs` Package Extraction + Modern NestJS Library Patterns
+- [x] **Block 9.0** — Package extraction: Bun workspace, @zenystx/core rename, @zenystx/nestjs extraction — 168 tests ✅ (2157 core + 168 nestjs)
 - [x] **Block 9.1** — `ConfigurableModuleBuilder` for HeliosModule (`forRoot` + `forRootAsync` with `useClass`/`useExisting`/`useFactory`) — 10 tests ✅
 - [x] **Block 9.2** — `@InjectHelios()`, `@InjectMap()`, `@InjectQueue()`, `@InjectTopic()` convenience decorators — 17 tests ✅
 - [x] **Block 9.3** — `registerAsync` for HeliosCacheModule + HeliosTransactionModule — 13 tests ✅
@@ -4748,7 +4748,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 9.7** — Event bridge for `@nestjs/event-emitter` (map/topic/lifecycle) — 11 tests ✅
 - [x] **Block 9.8** — Symbol-based injection tokens + `OnModuleDestroy` lifecycle hooks — 9 tests ✅
 - [x] **Block 9.9** — Subpath exports, package structure tests, build + publish verification — 57 tests ✅
-- [x] **Phase 9 checkpoint**: `@helios/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests) ✅
+- [x] **Phase 9 checkpoint**: `@zenystx/nestjs` v1.0 — state-of-the-art NestJS library (~80 new tests) ✅
 
 ### Phase 10 — Helios Blitz: NATS-Backed Stream & Batch Processing Engine (~295 tests)
 - [x] **Block 10.0** — Package scaffold (`packages/blitz/`) + BlitzService NATS connection lifecycle — 31 tests green (11 skipped/integration) ✅
@@ -4762,7 +4762,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 10.8** — Batch processing mode (BatchPipeline, EndOfStreamDetector, BatchResult) — 20 tests green ✅
 - [x] **Block 10.9** — NestJS module (`HeliosBlitzModule`, `HeliosBlitzService`, `@InjectBlitz()`) — 27 tests green ✅
 - [x] **Block 10.10** — E2E acceptance + feature parity gate (10 scenarios, publish dry-run) — 33 tests green ✅
-- [x] **Phase 10 checkpoint**: `@helios/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, 328 tests green ✅
+- [x] **Phase 10 checkpoint**: `@zenystx/blitz` v1.0 — NATS-backed stream & batch engine, ~80% Hazelcast Jet parity, 328 tests green ✅
 
 ### Phase 11 — Built-in REST API (~56 tests)
 - [x] **Block 11.1** — `RestApiConfig` upgrade (port, groups, timeout, fluent API) + `RestEndpointGroup` enum — 23 tests ✅
@@ -4771,7 +4771,7 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 11.4** — `ClusterReadHandler` + `ClusterWriteHandler` — cluster info, log level, member shutdown — 10 tests ✅
 - [x] **Block 11.5** — `DataHandler` — IMap CRUD + IQueue ops over REST — 10 tests ✅
 - [x] **Block 11.6** — `app/` migration + e2e REST acceptance (all 4 groups, real instance, fetch) — 8 tests ✅
-- [x] **Phase 11 checkpoint**: REST API is a first-class `@helios/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green ✅
+- [x] **Phase 11 checkpoint**: REST API is a first-class `@zenystx/core` feature — K8s probes, data access, cluster ops via `curl` — ~56 tests green ✅
 
 ### Phase 12 — MapStore SPI + Extension Packages (~117 tests) ✅
 
@@ -4780,9 +4780,9 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 - [x] **Block 12.A1** — `MapStoreConfig` (add `_factoryImplementation` field + `setFactoryImplementation()`/`getFactoryImplementation()`; setting one clears the other — mutually exclusive with `_implementation`), `MapStoreFactory` interface (`newMapStore(mapName, properties)` — factory-first resolution, mirrors Java `MapStoreFactory`), `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, `MapDataStore`, `EmptyMapDataStore`, `MapStoreWrapper`, `LoadOnlyMapDataStore`, `DelayedEntry` — 24 tests ✅
 - [x] **Block 12.A2** — `WriteThroughStore`, `CoalescedWriteBehindQueue`, `ArrayWriteBehindQueue`, `WriteBehindProcessor` (batch + 3x retry + single-entry fallback), `StoreWorker` (setInterval, flush-on-shutdown), `WriteBehindStore`, `MapStoreContext` (factory-first impl resolution: `getFactoryImplementation().newMapStore()` > `getImplementation()`; lifecycle + EAGER initial load) — 46 tests ✅
 - [x] **Block 12.A3** — IMap async migration: run `scripts/async-imap-codemod.ts --write`, update `IMap.ts` (11 methods → `Promise`), async `MapProxy`, lazy `MapDataStore` wiring, `NearCachedIMapWrapper` + `NetworkedMapProxy` signature update, `MapContainerService` store lifecycle, integration tests — all existing + 18 new green (2559 total)
-- [x] **Block 12.B** — `packages/s3/` (`@helios/s3`): `S3MapStore` + `S3Config` + `S3MapStore.factory(baseConfig)` (factory scopes prefix by map name), mock-S3-client tests, factory tests (2), workspace wiring — 14 tests ✅
-- [x] **Block 12.C** — `packages/mongodb/` (`@helios/mongodb`): `MongoMapStore` + `MongoConfig` + `MongoMapStore.factory(baseConfig)` (factory scopes collection by map name), mock-collection tests, factory tests (2), workspace wiring — 15 tests ✅
-- [x] **Block 12.D** — `packages/turso/` (`@helios/turso`): `TursoMapStore` + `TursoConfig` + `TursoMapStore.factory(baseConfig)` (factory scopes tableName by map name), real in-memory SQLite tests (`:memory:`), factory tests (2), workspace wiring — 18 tests ✅
+- [x] **Block 12.B** — `packages/s3/` (`@zenystx/s3`): `S3MapStore` + `S3Config` + `S3MapStore.factory(baseConfig)` (factory scopes prefix by map name), mock-S3-client tests, factory tests (2), workspace wiring — 14 tests ✅
+- [x] **Block 12.C** — `packages/mongodb/` (`@zenystx/mongodb`): `MongoMapStore` + `MongoConfig` + `MongoMapStore.factory(baseConfig)` (factory scopes collection by map name), mock-collection tests, factory tests (2), workspace wiring — 15 tests ✅
+- [x] **Block 12.D** — `packages/turso/` (`@zenystx/turso`): `TursoMapStore` + `TursoConfig` + `TursoMapStore.factory(baseConfig)` (factory scopes tableName by map name), real in-memory SQLite tests (`:memory:`), factory tests (2), workspace wiring — 18 tests ✅
 - [x] **Phase 12 checkpoint**: MapStore SPI in core + 3 extension packages — ~117 new tests green, all existing tests still green ✅
 
 ### Phase 13 — Infrastructure Fixes & Test Hygiene ✅
@@ -4801,9 +4801,12 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 ### Phase 14 — Blitz Embedded NATS Server
 
 > Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md`
-> Goal: Embed a NATS JetStream server natively inside `@helios/blitz` so that users never need
+> Goal: Embed a NATS JetStream server natively inside `@zenystx/blitz` so that users never need
 > to provision or manage an external NATS process. `BlitzService.start()` owns the full server
 > lifecycle — binary resolution, spawn, health-poll, cluster formation, and shutdown.
+> Follow-up: the distributed-by-default Helios cluster flow (one local NATS node per Helios
+> member, oldest member as Blitz bootstrap master, auto-cluster on second node) is scheduled in
+> Phase 18.
 
 - [x] **Block 14.1** — `package.json` change (`nats-server` dep → dependency) + `NatsServerBinaryResolver` (npm package → PATH → explicit override → error chain; N16 FIX: use `createRequire(import.meta.url)` not `require.resolve`; N6 FIX: `existsSync()` check after resolve) — 8 tests
 - [x] **Block 14.2** — `NatsServerConfig` (internal typed config) + `NatsServerManager` (spawn + health-poll + shutdown; N13 FIX: close probe connections in `_waitUntilReady` finally block; N14 FIX: poll `jsm.getAccountInfo()` for cluster JetStream readiness; N15 FIX: `shutdown()` is async, `await proc.exited`) — 14 tests
@@ -4896,6 +4899,23 @@ Distributed scheduled executor with durable scheduling (survives node failures).
 
 ---
 
+### Phase 18 — Blitz Distributed Embedded Cluster Default ← **CURRENT**
+
+> Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` Appendix B.
+> Goal: Make Blitz distributed by default in Helios multi-node deployments. Every Helios node
+> hosts one local embedded NATS node; the oldest/current Helios master member acts as the Blitz
+> bootstrap master for topology + seed routing; starting a second node should automatically form
+> a shared NATS/JetStream cluster without a manual master env flag.
+
+- [ ] **Block 18.1** — `clusterNode` primitive + replication defaults in `packages/blitz` (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, route normalization, `defaultReplicas`) — ~18 tests
+- [ ] **Block 18.2** — Helios Blitz bootstrap-master control plane (oldest-member topology authority, Blitz node metadata service, deterministic seed snapshot + master handoff) — ~14 tests
+- [ ] **Block 18.3** — Distributed-auto startup/join/rejoin flow (first node boots standalone, second node auto-joins, every app instance connects locally, no manual master role) — ~16 tests
+- [ ] **Block 18.4** — Env helpers + Helios/NestJS wiring + replicated Blitz-owned state (`BLITZ_MODE=auto`, `startFromEnv()`, `defaultReplicas` propagation to KV/window state) — ~12 tests
+- [ ] **Block 18.5** — Multi-node HA verification (3 Helios replicas, bootstrap-master failover, restart/rejoin, distributed-default acceptance) — ~18 tests
+- [ ] **Phase 18 checkpoint**: `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; 0 fail, 0 error
+
+---
+
 ## Commit Convention
 
 ```
@@ -4951,4 +4971,4 @@ bun run build
 
 ---
 
-*Plan v17.2 — updated 2026-03-05 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–16 complete — 3461 tests green (3461 pass, 0 fail, 0 error) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Phase 17 CURRENT: Blocks 17.0-17.9F, 17.10, 17.INT (Distributed Executor Service — immediate, non-durable, non-scheduled executor, ~205 tests) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phase 14), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16), `plans/DISTRIBUTED_EXECUTOR_PLAN.md` (Phase 17)*
+*Plan v18.0 — updated 2026-03-06 | Runtime: Bun 1.x | TypeScript: 6.0 beta | NestJS: 11.1.14 | Phases 1–17 complete — 3674 tests green (3674 pass, 0 fail, 0 error) | Phase 16 DONE: Blocks 16.A0-16.INT (Multi-Node Resilience — Cluster Runtime + Partition Replication + Anti-Entropy, 26 audit findings remediated) | Phase 17 DONE: Blocks 17.0-17.9F, 17.10, 17.INT (Distributed Executor Service — Scatter-backed executor runtime complete) | Phase 18 CURRENT: Blocks 18.1-18.5 (Blitz Distributed Embedded Cluster Default — one local NATS node per Helios member, oldest member bootstrap master, auto-cluster on second node) | Cross-ref: `plans/BLITZ_EMBEDDED_NATS_PLAN.md` (Phases 14 + 18), `plans/SERIALIZATION_SERVICE_IMPL_PLAN.md` (Phase 15), `plans/MULTI_NODE_RESILIENCE_PLAN.md` (Phase 16), `plans/DISTRIBUTED_EXECUTOR_PLAN.md` (Phase 17)*

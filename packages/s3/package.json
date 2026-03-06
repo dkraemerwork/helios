@@ -1,5 +1,5 @@
 {
-  "name": "@helios/s3",
+  "name": "@zenystx/s3",
   "version": "1.0.0",
   "description": "S3-backed MapStore for Helios",
   "type": "module",

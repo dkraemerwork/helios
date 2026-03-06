@@ -1,10 +1,10 @@
 /**
- * @helios/blitz NestJS integration.
+ * @zenystx/blitz NestJS integration.
  *
- * Import from '@helios/blitz/nestjs' (NOT from '@helios/blitz').
+ * Import from '@zenystx/blitz/nestjs' (NOT from '@zenystx/blitz').
  *
  * ```typescript
- * import { HeliosBlitzModule } from '@helios/blitz/nestjs';
+ * import { HeliosBlitzModule } from '@zenystx/blitz/nestjs';
  * ```
  */
 export { HeliosBlitzModule } from './HeliosBlitzModule.ts';

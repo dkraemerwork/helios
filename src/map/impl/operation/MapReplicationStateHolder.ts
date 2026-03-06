@@ -8,8 +8,8 @@
  * trigger write-behind. Write-behind state is restored separately via
  * WriteBehindStateHolder.applyState().
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import type { PartitionContainer } from '@helios/internal/partition/impl/PartitionContainer';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { PartitionContainer } from '@zenystx/core/internal/partition/impl/PartitionContainer';
 
 /** A captured (key, value) pair from a record store. */
 export interface ReplicatedRecord {

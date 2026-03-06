@@ -12,16 +12,16 @@
  *  - NestJS injection works with the expanded HeliosInstance interface
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@helios/core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@helios/core/config/HeliosConfig';
-import type { HeliosInstance } from '@helios/core/core/HeliosInstance';
-import type { IMap } from '@helios/core/map/IMap';
-import type { ReplicatedMap } from '@helios/core/replicatedmap/ReplicatedMap';
-import type { LifecycleService } from '@helios/core/instance/lifecycle/LifecycleService';
-import type { Cluster } from '@helios/core/cluster/Cluster';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
+import type { IMap } from '@zenystx/core/map/IMap';
+import type { ReplicatedMap } from '@zenystx/core/replicatedmap/ReplicatedMap';
+import type { LifecycleService } from '@zenystx/core/instance/lifecycle/LifecycleService';
+import type { Cluster } from '@zenystx/core/cluster/Cluster';
 import { Test } from '@nestjs/testing';
-import { HeliosModule } from '@helios/nestjs/HeliosModule';
-import { HELIOS_INSTANCE_TOKEN } from '@helios/nestjs/HeliosInstanceDefinition';
+import { HeliosModule } from '@zenystx/nestjs/HeliosModule';
+import { HELIOS_INSTANCE_TOKEN } from '@zenystx/nestjs/HeliosInstanceDefinition';
 import { Inject, Injectable } from '@nestjs/common';
 
 // ── helpers ────────────────────────────────────────────────────────────────

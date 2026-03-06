@@ -13,7 +13,7 @@
  *   - Shutdown cleanly
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { TestHeliosInstance } from '@helios/test-support/TestHeliosInstance';
+import { TestHeliosInstance } from '@zenystx/core/test-support/TestHeliosInstance';
 
 describe('Helios Smoke Test', () => {
     let hz: TestHeliosInstance;

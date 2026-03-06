@@ -221,7 +221,7 @@ export interface MapStoreFactory<K, V> {
 ```
 
 **Modify `src/index.ts` root barrel exports:**
-- Export `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, and `MapStoreFactory` from `@helios/core`.
+- Export `MapLoader`, `MapStore`, `MapLoaderLifecycleSupport`, and `MapStoreFactory` from `@zenystx/core`.
 
 ### A1.2 — Internal MapDataStore
 
@@ -1053,14 +1053,14 @@ flow through the configured store path.
 **Create `packages/s3/package.json`:**
 ```json
 {
-  "name": "@helios/s3",
+  "name": "@zenystx/s3",
   "version": "1.0.0",
   "description": "S3-backed MapStore for Helios",
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": { "@aws-sdk/client-s3": "^3.700.0" },
-  "peerDependencies": { "@helios/core": "workspace:*" },
-  "devDependencies": { "@helios/core": "workspace:*" },
+  "peerDependencies": { "@zenystx/core": "workspace:*" },
+  "devDependencies": { "@zenystx/core": "workspace:*" },
   "scripts": {
     "test": "bun test",
     "typecheck": "bun run tsc --noEmit"
@@ -1070,8 +1070,8 @@ flow through the configured store path.
 
 **Create `packages/s3/tsconfig.json`:**  
 Extends root `../../tsconfig.json`. Add paths:
-- `@helios/core` → `../../src/index.ts`
-- `@helios/core/*` → `../../src/*`
+- `@zenystx/core` → `../../src/index.ts`
+- `@zenystx/core/*` → `../../src/*`
 
 **Create `packages/s3/bunfig.toml`:**  
 Standard test config (no reflect-metadata needed).
@@ -1220,14 +1220,14 @@ config.addMapConfig(usersCfg);
 **Create `packages/mongodb/package.json`:**
 ```json
 {
-  "name": "@helios/mongodb",
+  "name": "@zenystx/mongodb",
   "version": "1.0.0",
   "description": "MongoDB-backed MapStore for Helios",
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": { "mongodb": "^6.12.0" },
-  "peerDependencies": { "@helios/core": "workspace:*" },
-  "devDependencies": { "@helios/core": "workspace:*" },
+  "peerDependencies": { "@zenystx/core": "workspace:*" },
+  "devDependencies": { "@zenystx/core": "workspace:*" },
   "scripts": { "test": "bun test", "typecheck": "bun run tsc --noEmit" }
 }
 ```
@@ -1365,14 +1365,14 @@ config.addMapConfig(usersCfg);
 **Create `packages/turso/package.json`:**
 ```json
 {
-  "name": "@helios/turso",
+  "name": "@zenystx/turso",
   "version": "1.0.0",
   "description": "Turso/libSQL-backed MapStore for Helios",
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": { "@libsql/client": "^0.14.0" },
-  "peerDependencies": { "@helios/core": "workspace:*" },
-  "devDependencies": { "@helios/core": "workspace:*" },
+  "peerDependencies": { "@zenystx/core": "workspace:*" },
+  "devDependencies": { "@zenystx/core": "workspace:*" },
   "scripts": { "test": "bun test", "typecheck": "bun run tsc --noEmit" }
 }
 ```

@@ -6,15 +6,15 @@
  * the fresh value from the backing store.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@helios/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@helios/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import { EvictionConfig } from '@helios/config/EvictionConfig';
-import { EvictionPolicy } from '@helios/config/EvictionPolicy';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
-import { NoOpTaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
+import { NearCachedMapProxyImpl } from '@zenystx/core/map/impl/nearcache/NearCachedMapProxyImpl';
+import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import { EvictionConfig } from '@zenystx/core/config/EvictionConfig';
+import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
+import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
+import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
 
 const MAP_NAME = 'localInvalidationTestMap';
 

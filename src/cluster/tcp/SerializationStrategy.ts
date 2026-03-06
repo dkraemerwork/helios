@@ -7,7 +7,7 @@
  * v1 (default): JsonSerializationStrategy — human-readable, wire-compatible.
  * v2 (future):  MessagePack/CBOR — compact binary, production-grade throughput.
  */
-import type { ClusterMessage } from '@helios/cluster/tcp/ClusterMessage';
+import type { ClusterMessage } from '@zenystx/core/cluster/tcp/ClusterMessage';
 
 export interface SerializationStrategy {
     serialize(message: ClusterMessage): Buffer;

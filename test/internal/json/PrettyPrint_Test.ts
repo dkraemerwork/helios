@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { JsonObject } from '@helios/internal/json/JsonObject';
-import { PrettyPrint } from '@helios/internal/json/PrettyPrint';
-import { StringWriter } from '@helios/internal/json/StringWriter';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import { PrettyPrint } from '@zenystx/core/internal/json/PrettyPrint';
+import { StringWriter } from '@zenystx/core/internal/json/StringWriter';
 
 describe('PrettyPrint_Test', () => {
   let output: StringWriter;

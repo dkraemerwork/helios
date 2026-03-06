@@ -4,10 +4,10 @@
  * Full IMap contract — Block 7.4.
  * Block 12.A3: 11 data methods made async (Promise return types).
  */
-import type { Predicate } from '@helios/query/Predicate';
-import type { Aggregator } from '@helios/aggregation/Aggregator';
-import type { EntryListener } from '@helios/map/EntryListener';
-import type { IndexConfig } from '@helios/config/IndexConfig';
+import type { Predicate } from '@zenystx/core/query/Predicate';
+import type { Aggregator } from '@zenystx/core/aggregation/Aggregator';
+import type { EntryListener } from '@zenystx/core/map/EntryListener';
+import type { IndexConfig } from '@zenystx/core/config/IndexConfig';
 
 export interface IMap<K, V> {
     /** Returns the name of this map. */

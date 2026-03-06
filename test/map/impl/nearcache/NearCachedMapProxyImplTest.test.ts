@@ -7,13 +7,13 @@
  * - local invalidation on writes
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@helios/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@helios/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
-import { NoOpTaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
+import { NearCachedMapProxyImpl } from '@zenystx/core/map/impl/nearcache/NearCachedMapProxyImpl';
+import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
+import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
 
 function makeNearCache(name = 'testMap'): DefaultNearCache<string, string> {
     const config = new NearCacheConfig(name)

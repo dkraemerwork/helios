@@ -4,19 +4,19 @@
  * Ported from com.hazelcast.map.impl.operation (Block 3.2b).
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { TestNodeEngine } from '@helios/test-support/TestNodeEngine';
-import { DefaultRecordStore } from '@helios/map/impl/recordstore/DefaultRecordStore';
-import { MapContainerService } from '@helios/map/impl/MapContainerService';
-import { MapService } from '@helios/map/impl/MapService';
-import { GetOperation } from '@helios/map/impl/operation/GetOperation';
-import { PutOperation } from '@helios/map/impl/operation/PutOperation';
-import { RemoveOperation } from '@helios/map/impl/operation/RemoveOperation';
-import { ContainsKeyOperation } from '@helios/map/impl/operation/ContainsKeyOperation';
-import { PutIfAbsentOperation } from '@helios/map/impl/operation/PutIfAbsentOperation';
-import { SetOperation } from '@helios/map/impl/operation/SetOperation';
-import { DeleteOperation } from '@helios/map/impl/operation/DeleteOperation';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import type { Data } from '@helios/internal/serialization/Data';
+import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
+import { MapContainerService } from '@zenystx/core/map/impl/MapContainerService';
+import { MapService } from '@zenystx/core/map/impl/MapService';
+import { GetOperation } from '@zenystx/core/map/impl/operation/GetOperation';
+import { PutOperation } from '@zenystx/core/map/impl/operation/PutOperation';
+import { RemoveOperation } from '@zenystx/core/map/impl/operation/RemoveOperation';
+import { ContainsKeyOperation } from '@zenystx/core/map/impl/operation/ContainsKeyOperation';
+import { PutIfAbsentOperation } from '@zenystx/core/map/impl/operation/PutIfAbsentOperation';
+import { SetOperation } from '@zenystx/core/map/impl/operation/SetOperation';
+import { DeleteOperation } from '@zenystx/core/map/impl/operation/DeleteOperation';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 describe('Map Operations via NodeEngine', () => {
     const MAP_NAME = 'testMap';

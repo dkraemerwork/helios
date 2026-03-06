@@ -17,8 +17,8 @@
 
 import 'reflect-metadata';
 import { Injectable } from '@nestjs/common';
-import { InjectMap } from '@helios/nestjs';
-import type { IMap } from '@helios/core/map/IMap';
+import { InjectMap } from '@zenystx/nestjs';
+import type { IMap } from '@zenystx/core/map/IMap';
 
 export interface Session {
     sessionId: string;

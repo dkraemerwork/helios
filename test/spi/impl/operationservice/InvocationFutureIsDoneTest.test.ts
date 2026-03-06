@@ -4,7 +4,7 @@
  * Tests for InvocationFuture.isDone() state management.
  */
 import { describe, it, expect } from 'bun:test';
-import { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFuture';
+import { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
 
 describe('InvocationFuture.isDone()', () => {
     it('isDone is false when future is newly created (no result yet)', () => {

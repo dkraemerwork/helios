@@ -4,12 +4,12 @@
  * Simple free-list buffer pool (max 3 items). No synchronization needed —
  * Bun is single-threaded and each Worker gets its own JS heap.
  */
-import { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { ByteArrayObjectDataInput } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import type { InternalSerializationService } from '@helios/internal/serialization/InternalSerializationService';
-import type { ByteOrder } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import type { Data } from '@helios/internal/serialization/Data';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
+import { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { ByteArrayObjectDataInput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
+import type { ByteOrder } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
 
 const MAX_POOLED_ITEMS = 3;
 const DEFAULT_OUTPUT_SIZE = 4096;

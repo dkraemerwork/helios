@@ -8,9 +8,9 @@
  * In Helios this is a thin coordination wrapper: it holds the request parameters
  * and delegates execution to the operation when {@link execute} is called.
  */
-import { MapGetInvalidationMetaDataOperation } from '@helios/map/impl/operation/MapGetInvalidationMetaDataOperation';
-import type { InvalidationMetaDataResponse } from '@helios/map/impl/operation/MapGetInvalidationMetaDataOperation';
-import type { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { MapGetInvalidationMetaDataOperation } from '@zenystx/core/map/impl/operation/MapGetInvalidationMetaDataOperation';
+import type { InvalidationMetaDataResponse } from '@zenystx/core/map/impl/operation/MapGetInvalidationMetaDataOperation';
+import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 export interface MapFetchNearCacheInvalidationMetadataRequestParameters {
     /** names of the maps for which metadata should be fetched */

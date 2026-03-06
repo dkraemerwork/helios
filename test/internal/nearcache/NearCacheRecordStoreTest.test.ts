@@ -5,16 +5,16 @@
  * TTL/idle tests use shorter durations to avoid long test runs.
  */
 import { describe, it, expect } from 'bun:test';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { EvictionConfig } from '@helios/config/EvictionConfig';
-import { EvictionPolicy } from '@helios/config/EvictionPolicy';
-import { MaxSizePolicy } from '@helios/config/MaxSizePolicy';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import type { NearCacheRecordStore } from '@helios/internal/nearcache/NearCacheRecordStore';
-import { NearCacheDataRecordStore } from '@helios/internal/nearcache/impl/store/NearCacheDataRecordStore';
-import { NearCacheObjectRecordStore } from '@helios/internal/nearcache/impl/store/NearCacheObjectRecordStore';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { EvictionConfig } from '@zenystx/core/config/EvictionConfig';
+import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
+import { MaxSizePolicy } from '@zenystx/core/config/MaxSizePolicy';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import type { NearCacheRecordStore } from '@zenystx/core/internal/nearcache/NearCacheRecordStore';
+import { NearCacheDataRecordStore } from '@zenystx/core/internal/nearcache/impl/store/NearCacheDataRecordStore';
+import { NearCacheObjectRecordStore } from '@zenystx/core/internal/nearcache/impl/store/NearCacheObjectRecordStore';
+import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
 
 const DEFAULT_RECORD_COUNT = 100;
 const DEFAULT_NEAR_CACHE_NAME = 'TestNearCache';

@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.server.tcp.PacketDecoderTest}.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Packet } from '@helios/internal/nio/Packet';
-import { PacketIOHelper } from '@helios/internal/nio/PacketIOHelper';
-import { PacketDecoder } from '@helios/internal/server/tcp/PacketDecoder';
-import { SwCounter } from '@helios/internal/util/counters/SwCounter';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
+import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { PacketIOHelper } from '@zenystx/core/internal/nio/PacketIOHelper';
+import { PacketDecoder } from '@zenystx/core/internal/server/tcp/PacketDecoder';
+import { SwCounter } from '@zenystx/core/internal/util/counters/SwCounter';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
 
 describe('PacketDecoderTest', () => {
     let dispatcher: Packet[];

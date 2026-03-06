@@ -5,13 +5,13 @@
  * In the current single-node phase, backup replication is deferred;
  * only the in-memory backup log tracking is implemented.
  */
-import type { NodeEngine } from '@helios/spi/NodeEngine';
-import type { Counter } from '@helios/internal/util/counters/Counter';
-import type { TransactionLogRecord } from '@helios/transaction/impl/TransactionLogRecord';
-import type { TransactionManagerServiceLike } from '@helios/transaction/impl/TransactionImpl';
-import { State } from '@helios/transaction/impl/Transaction';
-import { TransactionException } from '@helios/transaction/TransactionException';
-import { MwCounter } from '@helios/internal/util/counters/MwCounter';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import type { Counter } from '@zenystx/core/internal/util/counters/Counter';
+import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
+import type { TransactionManagerServiceLike } from '@zenystx/core/transaction/impl/TransactionImpl';
+import { State } from '@zenystx/core/transaction/impl/Transaction';
+import { TransactionException } from '@zenystx/core/transaction/TransactionException';
+import { MwCounter } from '@zenystx/core/internal/util/counters/MwCounter';
 
 export const SERVICE_NAME = 'hz:core:txManagerService';
 

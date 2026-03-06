@@ -13,18 +13,18 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 
-import { DefaultNearCache } from '@helios/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig, LocalUpdatePolicy } from '@helios/config/NearCacheConfig';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import { EvictionPolicy } from '@helios/config/EvictionPolicy';
-import { NearCachedClientMapProxy } from '@helios/client/map/impl/nearcache/NearCachedClientMapProxy';
-import { NearCachedClientCacheProxy } from '@helios/client/cache/impl/nearcache/NearCachedClientCacheProxy';
-import { RepairingTask } from '@helios/internal/nearcache/impl/invalidation/RepairingTask';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import { NoOpTaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
-import type { MinimalPartitionService } from '@helios/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { InvalidationMetaDataFetcher } from '@helios/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
+import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig, LocalUpdatePolicy } from '@zenystx/core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
+import { NearCachedClientMapProxy } from '@zenystx/core/client/map/impl/nearcache/NearCachedClientMapProxy';
+import { NearCachedClientCacheProxy } from '@zenystx/core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { RepairingTask } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingTask';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 

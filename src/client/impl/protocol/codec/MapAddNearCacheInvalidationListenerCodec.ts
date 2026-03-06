@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapAddNearCacheInvalidationListenerCodec}.
  * Auto-generated codec for near-cache invalidation listener on IMap.
  */
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
 import { StringCodec } from './builtin/StringCodec';
 import { DataCodec } from './builtin/DataCodec';
 import { ListUUIDCodec } from './builtin/ListUUIDCodec';
@@ -16,7 +16,7 @@ import {
     UUID_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
 } from './builtin/FixedSizeTypesCodec';
-import type { Data } from '@helios/internal/serialization/Data';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 // Field offsets relative to frame content start
 // Initial request frame: type(4) + correlationId(8) + partitionId(4) + listenerFlags(4) + localOnly(1)

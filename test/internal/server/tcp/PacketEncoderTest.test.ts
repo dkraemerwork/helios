@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.server.tcp.PacketEncoderTest}.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Packet } from '@helios/internal/nio/Packet';
-import { PacketIOHelper } from '@helios/internal/nio/PacketIOHelper';
-import { PacketEncoder } from '@helios/internal/server/tcp/PacketEncoder';
-import { HandlerStatus } from '@helios/internal/networking/HandlerStatus';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
+import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { PacketIOHelper } from '@zenystx/core/internal/nio/PacketIOHelper';
+import { PacketEncoder } from '@zenystx/core/internal/server/tcp/PacketEncoder';
+import { HandlerStatus } from '@zenystx/core/internal/networking/HandlerStatus';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
 
 const { CLEAN, DIRTY } = HandlerStatus;
 

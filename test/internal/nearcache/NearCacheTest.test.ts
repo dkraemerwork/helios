@@ -4,20 +4,20 @@
  * Tests DefaultNearCache delegating to a wrapped NearCacheRecordStore.
  */
 import { describe, it, expect } from 'bun:test';
-import { DefaultNearCache } from '@helios/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import type { NearCacheRecordStore } from '@helios/internal/nearcache/NearCacheRecordStore';
-import type { NearCacheRecord } from '@helios/internal/nearcache/NearCacheRecord';
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
-import type { StaleReadDetector } from '@helios/internal/nearcache/impl/invalidation/StaleReadDetector';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { UpdateSemantic } from '@helios/internal/nearcache/NearCache';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import { NoOpTaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
-import { NearCacheStatsImpl } from '@helios/internal/monitor/impl/NearCacheStatsImpl';
-import { NOT_RESERVED } from '@helios/internal/nearcache/NearCacheRecord';
+import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import type { NearCacheRecordStore } from '@zenystx/core/internal/nearcache/NearCacheRecordStore';
+import type { NearCacheRecord } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { StaleReadDetector } from '@zenystx/core/internal/nearcache/impl/invalidation/StaleReadDetector';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { UpdateSemantic } from '@zenystx/core/internal/nearcache/NearCache';
+import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import { NoOpTaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import { NearCacheStatsImpl } from '@zenystx/core/internal/monitor/impl/NearCacheStatsImpl';
+import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
 
 const DEFAULT_RECORD_COUNT = 100;
 const DEFAULT_NEAR_CACHE_NAME = 'TestNearCache';

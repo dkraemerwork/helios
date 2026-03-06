@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, mock } from 'bun:test';
-import { NestManagedContext } from '@helios/nestjs/context/NestManagedContext';
-import { NestAware } from '@helios/nestjs/context/NestAware';
+import { NestManagedContext } from '@zenystx/nestjs/context/NestManagedContext';
+import { NestAware } from '@zenystx/nestjs/context/NestAware';
 
 // ---------------------------------------------------------------------------
 // Helpers

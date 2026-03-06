@@ -1,4 +1,4 @@
-import type { IMap } from '@helios/map/IMap';
+import type { IMap } from '@zenystx/core/map/IMap';
 import type { Sink } from './Sink.ts';
 import type { MapEntry } from '../source/HeliosMapSource.ts';
 

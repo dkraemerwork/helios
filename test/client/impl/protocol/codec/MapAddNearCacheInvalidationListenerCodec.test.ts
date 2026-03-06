@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test';
-import { MapAddNearCacheInvalidationListenerCodec } from '@helios/client/impl/protocol/codec/MapAddNearCacheInvalidationListenerCodec';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import type { Data } from '@helios/internal/serialization/Data';
+import { MapAddNearCacheInvalidationListenerCodec } from '@zenystx/core/client/impl/protocol/codec/MapAddNearCacheInvalidationListenerCodec';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 const UUID_A = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const UUID_B = '11111111-2222-3333-4444-555555555555';

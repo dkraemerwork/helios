@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.cluster.MemberSelector}.
  */
-import type { Member } from '@helios/cluster/Member';
+import type { Member } from '@zenystx/core/cluster/Member';
 
 export interface MemberSelector {
     /**

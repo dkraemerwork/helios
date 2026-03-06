@@ -1,15 +1,15 @@
-import type { IMap } from "@helios/map/IMap";
-import type { IQueue } from "@helios/collection/IQueue";
-import type { IList } from "@helios/collection/IList";
-import type { ISet } from "@helios/collection/ISet";
-import type { ITopic } from "@helios/topic/ITopic";
-import type { MultiMap } from "@helios/multimap/MultiMap";
-import type { ReplicatedMap } from "@helios/replicatedmap/ReplicatedMap";
-import type { DistributedObject } from "@helios/core/DistributedObject";
-import type { LifecycleService } from "@helios/instance/lifecycle/LifecycleService";
-import type { Cluster } from "@helios/cluster/Cluster";
-import type { IExecutorService } from "@helios/executor/IExecutorService";
-import type { HeliosConfig } from "@helios/config/HeliosConfig";
+import type { IMap } from "@zenystx/core/map/IMap";
+import type { IQueue } from "@zenystx/core/collection/IQueue";
+import type { IList } from "@zenystx/core/collection/IList";
+import type { ISet } from "@zenystx/core/collection/ISet";
+import type { ITopic } from "@zenystx/core/topic/ITopic";
+import type { MultiMap } from "@zenystx/core/multimap/MultiMap";
+import type { ReplicatedMap } from "@zenystx/core/replicatedmap/ReplicatedMap";
+import type { DistributedObject } from "@zenystx/core/core/DistributedObject";
+import type { LifecycleService } from "@zenystx/core/instance/lifecycle/LifecycleService";
+import type { Cluster } from "@zenystx/core/cluster/Cluster";
+import type { IExecutorService } from "@zenystx/core/executor/IExecutorService";
+import type { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
 
 /**
  * Primary interface for a Helios cluster member or client.

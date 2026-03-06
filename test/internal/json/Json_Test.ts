@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'bun:test';
-import { Json } from '@helios/internal/json/Json';
-import { JsonArray } from '@helios/internal/json/JsonArray';
-import { JsonObject } from '@helios/internal/json/JsonObject';
-import { StringReader } from '@helios/internal/json/StringReader';
+import { Json } from '@zenystx/core/internal/json/Json';
+import { JsonArray } from '@zenystx/core/internal/json/JsonArray';
+import { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import { StringReader } from '@zenystx/core/internal/json/StringReader';
 
 describe('Json_Test', () => {
   it('literalConstants', () => {

@@ -4,8 +4,8 @@
  * An immutable collection that applies a MemberSelector to its internal Member collection.
  * Mutation methods throw errors. Supports iteration via for-of.
  */
-import type { Member } from '@helios/cluster/Member';
-import type { MemberSelector } from '@helios/cluster/MemberSelector';
+import type { Member } from '@zenystx/core/cluster/Member';
+import type { MemberSelector } from '@zenystx/core/cluster/MemberSelector';
 
 export class MemberSelectingCollection<M extends Member> implements Iterable<M> {
     private readonly members: M[];

@@ -8,10 +8,10 @@
  * TypeScript port exercises the same contract at the unit level via RepairingTask/MapNearCacheManager.
  */
 import { describe, it, expect } from 'bun:test';
-import { MapNearCacheManager } from '@helios/map/impl/nearcache/MapNearCacheManager';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import type { MapNearCacheNodeEngine } from '@helios/map/impl/nearcache/MapNearCacheManager';
+import { MapNearCacheManager } from '@zenystx/core/map/impl/nearcache/MapNearCacheManager';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import type { MapNearCacheNodeEngine } from '@zenystx/core/map/impl/nearcache/MapNearCacheManager';
 
 const MAP_NAME = 'test';
 

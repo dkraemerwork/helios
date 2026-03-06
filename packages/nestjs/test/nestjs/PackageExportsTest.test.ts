@@ -2,21 +2,21 @@
  * Block 9.9 — Subpath exports, package structure tests, build + publish verification.
  *
  * Verifies that:
- *  1. The main @helios/nestjs index barrel exports all expected public API symbols.
- *  2. Subpath imports (@helios/nestjs/cache, /transaction, /health, /events, /decorators)
+ *  1. The main @zenystx/nestjs index barrel exports all expected public API symbols.
+ *  2. Subpath imports (@zenystx/nestjs/cache, /transaction, /health, /events, /decorators)
  *     each export the right symbols independently.
  *  3. package.json files/exports structure is publish-ready.
  */
 
 import { describe, it, expect } from 'bun:test';
-import * as MainExports from '@helios/nestjs/index';
-import * as CacheExports from '@helios/nestjs/cache';
-import * as TransactionExports from '@helios/nestjs/transaction';
-import * as HealthExports from '@helios/nestjs/health';
-import * as EventsExports from '@helios/nestjs/events';
-import * as DecoratorsExports from '@helios/nestjs/decorators';
-import * as AutoconfigExports from '@helios/nestjs/autoconfiguration';
-import * as ContextExports from '@helios/nestjs/context';
+import * as MainExports from '@zenystx/nestjs/index';
+import * as CacheExports from '@zenystx/nestjs/cache';
+import * as TransactionExports from '@zenystx/nestjs/transaction';
+import * as HealthExports from '@zenystx/nestjs/health';
+import * as EventsExports from '@zenystx/nestjs/events';
+import * as DecoratorsExports from '@zenystx/nestjs/decorators';
+import * as AutoconfigExports from '@zenystx/nestjs/autoconfiguration';
+import * as ContextExports from '@zenystx/nestjs/context';
 
 // ─── 1. Main barrel ──────────────────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ describe('PackageExports / main barrel', () => {
     });
 });
 
-// ─── 2. @helios/nestjs/cache subpath ─────────────────────────────────────────
+// ─── 2. @zenystx/nestjs/cache subpath ─────────────────────────────────────────
 
 describe('PackageExports / subpath: cache', () => {
     it('exports HeliosCacheModule', () => {
@@ -122,7 +122,7 @@ describe('PackageExports / subpath: cache', () => {
     });
 });
 
-// ─── 3. @helios/nestjs/transaction subpath ────────────────────────────────────
+// ─── 3. @zenystx/nestjs/transaction subpath ────────────────────────────────────
 
 describe('PackageExports / subpath: transaction', () => {
     it('exports HeliosTransactionModule', () => {
@@ -146,7 +146,7 @@ describe('PackageExports / subpath: transaction', () => {
     });
 });
 
-// ─── 4. @helios/nestjs/health subpath ────────────────────────────────────────
+// ─── 4. @zenystx/nestjs/health subpath ────────────────────────────────────────
 
 describe('PackageExports / subpath: health', () => {
     it('exports HeliosHealthIndicator', () => {
@@ -158,7 +158,7 @@ describe('PackageExports / subpath: health', () => {
     });
 });
 
-// ─── 5. @helios/nestjs/events subpath ────────────────────────────────────────
+// ─── 5. @zenystx/nestjs/events subpath ────────────────────────────────────────
 
 describe('PackageExports / subpath: events', () => {
     it('exports HeliosEventBridge', () => {
@@ -170,7 +170,7 @@ describe('PackageExports / subpath: events', () => {
     });
 });
 
-// ─── 6. @helios/nestjs/decorators subpath ────────────────────────────────────
+// ─── 6. @zenystx/nestjs/decorators subpath ────────────────────────────────────
 
 describe('PackageExports / subpath: decorators', () => {
     it('exports InjectHelios', () => {
@@ -194,7 +194,7 @@ describe('PackageExports / subpath: decorators', () => {
     });
 });
 
-// ─── 7. @helios/nestjs/autoconfiguration subpath ─────────────────────────────
+// ─── 7. @zenystx/nestjs/autoconfiguration subpath ─────────────────────────────
 
 describe('PackageExports / subpath: autoconfiguration', () => {
     it('exports HeliosAutoConfigurationModule', () => {
@@ -206,7 +206,7 @@ describe('PackageExports / subpath: autoconfiguration', () => {
     });
 });
 
-// ─── 8. @helios/nestjs/context subpath ───────────────────────────────────────
+// ─── 8. @zenystx/nestjs/context subpath ───────────────────────────────────────
 
 describe('PackageExports / subpath: context', () => {
     it('exports NestAware', () => {
@@ -227,8 +227,8 @@ describe('PackageExports / subpath: context', () => {
 describe('PackageExports / package.json structure', () => {
     const pkg = require('../../package.json') as Record<string, unknown>;
 
-    it('has name @helios/nestjs', () => {
-        expect(pkg['name']).toBe('@helios/nestjs');
+    it('has name @zenystx/nestjs', () => {
+        expect(pkg['name']).toBe('@zenystx/nestjs');
     });
 
     it('has exports map with main "." entry', () => {

@@ -1,4 +1,4 @@
-import { tokenizeVersionString } from '@helios/version/Version';
+import { tokenizeVersionString } from '@zenystx/core/version/Version';
 
 /**
  * Build information for the Helios runtime.

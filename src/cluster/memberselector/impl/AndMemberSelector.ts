@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.cluster.memberselector.impl.AndMemberSelector}.
  * Selects a member only if all sub-selectors succeed (short-circuit AND).
  */
-import type { Member } from '@helios/cluster/Member';
-import type { MemberSelector } from '@helios/cluster/MemberSelector';
+import type { Member } from '@zenystx/core/cluster/Member';
+import type { MemberSelector } from '@zenystx/core/cluster/MemberSelector';
 
 export class AndMemberSelector implements MemberSelector {
     private readonly selectors: MemberSelector[];

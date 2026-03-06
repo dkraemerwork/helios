@@ -4,12 +4,12 @@
  * Tests basic behavior that doesn't require begin/commit/rollback execution.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { TransactionImpl } from '@helios/transaction/impl/TransactionImpl';
-import type { TransactionManagerServiceLike } from '@helios/transaction/impl/TransactionImpl';
-import type { NodeEngine } from '@helios/spi/NodeEngine';
-import { TransactionOptions, TransactionType } from '@helios/transaction/TransactionOptions';
-import { MwCounter } from '@helios/internal/util/counters/MwCounter';
-import { State } from '@helios/transaction/impl/Transaction';
+import { TransactionImpl } from '@zenystx/core/transaction/impl/TransactionImpl';
+import type { TransactionManagerServiceLike } from '@zenystx/core/transaction/impl/TransactionImpl';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import { TransactionOptions, TransactionType } from '@zenystx/core/transaction/TransactionOptions';
+import { MwCounter } from '@zenystx/core/internal/util/counters/MwCounter';
+import { State } from '@zenystx/core/transaction/impl/Transaction';
 
 function makeMockManager(): TransactionManagerServiceLike {
     return {

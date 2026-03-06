@@ -6,14 +6,14 @@
  * factory hook registration, error handling, and edge cases.
  */
 import { describe, expect, test } from 'bun:test';
-import { SerializationServiceImpl } from '@helios/internal/serialization/impl/SerializationServiceImpl';
-import { SerializationConfig, type DataSerializableFactory, type IdentifiedDataSerializable } from '@helios/internal/serialization/impl/SerializationConfig';
-import { HazelcastSerializationError } from '@helios/internal/serialization/impl/HazelcastSerializationError';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import { SerializationConstants } from '@helios/internal/serialization/impl/SerializationConstants';
-import { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { ByteArrayObjectDataInput, BIG_ENDIAN, LITTLE_ENDIAN } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import type { DataSerializerHook } from '@helios/internal/serialization/impl/DataSerializerHook';
+import { SerializationServiceImpl } from '@zenystx/core/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig, type DataSerializableFactory, type IdentifiedDataSerializable } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
+import { HazelcastSerializationError } from '@zenystx/core/internal/serialization/impl/HazelcastSerializationError';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { SerializationConstants } from '@zenystx/core/internal/serialization/impl/SerializationConstants';
+import { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { ByteArrayObjectDataInput, BIG_ENDIAN, LITTLE_ENDIAN } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { DataSerializerHook } from '@zenystx/core/internal/serialization/impl/DataSerializerHook';
 
 // ── toData / toObject round-trip tests ──
 

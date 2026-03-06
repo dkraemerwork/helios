@@ -1,5 +1,5 @@
-import { JsonValue } from '@helios/internal/json/JsonValue';
-import type { JsonWriter } from '@helios/internal/json/JsonWriter';
+import { JsonValue } from '@zenystx/core/internal/json/JsonValue';
+import type { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
 
 /** JSON string value. */
 export class JsonString extends JsonValue {

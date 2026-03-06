@@ -1,5 +1,5 @@
 {
-  "name": "@helios/mongodb",
+  "name": "@zenystx/mongodb",
   "version": "1.0.0",
   "description": "MongoDB-backed MapStore for Helios",
   "type": "module",

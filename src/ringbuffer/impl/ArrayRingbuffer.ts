@@ -1,6 +1,6 @@
-import type { Ringbuffer } from '@helios/ringbuffer/impl/Ringbuffer';
-import { StaleSequenceException } from '@helios/ringbuffer/StaleSequenceException';
-import { ReadOnlyRingbufferIterator } from '@helios/ringbuffer/impl/ReadOnlyRingbufferIterator';
+import type { Ringbuffer } from '@zenystx/core/ringbuffer/impl/Ringbuffer';
+import { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
+import { ReadOnlyRingbufferIterator } from '@zenystx/core/ringbuffer/impl/ReadOnlyRingbufferIterator';
 
 /**
  * The ArrayRingbuffer is responsible for storing the actual contents of a ringbuffer.

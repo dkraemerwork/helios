@@ -3,15 +3,15 @@
  * Manages HASH and SORTED indexes per attribute for a map.
  * Block 7.4a.
  */
-import type { IndexRegistry } from '@helios/query/impl/IndexRegistry';
-import type { Index, IndexConfig as IndexConfigInterface } from '@helios/query/impl/Index';
-import { IndexType } from '@helios/query/impl/Index';
-import { IndexMatchHint } from '@helios/query/impl/QueryContext';
-import type { QueryContext } from '@helios/query/impl/QueryContext';
-import { HashIndex } from '@helios/query/impl/HashIndex';
-import { SortedIndex } from '@helios/query/impl/SortedIndex';
-import { canonicalizeAttribute } from '@helios/query/impl/IndexUtils';
-import type { IndexConfig } from '@helios/config/IndexConfig';
+import type { IndexRegistry } from '@zenystx/core/query/impl/IndexRegistry';
+import type { Index, IndexConfig as IndexConfigInterface } from '@zenystx/core/query/impl/Index';
+import { IndexType } from '@zenystx/core/query/impl/Index';
+import { IndexMatchHint } from '@zenystx/core/query/impl/QueryContext';
+import type { QueryContext } from '@zenystx/core/query/impl/QueryContext';
+import { HashIndex } from '@zenystx/core/query/impl/HashIndex';
+import { SortedIndex } from '@zenystx/core/query/impl/SortedIndex';
+import { canonicalizeAttribute } from '@zenystx/core/query/impl/IndexUtils';
+import type { IndexConfig } from '@zenystx/core/config/IndexConfig';
 
 /** An index entry stored in the registry, wrapping the underlying data structure. */
 interface IndexEntry {

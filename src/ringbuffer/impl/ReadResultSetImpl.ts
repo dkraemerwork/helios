@@ -1,5 +1,5 @@
-import type { Data } from '@helios/internal/serialization/Data';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.ReadResultSetImpl}.

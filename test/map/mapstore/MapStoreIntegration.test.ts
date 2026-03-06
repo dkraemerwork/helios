@@ -5,13 +5,13 @@
  * IMap async methods triggering store operations.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import { MapStoreConfig } from '@helios/config/MapStoreConfig';
-import type { MapStore } from '@helios/map/MapStore';
-import type { MapLoader } from '@helios/map/MapLoader';
-import type { MapLoaderLifecycleSupport } from '@helios/map/MapLoaderLifecycleSupport';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { MapConfig } from '@zenystx/core/config/MapConfig';
+import { MapStoreConfig } from '@zenystx/core/config/MapStoreConfig';
+import type { MapStore } from '@zenystx/core/map/MapStore';
+import type { MapLoader } from '@zenystx/core/map/MapLoader';
+import type { MapLoaderLifecycleSupport } from '@zenystx/core/map/MapLoaderLifecycleSupport';
 
 // ── Mock store implementations ─────────────────────────────────────────────
 

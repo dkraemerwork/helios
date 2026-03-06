@@ -3,8 +3,8 @@
  *
  * Provides partition topology information to services and operations.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import type { Address } from '@helios/cluster/Address';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Address } from '@zenystx/core/cluster/Address';
 
 export interface PartitionService {
     /** Returns the total number of partitions in the cluster. */

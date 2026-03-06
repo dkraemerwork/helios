@@ -5,22 +5,22 @@
  * CancellableFuture.cancel() routing, and error semantics.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ExecutorServiceProxy } from '@helios/executor/impl/ExecutorServiceProxy.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
-import type { NodeEngine } from '@helios/spi/NodeEngine.js';
-import type { OperationService } from '@helios/spi/impl/operationservice/OperationService.js';
-import type { PartitionService } from '@helios/spi/PartitionService.js';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService.js';
-import type { Address } from '@helios/cluster/Address.js';
-import type { Member } from '@helios/cluster/Member.js';
-import type { Operation } from '@helios/spi/impl/operationservice/Operation.js';
-import { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFuture.js';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData.js';
-import { Bits } from '@helios/internal/nio/Bits.js';
-import type { ExecutorOperationResult } from '@helios/executor/ExecutorOperationResult.js';
-import type { Data } from '@helios/internal/serialization/Data.js';
-import type { TaskCallable, InlineTaskCallable } from '@helios/executor/TaskCallable.js';
+import { ExecutorServiceProxy } from '@zenystx/core/executor/impl/ExecutorServiceProxy.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine.js';
+import type { OperationService } from '@zenystx/core/spi/impl/operationservice/OperationService.js';
+import type { PartitionService } from '@zenystx/core/spi/PartitionService.js';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService.js';
+import type { Address } from '@zenystx/core/cluster/Address.js';
+import type { Member } from '@zenystx/core/cluster/Member.js';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation.js';
+import { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture.js';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData.js';
+import { Bits } from '@zenystx/core/internal/nio/Bits.js';
+import type { ExecutorOperationResult } from '@zenystx/core/executor/ExecutorOperationResult.js';
+import type { Data } from '@zenystx/core/internal/serialization/Data.js';
+import type { TaskCallable, InlineTaskCallable } from '@zenystx/core/executor/TaskCallable.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

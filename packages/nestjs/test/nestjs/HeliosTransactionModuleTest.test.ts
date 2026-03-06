@@ -12,18 +12,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Injectable } from '@nestjs/common';
-import { HeliosTransactionManager } from '@helios/nestjs/HeliosTransactionManager';
-import { ManagedTransactionalTaskContext } from '@helios/nestjs/ManagedTransactionalTaskContext';
-import { Transactional, Propagation } from '@helios/nestjs/Transactional';
-import { HeliosTransactionModule } from '@helios/nestjs/HeliosTransactionModule';
+import { HeliosTransactionManager } from '@zenystx/nestjs/HeliosTransactionManager';
+import { ManagedTransactionalTaskContext } from '@zenystx/nestjs/ManagedTransactionalTaskContext';
+import { Transactional, Propagation } from '@zenystx/nestjs/Transactional';
+import { HeliosTransactionModule } from '@zenystx/nestjs/HeliosTransactionModule';
 import {
     NoTransactionException,
     TransactionSystemException,
     TransactionSuspensionNotSupportedException,
-} from '@helios/nestjs/TransactionExceptions';
-import type { TransactionContext, TransactionalMap } from '@helios/core/transaction/TransactionContext';
-import { TransactionTimedOutException } from '@helios/core/transaction/TransactionTimedOutException';
-import type { TransactionContextFactory } from '@helios/nestjs/HeliosTransactionManager';
+} from '@zenystx/nestjs/TransactionExceptions';
+import type { TransactionContext, TransactionalMap } from '@zenystx/core/transaction/TransactionContext';
+import { TransactionTimedOutException } from '@zenystx/core/transaction/TransactionTimedOutException';
+import type { TransactionContextFactory } from '@zenystx/nestjs/HeliosTransactionManager';
 
 // ---------------------------------------------------------------------------
 // Mock TransactionContext builder

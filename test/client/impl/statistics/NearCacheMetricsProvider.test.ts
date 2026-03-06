@@ -5,12 +5,12 @@
  * {@code com.hazelcast.client.impl.statistics.NearCacheMetricsProvider}.
  */
 import { describe, test, expect } from 'bun:test';
-import { NearCacheMetricsProvider } from '@helios/client/impl/statistics/NearCacheMetricsProvider';
-import type { NearCacheManager } from '@helios/internal/nearcache/NearCacheManager';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { NOT_CACHED } from '@helios/internal/nearcache/NearCache';
+import { NearCacheMetricsProvider } from '@zenystx/core/client/impl/statistics/NearCacheMetricsProvider';
+import type { NearCacheManager } from '@zenystx/core/internal/nearcache/NearCacheManager';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
 
 function makeStats(hits: number, misses: number): NearCacheStats {
     return {

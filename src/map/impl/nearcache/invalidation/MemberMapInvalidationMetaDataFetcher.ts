@@ -8,8 +8,8 @@
  * In Phase 4+ (multi-node), this would invoke MapGetInvalidationMetaDataOperation
  * on each data member to retrieve partition UUIDs and sequences.
  */
-import type { InvalidationMetaDataFetcher } from '@helios/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { RepairingHandler } from '@helios/internal/nearcache/impl/invalidation/RepairingHandler';
+import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
 
 export class MemberMapInvalidationMetaDataFetcher implements InvalidationMetaDataFetcher {
     /**

@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.internal.networking.InboundHandler}.
  */
-import { ChannelHandler } from '@helios/internal/networking/ChannelHandler';
-import type { HandlerStatus } from '@helios/internal/networking/HandlerStatus';
+import { ChannelHandler } from '@zenystx/core/internal/networking/ChannelHandler';
+import type { HandlerStatus } from '@zenystx/core/internal/networking/HandlerStatus';
 
 export abstract class InboundHandler<S, D> extends ChannelHandler<S, D> {
     abstract onRead(): HandlerStatus | Promise<HandlerStatus> | void;

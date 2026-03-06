@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.internal.partition.impl.NameSpaceUtil}.
  * Helper for retrieving ServiceNamespace objects from partition containers.
  */
-import type { ObjectNamespace } from '@helios/internal/services/ObjectNamespace';
-import type { ServiceNamespace } from '@helios/internal/services/ServiceNamespace';
+import type { ObjectNamespace } from '@zenystx/core/internal/services/ObjectNamespace';
+import type { ServiceNamespace } from '@zenystx/core/internal/services/ServiceNamespace';
 
 export class NameSpaceUtil {
     private constructor() {}

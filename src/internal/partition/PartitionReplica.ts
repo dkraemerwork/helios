@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.partition.PartitionReplica}.
  * Represents the owner of a partition replica in the partition table.
  */
-import { Address } from '@helios/cluster/Address';
+import { Address } from '@zenystx/core/cluster/Address';
 
 export class PartitionReplica {
     private readonly _address: Address;

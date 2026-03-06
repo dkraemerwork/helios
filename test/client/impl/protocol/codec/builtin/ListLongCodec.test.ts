@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
-import { ListLongCodec } from '@helios/client/impl/protocol/codec/builtin/ListLongCodec';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ListLongCodec } from '@zenystx/core/client/impl/protocol/codec/builtin/ListLongCodec';
 
 function roundTrip(values: bigint[]): bigint[] {
     const msg = ClientMessage.createForEncode();

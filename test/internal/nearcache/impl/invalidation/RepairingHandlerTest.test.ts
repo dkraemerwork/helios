@@ -3,10 +3,10 @@
  * Port of core invalidation handling behavior.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { RepairingHandler } from '@helios/internal/nearcache/impl/invalidation/RepairingHandler';
-import type { MinimalPartitionService } from '@helios/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
+import { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
+import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
 
 const PARTITION_COUNT = 10;
 

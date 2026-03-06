@@ -5,13 +5,13 @@
  * (INVALIDATE and CACHE_ON_UPDATE local update policies).
  */
 import { describe, test, expect } from 'bun:test';
-import { NearCachedClientCacheProxy } from '@helios/client/cache/impl/nearcache/NearCachedClientCacheProxy';
-import { LocalUpdatePolicy } from '@helios/config/NearCacheConfig';
-import { CACHED_AS_NULL, NOT_CACHED } from '@helios/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@helios/internal/nearcache/NearCacheRecord';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
-import type { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import { NearCachedClientCacheProxy } from '@zenystx/core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { LocalUpdatePolicy } from '@zenystx/core/config/NearCacheConfig';
+import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/core/internal/nearcache/NearCache';
+import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
+import type { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
 
 // ── helper ────────────────────────────────────────────────────────────────────
 

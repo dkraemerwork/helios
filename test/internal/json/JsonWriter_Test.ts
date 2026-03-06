@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
-import { StringWriter } from '@helios/internal/json/StringWriter';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
+import { StringWriter } from '@zenystx/core/internal/json/StringWriter';
 
 function string(...chars: (string | number)[]): string {
   return chars.map(c => typeof c === 'number' ? String.fromCharCode(c) : c).join('');

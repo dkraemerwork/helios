@@ -1,10 +1,10 @@
 import { describe, test, expect } from 'bun:test';
-import { LikePredicate } from '@helios/query/impl/predicates/LikePredicate';
-import { ILikePredicate } from '@helios/query/impl/predicates/ILikePredicate';
-import type { QueryContext } from '@helios/query/impl/QueryContext';
-import { IndexMatchHint } from '@helios/query/impl/QueryContext';
-import type { Index } from '@helios/query/impl/Index';
-import { IndexType } from '@helios/query/impl/Index';
+import { LikePredicate } from '@zenystx/core/query/impl/predicates/LikePredicate';
+import { ILikePredicate } from '@zenystx/core/query/impl/predicates/ILikePredicate';
+import type { QueryContext } from '@zenystx/core/query/impl/QueryContext';
+import { IndexMatchHint } from '@zenystx/core/query/impl/QueryContext';
+import type { Index } from '@zenystx/core/query/impl/Index';
+import { IndexType } from '@zenystx/core/query/impl/Index';
 import { entry } from './PredicateTestUtils';
 
 /** Creates a minimal Index stub with the given type. */

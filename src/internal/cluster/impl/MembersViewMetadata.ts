@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.internal.cluster.impl.MembersViewMetadata}.
  */
-import type { Address } from '@helios/cluster/Address';
+import type { Address } from '@zenystx/core/cluster/Address';
 
 export class MembersViewMetadata {
     readonly #memberAddress: Address;

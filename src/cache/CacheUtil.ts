@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.cache.CacheUtil}.
  * Utility class for cache name prefixing and distributed-object naming.
  */
-import { CACHE_MANAGER_PREFIX } from '@helios/cache/HazelcastCacheManager';
+import { CACHE_MANAGER_PREFIX } from '@zenystx/core/cache/HazelcastCacheManager';
 
 export class CacheUtil {
     private constructor() {}

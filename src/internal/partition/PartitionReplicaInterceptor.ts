@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.internal.partition.PartitionReplicaInterceptor}.
  */
-import type { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
+import type { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
 
 export interface PartitionReplicaInterceptor {
     replicaChanged(

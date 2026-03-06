@@ -8,16 +8,16 @@
  * - Send periodic operations to cluster members to fetch latest partition sequences/UUIDs
  *   (controlled via RECONCILIATION_INTERVAL_SECONDS).
  */
-import { HeliosProperty } from '@helios/spi/properties/HeliosProperty';
-import type { HeliosProperties } from '@helios/spi/properties/HeliosProperties';
-import type { InvalidationMetaDataFetcher } from '@helios/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
-import type { TaskScheduler } from '@helios/internal/nearcache/impl/TaskScheduler';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { MinimalPartitionService } from '@helios/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import { RepairingHandler } from '@helios/internal/nearcache/impl/invalidation/RepairingHandler';
-import { StaleReadDetectorImpl } from '@helios/internal/nearcache/impl/invalidation/StaleReadDetectorImpl';
-import { DefaultNearCache } from '@helios/internal/nearcache/impl/DefaultNearCache';
+import { HeliosProperty } from '@zenystx/core/spi/properties/HeliosProperty';
+import type { HeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
+import type { InvalidationMetaDataFetcher } from '@zenystx/core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { TaskScheduler } from '@zenystx/core/internal/nearcache/impl/TaskScheduler';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
+import { StaleReadDetectorImpl } from '@zenystx/core/internal/nearcache/impl/invalidation/StaleReadDetectorImpl';
+import { DefaultNearCache } from '@zenystx/core/internal/nearcache/impl/DefaultNearCache';
 
 const NANOS_PER_SECOND = 1_000_000_000;
 const RESCHEDULE_FAILED_INITIALIZATION_AFTER_MS = 500;

@@ -3,9 +3,9 @@
  *
  * Sends invalidations to Near Caches immediately.
  */
-import { Invalidator } from '@helios/internal/nearcache/impl/invalidation/Invalidator';
-import type { Invalidation } from '@helios/internal/nearcache/impl/invalidation/Invalidation';
-import type { EventFilter, InvalidatorNodeEngine } from '@helios/internal/nearcache/impl/invalidation/Invalidator';
+import { Invalidator } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidator';
+import type { Invalidation } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidation';
+import type { EventFilter, InvalidatorNodeEngine } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidator';
 
 export class NonStopInvalidator extends Invalidator {
     constructor(serviceName: string, eventFilter: EventFilter, nodeEngine: InvalidatorNodeEngine) {

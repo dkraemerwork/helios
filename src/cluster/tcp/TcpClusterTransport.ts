@@ -16,9 +16,9 @@
  * Block 16.A5: Added SerializationStrategy support, new message types,
  * send()/disconnectPeer()/onMessage, membership-driven connection management.
  */
-import { Eventloop, type EventloopChannel, type EventloopServer } from '@helios/internal/eventloop/Eventloop';
-import type { ClusterMessage } from '@helios/cluster/tcp/ClusterMessage';
-import { type SerializationStrategy, JsonSerializationStrategy } from '@helios/cluster/tcp/SerializationStrategy';
+import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/core/internal/eventloop/Eventloop';
+import type { ClusterMessage } from '@zenystx/core/cluster/tcp/ClusterMessage';
+import { type SerializationStrategy, JsonSerializationStrategy } from '@zenystx/core/cluster/tcp/SerializationStrategy';
 
 export class TcpClusterTransport {
     private readonly _nodeId: string;

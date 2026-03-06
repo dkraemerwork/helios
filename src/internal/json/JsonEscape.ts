@@ -1,4 +1,4 @@
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
 
 /** Utility for writing JSON-escaped strings into a StringBuilder. */
 export class JsonEscape {

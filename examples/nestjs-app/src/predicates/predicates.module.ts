@@ -7,7 +7,7 @@
 
 import 'reflect-metadata';
 import { Module } from '@nestjs/common';
-import { HeliosObjectExtractionModule } from '@helios/nestjs';
+import { HeliosObjectExtractionModule } from '@zenystx/nestjs';
 import { PredicatesService } from './predicates.service';
 
 @Module({

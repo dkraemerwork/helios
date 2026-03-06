@@ -4,7 +4,7 @@
  * Tests for InvocationFuture.get() resolution behavior.
  */
 import { describe, it, expect } from 'bun:test';
-import { InvocationFuture, CancellationException } from '@helios/spi/impl/operationservice/InvocationFuture';
+import { InvocationFuture, CancellationException } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
 
 describe('InvocationFuture.get()', () => {
     it('get() resolves immediately when already complete', async () => {

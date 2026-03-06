@@ -1,9 +1,15 @@
 {
-  "name": "@helios/core",
+  "name": "@zenystx/core",
   "version": "1.0.0",
   "description": "Helios core — TypeScript/Bun port of Hazelcast distributed in-memory platform",
   "private": false,
-  "workspaces": ["packages/nestjs", "packages/blitz", "packages/s3", "packages/mongodb", "packages/turso"],
+  "workspaces": [
+    "packages/nestjs",
+    "packages/blitz",
+    "packages/s3",
+    "packages/mongodb",
+    "packages/turso"
+  ],
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
@@ -31,7 +37,8 @@
     "test:one": "bun test --test-name-pattern",
     "typecheck": "bun run tsc --noEmit",
     "convert": "bun run scripts/convert-java-tests.ts",
-    "prepublish": "bun run build"
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run build"
   },
   "keywords": [
     "hazelcast",

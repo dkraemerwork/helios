@@ -5,7 +5,7 @@
  * cache names across the locally-owned partitions.  The response is consumed by the
  * client-side {@code RepairingTask} during anti-entropy reconciliation.
  */
-import type { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 /** [partitionId, sequence] tuple returned per cache name. */
 export type PartitionSequenceEntry = [number, number];

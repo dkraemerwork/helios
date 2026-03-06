@@ -4,7 +4,7 @@
  * Mutable implementation of NearCacheStats. All mutation methods are
  * safe to call in Bun's single-threaded runtime.
  */
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats';
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats';
 
 export class NearCacheStatsImpl implements NearCacheStats {
     private readonly _creationTime: number;

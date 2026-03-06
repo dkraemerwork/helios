@@ -5,11 +5,11 @@
  * Key-aware records are stored in a map (later writes overwrite earlier ones for the same key).
  * Records without a key are stored under unique object keys.
  */
-import type { NodeEngine } from '@helios/spi/NodeEngine';
-import type { TransactionLogRecord } from '@helios/transaction/impl/TransactionLogRecord';
-import type { TargetAwareTransactionLogRecord } from '@helios/transaction/impl/TargetAwareTransactionLogRecord';
-import type { InvocationFuture } from '@helios/spi/impl/operationservice/InvocationFuture';
-import type { Operation } from '@helios/spi/impl/operationservice/Operation';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
+import type { TargetAwareTransactionLogRecord } from '@zenystx/core/transaction/impl/TargetAwareTransactionLogRecord';
+import type { InvocationFuture } from '@zenystx/core/spi/impl/operationservice/InvocationFuture';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
 
 export class TransactionLog {
     private readonly _recordMap = new Map<unknown, TransactionLogRecord>();

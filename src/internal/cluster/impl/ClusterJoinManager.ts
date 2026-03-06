@@ -8,13 +8,13 @@
  * - Finding 7: Master crash recovery via membership view collection
  *
  * The original ClusterJoinManager (discovery bridge) remains at
- * {@code @helios/internal/cluster/ClusterJoinManager} for address resolution.
+ * {@code @zenystx/core/internal/cluster/ClusterJoinManager} for address resolution.
  */
-import { MemberImpl } from '@helios/cluster/impl/MemberImpl';
-import { Address } from '@helios/cluster/Address';
-import { ClusterServiceImpl } from '@helios/internal/cluster/impl/ClusterServiceImpl';
-import { MembersView } from '@helios/internal/cluster/impl/MembersView';
-import { ConfigCheck } from '@helios/internal/cluster/impl/ConfigCheck';
+import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/core/cluster/Address';
+import { ClusterServiceImpl } from '@zenystx/core/internal/cluster/impl/ClusterServiceImpl';
+import { MembersView } from '@zenystx/core/internal/cluster/impl/MembersView';
+import { ConfigCheck } from '@zenystx/core/internal/cluster/impl/ConfigCheck';
 
 /**
  * Transport abstraction for sending join protocol messages.

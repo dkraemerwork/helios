@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import type { Predicate } from '@helios/query/Predicate';
-import { Predicates } from '@helios/query/Predicates';
-import { NotPredicate } from '@helios/query/impl/predicates/NotPredicate';
-import { TruePredicate } from '@helios/query/impl/predicates/TruePredicate';
+import type { Predicate } from '@zenystx/core/query/Predicate';
+import { Predicates } from '@zenystx/core/query/Predicates';
+import { NotPredicate } from '@zenystx/core/query/impl/predicates/NotPredicate';
+import { TruePredicate } from '@zenystx/core/query/impl/predicates/TruePredicate';
 import { createMockVisitablePredicate, createPassthroughVisitor } from './PredicateTestUtils';
 
 function mockPredicate(): Predicate {

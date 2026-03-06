@@ -13,7 +13,7 @@ import {
     HeliosCacheModule,
     type HeliosCacheModuleOptions,
     type HeliosCacheModuleOptionsFactory,
-} from '@helios/nestjs/HeliosCacheModule';
+} from '@zenystx/nestjs/HeliosCacheModule';
 
 describe('HeliosCacheModule.registerAsync', () => {
     let module: TestingModule;

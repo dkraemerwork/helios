@@ -7,23 +7,23 @@
  * and version +1 extra delta on failure.
  */
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import { MigrationManager } from '@helios/internal/partition/impl/MigrationManager';
-import { MigrationRequestOperation } from '@helios/internal/partition/impl/MigrationRequestOperation';
-import { MigrationCommitOperation } from '@helios/internal/partition/impl/MigrationCommitOperation';
-import { FinalizeMigrationOperation } from '@helios/internal/partition/impl/FinalizeMigrationOperation';
-import { PublishCompletedMigrationsOp } from '@helios/internal/partition/impl/PublishCompletedMigrationsOp';
-import { MigrationInfo, MigrationStatus } from '@helios/internal/partition/MigrationInfo';
-import { InternalPartitionServiceImpl } from '@helios/internal/partition/impl/InternalPartitionServiceImpl';
-import { InternalPartitionImpl } from '@helios/internal/partition/impl/InternalPartitionImpl';
-import { PartitionStateManager } from '@helios/internal/partition/impl/PartitionStateManager';
-import { PartitionContainer } from '@helios/internal/partition/impl/PartitionContainer';
-import { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
-import { PartitionMigrationEvent } from '@helios/internal/partition/PartitionMigrationEvent';
-import { Address } from '@helios/cluster/Address';
-import type { MigrationAwareService } from '@helios/internal/partition/MigrationAwareService';
-import type { ServiceNamespace } from '@helios/internal/services/ServiceNamespace';
-import type { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { MAX_REPLICA_COUNT } from '@helios/internal/partition/InternalPartition';
+import { MigrationManager } from '@zenystx/core/internal/partition/impl/MigrationManager';
+import { MigrationRequestOperation } from '@zenystx/core/internal/partition/impl/MigrationRequestOperation';
+import { MigrationCommitOperation } from '@zenystx/core/internal/partition/impl/MigrationCommitOperation';
+import { FinalizeMigrationOperation } from '@zenystx/core/internal/partition/impl/FinalizeMigrationOperation';
+import { PublishCompletedMigrationsOp } from '@zenystx/core/internal/partition/impl/PublishCompletedMigrationsOp';
+import { MigrationInfo, MigrationStatus } from '@zenystx/core/internal/partition/MigrationInfo';
+import { InternalPartitionServiceImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionServiceImpl';
+import { InternalPartitionImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionImpl';
+import { PartitionStateManager } from '@zenystx/core/internal/partition/impl/PartitionStateManager';
+import { PartitionContainer } from '@zenystx/core/internal/partition/impl/PartitionContainer';
+import { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
+import { PartitionMigrationEvent } from '@zenystx/core/internal/partition/PartitionMigrationEvent';
+import { Address } from '@zenystx/core/cluster/Address';
+import type { MigrationAwareService } from '@zenystx/core/internal/partition/MigrationAwareService';
+import type { ServiceNamespace } from '@zenystx/core/internal/services/ServiceNamespace';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { MAX_REPLICA_COUNT } from '@zenystx/core/internal/partition/InternalPartition';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 

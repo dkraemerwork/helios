@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.cache.CacheUtilTest}.
  */
 import { describe, expect, test } from 'bun:test';
-import { CacheUtil } from '@helios/cache/CacheUtil';
-import { CACHE_MANAGER_PREFIX } from '@helios/cache/HazelcastCacheManager';
+import { CacheUtil } from '@zenystx/core/cache/CacheUtil';
+import { CACHE_MANAGER_PREFIX } from '@zenystx/core/cache/HazelcastCacheManager';
 
 const CACHE_NAME = 'MY-CACHE';
 const URI_SCOPE = 'MY-SCOPE';

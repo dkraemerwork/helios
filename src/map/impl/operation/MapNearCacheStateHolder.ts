@@ -5,7 +5,7 @@
  * single partition during map replication/migration. Produced by {@link prepare}
  * before migration and consumed by {@link applyState} on the target member.
  */
-import type { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 
 export class MapNearCacheStateHolder {
     /** UUID of the partition at snapshot time, or null if not yet assigned. */

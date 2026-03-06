@@ -4,8 +4,8 @@
  * Responsible for writing or reading a Packet to/from a ByteBuffer.
  * Stateful — reusable but should only be used for reading OR writing, not both.
  */
-import { Packet } from '@helios/internal/nio/Packet';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
+import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
 
 export class PacketIOHelper {
     // 1 (version) + 2 (flags/char) + 4 (partitionId) + 4 (payload size)

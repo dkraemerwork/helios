@@ -3,9 +3,9 @@
  * Ported from com.hazelcast.map.impl.recordstore (operation unit tests, Block 3.2b).
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { DefaultRecordStore } from '@helios/map/impl/recordstore/DefaultRecordStore';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
-import type { Data } from '@helios/internal/serialization/Data';
+import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
+import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 describe('DefaultRecordStore', () => {
     let store: DefaultRecordStore;

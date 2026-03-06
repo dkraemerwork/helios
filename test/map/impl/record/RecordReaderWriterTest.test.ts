@@ -2,16 +2,16 @@
  * Port of {@code com.hazelcast.map.impl.record.RecordReaderWriterTest}.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import type { Data } from '@helios/internal/serialization/Data';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { ByteArrayObjectDataInput, BIG_ENDIAN } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import { RecordReaderWriter } from '@helios/map/impl/record/RecordReaderWriter';
-import { DataRecordWithStats } from '@helios/map/impl/record/DataRecordWithStats';
-import { ObjectRecordWithStats } from '@helios/map/impl/record/ObjectRecordWithStats';
-import { Records } from '@helios/map/impl/record/Records';
-import { ExpiryMetadataImpl } from '@helios/map/impl/recordstore/expiry/ExpiryMetadataImpl';
-import type { ExpiryMetadata } from '@helios/map/impl/recordstore/expiry/ExpiryMetadata';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { ByteArrayObjectDataInput, BIG_ENDIAN } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { RecordReaderWriter } from '@zenystx/core/map/impl/record/RecordReaderWriter';
+import { DataRecordWithStats } from '@zenystx/core/map/impl/record/DataRecordWithStats';
+import { ObjectRecordWithStats } from '@zenystx/core/map/impl/record/ObjectRecordWithStats';
+import { Records } from '@zenystx/core/map/impl/record/Records';
+import { ExpiryMetadataImpl } from '@zenystx/core/map/impl/recordstore/expiry/ExpiryMetadataImpl';
+import type { ExpiryMetadata } from '@zenystx/core/map/impl/recordstore/expiry/ExpiryMetadata';
 
 /** Create a HeapData with an integer payload (type=1, value=id). */
 function makeData(id: number): Data {

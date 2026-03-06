@@ -4,10 +4,10 @@
  * Reads binary data from a byte Buffer with position tracking.
  * Supports both big-endian and little-endian byte orders.
  */
-import { Bits } from '@helios/internal/nio/Bits';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { InternalSerializationService } from '@helios/internal/serialization/InternalSerializationService';
+import { Bits } from '@zenystx/core/internal/nio/Bits';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
 
 export const NULL_ARRAY_LENGTH = -1;
 const UTF_BUFFER_SIZE = 1024;

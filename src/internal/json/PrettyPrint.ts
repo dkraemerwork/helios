@@ -1,6 +1,6 @@
-import { WriterConfig } from '@helios/internal/json/WriterConfig';
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
-import { Writer } from '@helios/internal/json/Writer';
+import { WriterConfig } from '@zenystx/core/internal/json/WriterConfig';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
+import { Writer } from '@zenystx/core/internal/json/Writer';
 
 /** Human-readable JSON output with configurable indentation. */
 export class PrettyPrint extends WriterConfig {

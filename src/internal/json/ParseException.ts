@@ -1,4 +1,4 @@
-import { Location } from '@helios/internal/json/Location';
+import { Location } from '@zenystx/core/internal/json/Location';
 
 /** Unchecked exception thrown when JSON parsing fails. */
 export class ParseException extends Error {

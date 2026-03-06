@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { UsernamePasswordCredentials } from '@helios/security/UsernamePasswordCredentials';
-import { SimpleTokenCredentials } from '@helios/security/SimpleTokenCredentials';
+import { UsernamePasswordCredentials } from '@zenystx/core/security/UsernamePasswordCredentials';
+import { SimpleTokenCredentials } from '@zenystx/core/security/SimpleTokenCredentials';
 
 describe('CredentialsTest', () => {
     describe('UsernamePasswordCredentials', () => {

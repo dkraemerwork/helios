@@ -1,4 +1,4 @@
-import { DiscoveryStrategyConfig } from '@helios/config/DiscoveryStrategyConfig';
+import { DiscoveryStrategyConfig } from '@zenystx/core/config/DiscoveryStrategyConfig';
 
 export class DiscoveryConfig {
     private _discoveryStrategyConfigs: DiscoveryStrategyConfig[] = [];

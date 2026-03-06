@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.internal.serialization.SerializationService}.
  */
-import type { Data } from '@helios/internal/serialization/Data';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 export interface SerializationService {
     toData(obj: unknown): Data | null;

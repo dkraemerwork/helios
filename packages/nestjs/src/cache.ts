@@ -1,9 +1,9 @@
 /**
- * @helios/nestjs/cache — Cache subpath barrel.
+ * @zenystx/nestjs/cache — Cache subpath barrel.
  *
  * Import cache-related symbols from this subpath to reduce bundle size:
  * ```typescript
- * import { HeliosCacheModule, HeliosCache, Cacheable } from '@helios/nestjs/cache';
+ * import { HeliosCacheModule, HeliosCache, Cacheable } from '@zenystx/nestjs/cache';
  * ```
  */
 

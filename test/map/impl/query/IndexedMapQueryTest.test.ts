@@ -13,21 +13,21 @@
  * 9. NearCachedIMapWrapper addIndex delegation
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { IndexRegistryImpl } from '@helios/query/impl/IndexRegistryImpl';
-import { IndexType } from '@helios/query/impl/Index';
-import { IndexConfig } from '@helios/config/IndexConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import { MapProxy } from '@helios/map/impl/MapProxy';
-import { DefaultRecordStore } from '@helios/map/impl/recordstore/DefaultRecordStore';
-import { MapContainerService } from '@helios/map/impl/MapContainerService';
-import { TestNodeEngine } from '@helios/test-support/TestNodeEngine';
-import { EqualPredicate } from '@helios/query/impl/predicates/EqualPredicate';
-import { GreaterLessPredicate } from '@helios/query/impl/predicates/GreaterLessPredicate';
-import { BetweenPredicate } from '@helios/query/impl/predicates/BetweenPredicate';
-import { LikePredicate } from '@helios/query/impl/predicates/LikePredicate';
-import { InPredicate } from '@helios/query/impl/predicates/InPredicate';
-import { IndexMatchHint } from '@helios/query/impl/QueryContext';
-import type { IMap } from '@helios/map/IMap';
+import { IndexRegistryImpl } from '@zenystx/core/query/impl/IndexRegistryImpl';
+import { IndexType } from '@zenystx/core/query/impl/Index';
+import { IndexConfig } from '@zenystx/core/config/IndexConfig';
+import { MapConfig } from '@zenystx/core/config/MapConfig';
+import { MapProxy } from '@zenystx/core/map/impl/MapProxy';
+import { DefaultRecordStore } from '@zenystx/core/map/impl/recordstore/DefaultRecordStore';
+import { MapContainerService } from '@zenystx/core/map/impl/MapContainerService';
+import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
+import { EqualPredicate } from '@zenystx/core/query/impl/predicates/EqualPredicate';
+import { GreaterLessPredicate } from '@zenystx/core/query/impl/predicates/GreaterLessPredicate';
+import { BetweenPredicate } from '@zenystx/core/query/impl/predicates/BetweenPredicate';
+import { LikePredicate } from '@zenystx/core/query/impl/predicates/LikePredicate';
+import { InPredicate } from '@zenystx/core/query/impl/predicates/InPredicate';
+import { IndexMatchHint } from '@zenystx/core/query/impl/QueryContext';
+import type { IMap } from '@zenystx/core/map/IMap';
 
 // ── IndexRegistryImpl Tests ──────────────────────────────────────────────────
 

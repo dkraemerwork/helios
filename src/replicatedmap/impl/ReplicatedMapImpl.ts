@@ -1,4 +1,4 @@
-import type { ReplicatedMap } from '@helios/replicatedmap/ReplicatedMap';
+import type { ReplicatedMap } from '@zenystx/core/replicatedmap/ReplicatedMap';
 
 /**
  * In-memory ReplicatedMap implementation for single-node use.

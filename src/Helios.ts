@@ -10,9 +10,9 @@
  *
  * Port of com.hazelcast.core.Hazelcast.
  */
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
-import { loadConfig } from '@helios/config/ConfigLoader';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { loadConfig } from '@zenystx/core/config/ConfigLoader';
 
 export class Helios {
     /** Registry of all live instances keyed by instance name. */

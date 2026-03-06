@@ -6,16 +6,16 @@
  * In TypeScript (single-threaded Bun), thread-access checks are omitted.
  * Java's blocking waitWithDeadline() is replaced by Promise.all().
  */
-import type { NodeEngine } from '@helios/spi/NodeEngine';
-import type { Counter } from '@helios/internal/util/counters/Counter';
-import type { Transaction } from '@helios/transaction/impl/Transaction';
-import type { TransactionLogRecord } from '@helios/transaction/impl/TransactionLogRecord';
-import { State } from '@helios/transaction/impl/Transaction';
-import { TransactionLog } from '@helios/transaction/impl/TransactionLog';
-import { TransactionOptions, TransactionType } from '@helios/transaction/TransactionOptions';
-import { TransactionException } from '@helios/transaction/TransactionException';
-import { TransactionNotActiveException } from '@helios/transaction/TransactionNotActiveException';
-import { TransactionTimedOutException } from '@helios/transaction/TransactionTimedOutException';
+import type { NodeEngine } from '@zenystx/core/spi/NodeEngine';
+import type { Counter } from '@zenystx/core/internal/util/counters/Counter';
+import type { Transaction } from '@zenystx/core/transaction/impl/Transaction';
+import type { TransactionLogRecord } from '@zenystx/core/transaction/impl/TransactionLogRecord';
+import { State } from '@zenystx/core/transaction/impl/Transaction';
+import { TransactionLog } from '@zenystx/core/transaction/impl/TransactionLog';
+import { TransactionOptions, TransactionType } from '@zenystx/core/transaction/TransactionOptions';
+import { TransactionException } from '@zenystx/core/transaction/TransactionException';
+import { TransactionNotActiveException } from '@zenystx/core/transaction/TransactionNotActiveException';
+import { TransactionTimedOutException } from '@zenystx/core/transaction/TransactionTimedOutException';
 
 /** Minimal interface that TransactionImpl needs from the manager service. */
 export interface TransactionManagerServiceLike {

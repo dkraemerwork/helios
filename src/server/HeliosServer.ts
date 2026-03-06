@@ -6,10 +6,10 @@
  *
  * Block 7.7: CLI entrypoint + standalone server mode
  */
-import { Helios } from '@helios/Helios';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { loadConfig } from '@helios/config/ConfigLoader';
-import type { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
+import { Helios } from '@zenystx/core/Helios';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { loadConfig } from '@zenystx/core/config/ConfigLoader';
+import type { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
 
 export type ServerState = 'stopped' | 'starting' | 'running' | 'stopping';
 

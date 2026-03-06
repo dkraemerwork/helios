@@ -1,4 +1,4 @@
-import type { ArrayRingbuffer } from '@helios/ringbuffer/impl/ArrayRingbuffer';
+import type { ArrayRingbuffer } from '@zenystx/core/ringbuffer/impl/ArrayRingbuffer';
 
 /** Read-only iterator over items in a Ringbuffer. */
 export class ReadOnlyRingbufferIterator<E> implements Iterator<E> {

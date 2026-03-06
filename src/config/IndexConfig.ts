@@ -2,7 +2,7 @@
  * Configuration for a map index.
  * Port of com.hazelcast.config.IndexConfig.
  */
-import { IndexType } from '@helios/query/impl/Index';
+import { IndexType } from '@zenystx/core/query/impl/Index';
 
 export class IndexConfig {
     private _name: string | null = null;

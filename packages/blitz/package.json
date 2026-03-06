@@ -1,5 +1,5 @@
 {
-  "name": "@helios/blitz",
+  "name": "@zenystx/blitz",
   "version": "1.0.0",
   "description": "Helios Blitz — NATS-backed stream & batch processing engine",
   "private": false,
@@ -24,7 +24,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist/src --target node --format esm --external @nats-io/jetstream --external @nats-io/kv --external @nats-io/transport-node --external @nestjs/common --external @nestjs/core --external @helios/core && bun build ./src/nestjs/index.ts --outdir dist/src/nestjs --target node --format esm --external @nats-io/jetstream --external @nats-io/kv --external @nats-io/transport-node --external @nestjs/common --external @nestjs/core --external @helios/core && bun run tsc --project tsconfig.build.json",
+    "build": "bun build ./src/index.ts --outdir dist/src --target node --format esm --external @nats-io/jetstream --external @nats-io/kv --external @nats-io/transport-node --external @nestjs/common --external @nestjs/core --external @zenystx/core && bun build ./src/nestjs/index.ts --outdir dist/src/nestjs --target node --format esm --external @nats-io/jetstream --external @nats-io/kv --external @nats-io/transport-node --external @nestjs/common --external @nestjs/core --external @zenystx/core && bun run tsc --project tsconfig.build.json",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "bun run tsc --noEmit",
@@ -45,7 +45,7 @@
   "author": "Helios Contributors",
   "license": "Apache-2.0",
   "dependencies": {
-    "@helios/core": "file:../..",
+    "@zenystx/core": "file:../..",
     "@nats-io/jetstream": "^3.3.1",
     "@nats-io/kv": "^3.3.1",
     "@nats-io/transport-node": "^3.3.1",

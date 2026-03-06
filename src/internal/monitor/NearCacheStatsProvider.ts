@@ -1,4 +1,4 @@
-import type { NearCacheStats } from '@helios/nearcache/NearCacheStats'
+import type { NearCacheStats } from '@zenystx/core/nearcache/NearCacheStats'
 
 /**
  * Monitoring-side contract for Near Cache statistics.

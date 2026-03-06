@@ -4,7 +4,7 @@
  * Member-side implementation of {@link MinimalPartitionService}.
  * Delegates partition ID lookups and partition count to the wrapped partition service.
  */
-import type { MinimalPartitionService } from '@helios/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
 
 /** Minimal interface needed from the wrapped partition service. */
 export interface PartitionServiceLike {

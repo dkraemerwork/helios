@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
-import { LoadOnlyMapDataStore } from '@helios/map/impl/mapstore/LoadOnlyMapDataStore';
-import { MapStoreWrapper } from '@helios/map/impl/mapstore/MapStoreWrapper';
-import type { MapLoader } from '@helios/map/MapLoader';
+import { LoadOnlyMapDataStore } from '@zenystx/core/map/impl/mapstore/LoadOnlyMapDataStore';
+import { MapStoreWrapper } from '@zenystx/core/map/impl/mapstore/MapStoreWrapper';
+import type { MapLoader } from '@zenystx/core/map/MapLoader';
 
 const makeLoader = (): MapLoader<string, string> => ({
   load: async (key) => key === 'k' ? 'v' : null,

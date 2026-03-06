@@ -16,7 +16,7 @@
  */
 
 import { Module } from '@nestjs/common';
-import { HeliosCacheModule, HeliosObjectExtractionModule } from '@helios/nestjs';
+import { HeliosCacheModule, HeliosObjectExtractionModule } from '@zenystx/nestjs';
 import { NearCacheService } from './near-cache.service';
 
 @Module({

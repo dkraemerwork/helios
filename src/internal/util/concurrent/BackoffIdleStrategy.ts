@@ -1,4 +1,4 @@
-import { Preconditions } from '@helios/internal/util/Preconditions';
+import { Preconditions } from '@zenystx/core/internal/util/Preconditions';
 
 /**
  * Idling strategy with exponential backoff.

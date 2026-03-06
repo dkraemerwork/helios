@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { Version } from '@helios/version/Version';
+import { Version } from '@zenystx/core/version/Version';
 
 describe('VersionTest', () => {
   const V3_0 = Version.of(3, 0);

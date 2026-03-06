@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.partition.PartitionMigrationEvent}.
  * Value object describing a partition migration: source, destination, type.
  */
-import type { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
+import type { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
 
 /** The type of migration being performed. */
 export type MigrationType = 'COPY' | 'MOVE' | 'SHIFT_UP' | 'SHIFT_DOWN';

@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.server.tcp.PacketEncoder}.
  * OutboundHandler that writes Packet instances to a ByteBuffer.
  */
-import { OutboundHandler } from '@helios/internal/networking/OutboundHandler';
-import { HandlerStatus } from '@helios/internal/networking/HandlerStatus';
-import { Packet } from '@helios/internal/nio/Packet';
-import { PacketIOHelper } from '@helios/internal/nio/PacketIOHelper';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
+import { OutboundHandler } from '@zenystx/core/internal/networking/OutboundHandler';
+import { HandlerStatus } from '@zenystx/core/internal/networking/HandlerStatus';
+import { Packet } from '@zenystx/core/internal/nio/Packet';
+import { PacketIOHelper } from '@zenystx/core/internal/nio/PacketIOHelper';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
 
 const { CLEAN, DIRTY } = HandlerStatus;
 

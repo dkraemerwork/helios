@@ -7,8 +7,8 @@
 import type { Record } from './Record';
 import { Record as RecordNS } from './Record';
 import { RecordReaderWriter } from './RecordReaderWriter';
-import type { Data } from '@helios/internal/serialization/Data';
-import { JVMUtil } from '@helios/internal/util/JVMUtil';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { JVMUtil } from '@zenystx/core/internal/util/JVMUtil';
 
 export class SimpleRecord<V = unknown> implements Record<V> {
     protected _value: V = null as unknown as V;

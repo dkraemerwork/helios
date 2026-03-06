@@ -1,9 +1,9 @@
-import { Writer } from '@helios/internal/json/Writer';
-import { WriterConfig } from '@helios/internal/json/WriterConfig';
-import { WritingBuffer } from '@helios/internal/json/WritingBuffer';
-import type { JsonWriter } from '@helios/internal/json/JsonWriter';
-import type { JsonObject } from '@helios/internal/json/JsonObject';
-import type { JsonArray } from '@helios/internal/json/JsonArray';
+import { Writer } from '@zenystx/core/internal/json/Writer';
+import { WriterConfig } from '@zenystx/core/internal/json/WriterConfig';
+import { WritingBuffer } from '@zenystx/core/internal/json/WritingBuffer';
+import type { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
+import type { JsonObject } from '@zenystx/core/internal/json/JsonObject';
+import type { JsonArray } from '@zenystx/core/internal/json/JsonArray';
 
 /** Abstract base class for all JSON value types. */
 export abstract class JsonValue {

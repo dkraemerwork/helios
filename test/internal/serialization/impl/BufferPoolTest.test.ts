@@ -1,15 +1,15 @@
 import { describe, test, expect } from 'bun:test';
-import { BufferPool } from '@helios/internal/serialization/impl/bufferpool/BufferPool';
-import { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { ByteArrayObjectDataInput } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import { HazelcastSerializationError } from '@helios/internal/serialization/impl/HazelcastSerializationError';
-import { SerializerAdapter } from '@helios/internal/serialization/impl/SerializerAdapter';
-import { DataSerializerHook } from '@helios/internal/serialization/impl/DataSerializerHook';
-import { SerializationConfig, type DataSerializableFactory } from '@helios/internal/serialization/impl/SerializationConfig';
-import type { InternalSerializationService } from '@helios/internal/serialization/InternalSerializationService';
-import type { Data } from '@helios/internal/serialization/Data';
-import { BIG_ENDIAN, LITTLE_ENDIAN } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
+import { BufferPool } from '@zenystx/core/internal/serialization/impl/bufferpool/BufferPool';
+import { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { ByteArrayObjectDataInput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { HazelcastSerializationError } from '@zenystx/core/internal/serialization/impl/HazelcastSerializationError';
+import { SerializerAdapter } from '@zenystx/core/internal/serialization/impl/SerializerAdapter';
+import { DataSerializerHook } from '@zenystx/core/internal/serialization/impl/DataSerializerHook';
+import { SerializationConfig, type DataSerializableFactory } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
+import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { BIG_ENDIAN, LITTLE_ENDIAN } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
 
 // Minimal stub for InternalSerializationService (only needed as constructor arg)
 const stubService: InternalSerializationService = {

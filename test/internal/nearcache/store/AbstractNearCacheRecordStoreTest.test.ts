@@ -4,12 +4,12 @@
  * Tests the reservation / publish mechanism.
  */
 import { describe, it, expect } from 'bun:test';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { InMemoryFormat } from '@helios/config/InMemoryFormat';
-import { NearCacheDataRecordStore } from '@helios/internal/nearcache/impl/store/NearCacheDataRecordStore';
-import { NOT_RESERVED } from '@helios/internal/nearcache/NearCacheRecord';
-import { TestSerializationService } from '@helios/test-support/TestSerializationService';
-import { MapHeliosProperties } from '@helios/spi/properties/HeliosProperties';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { InMemoryFormat } from '@zenystx/core/config/InMemoryFormat';
+import { NearCacheDataRecordStore } from '@zenystx/core/internal/nearcache/impl/store/NearCacheDataRecordStore';
+import { NOT_RESERVED } from '@zenystx/core/internal/nearcache/NearCacheRecord';
+import { TestSerializationService } from '@zenystx/core/test-support/TestSerializationService';
+import { MapHeliosProperties } from '@zenystx/core/spi/properties/HeliosProperties';
 
 const ss = new TestSerializationService();
 const props = new MapHeliosProperties();

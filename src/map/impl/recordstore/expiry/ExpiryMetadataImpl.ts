@@ -2,9 +2,9 @@
  * Port of {@code com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadataImpl}.
  */
 import type { ExpiryMetadata } from './ExpiryMetadata';
-import type { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import type { ByteArrayObjectDataInput } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import { stripBaseTime, recomputeWithBaseTime } from '@helios/internal/util/TimeStripUtil';
+import type { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import type { ByteArrayObjectDataInput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/core/internal/util/TimeStripUtil';
 
 /** Convert millis to seconds (for compact storage). */
 function toSeconds(millis: number): number {

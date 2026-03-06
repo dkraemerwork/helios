@@ -6,15 +6,15 @@
  * full partition replication for maps.
  */
 import { describe, test, expect, mock } from 'bun:test';
-import { MapReplicationOperation } from '@helios/map/impl/operation/MapReplicationOperation';
-import { MapReplicationStateHolder } from '@helios/map/impl/operation/MapReplicationStateHolder';
-import { WriteBehindStateHolder } from '@helios/map/impl/operation/WriteBehindStateHolder';
-import { MapNearCacheStateHolder } from '@helios/map/impl/operation/MapNearCacheStateHolder';
-import { PartitionContainer } from '@helios/internal/partition/impl/PartitionContainer';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import type { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
-import type { WriteBehindStore } from '@helios/map/impl/mapstore/writebehind/WriteBehindStore';
-import type { Data } from '@helios/internal/serialization/Data';
+import { MapReplicationOperation } from '@zenystx/core/map/impl/operation/MapReplicationOperation';
+import { MapReplicationStateHolder } from '@zenystx/core/map/impl/operation/MapReplicationStateHolder';
+import { WriteBehindStateHolder } from '@zenystx/core/map/impl/operation/WriteBehindStateHolder';
+import { MapNearCacheStateHolder } from '@zenystx/core/map/impl/operation/MapNearCacheStateHolder';
+import { PartitionContainer } from '@zenystx/core/internal/partition/impl/PartitionContainer';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import type { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { WriteBehindStore } from '@zenystx/core/map/impl/mapstore/writebehind/WriteBehindStore';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
 
 function data(val: string): Data {
     // HeapData requires an 8-byte header + payload; build a minimal valid buffer.

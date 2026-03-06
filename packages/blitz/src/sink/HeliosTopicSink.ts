@@ -1,4 +1,4 @@
-import type { ITopic } from '@helios/topic/ITopic';
+import type { ITopic } from '@zenystx/core/topic/ITopic';
 import type { Sink } from './Sink.ts';
 
 class HeliosTopicSinkImpl<T> implements Sink<T> {

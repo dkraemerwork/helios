@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { LifecycleEvent, LifecycleState } from '@helios/instance/lifecycle/LifecycleEvent';
+import { LifecycleEvent, LifecycleState } from '@zenystx/core/instance/lifecycle/LifecycleEvent';
 
 describe('LifecycleEvent', () => {
   test('getState returns the state', () => {

@@ -2,9 +2,9 @@
  * Port of com.hazelcast.client.impl.protocol.ClientMessageWriterTest
  */
 import { describe, it, expect } from 'bun:test';
-import { ClientMessage } from '@helios/client/impl/protocol/ClientMessage';
-import { ClientMessageWriter } from '@helios/client/impl/protocol/ClientMessageWriter';
-import { ByteBuffer } from '@helios/internal/networking/ByteBuffer';
+import { ClientMessage } from '@zenystx/core/client/impl/protocol/ClientMessage';
+import { ClientMessageWriter } from '@zenystx/core/client/impl/protocol/ClientMessageWriter';
+import { ByteBuffer } from '@zenystx/core/internal/networking/ByteBuffer';
 
 const SIZE = ClientMessage.SIZE_OF_FRAME_LENGTH_AND_FLAGS;
 

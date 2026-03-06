@@ -1,5 +1,5 @@
 {
-  "name": "@helios/nestjs",
+  "name": "@zenystx/nestjs",
   "version": "1.0.0",
   "description": "Helios NestJS integration — @Module, @Injectable, cache, transactions, DI",
   "private": false,
@@ -80,14 +80,14 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@helios/core": "file:../..",
+    "@zenystx/core": "file:../..",
     "@nestjs/testing": "^11.1.14",
     "@types/bun": "latest",
     "@types/node": "^25.3.3",
     "typescript": "beta"
   },
   "peerDependencies": {
-    "@helios/core": "^1.0.0",
+    "@zenystx/core": "^1.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0"
   }

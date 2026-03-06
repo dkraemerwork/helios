@@ -5,11 +5,11 @@
  * relevant data to MetaDataContainers. Used to repair Near Cache in the event of missed
  * invalidation events or partition UUID changes.
  */
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
-import type { Data } from '@helios/internal/serialization/Data';
-import type { MinimalPartitionService } from '@helios/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import { MetaDataContainer } from '@helios/internal/nearcache/impl/invalidation/MetaDataContainer';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import { MetaDataContainer } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataContainer';
 
 interface Logger {
     finest(msg: string): void;

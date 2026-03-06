@@ -12,9 +12,8 @@
     "noUncheckedSideEffectImports": true,
 
     "paths": {
-      "@helios/core": ["../../src/index.ts"],
-      "@helios/core/*": ["../../src/*"],
-      "@helios/*": ["../../src/*"]
+      "@zenystx/core": ["../../src/index.ts"],
+      "@zenystx/core/*": ["../../src/*"]
     },
 
     "types": ["bun"]

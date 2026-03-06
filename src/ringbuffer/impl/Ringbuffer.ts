@@ -1,4 +1,4 @@
-import type { StaleSequenceException } from '@helios/ringbuffer/StaleSequenceException';
+import type { StaleSequenceException } from '@zenystx/core/ringbuffer/StaleSequenceException';
 
 /**
  * The Ringbuffer is responsible for storing the actual content of a ringbuffer.

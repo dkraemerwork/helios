@@ -11,11 +11,11 @@
  *  - Near-cache INVALIDATE messages propagate between nodes
  */
 import { describe, it, expect, afterEach } from "bun:test";
-import { Helios } from "@helios/Helios";
-import { HeliosConfig } from "@helios/config/HeliosConfig";
-import { QueueConfig } from "@helios/config/QueueConfig";
-import { TopicConfig } from "@helios/config/TopicConfig";
-import type { HeliosInstanceImpl } from "@helios/instance/impl/HeliosInstanceImpl";
+import { Helios } from "@zenystx/core/Helios";
+import { HeliosConfig } from "@zenystx/core/config/HeliosConfig";
+import { QueueConfig } from "@zenystx/core/config/QueueConfig";
+import { TopicConfig } from "@zenystx/core/config/TopicConfig";
+import type { HeliosInstanceImpl } from "@zenystx/core/instance/impl/HeliosInstanceImpl";
 
 // Ports in the 15780+ range — unlikely to conflict with other tests.
 const BASE_PORT = 15780;

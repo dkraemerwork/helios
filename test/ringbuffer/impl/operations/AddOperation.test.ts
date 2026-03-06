@@ -4,12 +4,12 @@
  * Tests AddOperation with FAIL and OVERWRITE overflow policies.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { RingbufferConfig } from '@helios/config/RingbufferConfig';
-import { RingbufferContainer } from '@helios/ringbuffer/impl/RingbufferContainer';
-import { RingbufferService } from '@helios/ringbuffer/impl/RingbufferService';
-import { AddOperation } from '@helios/ringbuffer/impl/operations/AddOperation';
-import { OverflowPolicy } from '@helios/ringbuffer/OverflowPolicy';
-import { TestNodeEngine } from '@helios/test-support/TestNodeEngine';
+import { RingbufferConfig } from '@zenystx/core/config/RingbufferConfig';
+import { RingbufferContainer } from '@zenystx/core/ringbuffer/impl/RingbufferContainer';
+import { RingbufferService } from '@zenystx/core/ringbuffer/impl/RingbufferService';
+import { AddOperation } from '@zenystx/core/ringbuffer/impl/operations/AddOperation';
+import { OverflowPolicy } from '@zenystx/core/ringbuffer/OverflowPolicy';
+import { TestNodeEngine } from '@zenystx/core/test-support/TestNodeEngine';
 
 const CAPACITY = 10;
 

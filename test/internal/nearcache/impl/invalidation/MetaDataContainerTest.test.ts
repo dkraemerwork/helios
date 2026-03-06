@@ -3,7 +3,7 @@
  * com.hazelcast.internal.nearcache.impl.invalidation.MetaDataContainer.
  */
 import { describe, it, expect } from 'bun:test';
-import { MetaDataContainer } from '@helios/internal/nearcache/impl/invalidation/MetaDataContainer';
+import { MetaDataContainer } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataContainer';
 
 describe('MetaDataContainerTest', () => {
     it('initialStateIsZero', () => {

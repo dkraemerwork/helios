@@ -10,11 +10,11 @@
  * - Shutdown destroys near-caches
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
-import { NearCachedIMapWrapper } from '@helios/map/impl/nearcache/NearCachedIMapWrapper';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { MapConfig } from '@zenystx/core/config/MapConfig';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
+import { NearCachedIMapWrapper } from '@zenystx/core/map/impl/nearcache/NearCachedIMapWrapper';
 
 describe('NearCacheWiringTest', () => {
     let instance: HeliosInstanceImpl;

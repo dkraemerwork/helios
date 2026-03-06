@@ -1,6 +1,6 @@
-import { JsonValue } from '@helios/internal/json/JsonValue';
-import { Json } from '@helios/internal/json/Json';
-import type { JsonWriter } from '@helios/internal/json/JsonWriter';
+import { JsonValue } from '@zenystx/core/internal/json/JsonValue';
+import { Json } from '@zenystx/core/internal/json/Json';
+import type { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
 
 /** Ordered, mutable JSON array. */
 export class JsonArray extends JsonValue implements Iterable<JsonValue> {

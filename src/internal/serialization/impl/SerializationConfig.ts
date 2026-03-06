@@ -4,10 +4,10 @@
  * Configuration for SerializationServiceImpl — byte order, factory registrations,
  * and hook-based subsystem registration.
  */
-import { BIG_ENDIAN, type ByteOrder } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import type { DataSerializerHook } from '@helios/internal/serialization/impl/DataSerializerHook';
-import type { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import type { ByteArrayObjectDataInput } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
+import { BIG_ENDIAN, type ByteOrder } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { DataSerializerHook } from '@zenystx/core/internal/serialization/impl/DataSerializerHook';
+import type { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import type { ByteArrayObjectDataInput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
 
 /** Duck-typed IdentifiedDataSerializable contract. */
 export interface IdentifiedDataSerializable {

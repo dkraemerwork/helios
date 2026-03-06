@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { RingbufferWaitNotifyKey } from '@helios/ringbuffer/impl/RingbufferWaitNotifyKey';
-import { RingbufferService } from '@helios/ringbuffer/impl/RingbufferService';
-import { DistributedObjectNamespace } from '@helios/internal/services/DistributedObjectNamespace';
-import { MapService } from '@helios/map/impl/MapService';
+import { RingbufferWaitNotifyKey } from '@zenystx/core/ringbuffer/impl/RingbufferWaitNotifyKey';
+import { RingbufferService } from '@zenystx/core/ringbuffer/impl/RingbufferService';
+import { DistributedObjectNamespace } from '@zenystx/core/internal/services/DistributedObjectNamespace';
+import { MapService } from '@zenystx/core/map/impl/MapService';
 
 function waitNotifyKey(service: string, object: string, partitionId = 0): RingbufferWaitNotifyKey {
     return new RingbufferWaitNotifyKey(new DistributedObjectNamespace(service, object), partitionId);

@@ -18,11 +18,11 @@ import { FileSource } from '../src/source/FileSource.ts';
 import { FileSink } from '../src/sink/FileSink.ts';
 import { LogSink } from '../src/sink/LogSink.ts';
 import { HttpWebhookSource } from '../src/source/HttpWebhookSource.ts';
-import { Message } from '@helios/topic/Message';
+import { Message } from '@zenystx/core/topic/Message';
 import { BlitzService } from '../src/BlitzService.ts';
-import type { IMap } from '@helios/map/IMap';
-import type { ITopic } from '@helios/topic/ITopic';
-import type { MessageListener } from '@helios/topic/MessageListener';
+import type { IMap } from '@zenystx/core/map/IMap';
+import type { ITopic } from '@zenystx/core/topic/ITopic';
+import type { MessageListener } from '@zenystx/core/topic/MessageListener';
 
 // ---------------------------------------------------------------------------
 // 1 — BlitzCodec

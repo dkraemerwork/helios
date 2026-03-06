@@ -1,4 +1,4 @@
-import { BuildInfo } from '@helios/instance/BuildInfo';
+import { BuildInfo } from '@zenystx/core/instance/BuildInfo';
 
 // Helios build properties (equivalent to GeneratedBuildProperties in Java)
 // These values represent the current Helios port version

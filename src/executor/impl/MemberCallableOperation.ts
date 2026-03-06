@@ -5,7 +5,7 @@
  * does NOT retry on {@link MemberLeftException} or {@link TargetNotMemberException}.
  * If the target member departs, the invocation fails immediately.
  */
-import { ExecuteCallableOperation, type TaskDescriptor } from '@helios/executor/impl/ExecuteCallableOperation.js';
+import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/core/executor/impl/ExecuteCallableOperation.js';
 
 export class MemberCallableOperation extends ExecuteCallableOperation {
     readonly targetMemberUuid: string;

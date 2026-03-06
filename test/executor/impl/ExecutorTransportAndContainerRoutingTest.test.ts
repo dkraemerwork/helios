@@ -12,18 +12,18 @@
  * - Instance shutdown awaits executor-aware service shutdown hooks
  */
 import { describe, test, expect } from 'bun:test';
-import { NodeEngineImpl } from '@helios/spi/impl/NodeEngineImpl';
-import { OperationServiceImpl } from '@helios/spi/impl/operationservice/impl/OperationServiceImpl';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { Address } from '@helios/cluster/Address';
-import { HeliosInstanceImpl } from '@helios/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@helios/config/HeliosConfig';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry';
-import { SerializationServiceImpl } from '@helios/internal/serialization/impl/SerializationServiceImpl';
-import { SerializationConfig } from '@helios/internal/serialization/impl/SerializationConfig';
-import { TargetNotMemberException } from '@helios/spi/impl/operationservice/RetryableException';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig';
+import { NodeEngineImpl } from '@zenystx/core/spi/impl/NodeEngineImpl';
+import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { Address } from '@zenystx/core/cluster/Address';
+import { HeliosInstanceImpl } from '@zenystx/core/instance/impl/HeliosInstanceImpl';
+import { HeliosConfig } from '@zenystx/core/config/HeliosConfig';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry';
+import { SerializationServiceImpl } from '@zenystx/core/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
+import { TargetNotMemberException } from '@zenystx/core/spi/impl/operationservice/RetryableException';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 

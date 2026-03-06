@@ -1,12 +1,12 @@
 import { describe, test, expect } from 'bun:test';
-import { MapStoreConfig } from '@helios/config/MapStoreConfig';
-import { MapConfig } from '@helios/config/MapConfig';
-import type { MapStoreFactory } from '@helios/map/MapStoreFactory';
-import type { MapStore } from '@helios/map/MapStore';
+import { MapStoreConfig } from '@zenystx/core/config/MapStoreConfig';
+import { MapConfig } from '@zenystx/core/config/MapConfig';
+import type { MapStoreFactory } from '@zenystx/core/map/MapStoreFactory';
+import type { MapStore } from '@zenystx/core/map/MapStore';
 
 // Compile-time smoke test — verify root-barrel exports
-import type { MapLoader } from '@helios/map/MapLoader';
-import type { MapLoaderLifecycleSupport } from '@helios/map/MapLoaderLifecycleSupport';
+import type { MapLoader } from '@zenystx/core/map/MapLoader';
+import type { MapLoaderLifecycleSupport } from '@zenystx/core/map/MapLoaderLifecycleSupport';
 // (if these lines compile, the exports are wired)
 
 const fakeFactory: MapStoreFactory<string, string> = {

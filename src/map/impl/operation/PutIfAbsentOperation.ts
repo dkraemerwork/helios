@@ -5,11 +5,11 @@
  * Sends null on success (entry was new) or the existing value otherwise.
  * Implements BackupAwareOperation — produces a PutBackupOperation.
  */
-import type { Data } from '@helios/internal/serialization/Data';
-import type { Operation } from '@helios/spi/impl/operationservice/Operation';
-import type { BackupAwareOperation } from '@helios/spi/impl/operationservice/BackupAwareOperation';
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
-import { PutBackupOperation } from '@helios/map/impl/operation/PutBackupOperation';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import type { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { BackupAwareOperation } from '@zenystx/core/spi/impl/operationservice/BackupAwareOperation';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
+import { PutBackupOperation } from '@zenystx/core/map/impl/operation/PutBackupOperation';
 
 export class PutIfAbsentOperation extends MapOperation implements BackupAwareOperation {
     private readonly _key: Data;

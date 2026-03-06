@@ -10,7 +10,7 @@
  *   - bytesRead / bytesWritten counters are accurate
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { Eventloop, EventloopChannel, EventloopServer } from '@helios/internal/eventloop/Eventloop';
+import { Eventloop, EventloopChannel, EventloopServer } from '@zenystx/core/internal/eventloop/Eventloop';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

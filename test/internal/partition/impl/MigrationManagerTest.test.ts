@@ -4,13 +4,13 @@
  * MigrationPlanner invocation, pauseMigration/resumeMigration.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MigrationManager } from '@helios/internal/partition/impl/MigrationManager';
-import { PartitionStateManager } from '@helios/internal/partition/impl/PartitionStateManager';
-import { MigrationQueue } from '@helios/internal/partition/impl/MigrationQueue';
-import { Address } from '@helios/cluster/Address';
-import { MemberImpl } from '@helios/cluster/impl/MemberImpl';
-import { MemberVersion } from '@helios/version/MemberVersion';
-import type { Member } from '@helios/cluster/Member';
+import { MigrationManager } from '@zenystx/core/internal/partition/impl/MigrationManager';
+import { PartitionStateManager } from '@zenystx/core/internal/partition/impl/PartitionStateManager';
+import { MigrationQueue } from '@zenystx/core/internal/partition/impl/MigrationQueue';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import type { Member } from '@zenystx/core/cluster/Member';
 
 function makeMember(host: string, port: number, uuid?: string, lite = false): Member {
     return new MemberImpl.Builder(new Address(host, port))

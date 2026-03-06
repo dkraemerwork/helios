@@ -11,11 +11,11 @@ import {
     HeliosTransactionModule,
     type HeliosTransactionModuleOptions,
     type HeliosTransactionModuleOptionsFactory,
-} from '@helios/nestjs/HeliosTransactionModule';
-import { HeliosTransactionManager } from '@helios/nestjs/HeliosTransactionManager';
-import { ManagedTransactionalTaskContext } from '@helios/nestjs/ManagedTransactionalTaskContext';
-import type { TransactionContext } from '@helios/core/transaction/TransactionContext';
-import type { TransactionContextFactory } from '@helios/nestjs/HeliosTransactionManager';
+} from '@zenystx/nestjs/HeliosTransactionModule';
+import { HeliosTransactionManager } from '@zenystx/nestjs/HeliosTransactionManager';
+import { ManagedTransactionalTaskContext } from '@zenystx/nestjs/ManagedTransactionalTaskContext';
+import type { TransactionContext } from '@zenystx/core/transaction/TransactionContext';
+import type { TransactionContextFactory } from '@zenystx/nestjs/HeliosTransactionManager';
 
 // ---------------------------------------------------------------------------
 // Minimal mock factory

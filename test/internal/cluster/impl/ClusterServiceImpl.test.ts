@@ -10,15 +10,15 @@
  * - Finding 13: Cluster state change rejected during active migration / stamp mismatch
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ClusterServiceImpl } from '@helios/internal/cluster/impl/ClusterServiceImpl';
-import { ClusterStateManager } from '@helios/internal/cluster/impl/ClusterStateManager';
-import { ClusterState } from '@helios/internal/cluster/ClusterState';
-import { MemberImpl } from '@helios/cluster/impl/MemberImpl';
-import { Address } from '@helios/cluster/Address';
-import { MemberVersion } from '@helios/version/MemberVersion';
-import { MembersView } from '@helios/internal/cluster/impl/MembersView';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import { BuildInfoProvider } from '@helios/instance/BuildInfoProvider';
+import { ClusterServiceImpl } from '@zenystx/core/internal/cluster/impl/ClusterServiceImpl';
+import { ClusterStateManager } from '@zenystx/core/internal/cluster/impl/ClusterStateManager';
+import { ClusterState } from '@zenystx/core/internal/cluster/ClusterState';
+import { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import { Address } from '@zenystx/core/cluster/Address';
+import { MemberVersion } from '@zenystx/core/version/MemberVersion';
+import { MembersView } from '@zenystx/core/internal/cluster/impl/MembersView';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import { BuildInfoProvider } from '@zenystx/core/instance/BuildInfoProvider';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 

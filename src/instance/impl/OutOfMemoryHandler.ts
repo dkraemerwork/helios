@@ -1,4 +1,4 @@
-import type { HeliosInstance } from '@helios/core/HeliosInstance';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
 
 /**
  * Handler for out-of-memory conditions.

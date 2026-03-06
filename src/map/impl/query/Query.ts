@@ -3,9 +3,9 @@
  *
  * Represents a query together with all variants: predicate, iterationType, etc.
  */
-import type { Predicate } from '@helios/query/Predicate';
-import type { PartitionIdSet } from '@helios/internal/util/collection/PartitionIdSet';
-import { IterationType } from '@helios/internal/util/IterationType';
+import type { Predicate } from '@zenystx/core/query/Predicate';
+import type { PartitionIdSet } from '@zenystx/core/internal/util/collection/PartitionIdSet';
+import { IterationType } from '@zenystx/core/internal/util/IterationType';
 
 export class Query {
     private readonly _mapName: string;

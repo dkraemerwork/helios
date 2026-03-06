@@ -5,12 +5,12 @@
  * non-IDS header, readData not a function), EE versioned header skip.
  */
 import { describe, expect, it } from 'bun:test';
-import { DataSerializableSerializer } from '@helios/internal/serialization/impl/serializers/DataSerializableSerializer';
-import { ByteArrayObjectDataOutput } from '@helios/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { ByteArrayObjectDataInput, BIG_ENDIAN } from '@helios/internal/serialization/impl/ByteArrayObjectDataInput';
-import { HazelcastSerializationError } from '@helios/internal/serialization/impl/HazelcastSerializationError';
-import { SerializationConstants } from '@helios/internal/serialization/impl/SerializationConstants';
-import type { DataSerializableFactory, IdentifiedDataSerializable } from '@helios/internal/serialization/impl/SerializationConfig';
+import { DataSerializableSerializer } from '@zenystx/core/internal/serialization/impl/serializers/DataSerializableSerializer';
+import { ByteArrayObjectDataOutput } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { ByteArrayObjectDataInput, BIG_ENDIAN } from '@zenystx/core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { HazelcastSerializationError } from '@zenystx/core/internal/serialization/impl/HazelcastSerializationError';
+import { SerializationConstants } from '@zenystx/core/internal/serialization/impl/SerializationConstants';
+import type { DataSerializableFactory, IdentifiedDataSerializable } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
 
 class TestIdsObject implements IdentifiedDataSerializable {
     value = 0;

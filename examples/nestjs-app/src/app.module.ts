@@ -9,8 +9,8 @@
 import 'reflect-metadata';
 import type { DynamicModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
-import type { HeliosInstance } from '@helios/core/core/HeliosInstance';
-import { HeliosModule } from '@helios/nestjs';
+import type { HeliosInstance } from '@zenystx/core/core/HeliosInstance';
+import { HeliosModule } from '@zenystx/nestjs';
 import { MongoDbStoreModule } from './mongodb-store/mongodb-store.module';
 import { NearCacheModule } from './near-cache/near-cache.module';
 import { PredicatesModule } from './predicates/predicates.module';

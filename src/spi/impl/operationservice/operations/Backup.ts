@@ -4,10 +4,10 @@
  * Executes a backup operation on a replica node. Validates ownership and
  * version freshness before executing. Sends BackupAck for sync backups.
  */
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import type { Address } from '@helios/cluster/Address';
-import type { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
-import type { InternalPartition } from '@helios/internal/partition/InternalPartition';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { Address } from '@zenystx/core/cluster/Address';
+import type { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
+import type { InternalPartition } from '@zenystx/core/internal/partition/InternalPartition';
 
 /**
  * Version tracking for backup replicas.

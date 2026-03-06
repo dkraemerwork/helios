@@ -3,7 +3,7 @@
  *
  * Clears all entries in the partition's record store for the given map.
  */
-import { MapOperation } from '@helios/map/impl/operation/MapOperation';
+import { MapOperation } from '@zenystx/core/map/impl/operation/MapOperation';
 
 export class ClearOperation extends MapOperation {
     constructor(mapName: string) {

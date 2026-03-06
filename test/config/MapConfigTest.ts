@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'bun:test';
-import { MapConfig } from '@helios/config/MapConfig';
-import { EvictionPolicy } from '@helios/config/EvictionPolicy';
-import { MapStoreConfig } from '@helios/config/MapStoreConfig';
-import { NearCacheConfig } from '@helios/config/NearCacheConfig';
+import { MapConfig } from '@zenystx/core/config/MapConfig';
+import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
+import { MapStoreConfig } from '@zenystx/core/config/MapStoreConfig';
+import { NearCacheConfig } from '@zenystx/core/config/NearCacheConfig';
 
 describe('MapConfigTest', () => {
 

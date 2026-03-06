@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { JsonNumber } from '@helios/internal/json/JsonNumber';
-import { JsonWriter } from '@helios/internal/json/JsonWriter';
-import { StringWriter } from '@helios/internal/json/StringWriter';
+import { JsonNumber } from '@zenystx/core/internal/json/JsonNumber';
+import { JsonWriter } from '@zenystx/core/internal/json/JsonWriter';
+import { StringWriter } from '@zenystx/core/internal/json/StringWriter';
 
 describe('JsonNumber_Test', () => {
   let output: StringWriter;

@@ -1,4 +1,4 @@
-import { tokenizeVersionString, Version } from '@helios/version/Version';
+import { tokenizeVersionString, Version } from '@zenystx/core/version/Version';
 
 /** String representation of the UNKNOWN version. */
 const UNKNOWN_VERSION_STRING = '0.0.0';

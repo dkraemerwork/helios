@@ -6,7 +6,22 @@
  * instance and passed to `CacheModule.register({ stores: [...] })`.
  */
 
-import type { KeyvStoreAdapter, StoredData } from 'keyv';
+export type StoredData<Value> = Value;
+
+export interface KeyvStoreAdapter {
+  opts: Record<string, unknown>;
+  namespace?: string;
+  get<Value>(key: string): Promise<StoredData<Value> | undefined>;
+  set(key: string, value: unknown, ttl?: number): Promise<boolean>;
+  delete(key: string): Promise<boolean>;
+  clear(): Promise<void>;
+  has?(key: string): Promise<boolean>;
+  getMany?<Value>(
+    keys: string[],
+  ): Promise<Array<StoredData<Value | undefined>>>;
+  deleteMany?(keys: string[]): Promise<boolean>;
+  on?(_event: string, _listener: (...args: unknown[]) => void): this;
+}
 
 // ---------------------------------------------------------------------------
 // IMap — minimal duck-type interface required by HeliosCache.
@@ -15,12 +30,12 @@ import type { KeyvStoreAdapter, StoredData } from 'keyv';
 // ---------------------------------------------------------------------------
 
 export interface IHeliosCacheMap {
-    get(key: string): Promise<unknown>;
-    set(key: string, value: unknown, ttl?: number): Promise<void>;
-    delete(key: string): Promise<boolean>;
-    clear(): Promise<void>;
-    has?(key: string): Promise<boolean>;
-    keys?(): Promise<string[]>;
+  get(key: string): Promise<unknown>;
+  set(key: string, value: unknown, ttl?: number): Promise<void>;
+  delete(key: string): Promise<boolean>;
+  clear(): Promise<void>;
+  has?(key: string): Promise<boolean>;
+  keys?(): Promise<string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -28,48 +43,50 @@ export interface IHeliosCacheMap {
 // ---------------------------------------------------------------------------
 
 export class HeliosCache implements KeyvStoreAdapter {
-    opts: Record<string, unknown> = {};
-    namespace?: string;
+  opts: Record<string, unknown> = {};
+  namespace?: string;
 
-    constructor(private readonly _map: IHeliosCacheMap) {}
+  constructor(private readonly _map: IHeliosCacheMap) {}
 
-    async get<Value>(key: string): Promise<StoredData<Value> | undefined> {
-        const value = await this._map.get(key);
-        return value as StoredData<Value> | undefined;
+  async get<Value>(key: string): Promise<StoredData<Value> | undefined> {
+    const value = await this._map.get(key);
+    return value as StoredData<Value> | undefined;
+  }
+
+  async set(key: string, value: unknown, ttl?: number): Promise<boolean> {
+    await this._map.set(key, value, ttl);
+    return true;
+  }
+
+  async delete(key: string): Promise<boolean> {
+    return this._map.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    await this._map.clear();
+  }
+
+  async has(key: string): Promise<boolean> {
+    if (this._map.has) {
+      return this._map.has(key);
     }
+    return (await this._map.get(key)) !== undefined;
+  }
 
-    async set(key: string, value: unknown, ttl?: number): Promise<boolean> {
-        await this._map.set(key, value, ttl);
-        return true;
-    }
+  async getMany<Value>(
+    keys: string[],
+  ): Promise<Array<StoredData<Value | undefined>>> {
+    return Promise.all(keys.map((k) => this.get<Value>(k)));
+  }
 
-    async delete(key: string): Promise<boolean> {
-        return this._map.delete(key);
-    }
+  async deleteMany(keys: string[]): Promise<boolean> {
+    await Promise.all(keys.map((k) => this._map.delete(k)));
+    return true;
+  }
 
-    async clear(): Promise<void> {
-        await this._map.clear();
-    }
-
-    async has(key: string): Promise<boolean> {
-        if (this._map.has) {
-            return this._map.has(key);
-        }
-        return (await this._map.get(key)) !== undefined;
-    }
-
-    async getMany<Value>(keys: string[]): Promise<Array<StoredData<Value | undefined>>> {
-        return Promise.all(keys.map(k => this.get<Value>(k)));
-    }
-
-    async deleteMany(keys: string[]): Promise<boolean> {
-        await Promise.all(keys.map(k => this._map.delete(k)));
-        return true;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    on(_event: string, _listener: (...args: unknown[]) => void): this {
-        // Event support is optional for basic cache use cases.
-        return this;
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  on(_event: string, _listener: (...args: unknown[]) => void): this {
+    // Event support is optional for basic cache use cases.
+    return this;
+  }
 }

@@ -3,7 +3,7 @@
  * The proxy unwraps this and deserializes resultData before completing the caller's future.
  */
 
-import type { Data } from '@helios/internal/serialization/Data.js';
+import type { Data } from '@zenystx/core/internal/serialization/Data.js';
 
 export interface ExecutorOperationResult {
     readonly taskUuid: string;

@@ -2,7 +2,7 @@
  * Port of {@code com.hazelcast.internal.partition.MigrationInfo}.
  * Represents migration metadata for a partition replica.
  */
-import type { PartitionReplica } from '@helios/internal/partition/PartitionReplica';
+import type { PartitionReplica } from '@zenystx/core/internal/partition/PartitionReplica';
 
 export enum MigrationStatus {
     ACTIVE = 0,

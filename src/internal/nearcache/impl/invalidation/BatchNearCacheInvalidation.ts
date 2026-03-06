@@ -3,7 +3,7 @@
  *
  * Represents a batch of Near Cache invalidation events.
  */
-import { Invalidation } from '@helios/internal/nearcache/impl/invalidation/Invalidation';
+import { Invalidation } from '@zenystx/core/internal/nearcache/impl/invalidation/Invalidation';
 
 export class BatchNearCacheInvalidation extends Invalidation {
     private readonly _invalidations: Invalidation[];

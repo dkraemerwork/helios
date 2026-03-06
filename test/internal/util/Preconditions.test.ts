@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { Preconditions } from '@helios/internal/util/Preconditions';
+import { Preconditions } from '@zenystx/core/internal/util/Preconditions';
 
 describe('PreconditionsTest', () => {
   it('checkNotNull_whenNull', () => {

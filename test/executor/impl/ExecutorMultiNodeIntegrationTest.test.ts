@@ -7,20 +7,20 @@
  * semantics, local inline isolation, stats accumulation, and shutdown propagation.
  */
 import { describe, test, expect, afterEach } from 'bun:test';
-import { OperationServiceImpl } from '@helios/spi/impl/operationservice/impl/OperationServiceImpl';
-import { NodeEngineImpl } from '@helios/spi/impl/NodeEngineImpl';
-import { Address } from '@helios/cluster/Address';
-import { SerializationServiceImpl } from '@helios/internal/serialization/impl/SerializationServiceImpl';
-import { SerializationConfig } from '@helios/internal/serialization/impl/SerializationConfig';
-import { ExecutorServiceProxy } from '@helios/executor/impl/ExecutorServiceProxy';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig';
-import { ExecuteCallableOperation, type TaskDescriptor } from '@helios/executor/impl/ExecuteCallableOperation';
-import { MemberCallableOperation } from '@helios/executor/impl/MemberCallableOperation';
-import { ShutdownOperation } from '@helios/executor/impl/ShutdownOperation';
-import { Operation } from '@helios/spi/impl/operationservice/Operation';
-import type { Member } from '@helios/cluster/Member';
+import { OperationServiceImpl } from '@zenystx/core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { NodeEngineImpl } from '@zenystx/core/spi/impl/NodeEngineImpl';
+import { Address } from '@zenystx/core/cluster/Address';
+import { SerializationServiceImpl } from '@zenystx/core/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig } from '@zenystx/core/internal/serialization/impl/SerializationConfig';
+import { ExecutorServiceProxy } from '@zenystx/core/executor/impl/ExecutorServiceProxy';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig';
+import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/core/executor/impl/ExecuteCallableOperation';
+import { MemberCallableOperation } from '@zenystx/core/executor/impl/MemberCallableOperation';
+import { ShutdownOperation } from '@zenystx/core/executor/impl/ShutdownOperation';
+import { Operation } from '@zenystx/core/spi/impl/operationservice/Operation';
+import type { Member } from '@zenystx/core/cluster/Member';
 
 // ── Multi-node simulation ───────────────────────────────────────────────────
 

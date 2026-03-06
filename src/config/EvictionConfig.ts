@@ -1,5 +1,5 @@
-import { EvictionPolicy } from '@helios/config/EvictionPolicy';
-import { MaxSizePolicy } from '@helios/config/MaxSizePolicy';
+import { EvictionPolicy } from '@zenystx/core/config/EvictionPolicy';
+import { MaxSizePolicy } from '@zenystx/core/config/MaxSizePolicy';
 
 export class EvictionConfig {
     static readonly DEFAULT_MAX_ENTRY_COUNT = 10000;

@@ -8,8 +8,8 @@
  *
  * Block 16.B5 — Graceful Shutdown Protocol
  */
-import type { Address } from '@helios/cluster/Address';
-import type { InternalPartitionServiceImpl } from '@helios/internal/partition/impl/InternalPartitionServiceImpl';
+import type { Address } from '@zenystx/core/cluster/Address';
+import type { InternalPartitionServiceImpl } from '@zenystx/core/internal/partition/impl/InternalPartitionServiceImpl';
 
 export class ShutdownRequestHandler {
     private readonly _partitionService: InternalPartitionServiceImpl;

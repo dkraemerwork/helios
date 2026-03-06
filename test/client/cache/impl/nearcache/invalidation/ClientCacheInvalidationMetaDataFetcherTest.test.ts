@@ -7,13 +7,13 @@
  * Note: Cache names in Hazelcast are prefixed with "/hz/" in the metadata generator.
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { ClientCacheInvalidationMetaDataFetcher } from '@helios/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
-import type { ClientCacheClusterService, ClientCacheDataMember } from '@helios/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
-import { RepairingHandler } from '@helios/internal/nearcache/impl/invalidation/RepairingHandler';
-import { MetaDataGenerator } from '@helios/internal/nearcache/impl/invalidation/MetaDataGenerator';
-import type { MinimalPartitionService } from '@helios/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { NearCache } from '@helios/internal/nearcache/NearCache';
-import type { SerializationService } from '@helios/internal/serialization/SerializationService';
+import { ClientCacheInvalidationMetaDataFetcher } from '@zenystx/core/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
+import type { ClientCacheClusterService, ClientCacheDataMember } from '@zenystx/core/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
+import { RepairingHandler } from '@zenystx/core/internal/nearcache/impl/invalidation/RepairingHandler';
+import { MetaDataGenerator } from '@zenystx/core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { MinimalPartitionService } from '@zenystx/core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { NearCache } from '@zenystx/core/internal/nearcache/NearCache';
+import type { SerializationService } from '@zenystx/core/internal/serialization/SerializationService';
 
 const PARTITION_COUNT = 271;
 

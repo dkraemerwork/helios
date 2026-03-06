@@ -6,9 +6,9 @@
  *
  * Ref: ClusterHeartbeatManager.java (760 lines)
  */
-import type { MemberImpl } from '@helios/cluster/impl/MemberImpl';
-import type { ClusterServiceImpl } from '@helios/internal/cluster/impl/ClusterServiceImpl';
-import { DeadlineClusterFailureDetector } from '@helios/internal/cluster/impl/DeadlineClusterFailureDetector';
+import type { MemberImpl } from '@zenystx/core/cluster/impl/MemberImpl';
+import type { ClusterServiceImpl } from '@zenystx/core/internal/cluster/impl/ClusterServiceImpl';
+import { DeadlineClusterFailureDetector } from '@zenystx/core/internal/cluster/impl/DeadlineClusterFailureDetector';
 
 const CLOCK_JUMP_THRESHOLD = 120_000; // 2 minutes
 

@@ -25,13 +25,13 @@
 | 13 | Block 10.5 | NATS queue groups have no key-affinity — grouped aggregations produce wrong results with parallel workers | Replaced queue-group parallelism with subject-partitioned shards (`withParallelism(N)` → `hash(key) % N`); no combiner needed |
 | 14 | Block 10.3 | `NakError` referenced in operator spec but never defined anywhere — day-1 compile error | Added `src/errors/` hierarchy (`BlitzError`, `NakError`, `DeadLetterError`, `PipelineError`) to package layout + type definitions; Block 10.0 TODO updated |
 | 15 | Block 9.4 | `TransactionExceptions.ts` imported in `Transactional.ts` but missing from `packages/nestjs/` layout and never specified | Added `TransactionExceptions.ts` to nestjs package layout + full `CannotCreateTransactionException` type definition in Block 9.4; Block 9.4 TODO updated |
-| 16 | Block 10.9 | `@nestjs/common` and `@nestjs/core` absent from `packages/blitz/package.json`; NestJS submodule leaking through main barrel `src/index.ts` | Added as optional peer dependencies; NestJS submodule exported only via `@helios/blitz/nestjs` subpath export; `src/index.ts` must NOT import from `src/nestjs/` |
+| 16 | Block 10.9 | `@nestjs/common` and `@nestjs/core` absent from `packages/blitz/package.json`; NestJS submodule leaking through main barrel `src/index.ts` | Added as optional peer dependencies; NestJS submodule exported only via `@zenystx/blitz/nestjs` subpath export; `src/index.ts` must NOT import from `src/nestjs/` |
 | 17 | Phase 10 | `process.exit(0)` skip guard makes ALL 10 integration test files silently disappear from `bun test` — done gate shows green with 0 actual integration tests run | Replaced with `describe.skipIf(!NATS_AVAILABLE)` — shows as SKIP in output, counted in test results, done gate can verify skip count vs expected |
 | 18 | Block 10.7 | `CheckpointManager` defaults (N, T) and mid-window crash replay scope unspecified — implementer cannot derive correct values | Added `CheckpointManager specification` subsection: N=100 acks, T=5000ms, KV value includes `windowKeys: string[]`, restart seeks to `sequence+1` + restores open window accumulators from KV; both configurable via `BlitzConfig.checkpointIntervalAcks` / `checkpointIntervalMs` |
 | 19 | Block 10.7 | Sink error propagation contract undefined — when `write()` throws the plan never specifies whether the upstream JetStream message is nak'd, retried, or silently dropped | Added `Sink error propagation contract` subsection: sink failure = operator failure from fault policy's perspective; upstream message nak'd; full pipeline chain retries as a unit; idempotency requirements for sinks documented per-sink in Block 10.2 |
 | 20 | Block 10.0 | NATS server unavailability during pipeline execution is unaddressed — in-flight `js.publish()` and KV writes during reconnect window fail silently | Added NATS reconnect behavior subsection with explicit reconnect config fields (`maxReconnectAttempts`, `reconnectTimeWaitMs`, `connectTimeoutMs`, `natsPendingLimit`), per-primitive reconnect behavior contract, `BlitzEvent` enum for status monitoring, `nc.status()` subscription in `BlitzService` |
 | 21 | Block 10.7 | Block 10.7 has only 20 specified tests — severely under-tested for 8 distinct fault-tolerance behavioral axes; 80% coverage gate will fail | Raised Block 10.7 to 35 tests minimum with detailed per-concern test list covering AckPolicy (3), RetryPolicy fixed (3), RetryPolicy exponential (3), DeadLetterSink (4), CheckpointManager (8), Crash simulation (3), Sink errors (3); Phase 10 total raised from ~280 to ~295 |
-| 22 | Block 10.5 | `Aggregator<T, A, R>` name collision — plan claimed core batch aggregators are "reused here" but the blitz interface adds `combine()` which is absent in core; the two interfaces are incompatible, violating "no duplicate implementations" | Specified blitz aggregators as thin wrappers: delegate all logic to `@helios/core` implementations, add only `combine()` per wrapper; full interface spec and per-aggregator `combine()` semantics documented |
+| 22 | Block 10.5 | `Aggregator<T, A, R>` name collision — plan claimed core batch aggregators are "reused here" but the blitz interface adds `combine()` which is absent in core; the two interfaces are incompatible, violating "no duplicate implementations" | Specified blitz aggregators as thin wrappers: delegate all logic to `@zenystx/core` implementations, add only `combine()` per wrapper; full interface spec and per-aggregator `combine()` semantics documented |
 | 23 | Block 10.1 | At-least-once duplicate delivery never documented as an explicit operator contract — operators WILL receive duplicate `process()` calls after restart but no JSDoc, StageContext, or test scenario exists to communicate this | Added at-least-once JSDoc to `Stage.ts` spec; added `StageContext` interface (`messageId`, `deliveryCount`, `nak()`); added `StageContext.ts` to package layout; added `AtLeastOnceTest` scenario to Block 10.10; added positive "What IS guaranteed" statement to Phase 10 intro |
 | 24 | Block 10.9 | `HeliosBlitzModule` uses `ConfigurableModuleBuilder` but `HeliosCacheModule` and `HeliosTransactionModule` use hand-rolled `register()`/`registerAsync()` — two patterns in the ecosystem with no documented rationale; new contributors will be confused | Added rationale note in Block 10.9 explaining the historical difference; specified `ConfigurableModuleBuilder` as the canonical pattern for all new `@helios/*` modules; noted cache/transaction migration as a separate future task; added note to Phase 9 done gate |
 
@@ -123,7 +123,7 @@ HeliosCacheModule.registerAsync({
 
 **Symptom:** TODO item: "Deprecation shim: if static methods are called, warn + delegate (one release cycle)."
 
-**Root cause:** `@helios/nestjs` has never been published. Zero external consumers exist.
+**Root cause:** `@zenystx/nestjs` has never been published. Zero external consumers exist.
 A shim creates a state where the API is half-removed, adds dead code, and makes "done" ambiguous.
 
 **Fix applied:** Removed entirely. Block 9.4 is now a clean one-step operation:
@@ -330,7 +330,7 @@ package is superseded. The modern scoped packages are:
 **Fix applied:**
 
 1. `packages/blitz/package.json` deps updated to:
-   `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@helios/core`
+   `@nats-io/transport-node`, `@nats-io/jetstream`, `@nats-io/kv`, `@zenystx/core`
 
 2. Package layout comment updated in the Phase 10 Package layout section.
 
@@ -476,7 +476,7 @@ corresponding file spec was ever added to the package layout or block TODO list.
 **Fix applied:**
 
 1. Added `errors/` directory to the `packages/blitz/src/` package layout:
-   - `BlitzError.ts` — base class for all `@helios/blitz` errors
+   - `BlitzError.ts` — base class for all `@zenystx/blitz` errors
    - `NakError.ts` — operator returned an error; message will be nak'd
    - `DeadLetterError.ts` — retries exhausted; message routed to DL stream
    - `PipelineError.ts` — structural pipeline error (cycle, no source, etc.)
@@ -522,7 +522,7 @@ was never given a file spec or a TODO item.
 /** Thrown when @Transactional() is called outside a HeliosTransactionModule context.
  *  Indicates a misconfiguration — the module was not imported in the app module.
  *  This is always a programmer error, never a recoverable runtime error.
- *  NOTE: Does NOT extend BlitzError — @helios/nestjs must not depend on @helios/blitz. */
+ *  NOTE: Does NOT extend BlitzError — @zenystx/nestjs must not depend on @zenystx/blitz. */
 export class CannotCreateTransactionException extends Error {
   constructor(message: string) {
     super(message);
@@ -534,8 +534,8 @@ export class CannotCreateTransactionException extends Error {
 3. Added to Block 9.4 TODO (first item):
    `- [ ] Create src/TransactionExceptions.ts — export CannotCreateTransactionException`
 
-Note: `TransactionExceptions.ts` in `@helios/nestjs` does **not** extend `BlitzError` from
-`@helios/blitz`. `@helios/nestjs` must not depend on `@helios/blitz`. It is a standalone
+Note: `TransactionExceptions.ts` in `@zenystx/nestjs` does **not** extend `BlitzError` from
+`@zenystx/blitz`. `@zenystx/nestjs` must not depend on `@zenystx/blitz`. It is a standalone
 `Error` subclass.
 
 ---
@@ -543,7 +543,7 @@ Note: `TransactionExceptions.ts` in `@helios/nestjs` does **not** extend `BlitzE
 ## Issue 16 — Block 10.9: `@nestjs/common` and `@nestjs/core` absent from `packages/blitz/package.json`
 
 **Symptom:** `packages/blitz/package.json` was specified with only:
-`deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core`
+`deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @zenystx/core`
 
 `src/nestjs/HeliosBlitzModule.ts`, `HeliosBlitzService.ts`, and `InjectBlitz.decorator.ts`
 all use NestJS decorators (`@Module`, `@Injectable`, `@Inject`, `@Global`, `DynamicModule`).
@@ -571,16 +571,16 @@ the corresponding peer dependency declarations or the subpath export boundary.
 
 2. Package layout comment for `package.json` updated to show the full structure:
    ```
-   # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @helios/core
+   # deps: @nats-io/transport-node, @nats-io/jetstream, @nats-io/kv, @zenystx/core
    # peerDeps (optional): @nestjs/common@^11, @nestjs/core@^11
    # devDeps: nats-server (binary), bun-types, typescript
    ```
 
 3. Added `src/nestjs/index.ts` barrel export file to the package layout listing.
 
-4. Added `@helios/blitz/nestjs` subpath export to the package layout exports spec:
+4. Added `@zenystx/blitz/nestjs` subpath export to the package layout exports spec:
    ```json
-   "@helios/blitz/nestjs": {
+   "@zenystx/blitz/nestjs": {
      "import": "./dist/src/nestjs/index.js",
      "types": "./dist/src/nestjs/index.d.ts"
    }
@@ -591,7 +591,7 @@ the corresponding peer dependency declarations or the subpath export boundary.
 
 6. Block 10.9 TODO list updated with:
    - "Add `@nestjs/common@^11` and `@nestjs/core@^11` as optional peer dependencies in `packages/blitz/package.json`"
-   - "Export `src/nestjs/` via `@helios/blitz/nestjs` subpath export — NOT from main barrel `src/index.ts`"
+   - "Export `src/nestjs/` via `@zenystx/blitz/nestjs` subpath export — NOT from main barrel `src/index.ts`"
    - "Verify `src/index.ts` does NOT import or re-export anything from `src/nestjs/`"
 
 ---
@@ -809,7 +809,7 @@ mode per concern.
 
 ---
 
-## Issue 22 — Block 10.5: `Aggregator` name collision between `@helios/core` and `@helios/blitz`
+## Issue 22 — Block 10.5: `Aggregator` name collision between `@zenystx/core` and `@zenystx/blitz`
 
 **Symptom:** Block 10.5 stated "Aggregators follow the same interface as Phase 1 Block 1.4
 (`src/aggregation/`). They are **reused here** — no duplicate implementations." However, the
@@ -831,7 +831,7 @@ blitz aggregators relate to the core aggregators at the implementation level.
 
 2. The six concrete aggregators in `packages/blitz/src/aggregate/` are specified as **thin
    wrappers** that:
-   - Delegate `create()`, `accumulate()`, and `export()` to `@helios/core` implementations
+   - Delegate `create()`, `accumulate()`, and `export()` to `@zenystx/core` implementations
    - Add only `combine()` as a single new method per wrapper
 
 3. Per-aggregator `combine()` semantics documented:
@@ -845,7 +845,7 @@ blitz aggregators relate to the core aggregators at the implementation level.
 4. The confusing "reused here" sentence replaced with the wrapper pattern description.
 
 5. Block 10.5 TODO updated: first item is "Implement blitz aggregate wrappers that delegate to
-   `@helios/core` aggregators and add `combine()` — no business logic duplication".
+   `@zenystx/core` aggregators and add `combine()` — no business logic duplication".
 
 6. Package layout comment for `Aggregator.ts` updated to: "extends core batch contract with
    `combine()` for parallel partial aggregation".
@@ -999,7 +999,7 @@ grep -n "PipelineError" plans/TYPESCRIPT_PORT_PLAN.md
 grep -n "nestjs/common\|peerDeps" plans/TYPESCRIPT_PORT_PLAN.md
 # → should show in package layout + Block 10.0 comment + Block 10.9 note
 
-# 19. @helios/blitz/nestjs subpath export present (Issue 16)
+# 19. @zenystx/blitz/nestjs subpath export present (Issue 16)
 grep -n "blitz/nestjs\|nestjs/index" plans/TYPESCRIPT_PORT_PLAN.md
 # → should appear in package layout exports block
 

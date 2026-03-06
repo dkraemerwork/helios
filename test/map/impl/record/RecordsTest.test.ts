@@ -2,12 +2,12 @@
  * Port of {@code com.hazelcast.map.impl.record.RecordsTest}.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import type { InternalSerializationService } from '@helios/internal/serialization/InternalSerializationService';
-import type { Data } from '@helios/internal/serialization/Data';
-import { HeapData } from '@helios/internal/serialization/impl/HeapData';
-import { DataRecordWithStats } from '@helios/map/impl/record/DataRecordWithStats';
-import { CachedDataRecordWithStats } from '@helios/map/impl/record/CachedDataRecordWithStats';
-import { Records } from '@helios/map/impl/record/Records';
+import type { InternalSerializationService } from '@zenystx/core/internal/serialization/InternalSerializationService';
+import type { Data } from '@zenystx/core/internal/serialization/Data';
+import { HeapData } from '@zenystx/core/internal/serialization/impl/HeapData';
+import { DataRecordWithStats } from '@zenystx/core/map/impl/record/DataRecordWithStats';
+import { CachedDataRecordWithStats } from '@zenystx/core/map/impl/record/CachedDataRecordWithStats';
+import { Records } from '@zenystx/core/map/impl/record/Records';
 
 /**
  * Minimal serialization service for tests.

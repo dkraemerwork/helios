@@ -1,12 +1,12 @@
-import { MulticastConfig } from '@helios/config/MulticastConfig';
-import { TcpIpConfig } from '@helios/config/TcpIpConfig';
-import { AwsConfig } from '@helios/config/AwsConfig';
-import { GcpConfig } from '@helios/config/GcpConfig';
-import { AzureConfig } from '@helios/config/AzureConfig';
-import { KubernetesConfig } from '@helios/config/KubernetesConfig';
-import { EurekaConfig } from '@helios/config/EurekaConfig';
-import { DiscoveryConfig } from '@helios/config/DiscoveryConfig';
-import { AutoDetectionConfig } from '@helios/config/AutoDetectionConfig';
+import { MulticastConfig } from '@zenystx/core/config/MulticastConfig';
+import { TcpIpConfig } from '@zenystx/core/config/TcpIpConfig';
+import { AwsConfig } from '@zenystx/core/config/AwsConfig';
+import { GcpConfig } from '@zenystx/core/config/GcpConfig';
+import { AzureConfig } from '@zenystx/core/config/AzureConfig';
+import { KubernetesConfig } from '@zenystx/core/config/KubernetesConfig';
+import { EurekaConfig } from '@zenystx/core/config/EurekaConfig';
+import { DiscoveryConfig } from '@zenystx/core/config/DiscoveryConfig';
+import { AutoDetectionConfig } from '@zenystx/core/config/AutoDetectionConfig';
 
 export class InvalidConfigurationException extends Error {
     constructor(message: string) {

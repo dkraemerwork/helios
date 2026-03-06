@@ -3,11 +3,11 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { CancellationOperation } from '@helios/executor/impl/CancellationOperation.js';
-import { ShutdownOperation } from '@helios/executor/impl/ShutdownOperation.js';
-import { ExecutorContainerService } from '@helios/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@helios/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@helios/config/ExecutorConfig.js';
+import { CancellationOperation } from '@zenystx/core/executor/impl/CancellationOperation.js';
+import { ShutdownOperation } from '@zenystx/core/executor/impl/ShutdownOperation.js';
+import { ExecutorContainerService } from '@zenystx/core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/core/executor/impl/TaskTypeRegistry.js';
+import { ExecutorConfig } from '@zenystx/core/config/ExecutorConfig.js';
 
 function makeRegistry(...entries: Array<[string, (input: unknown) => unknown | Promise<unknown>]>): TaskTypeRegistry {
     const reg = new TaskTypeRegistry();

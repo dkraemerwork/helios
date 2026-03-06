@@ -1,5 +1,5 @@
 {
-  "name": "@helios/turso",
+  "name": "@zenystx/turso",
   "version": "1.0.0",
   "description": "Turso/libSQL-backed MapStore for Helios",
   "type": "module",

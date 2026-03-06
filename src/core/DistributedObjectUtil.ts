@@ -1,5 +1,5 @@
-import type { DistributedObject } from '@helios/core/DistributedObject';
-import type { PrefixedDistributedObject } from '@helios/core/PrefixedDistributedObject';
+import type { DistributedObject } from '@zenystx/core/core/DistributedObject';
+import type { PrefixedDistributedObject } from '@zenystx/core/core/PrefixedDistributedObject';
 
 /**
  * Utility class for DistributedObject name handling.
