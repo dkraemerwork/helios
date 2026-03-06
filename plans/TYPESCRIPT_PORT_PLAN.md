@@ -213,15 +213,15 @@ Goal: prove the full Phase 18 system works under realistic HA flows.
 
 Tasks:
 
-- [ ] Add verification scenario for first-node-alone boot.
-- [ ] Add verification scenario for second-node auto-cluster formation.
-- [ ] Add verification scenario for current-master handoff.
-- [ ] Add verification scenario for retryable topology responses during re-registration sweep.
-- [ ] Add verification scenario for restart and rejoin.
-- [ ] Add verification scenario for `shutdownAsync()` lifecycle and cleanup.
-- [ ] Add verification scenario proving no child-process leaks remain after repeated start/stop cycles.
-- [ ] Add distributed-default acceptance coverage across Helios + Blitz + any reused NestJS bridge surfaces.
-- [ ] Run a final verification task that proves the whole feature is end to end, production ready, HA-safe, and free of stubs or mock-only behavior.
+- [x] Add verification scenario for first-node-alone boot.
+- [x] Add verification scenario for second-node auto-cluster formation.
+- [x] Add verification scenario for current-master handoff.
+- [x] Add verification scenario for retryable topology responses during re-registration sweep.
+- [x] Add verification scenario for restart and rejoin.
+- [x] Add verification scenario for `shutdownAsync()` lifecycle and cleanup.
+- [x] Add verification scenario proving no child-process leaks remain after repeated start/stop cycles.
+- [x] Add distributed-default acceptance coverage across Helios + Blitz + any reused NestJS bridge surfaces.
+- [x] Run a final verification task that proves the whole feature is end to end, production ready, HA-safe, and free of stubs or mock-only behavior.
 
 ## Phase 19 Task Breakdown
 
@@ -500,7 +500,7 @@ Tasks:
 - [x] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, explicit expected-registrant sweep rules after master change) — ~18 tests
 - [x] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, deterministic cleanup on member leave/shutdown) — ~18 tests
 - [x] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS) — ~16 tests
-- [ ] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, current-master handoff, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
+- [x] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, current-master handoff, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
 - [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error
 - [ ] **Block 19.1** — MongoDB MapStore parity/scope freeze + core runtime closure (`plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` binding, document-only scope freeze, `shutdownAsync()` flush await, realistic EAGER timing, `MapKeyStream<K>` closure, bulk/clear/loadAllKeys legality, query/index rebuild, JSON/YAML config-origin wiring) — ~18 tests
 - [ ] **Block 19.2** — Mongo config/property resolution + document mapping + lifecycle hardening (`MapStoreConfig.properties` resolution, document-only mode, `id-column`, `columns`, `single-column-as-value`, `replace-strategy`, registry/provider bootstrap, dynamic loading, owned vs injected client lifecycle, read-only vs writable collection ownership) — ~20 tests
