@@ -66,6 +66,7 @@ import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/Scat
 import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/InlineExecutionBackend";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
+import { HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -118,6 +119,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** TCP transport — non-null when TCP-IP join is enabled. */
   private _transport: TcpClusterTransport | null = null;
 
+  /** Blitz lifecycle manager — non-null when Blitz distributed-auto or embedded-local is enabled. */
+  private _blitzLifecycleManager: HeliosBlitzLifecycleManager | null = null;
+
   /** Current log level (mutable via REST CLUSTER_WRITE). */
   private _logLevel: string = "INFO";
 
@@ -166,6 +170,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Start TCP networking if configured
     this._startNetworking();
+
+    // Initialize Blitz lifecycle manager if configured
+    this._initBlitzLifecycle();
 
     // Start built-in REST server if configured
     this._restServer = new HeliosRestServer(
@@ -281,6 +288,28 @@ export class HeliosInstanceImpl implements HeliosInstance {
         // Connection may fail transiently; callers use waitForPeers() to poll
       });
     }
+  }
+
+  private _initBlitzLifecycle(): void {
+    const blitzConfig = this._config.getBlitzConfig();
+    if (!blitzConfig || blitzConfig.enabled === false) return;
+
+    this._blitzLifecycleManager = new HeliosBlitzLifecycleManager(
+      blitzConfig,
+      this._name,
+    );
+
+    // Register Blitz lifecycle cleanup as a shutdown hook
+    this.registerShutdownHook(async () => {
+      this._blitzLifecycleManager?.markShutdown();
+    });
+  }
+
+  /**
+   * Returns the Blitz lifecycle manager, or null if Blitz is not enabled.
+   */
+  getBlitzLifecycleManager(): HeliosBlitzLifecycleManager | null {
+    return this._blitzLifecycleManager;
   }
 
   private _applyRemotePut(mapName: string, key: unknown, value: unknown): void {
@@ -408,6 +437,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._lifecycleService.shutdown();
     this._nodeEngine.shutdown();
     this._ss.destroy();
+    this._blitzLifecycleManager?.markShutdown();
     this._transport?.shutdown();
     this._transport = null;
     this._restServer.stop();
