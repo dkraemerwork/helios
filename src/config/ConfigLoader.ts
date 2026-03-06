@@ -14,6 +14,7 @@
  *     backupCount: 2
  * ```
  */
+import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
@@ -94,6 +95,11 @@ export function parseRawConfig(raw: unknown): HeliosConfig {
                 }
             }
         }
+    }
+
+    // --- blitz config ---
+    if ('blitz' in obj && obj['blitz'] !== null && typeof obj['blitz'] === 'object') {
+        config.setBlitzConfig(obj['blitz'] as HeliosBlitzRuntimeConfig);
     }
 
     // --- map configs ---

@@ -166,15 +166,15 @@ Goal: add the Helios-owned distributed control plane for Blitz topology and mast
 
 Tasks:
 
-- [ ] Extend `HeliosConfig` with the Blitz runtime section needed for distributed embedded behavior.
-- [ ] Add any `ConfigLoader` support required if file-config support is part of the runtime path.
-- [ ] Define topology models and ownership semantics for Helios-managed Blitz clustering.
-- [ ] Add coordinator service/runtime responsible for topology decisions and cluster-state translation.
-- [ ] Define and wire `BLITZ_*` cluster messages, including `requestId`, retry metadata, and response correlation.
-- [ ] Make the current Helios master the authoritative source for topology snapshots, keyed by `memberListVersion`.
-- [ ] Implement mandatory re-registration behavior after master change or topology invalidation.
-- [ ] Add tests that prove topology messages, snapshot authority, retry handling, and re-registration are real protocol behavior, not mocks.
-- [ ] Run a verification task that proves config, protocol, and topology state are end to end and production ready.
+- [x] Extend `HeliosConfig` with the Blitz runtime section needed for distributed embedded behavior.
+- [x] Add any `ConfigLoader` support required if file-config support is part of the runtime path.
+- [x] Define topology models and ownership semantics for Helios-managed Blitz clustering.
+- [x] Add coordinator service/runtime responsible for topology decisions and cluster-state translation.
+- [x] Define and wire `BLITZ_*` cluster messages, including `requestId`, retry metadata, and response correlation.
+- [x] Make the current Helios master the authoritative source for topology snapshots, keyed by `memberListVersion`.
+- [x] Implement mandatory re-registration behavior after master change or topology invalidation.
+- [x] Add tests that prove topology messages, snapshot authority, retry handling, and re-registration are real protocol behavior, not mocks.
+- [x] Run a verification task that proves config, protocol, and topology state are end to end and production ready.
 
 ### Block 18.3 — Helios runtime wiring + distributed-auto startup/join/rejoin flow
 
@@ -497,7 +497,7 @@ Tasks:
 - [x] **Block 17R.1** — Executor Scatter production closure (`plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`, real member-local executor registry/container ownership, no distributed direct-factory fallback, Scatter-backed off-main-thread execution, module-backed worker-materializable registration only, scatter default with inline explicit-only for tests/dev, deterministic cancel/shutdown/task-lost/member-loss semantics, fail-closed backend health, recycle-on-crash-or-timeout behavior, docs/examples/config/test-support honesty) — ~24 tests
 - [ ] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution and explicit inline test/dev usage; 0 fail, 0 error
 - [x] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
-- [ ] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, explicit expected-registrant sweep rules after master change) — ~18 tests
+- [x] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, explicit expected-registrant sweep rules after master change) — ~18 tests
 - [ ] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, deterministic cleanup on member leave/shutdown) — ~18 tests
 - [ ] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS) — ~16 tests
 - [ ] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, current-master handoff, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests

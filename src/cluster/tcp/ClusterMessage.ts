@@ -6,6 +6,8 @@
  * All messages carry a `type` discriminant so the receiver can switch on them.
  */
 
+import type { BlitzNodeRegistration } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
+
 // ── Existing message types ────────────────────────────────────────────
 
 export interface HelloMsg {
@@ -232,6 +234,41 @@ export interface TopicAckMsg {
   readonly error?: string;
 }
 
+// ── Blitz topology protocol messages ─────────────────────────────────
+
+export interface BlitzNodeRegisterMsg {
+  readonly type: "BLITZ_NODE_REGISTER";
+  readonly registration: BlitzNodeRegistration;
+}
+
+export interface BlitzNodeRemoveMsg {
+  readonly type: "BLITZ_NODE_REMOVE";
+  readonly memberId: string;
+}
+
+export interface BlitzTopologyRequestMsg {
+  readonly type: "BLITZ_TOPOLOGY_REQUEST";
+  readonly requestId: string;
+}
+
+export interface BlitzTopologyResponseMsg {
+  readonly type: "BLITZ_TOPOLOGY_RESPONSE";
+  readonly requestId: string;
+  readonly routes: string[];
+  readonly masterMemberId: string;
+  readonly memberListVersion: number;
+  readonly registrationsComplete: boolean;
+  readonly retryAfterMs?: number;
+  readonly clientConnectUrl: string;
+}
+
+export interface BlitzTopologyAnnounceMsg {
+  readonly type: "BLITZ_TOPOLOGY_ANNOUNCE";
+  readonly memberListVersion: number;
+  readonly routes: string[];
+  readonly masterMemberId: string;
+}
+
 export type ClusterMessage =
   | HelloMsg
   | MapPutMsg
@@ -256,5 +293,10 @@ export type ClusterMessage =
   | QueueEventMsg
   | TopicMessageMsg
   | TopicPublishRequestMsg
-  | TopicAckMsg;
+  | TopicAckMsg
+  | BlitzNodeRegisterMsg
+  | BlitzNodeRemoveMsg
+  | BlitzTopologyRequestMsg
+  | BlitzTopologyResponseMsg
+  | BlitzTopologyAnnounceMsg;
 import type { EncodedData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";

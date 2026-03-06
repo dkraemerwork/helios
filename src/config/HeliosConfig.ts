@@ -4,6 +4,7 @@
  * Holds the instance name and any per-map configurations.
  * Use HeliosConfig as the entry point when constructing a HeliosInstanceImpl.
  */
+import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
@@ -17,6 +18,7 @@ export class HeliosConfig {
   private readonly _topicConfigs = new Map<string, TopicConfig>();
   private readonly _executorConfigs = new Map<string, ExecutorConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
+  private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
 
   constructor(name?: string) {
     this._name = name ?? "helios";
@@ -101,5 +103,14 @@ export class HeliosConfig {
 
   getExecutorConfigs(): ReadonlyMap<string, ExecutorConfig> {
     return this._executorConfigs;
+  }
+
+  getBlitzConfig(): HeliosBlitzRuntimeConfig | null {
+    return this._blitzConfig;
+  }
+
+  setBlitzConfig(config: HeliosBlitzRuntimeConfig): this {
+    this._blitzConfig = config;
+    return this;
   }
 }

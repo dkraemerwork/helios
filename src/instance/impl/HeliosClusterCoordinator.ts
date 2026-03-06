@@ -1,4 +1,7 @@
 import type {
+  BlitzNodeRegisterMsg,
+  BlitzNodeRemoveMsg,
+  BlitzTopologyRequestMsg,
   ClusterMessage,
   FinalizeJoinMsg,
   MembersUpdateMsg,
@@ -18,6 +21,7 @@ import type { PartitionRuntimeState } from "@zenystx/helios-core/internal/partit
 import { InternalPartitionServiceImpl } from "@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 type MembershipListener = () => void;
@@ -32,6 +36,7 @@ export class HeliosClusterCoordinator {
   private readonly _membershipListeners: MembershipListener[] = [];
   private readonly _joinRequestedPeers = new Set<string>();
   private readonly _connectedPeers = new Set<string>();
+  private readonly _blitzCoordinator = new HeliosBlitzCoordinator();
 
   constructor(
     private readonly _instanceName: string,
@@ -181,6 +186,26 @@ export class HeliosClusterCoordinator {
       case "PARTITION_STATE":
         this._handlePartitionState(message);
         return true;
+      case "BLITZ_NODE_REGISTER":
+        return this._blitzCoordinator.handleRegister(
+          message as BlitzNodeRegisterMsg,
+          this._clusterService.isMaster(),
+        );
+      case "BLITZ_NODE_REMOVE":
+        return this._blitzCoordinator.handleRemove(
+          message as BlitzNodeRemoveMsg,
+          this._clusterService.isMaster(),
+        );
+      case "BLITZ_TOPOLOGY_REQUEST": {
+        const response = this._blitzCoordinator.handleTopologyRequest(
+          message as BlitzTopologyRequestMsg,
+          this._clusterService.isMaster(),
+        );
+        if (response) {
+          this._transport.broadcast(response);
+        }
+        return response !== null;
+      }
       default:
         return false;
     }
