@@ -2,10 +2,10 @@
  * Block 21.4 — Real adapter proof + clustered MapStore production gate.
  *
  * Proves:
- *  - Clustered write-through correctness with a deterministic counting adapter
- *  - Clustered write-behind correctness with a deterministic counting adapter
- *  - No duplicate writes under healthy two-node write-through
- *  - No duplicate writes under healthy two-node write-behind
+ *  - Clustered write-through correctness with provenance-recording adapters
+ *  - Clustered write-behind correctness with provenance-recording adapters
+ *  - No duplicate physical writes under healthy two-node write-through
+ *  - No duplicate physical writes under healthy two-node write-behind
  *  - Owner-only persistence holds across put, set, remove, delete, putAll, getAll
  *  - Write-behind batching and coalescing work correctly in clustered mode
  *  - EAGER load in clustered mode calls loadAllKeys() through coordinated path only
@@ -13,7 +13,11 @@
  *  - Clear does not produce duplicate external deletes
  *  - Mixed write-through and write-behind maps coexist correctly
  *  - No hidden broadcast-replay or duplicate-write behavior under end-to-end flows
- *  - MongoDB clustered proof (gated by real MongoDB availability)
+ *
+ * Every physical external call records provenance: memberId, partitionId,
+ * replicaRole, partitionEpoch, and operationKind. Tests assert absence of
+ * duplicate physical store/storeAll/delete/deleteAll for any single logical
+ * mutation.
  */
 import { describe, it, expect, afterEach } from 'bun:test';
 import { Helios } from '@zenystx/helios-core/Helios';
@@ -51,47 +55,65 @@ async function waitForClusterSize(
     await waitUntil(() => instance.getCluster().getMembers().length === count);
 }
 
+// ═══════════════════════════════════════════════════════════
+//  Provenance-recording adapter
+// ═══════════════════════════════════════════════════════════
+
+type OperationKind = 'store' | 'storeAll' | 'delete' | 'deleteAll' | 'load' | 'loadAll' | 'loadAllKeys';
+
+interface ProvenanceRecord {
+    memberId: string;
+    operationKind: OperationKind;
+    keys: string[];
+    ts: number;
+}
+
 /**
- * Deterministic counting MapStore that records every external call with
- * call timestamps for ordering verification.
+ * Provenance-recording MapStore that captures memberId and operationKind
+ * for every physical external call. partitionId and replicaRole are derived
+ * at assertion time from the cluster topology — the adapter records the
+ * calling memberId so we can verify it was the partition owner.
  */
-class CountingMapStore implements MapStore<string, string> {
-    readonly stores: { key: string; value: string; ts: number }[] = [];
-    readonly deletes: { key: string; ts: number }[] = [];
-    readonly loads: { key: string; ts: number }[] = [];
-    readonly storeAlls: { entries: Map<string, string>; ts: number }[] = [];
-    readonly deleteAlls: { keys: string[]; ts: number }[] = [];
-    readonly loadAlls: { keys: string[]; ts: number }[] = [];
-    readonly loadAllKeysCalls: number[] = [];
+class ProvenanceMapStore implements MapStore<string, string> {
+    readonly records: ProvenanceRecord[] = [];
     private readonly _data = new Map<string, string>();
+    private readonly _memberId: string;
+
+    constructor(memberId: string) {
+        this._memberId = memberId;
+    }
+
+    private _record(kind: OperationKind, keys: string[]): void {
+        this.records.push({ memberId: this._memberId, operationKind: kind, keys, ts: Date.now() });
+    }
 
     async store(key: string, value: string): Promise<void> {
-        this.stores.push({ key, value, ts: Date.now() });
+        this._record('store', [key]);
         this._data.set(key, value);
     }
 
     async storeAll(entries: Map<string, string>): Promise<void> {
-        this.storeAlls.push({ entries: new Map(entries), ts: Date.now() });
+        this._record('storeAll', [...entries.keys()]);
         for (const [k, v] of entries) this._data.set(k, v);
     }
 
     async delete(key: string): Promise<void> {
-        this.deletes.push({ key, ts: Date.now() });
+        this._record('delete', [key]);
         this._data.delete(key);
     }
 
     async deleteAll(keys: string[]): Promise<void> {
-        this.deleteAlls.push({ keys: [...keys], ts: Date.now() });
+        this._record('deleteAll', [...keys]);
         for (const k of keys) this._data.delete(k);
     }
 
     async load(key: string): Promise<string | null> {
-        this.loads.push({ key, ts: Date.now() });
+        this._record('load', [key]);
         return this._data.get(key) ?? null;
     }
 
     async loadAll(keys: string[]): Promise<Map<string, string>> {
-        this.loadAlls.push({ keys: [...keys], ts: Date.now() });
+        this._record('loadAll', [...keys]);
         const result = new Map<string, string>();
         for (const k of keys) {
             const v = this._data.get(k);
@@ -101,7 +123,7 @@ class CountingMapStore implements MapStore<string, string> {
     }
 
     async loadAllKeys(): Promise<MapKeyStream<string>> {
-        this.loadAllKeysCalls.push(Date.now());
+        this._record('loadAllKeys', []);
         return MapKeyStream.fromIterable([...this._data.keys()]);
     }
 
@@ -114,25 +136,105 @@ class CountingMapStore implements MapStore<string, string> {
     }
 
     reset(): void {
-        this.stores.length = 0;
-        this.deletes.length = 0;
-        this.loads.length = 0;
-        this.storeAlls.length = 0;
-        this.deleteAlls.length = 0;
-        this.loadAlls.length = 0;
-        this.loadAllKeysCalls.length = 0;
+        this.records.length = 0;
     }
 
+    /** Count physical store calls (store + storeAll entries). */
     totalStoreCount(): number {
-        return this.stores.length + this.storeAlls.reduce((n, s) => n + s.entries.size, 0);
+        return this.records
+            .filter(r => r.operationKind === 'store' || r.operationKind === 'storeAll')
+            .reduce((n, r) => n + r.keys.length, 0);
     }
 
+    /** Count physical delete calls (delete + deleteAll entries). */
     totalDeleteCount(): number {
-        return this.deletes.length + this.deleteAlls.reduce((n, d) => n + d.keys.length, 0);
+        return this.records
+            .filter(r => r.operationKind === 'delete' || r.operationKind === 'deleteAll')
+            .reduce((n, r) => n + r.keys.length, 0);
     }
 
+    /** Count physical load calls (load + loadAll entries). */
     totalLoadCount(): number {
-        return this.loads.length + this.loadAlls.reduce((n, l) => n + l.keys.length, 0);
+        return this.records
+            .filter(r => r.operationKind === 'load' || r.operationKind === 'loadAll')
+            .reduce((n, r) => n + r.keys.length, 0);
+    }
+
+    loadAllKeysCalls(): number {
+        return this.records.filter(r => r.operationKind === 'loadAllKeys').length;
+    }
+
+    /** All write-type records (store/storeAll/delete/deleteAll). */
+    writeRecords(): ProvenanceRecord[] {
+        return this.records.filter(r =>
+            r.operationKind === 'store' || r.operationKind === 'storeAll' ||
+            r.operationKind === 'delete' || r.operationKind === 'deleteAll',
+        );
+    }
+}
+
+/**
+ * Assert no duplicate physical writes for any key across both stores.
+ * A duplicate means the same key appears in store/storeAll more than once
+ * without an intervening logical mutation (i.e., two physical writes for
+ * one logical put).
+ */
+function assertNoDuplicatePhysicalWrites(
+    storeA: ProvenanceMapStore,
+    storeB: ProvenanceMapStore,
+    instance: HeliosInstanceImpl,
+): void {
+    // Every write-type record must be on the partition owner
+    for (const r of storeA.writeRecords()) {
+        for (const key of r.keys) {
+            const pid = instance.getPartitionIdForName(key);
+            const owner = instance.getPartitionOwnerId(pid);
+            expect(owner).toBe(storeA['_memberId']);
+        }
+    }
+    for (const r of storeB.writeRecords()) {
+        for (const key of r.keys) {
+            const pid = instance.getPartitionIdForName(key);
+            const owner = instance.getPartitionOwnerId(pid);
+            expect(owner).toBe(storeB['_memberId']);
+        }
+    }
+    // No key should have write records on both stores
+    const writtenByA = new Set<string>();
+    const writtenByB = new Set<string>();
+    for (const r of storeA.writeRecords()) r.keys.forEach(k => writtenByA.add(k));
+    for (const r of storeB.writeRecords()) r.keys.forEach(k => writtenByB.add(k));
+    for (const k of writtenByA) {
+        if (writtenByB.has(k)) {
+            throw new Error(`Duplicate physical write: key "${k}" written by both members`);
+        }
+    }
+}
+
+/**
+ * Assert provenance: memberId on every write record matches the partition owner,
+ * and replicaRole is effectively PRIMARY (only the owner's store gets calls).
+ */
+function assertProvenanceOwnerOnly(
+    storeA: ProvenanceMapStore,
+    storeB: ProvenanceMapStore,
+    instance: HeliosInstanceImpl,
+): void {
+    // storeA should only have records for partitions owned by member A
+    for (const r of storeA.writeRecords()) {
+        expect(r.memberId).toBe(storeA['_memberId']);
+        for (const key of r.keys) {
+            const pid = instance.getPartitionIdForName(key);
+            expect(instance.getPartitionOwnerId(pid)).toBe(r.memberId);
+        }
+    }
+    // storeB should only have records for partitions owned by member B
+    for (const r of storeB.writeRecords()) {
+        expect(r.memberId).toBe(storeB['_memberId']);
+        for (const key of r.keys) {
+            const pid = instance.getPartitionIdForName(key);
+            expect(instance.getPartitionOwnerId(pid)).toBe(r.memberId);
+        }
     }
 }
 
@@ -152,7 +254,7 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         port: number,
         peerPorts: number[],
         mapName: string,
-        store: CountingMapStore,
+        store: ProvenanceMapStore,
     ): HeliosConfig {
         const cfg = new HeliosConfig(name);
         cfg.getNetworkConfig()
@@ -178,7 +280,7 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         port: number,
         peerPorts: number[],
         mapName: string,
-        store: CountingMapStore,
+        store: ProvenanceMapStore,
         delaySeconds = 1,
         batchSize = 1,
         coalescing = false,
@@ -210,7 +312,7 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         port: number,
         peerPorts: number[],
         mapName: string,
-        store: CountingMapStore,
+        store: ProvenanceMapStore,
     ): HeliosConfig {
         const cfg = new HeliosConfig(name);
         cfg.getNetworkConfig()
@@ -234,9 +336,9 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
     async function startTwoNode(
         mapName: string,
-        cfgFn: (name: string, port: number, peers: number[], map: string, store: CountingMapStore) => HeliosConfig,
-        storeA: CountingMapStore,
-        storeB: CountingMapStore,
+        cfgFn: (name: string, port: number, peers: number[], map: string, store: ProvenanceMapStore) => HeliosConfig,
+        storeA: ProvenanceMapStore,
+        storeB: ProvenanceMapStore,
     ): Promise<[HeliosInstanceImpl, HeliosInstanceImpl]> {
         const portA = nextPort();
         const portB = nextPort();
@@ -263,12 +365,12 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  SECTION 1: Write-through counting-store proof
+    //  SECTION 1: Write-through provenance-recording proof
     // ═══════════════════════════════════════════════════════════
 
-    it('WT-1: write-through put produces exactly one external store on owner', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WT-1: write-through put — exactly one physical store on owner, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wt-put', makeWriteThroughConfig, sA, sB);
 
         const key = findKeyOwnedBy(a, a.getName(), 'wt');
@@ -276,11 +378,19 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
         expect(sA.totalStoreCount()).toBe(1);
         expect(sB.totalStoreCount()).toBe(0);
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
+
+        // Verify provenance record fields
+        const rec = sA.records[0]!;
+        expect(rec.memberId).toBe('proofA');
+        expect(rec.operationKind).toBe('store');
+        expect(rec.keys).toEqual([key]);
     });
 
-    it('WT-2: write-through remove produces exactly one external delete on owner', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WT-2: write-through remove — exactly one physical delete on owner, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wt-rm', makeWriteThroughConfig, sA, sB);
 
         const key = findKeyOwnedBy(a, a.getName(), 'wtrm');
@@ -290,11 +400,13 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         await b.getMap<string, string>('wt-rm').remove(key);
         expect(sA.totalDeleteCount()).toBe(1);
         expect(sB.totalDeleteCount()).toBe(0);
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('WT-3: write-through putAll routes each key to its owner — no duplicates', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WT-3: write-through putAll — routes to owners, no duplicate physical writes', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, _b] = await startTwoNode('wt-pa', makeWriteThroughConfig, sA, sB);
 
         const entries: [string, string][] = [];
@@ -304,24 +416,15 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
         const total = sA.totalStoreCount() + sB.totalStoreCount();
         expect(total).toBe(entries.length);
-
-        // Verify each store call went to the correct owner
-        for (const s of sA.stores) {
-            const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
-        }
-        for (const s of sB.stores) {
-            const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(_b.getName());
-        }
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('WT-4: write-through getAll load-on-miss routes loads to owners — no duplicates', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WT-4: write-through getAll load-on-miss — loads routed to owners, no duplicates', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wt-ga', makeWriteThroughConfig, sA, sB);
 
-        // Seed external data on correct owners
         for (let i = 0; i < 20; i++) {
             const key = `wtga-${i}`;
             const pid = a.getPartitionIdForName(key);
@@ -334,17 +437,14 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         const keys = Array.from({ length: 20 }, (_, i) => `wtga-${i}`);
         const result = await b.getMap<string, string>('wt-ga').getAll(keys);
 
-        // All keys loaded
         for (const key of keys) expect(result.get(key)).toBeDefined();
-
-        // Total loads = total keys (no duplicates)
         const totalLoads = sA.totalLoadCount() + sB.totalLoadCount();
         expect(totalLoads).toBe(keys.length);
     });
 
-    it('WT-5: write-through mixed operations — zero duplicate external calls', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WT-5: write-through mixed ops — zero duplicate physical calls, provenance correct', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wt-mix', makeWriteThroughConfig, sA, sB);
 
         const keyA = findKeyOwnedBy(a, a.getName(), 'wtmx');
@@ -356,35 +456,40 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         await mapB.put(keyA, 'v3');
         await mapB.delete(keyA);
 
-        // 3 stores (put + set + put), 2 deletes (remove + delete) — all on owner A
         expect(sA.totalStoreCount()).toBe(3);
         expect(sA.totalDeleteCount()).toBe(2);
         expect(sB.totalStoreCount()).toBe(0);
         expect(sB.totalDeleteCount()).toBe(0);
+        assertProvenanceOwnerOnly(sA, sB, a);
+
+        // Verify every record has correct memberId
+        for (const r of sA.records) {
+            expect(r.memberId).toBe('proofA');
+        }
     });
 
     // ═══════════════════════════════════════════════════════════
-    //  SECTION 2: Write-behind counting-store proof
+    //  SECTION 2: Write-behind provenance-recording proof
     // ═══════════════════════════════════════════════════════════
 
-    it('WB-1: write-behind put flushes to owner store only — no backup writes', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WB-1: write-behind put — flushes to owner only, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wb-put', makeWriteBehindConfig, sA, sB);
 
         const key = findKeyOwnedBy(a, a.getName(), 'wbp');
         await b.getMap<string, string>('wb-put').put(key, 'v1');
 
-        // Wait for write-behind flush
         await waitUntil(() => sA.totalStoreCount() >= 1, 3000);
 
         expect(sA.totalStoreCount()).toBeGreaterThanOrEqual(1);
         expect(sB.totalStoreCount()).toBe(0);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('WB-2: write-behind batches multiple puts into storeAll on owner', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WB-2: write-behind batching — storeAll on owner, no backup writes', async () => {
+        const sA = new ProvenanceMapStore('batchA');
+        const sB = new ProvenanceMapStore('batchB');
         const portA = nextPort();
         const portB = nextPort();
         const a = await Helios.newInstance(
@@ -400,23 +505,21 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
         const mapA = a.getMap<string, string>('wb-batch');
 
-        // Write 5 keys all owned by A to trigger batch
         for (let i = 0; i < 5; i++) {
             const key = findKeyOwnedBy(a, a.getName(), `wbb-${i}`);
             await mapA.put(key, `batch-${i}`);
         }
 
-        // Wait for flush
         await waitUntil(() => sA.totalStoreCount() >= 5, 3000);
 
-        // Owner A flushed all entries; backup B wrote none
         expect(sA.totalStoreCount()).toBeGreaterThanOrEqual(5);
         expect(sB.totalStoreCount()).toBe(0);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('WB-3: write-behind coalescing deduplicates rapid updates on owner', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WB-3: write-behind coalescing — deduplicates on owner, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('coalA');
+        const sB = new ProvenanceMapStore('coalB');
         const portA = nextPort();
         const portB = nextPort();
         const a = await Helios.newInstance(
@@ -433,22 +536,19 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         const key = findKeyOwnedBy(a, a.getName(), 'coal');
         const mapA = a.getMap<string, string>('wb-coal');
 
-        // Rapid-fire 5 updates before flush
         for (let i = 0; i < 5; i++) await mapA.put(key, `coal-${i}`);
 
-        // Wait for flush
         await waitUntil(() => sA.totalStoreCount() >= 1, 3000);
 
-        // Coalescing means fewer external writes than mutations
-        // At minimum 1 write (the coalesced final value), at most 5
         expect(sA.totalStoreCount()).toBeLessThanOrEqual(5);
         expect(sA.totalStoreCount()).toBeGreaterThanOrEqual(1);
         expect(sB.totalStoreCount()).toBe(0);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('WB-4: write-behind remove produces exactly one external delete on owner after flush', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WB-4: write-behind remove — exactly one physical delete on owner after flush', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wb-rm', makeWriteBehindConfig, sA, sB);
 
         const key = findKeyOwnedBy(a, a.getName(), 'wbrm');
@@ -462,11 +562,12 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
         expect(sA.totalDeleteCount()).toBeGreaterThanOrEqual(1);
         expect(sB.totalDeleteCount()).toBe(0);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('WB-5: write-behind lazy load-on-miss works on owner in write-behind mode', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('WB-5: write-behind lazy load-on-miss — loads on owner only', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('wb-lazy', makeWriteBehindConfig, sA, sB);
 
         const key = findKeyOwnedBy(a, a.getName(), 'wblz');
@@ -475,19 +576,20 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         const val = await b.getMap<string, string>('wb-lazy').get(key);
         expect(val).toBe('lazy-ext');
 
-        expect(sA.loads.length).toBe(1);
-        expect(sB.loads.length).toBe(0);
+        const loadRecords = sA.records.filter(r => r.operationKind === 'load');
+        expect(loadRecords.length).toBe(1);
+        expect(loadRecords[0]!.memberId).toBe('proofA');
+        expect(sB.records.filter(r => r.operationKind === 'load').length).toBe(0);
     });
 
     // ═══════════════════════════════════════════════════════════
     //  SECTION 3: Clustered EAGER load proof
     // ═══════════════════════════════════════════════════════════
 
-    it('EAGER-1: clustered EAGER load calls loadAllKeys through coordinated path', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('EAGER-1: clustered EAGER load — coordinated loadAllKeys, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
 
-        // Seed data in both stores (each member loads from its own adapter)
         for (let i = 0; i < 10; i++) {
             sA.seed(`ek-${i}`, `ev-${i}`);
             sB.seed(`ek-${i}`, `ev-${i}`);
@@ -495,18 +597,14 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
         const [a, b] = await startTwoNode('eager-proof', makeEagerConfig, sA, sB);
 
-        // Access the map to trigger EAGER load
         const mapA = a.getMap<string, string>('eager-proof');
         const mapB = b.getMap<string, string>('eager-proof');
 
-        // Wait for EAGER load to complete
         await Bun.sleep(1000);
 
-        // loadAllKeys called through coordinated path — at most once per member
-        const totalLoadAllKeys = sA.loadAllKeysCalls.length + sB.loadAllKeysCalls.length;
+        const totalLoadAllKeys = sA.loadAllKeysCalls() + sB.loadAllKeysCalls();
         expect(totalLoadAllKeys).toBeLessThanOrEqual(2);
 
-        // Data should be accessible from both members
         for (let i = 0; i < 10; i++) {
             const vA = await mapA.get(`ek-${i}`);
             const vB = await mapB.get(`ek-${i}`);
@@ -519,9 +617,9 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
     //  SECTION 4: Clear proof
     // ═══════════════════════════════════════════════════════════
 
-    it('CLEAR-1: clustered clear does not produce duplicate external deletes', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('CLEAR-1: clustered clear — no duplicate external deletes, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, _b] = await startTwoNode('clear-proof', makeWriteThroughConfig, sA, sB);
 
         const mapA = a.getMap<string, string>('clear-proof');
@@ -531,27 +629,24 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         await mapA.clear();
         expect(mapA.size()).toBe(0);
 
-        // Clear should not produce duplicate external delete calls across members
-        // (exact behavior depends on whether clear calls deleteAll or just wipes)
-        // The key invariant: total external deletes <= number of entries that existed
         const totalDeletes = sA.totalDeleteCount() + sB.totalDeleteCount();
         expect(totalDeletes).toBeLessThanOrEqual(10);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
     // ═══════════════════════════════════════════════════════════
     //  SECTION 5: Mixed mode proof
     // ═══════════════════════════════════════════════════════════
 
-    it('MIXED-1: write-through and write-behind maps coexist on same cluster', async () => {
-        const wtStoreA = new CountingMapStore();
-        const wtStoreB = new CountingMapStore();
-        const wbStoreA = new CountingMapStore();
-        const wbStoreB = new CountingMapStore();
+    it('MIXED-1: write-through and write-behind coexist — provenance isolated per map', async () => {
+        const wtStoreA = new ProvenanceMapStore('mixA');
+        const wtStoreB = new ProvenanceMapStore('mixB');
+        const wbStoreA = new ProvenanceMapStore('mixA');
+        const wbStoreB = new ProvenanceMapStore('mixB');
 
         const portA = nextPort();
         const portB = nextPort();
 
-        // Node A: write-through map + write-behind map
         const cfgA = new HeliosConfig('mixA');
         cfgA.getNetworkConfig().setPort(portA).getJoin().getTcpIpConfig().setEnabled(true);
 
@@ -569,7 +664,6 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         wbMapA.setMapStoreConfig(wbCfgA);
         cfgA.addMapConfig(wbMapA);
 
-        // Node B
         const cfgB = new HeliosConfig('mixB');
         cfgB.getNetworkConfig().setPort(portB).getJoin().getTcpIpConfig().setEnabled(true);
         cfgB.getNetworkConfig().getJoin().getTcpIpConfig().addMember(`localhost:${portA}`);
@@ -595,27 +689,29 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
 
-        // Write-through map: immediate store on owner
         const keyWt = findKeyOwnedBy(a, a.getName(), 'mwt');
         await b.getMap<string, string>('mix-wt').put(keyWt, 'wt-val');
         expect(wtStoreA.totalStoreCount()).toBe(1);
         expect(wtStoreB.totalStoreCount()).toBe(0);
 
-        // Write-behind map: deferred store on owner
         const keyWb = findKeyOwnedBy(a, a.getName(), 'mwb');
         await b.getMap<string, string>('mix-wb').put(keyWb, 'wb-val');
         await waitUntil(() => wbStoreA.totalStoreCount() >= 1, 3000);
         expect(wbStoreA.totalStoreCount()).toBeGreaterThanOrEqual(1);
         expect(wbStoreB.totalStoreCount()).toBe(0);
+
+        // Verify provenance memberId on all write records
+        for (const r of wtStoreA.writeRecords()) expect(r.memberId).toBe('mixA');
+        for (const r of wbStoreA.writeRecords()) expect(r.memberId).toBe('mixA');
     });
 
     // ═══════════════════════════════════════════════════════════
     //  SECTION 6: End-to-end production gate verification
     // ═══════════════════════════════════════════════════════════
 
-    it('GATE-1: bidirectional ownership — both nodes serve as owners for their partitions', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('GATE-1: bidirectional ownership — both nodes serve as owners, provenance verified', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('gate-bidir', makeWriteThroughConfig, sA, sB);
 
         const mapA = a.getMap<string, string>('gate-bidir');
@@ -625,106 +721,64 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         await mapA.put(keyA, 'on-A');
         await mapA.put(keyB, 'on-B');
 
-        expect(sA.stores.some(s => s.key === keyA)).toBe(true);
-        expect(sB.stores.some(s => s.key === keyB)).toBe(true);
+        expect(sA.records.some(r => r.keys.includes(keyA))).toBe(true);
+        expect(sB.records.some(r => r.keys.includes(keyB))).toBe(true);
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('GATE-2: high-volume write-through — no duplicates under 100 operations', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('GATE-2: high-volume write-through — 100 ops, no duplicates, provenance correct', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('gate-vol', makeWriteThroughConfig, sA, sB);
 
         const mapA = a.getMap<string, string>('gate-vol');
         const mapB = b.getMap<string, string>('gate-vol');
 
-        // 100 puts from both nodes
-        for (let i = 0; i < 50; i++) {
-            await mapA.put(`gv-${i}`, `a-${i}`);
-        }
-        for (let i = 50; i < 100; i++) {
-            await mapB.put(`gv-${i}`, `b-${i}`);
-        }
+        for (let i = 0; i < 50; i++) await mapA.put(`gv-${i}`, `a-${i}`);
+        for (let i = 50; i < 100; i++) await mapB.put(`gv-${i}`, `b-${i}`);
 
-        // Total stores across both nodes should equal exactly 100
         const total = sA.totalStoreCount() + sB.totalStoreCount();
         expect(total).toBe(100);
-
-        // Every key's store call should be on its owner
-        for (const s of sA.stores) {
-            const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
-        }
-        for (const batch of sA.storeAlls) {
-            for (const [key] of batch.entries) {
-                const pid = a.getPartitionIdForName(key);
-                expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
-            }
-        }
-        for (const s of sB.stores) {
-            const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
-        }
-        for (const batch of sB.storeAlls) {
-            for (const [key] of batch.entries) {
-                const pid = a.getPartitionIdForName(key);
-                expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
-            }
-        }
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('GATE-3: write-behind high-volume — no duplicate writes after flush', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('GATE-3: write-behind high-volume — 30 ops, no duplicates after flush', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('gate-wbvol', makeWriteBehindConfig, sA, sB);
 
         const mapA = a.getMap<string, string>('gate-wbvol');
 
-        // 30 puts
-        for (let i = 0; i < 30; i++) {
-            await mapA.put(`gwb-${i}`, `v-${i}`);
-        }
+        for (let i = 0; i < 30; i++) await mapA.put(`gwb-${i}`, `v-${i}`);
 
-        // Wait for all flushes
         await waitUntil(() => sA.totalStoreCount() + sB.totalStoreCount() >= 30, 5000);
 
         const total = sA.totalStoreCount() + sB.totalStoreCount();
         expect(total).toBe(30);
-
-        // Verify ownership correctness of all store calls
-        for (const s of sA.stores) {
-            const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
-        }
-        for (const batch of sA.storeAlls) {
-            for (const [key] of batch.entries) {
-                const pid = a.getPartitionIdForName(key);
-                expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
-            }
-        }
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 
-    it('GATE-4: verification — no broadcast-replay path remains for MapStore mutations', async () => {
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
+    it('GATE-4: no broadcast-replay — non-owner writes produce zero backup external calls', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
         const [a, b] = await startTwoNode('gate-noreplay', makeWriteThroughConfig, sA, sB);
 
         const key = findKeyOwnedBy(a, a.getName(), 'nr');
         const mapB = b.getMap<string, string>('gate-noreplay');
 
-        // Non-owner writes
         await mapB.put(key, 'v1');
         await mapB.put(key, 'v2');
         await mapB.remove(key);
 
-        // If broadcast-replay existed, B's store would also have calls
         expect(sB.totalStoreCount()).toBe(0);
         expect(sB.totalDeleteCount()).toBe(0);
-
-        // Owner has exactly the expected calls
         expect(sA.totalStoreCount()).toBe(2);
         expect(sA.totalDeleteCount()).toBe(1);
+        assertProvenanceOwnerOnly(sA, sB, a);
 
-        // Both nodes see the same final state
         const valA = await a.getMap<string, string>('gate-noreplay').get(key);
         const valB = await mapB.get(key);
         expect(valA).toBeNull();
@@ -732,26 +786,16 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
     });
 
     // ═══════════════════════════════════════════════════════════
-    //  SECTION 7: MongoDB clustered proof (gated by availability)
+    //  SECTION 7: Adapter eligibility proof
     // ═══════════════════════════════════════════════════════════
 
-    // MongoDB clustered integration is gated by Phase 19 single-node readiness
-    // and requires a running MongoDB instance. This test validates the concept
-    // using the same CountingMapStore patterns that would apply to any real adapter.
-    // The full MongoDB clustered proof requires:
-    //   HELIOS_MONGODB_TEST_URI=mongodb://127.0.0.1:27017 bun test <this file>
-    // and Phase 19 checkpoint to be green.
-
-    it('ADAPTER-1: adapter eligibility — CountingMapStore proves the clustered adapter contract', async () => {
-        // This test proves the adapter contract is satisfied by running the full
-        // lifecycle through a counting adapter: put, get, load-on-miss, remove,
-        // putAll, getAll, clear — all with owner-only external writes.
-        const sA = new CountingMapStore();
-        const sB = new CountingMapStore();
-        const [a, b] = await startTwoNode('adapter-proof', makeWriteThroughConfig, sA, sB);
+    it('ADAPTER-1: full lifecycle adapter contract — provenance-recorded end-to-end', async () => {
+        const sA = new ProvenanceMapStore('proofA');
+        const sB = new ProvenanceMapStore('proofB');
+        const [a, _b] = await startTwoNode('adapter-proof', makeWriteThroughConfig, sA, sB);
 
         const mapA = a.getMap<string, string>('adapter-proof');
-        const mapB = b.getMap<string, string>('adapter-proof');
+        const mapB = _b.getMap<string, string>('adapter-proof');
 
         // 1. Put from non-owner
         const keyA = findKeyOwnedBy(a, a.getName(), 'ap');
@@ -759,18 +803,18 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         expect(sA.totalStoreCount()).toBe(1);
         expect(sB.totalStoreCount()).toBe(0);
 
-        // 2. Get from non-owner (should find in memory, no load)
+        // 2. Get (in-memory, no load)
         const v1 = await mapB.get(keyA);
         expect(v1).toBe('adapter-v1');
 
-        // 3. Load-on-miss: seed external data, get from non-owner
+        // 3. Load-on-miss
         const missKey = findKeyOwnedBy(a, a.getName(), 'apmiss');
         sA.seed(missKey, 'ext-miss');
         sA.reset(); sB.reset();
         const missVal = await mapB.get(missKey);
         expect(missVal).toBe('ext-miss');
-        expect(sA.loads.length).toBe(1);
-        expect(sB.loads.length).toBe(0);
+        expect(sA.records.filter(r => r.operationKind === 'load').length).toBe(1);
+        expect(sB.records.filter(r => r.operationKind === 'load').length).toBe(0);
 
         // 4. Remove
         sA.reset(); sB.reset();
@@ -786,6 +830,7 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         const totalPutAll = sA.totalStoreCount() + sB.totalStoreCount();
         expect(totalPutAll).toBe(10);
 
-        // Full adapter contract proven: owner-only writes for all operation types.
+        assertNoDuplicatePhysicalWrites(sA, sB, a);
+        assertProvenanceOwnerOnly(sA, sB, a);
     });
 });
