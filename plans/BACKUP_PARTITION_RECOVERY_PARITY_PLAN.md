@@ -15,6 +15,8 @@ This is an execution plan, not a research note. It is intentionally narrower tha
 `plans/MULTI_NODE_RESILIENCE_PLAN.md`: it focuses only on the owner-loss / backup-recovery path and
 the runtime wiring required to make that path real in production.
 
+This plan is the authoritative backup/recovery implementation-detail plan for Phase 21 under `plans/TYPESCRIPT_PORT_PLAN.md`. It may add clarification, sequencing, and stricter implementation detail, but it must not narrow, weaken, or replace the master plan's acceptance contract. Any secondary or older backup/recovery plan, including `plans/PARTITION_BACKUP_E2E_CLOSURE_PLAN.md`, is subordinate and must be interpreted only in ways that preserve or strengthen the acceptance requirements in this file and in `plans/TYPESCRIPT_PORT_PLAN.md`.
+
 Implementation constraints for this plan:
 
 - Bun-native and TypeScript-native only
@@ -61,6 +63,7 @@ The implementation in `helios` should match these Hazelcast behaviors exactly in
 6. Background anti-entropy verifies backup versions and triggers replica sync for missed state.
 7. Replica sync is a real remote protocol with retries, throttling, timeouts, and stale-response
    rejection.
+8. Anti-entropy and replica sync are namespace-scoped, not metadata-only: the owner compares versions per `ServiceNamespace`, requests sync only for dirty or mismatched namespaces, and success is measured by repaired service payload/state for that namespace rather than by partition metadata or version-table parity alone.
 
 Primary Java reference points:
 
@@ -141,6 +144,7 @@ story on a real multi-node clustered runtime.
 - Anti-entropy is mandatory for correctness, not optional monitoring.
 - If no replica survives, fail honestly with partition-lost signaling rather than silently
   inventing recovery.
+- Generic partition-lost parity is only cluster-core parity. It does not authorize map, cache, or other service-level parity claims unless the relevant service also wires its own Hazelcast-equivalent partition-lost semantics, or the plan/docs explicitly narrow the claim.
 - Production code must have one clean runtime path. Test helpers may simulate failures, but they may
   not introduce alternate recovery logic unavailable to real nodes.
 
@@ -214,6 +218,10 @@ Tasks:
 - Detect partitions whose owner is missing.
 - Find first surviving replica index `1..N` and construct promotion work.
 - Apply promotion as a partition-table mutation that preserves replica ordering semantics.
+- Split promotion into explicit staged steps matching Hazelcast intent: `beforePromotion` on the candidate target, authoritative partition-state install, then `finalizePromotion`; do not collapse promotion into a single unguarded role flip.
+- Fence each promotion with a promotion epoch/partition-state stamp plus expected destination member identity; before/finalize/retry work must be rejected if the stamp, expected target, or current owner view has changed.
+- Keep the partition unavailable for owner traffic until finalize succeeds; the promoted replica must not accept owner-routed operations, backup authority, or service commit side effects before finalization publishes the new epoch.
+- Explicitly fence the old owner/source epoch on member loss, demotion, or retried promotion by cancelling local partition work, invalidating migration and replica-sync sessions, and rejecting late ops, acks, and stale state from the retired authority.
 - Increment partition versions with Hazelcast-compatible promotion/failure semantics.
 - Publish the post-promotion runtime state to all members.
 - Ensure promoted owner immediately becomes authoritative for operation routing and backups.
@@ -300,6 +308,7 @@ Tasks:
 - Add throttling to avoid bursty OOM or event-loop starvation.
 - Anti-entropy may wire scheduler scaffolding earlier, but it must remain production-disabled until
   `R7` replica-sync protocol semantics are complete end to end.
+- Anti-entropy must compare owner vs backup replica versions per supported service namespace/version tuple and trigger namespace-scoped sync only for dirty or mismatched namespaces; partition metadata parity, replica-slot occupancy, or version-table parity alone must never count as repair completion.
 
 Primary touched areas:
 
@@ -322,6 +331,8 @@ Tasks:
 - Add sync-request registration and timeout cleanup.
 - Add retry response behavior when migrations are paused, owner changed, or capacity is saturated.
 - Reject stale sync responses using version and ownership checks.
+- Compare and track replica versions per service namespace, send request/response work per namespace or fragment, and explicitly reject any implementation or proof that treats partition-level metadata parity as equivalent to repaired replica payload.
+- Handle wrong-target and stale-response delivery exactly in the live runtime path: if the recipient no longer owns the requested replica index, fail received payloads as wrong-target, clear the in-flight sync request, reschedule only if the node is still a valid replica, and clear local replica versions if it is no longer a replica.
 - Support fragment or namespace-aware transfer semantics needed by current/future replicated
   services.
 - Release permits deterministically on success, retry, timeout, and member death.
@@ -355,6 +366,7 @@ Tasks:
 - Close any gap where partition ownership changes but the target member lacks required data.
 - Any unsupported service must be explicitly marked unsupported in docs, examples, and test-support
   and excluded from parity claims and acceptance language.
+- Treat partition-lost the same way: generic partition-lost events from the partition service do not by themselves satisfy service-level parity. For maps, parity requires map-scoped partition-lost semantics equivalent in intent to Hazelcast `IMap.addPartitionLostListener(...)` / `MapPartitionLostEvent`, or an explicit narrowing that clustered maps and MapStore do not claim that surface.
 
 Exit criteria:
 
@@ -393,6 +405,7 @@ Required acceptance scenarios:
 - 3-node owner crash promotes first backup and operations continue on promoted owner
 - 3-node owner crash later refills backup slot on surviving or rejoined member
 - dropped/delayed backup traffic is repaired by anti-entropy without manual intervention
+- intentionally diverged backup payload state for every supported service namespace is repaired back to owner-equivalent state by anti-entropy + replica sync; partition metadata parity, replica-slot occupancy, and version-only convergence do not satisfy this proof
 - owner + all backups lost emits partition-lost exactly once per lost partition
 - repeated crash/rejoin cycles converge without stuck sync permits or ghost owners
 - cluster-safe/readiness signals reflect degraded redundancy during repair and return to safe after
@@ -401,6 +414,8 @@ Required acceptance scenarios:
   completes
 - repair metrics, retry or timeout counters, and partition-lost signals are observable through the
   supported runtime surfaces
+- every R9 acceptance suite must launch at least three separate Helios members as separate Bun processes with distinct TCP listeners and exercise recovery only over real `TcpClusterTransport`; shared-process, in-memory, or direct-call cluster tests are supplemental only and do not close this block
+- crash, packet-drop, and packet-delay scenarios must be injected at the process or transport boundary (member kill, socket cut, or cluster-frame proxy drop/delay), not by mutating partition tables, replica versions, or service state directly inside a member process
 
 Suggested test locations:
 
@@ -469,6 +484,7 @@ This plan is not complete unless all of the following are true:
 - promoted owner immediately becomes the routing authority for partition traffic
 - missing backup slots are refilled automatically when another eligible member exists
 - stale backup state caused by dropped/delayed backup traffic is eventually repaired by anti-entropy
+- anti-entropy and replica sync proof is namespace-scoped and payload-scoped: per-service namespace/version comparison and actual repaired service state are required, and partition metadata parity or version-only convergence are explicitly insufficient
 - total replica loss emits partition-lost and does not masquerade as successful recovery
 - supported partition-scoped services remain correct after promotion, refill, replica sync,
   shutdown, and rejoin; partition metadata parity alone is not sufficient
@@ -477,6 +493,7 @@ This plan is not complete unless all of the following are true:
 - operator-facing recovery metrics, events, readiness signals, docs, examples, and proof commands
   all reflect the single real production recovery path
 - operation routing, backup execution, migration, and metrics all consult the same partition table
+- the required recovery proof runs on separate Helios member processes over real TCP and includes transport-boundary crash/drop/delay fault injection; shared-process or direct-call simulations do not satisfy the gate
 - real multi-node tests cover crash, promotion, refill, anti-entropy repair, and partition-lost
 - docs/plans do not claim parity beyond what the tests prove
 

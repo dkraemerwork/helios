@@ -280,6 +280,7 @@ describe("Block 18.2 — Helios Blitz Config, Protocol, and Topology Service", (
         ],
         masterMemberId: "node-1",
         memberListVersion: 10,
+        fenceToken: "fence-abc-123",
         registrationsComplete: false,
         retryAfterMs: 1000,
         clientConnectUrl: "nats://127.0.0.1:4222",
@@ -692,6 +693,144 @@ describe("Block 18.2 — Helios Blitz Config, Protocol, and Topology Service", (
       expect(announce?.routes).toHaveLength(2);
       expect(announce?.routes).toContain("nats://node-1.cluster.local:6222");
       expect(announce?.routes).toContain("nats://node-2.cluster.local:6223");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 7. Authority tuple fencing with fenceToken (4 tests)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe("Authority tuple fencing", () => {
+    let coordinator: HeliosBlitzCoordinator;
+
+    beforeEach(() => {
+      coordinator = new HeliosBlitzCoordinator();
+    });
+
+    test("fenceToken is generated on master epoch change and rotates on each new epoch", () => {
+      coordinator.setMasterMemberId("master-1");
+      coordinator.setMemberListVersion(1);
+
+      const token1 = coordinator.getFenceToken();
+      expect(token1).toBeString();
+      expect(token1!.length).toBeGreaterThan(0);
+
+      // Same epoch → same token
+      expect(coordinator.getFenceToken()).toBe(token1);
+
+      // New epoch (new master or new version) → new token
+      coordinator.setMasterMemberId("master-2");
+      coordinator.setMemberListVersion(2);
+
+      const token2 = coordinator.getFenceToken();
+      expect(token2).toBeString();
+      expect(token2).not.toBe(token1);
+    });
+
+    test("authoritative topology response carries fenceToken in authority tuple", () => {
+      coordinator.setMasterMemberId("master-node");
+      coordinator.setMemberListVersion(3);
+
+      coordinator.handleRegister(
+        {
+          type: "BLITZ_NODE_REGISTER",
+          registration: {
+            memberId: "node-1",
+            memberListVersion: 3,
+            serverName: "nats-1",
+            clientPort: 4222,
+            clusterPort: 6222,
+            advertiseHost: "node-1.local",
+            clusterName: "test",
+            ready: true,
+            startedAt: Date.now(),
+          },
+        },
+        true,
+      );
+
+      const response = coordinator.handleTopologyRequest(
+        { type: "BLITZ_TOPOLOGY_REQUEST", requestId: "req-fence-1" },
+        true,
+      );
+
+      expect(response).not.toBeNull();
+      expect(response!.fenceToken).toBe(coordinator.getFenceToken()!);
+      expect(response!.masterMemberId).toBe("master-node");
+      expect(response!.memberListVersion).toBe(3);
+    });
+
+    test("authoritative topology announce carries fenceToken in authority tuple", () => {
+      coordinator.setMasterMemberId("master-node");
+      coordinator.setMemberListVersion(5);
+
+      coordinator.handleRegister(
+        {
+          type: "BLITZ_NODE_REGISTER",
+          registration: {
+            memberId: "node-1",
+            memberListVersion: 5,
+            serverName: "nats-1",
+            clientPort: 4222,
+            clusterPort: 6222,
+            advertiseHost: "node-1.local",
+            clusterName: "test",
+            ready: true,
+            startedAt: Date.now(),
+          },
+        },
+        true,
+      );
+
+      const announce = coordinator.generateTopologyAnnounce();
+
+      expect(announce).not.toBeNull();
+      expect(announce!.fenceToken).toBe(coordinator.getFenceToken()!);
+      expect(announce!.masterMemberId).toBe("master-node");
+      expect(announce!.memberListVersion).toBe(5);
+    });
+
+    test("validateAuthority rejects stale authority tuples from pre-demotion masters", () => {
+      coordinator.setMasterMemberId("master-1");
+      coordinator.setMemberListVersion(1);
+
+      const validToken = coordinator.getFenceToken()!;
+
+      // Valid authority tuple accepted
+      expect(
+        coordinator.validateAuthority("master-1", 1, validToken),
+      ).toBe(true);
+
+      // Simulate master change (epoch rotation)
+      coordinator.setMasterMemberId("master-2");
+      coordinator.setMemberListVersion(2);
+
+      const newToken = coordinator.getFenceToken()!;
+
+      // Old master tuple rejected
+      expect(
+        coordinator.validateAuthority("master-1", 1, validToken),
+      ).toBe(false);
+
+      // Wrong fenceToken with correct master/version rejected
+      expect(
+        coordinator.validateAuthority("master-2", 2, validToken),
+      ).toBe(false);
+
+      // Correct tuple accepted
+      expect(
+        coordinator.validateAuthority("master-2", 2, newToken),
+      ).toBe(true);
+
+      // Wrong master with correct version/token rejected
+      expect(
+        coordinator.validateAuthority("master-1", 2, newToken),
+      ).toBe(false);
+
+      // Correct master with wrong version rejected
+      expect(
+        coordinator.validateAuthority("master-2", 1, newToken),
+      ).toBe(false);
     });
   });
 });

@@ -95,6 +95,8 @@ Clustered MapStore support is complete only when all of the following are true:
     unless it is actually implemented.
 13. at least one real adapter proves the full clustered vertical slice against a real external
     store after adapter-level single-node work is complete.
+14. clustered maps expose map-scoped partition-lost semantics equivalent in intent to Hazelcast `IMap.addPartitionLostListener(...)`, `removePartitionLostListener(...)`, and `MapPartitionLostEvent`; if that surface is intentionally out of scope, clustered MapStore docs, plans, and acceptance gates must explicitly say so and must not claim full Hazelcast map/MapStore parity.
+15. clustered proof does not rely on idempotent adapters or final-state-only assertions; proof harnesses must capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external MapStore call and assert that duplicate physical calls did not occur where the contract says they must not.
 
 This target explicitly excludes split-brain merge correctness, exactly-once external persistence,
 WAN replication, and any adapter that has not passed the clustered proof gate.
@@ -134,6 +136,10 @@ EAGER preload in clustered mode must be a single coordinated load epoch per map.
 - one authoritative sweep enumerates keys once for the map-load epoch
 - keys are partitioned by current owner and loaded where they belong
 - backups receive data through normal backup replication, not through independent store reads
+- a member join during an active EAGER load must attach to the existing map-load epoch, not start a new one
+- the cluster must never run a second full `loadAllKeys()` sweep for the same map-load epoch just because ownership or membership changed mid-load
+- if partition ownership changes during the epoch, remaining work is reassigned by explicit batch/progress handoff; already assigned or completed batches are not re-enumerated or re-read from the external store
+- EAGER callers on both the original member and the joining member wait on epoch completion without deadlock
 
 ### 5. Legacy map broadcast becomes signaling only or is removed
 
@@ -178,6 +184,9 @@ Finishing this core plan does not automatically make every MapStore adapter clus
 - `MapContainerService` must become migration-aware for map data and write-behind state.
 - backup-to-owner promotion must have an explicit cutover point after migration finalization.
 - a promoted backup must continue pending write-behind work without replaying already-finished work.
+- promotion and write-behind handoff are staged: `beforePromotion` freezes the retiring owner and prepares the target, state install transfers authoritative queue/flush metadata, and `finalize` is the only point where the target becomes the external writer
+- every handoff, finalize, flush-ack, and retry path carries a partition ownership epoch plus expected source/target member identity, and must fail closed when the epoch, owner, or expected target no longer match
+- no owner-routed map traffic or external MapStore writes/loads/deletes may run on the target before finalize, and the old owner must be explicitly fenced so it cannot emit late external writes after demotion
 
 ### EAGER load and clear
 
@@ -318,6 +327,7 @@ Deliverables:
 - `MapProxy` no longer performs external MapStore work in the caller after `invokeOnPartition()`
 - owner-executed mutation path performs write-through or write-behind behavior on the owner only
 - owner-executed miss path performs `load` / `loadAll` on the owner only
+- proof adapters record per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) so the suite can assert against duplicate physical owner/backup/replay calls instead of inferring safety from final persisted state
 - `putAll()` and `getAll()` are upgraded to owner-routed bulk paths that reach `storeAll()` /
   `loadAll()` end to end
 - `clear()` is routed as an owner-aware multi-partition operation, not caller-local plus global
@@ -325,12 +335,12 @@ Deliverables:
 
 Tests:
 
-- two-node write-through proof with a counting store shows exactly one external write/delete per
-  logical mutation
+- two-node write-through proof with a provenance-recording counting store shows exactly one physical external write/delete per logical mutation and exposes the caller `memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, and `operationKind`
 - non-owner caller never invokes adapter `store` / `delete` / `load` locally
 - `putAll()` reaches `storeAll()` through the real owner path
 - `getAll()` misses reach `loadAll()` through the real owner path
 - `clear()` performs one ownership-aware external delete flow, not one flow per member
+- migration/promotion/replay scenarios assert on captured physical call counts and provenance, not just final external state
 
 Exit gate:
 
@@ -370,6 +380,9 @@ Deliverables:
 - `MapReplicationOperation` and `WriteBehindStateHolder` are wired into real migration flow
 - migration apply/finalize/rollback paths move map data and write-behind metadata correctly
 - owner demotion/promotion cutover is explicit and tested
+- promotion and write-behind handoff are staged: `beforePromotion` freezes the retiring owner and prepares the target, state install transfers authoritative queue/flush metadata, and `finalize` is the only point where the target becomes the external writer
+- every handoff, finalize, flush-ack, and retry path carries a partition ownership epoch plus expected source/target member identity, and must fail closed when the epoch, owner, or expected target no longer match
+- no owner-routed map traffic or external MapStore writes/loads/deletes may run on the target before finalize, and the old owner must be explicitly fenced so it cannot emit late external writes after demotion
 - graceful member shutdown flushes or hands off owned write-behind work deterministically
 
 Tests:
@@ -377,6 +390,8 @@ Tests:
 - partition migration transfers pending write-behind entries and flush metadata
 - promoted backup resumes pending writes without replaying already-finished entries
 - owner leave and graceful shutdown do not produce duplicate external writes
+- promoted target does not perform any external write/load/delete before finalize, even if replicated state and write-behind metadata are already present locally
+- demoted/retired owner cannot leak late write-behind flushes, retries, or offloaded completions after the ownership epoch changes
 - migration rollback does not leave two external writers active for the same partition
 
 Exit gate:
@@ -395,6 +410,8 @@ Deliverables:
 - backup population through replication, not repeated store reads
 - coordinated external clear flow that partitions delete work by owner
 - deterministic behavior when membership changes during EAGER load or clear
+- join-continuity rules for EAGER load are explicit: one load epoch stays authoritative across member join/rebalance, joiners wait on that epoch, and work moves only by tracked batch reassignment or handoff
+- no join path may trigger a second full `loadAllKeys()` scan, a second coordinator, or duplicate external `loadAll` / `store` / `storeAll` / `delete` / `deleteAll` calls for keys already assigned in the active epoch
 
 Tests:
 
@@ -402,6 +419,9 @@ Tests:
   per member
 - EAGER-loaded data lands on owners and becomes visible through normal clustered access
 - member join during EAGER load does not cause duplicate external writes or duplicate key loading
+- member join during EAGER load does not deadlock the original loader, the joining member, or epoch completion
+- member join during EAGER load keeps one authoritative epoch alive and calls `loadAllKeys()` exactly once for that epoch
+- member join during EAGER load does not duplicate external per-key reads or any external write/delete side effects for work already assigned before the join
 - clear in a two-node cluster deletes each external key exactly once
 
 Exit gate:
@@ -415,17 +435,18 @@ Goal: prove the core plan works with a real adapter and document only supported 
 Deliverables:
 
 - clustered proof suite against a real adapter after its single-node plan is complete
+- clustered proof adapters and MongoDB proof fixtures capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external call
 - MongoDB is the first intended proof adapter because Phase 19 already defines its single-node
   production contract
 - docs for clustered MapStore scope, durability, failover behavior, and adapter eligibility
+- map-scoped partition-lost docs and proof: clustered maps either ship Hazelcast-parity map listener/event support for partition loss and cover it in the clustered proof suite, or the clustered MapStore contract is explicitly narrowed so no adapter, example, or acceptance line implies that generic partition-lost satisfies map-level parity
 - examples only for paths that actually work end to end
 
 Tests:
 
-- counting test adapter proves no duplicate writes/deletes under two-node write-through and
-  write-behind flows
-- real MongoDB clustered integration suite proves owner-only writes, lazy load, eager load,
-  migration, shutdown handoff, and restart/failover behavior
+- provenance-recording counting test adapter proves no duplicate physical writes/deletes under two-node write-through and write-behind flows, even when the final external state would look correct under an idempotent adapter
+- real MongoDB clustered integration suite proves owner-only writes, lazy load, eager load, migration, shutdown handoff, and restart/failover behavior with the same per-call provenance capture and duplicate-physical-call assertions
+- map-scoped partition-lost proof shows clustered maps surface partition-loss listener/event behavior explicitly rather than relying on generic partition-service events
 - docs/examples smoke tests run only against supported clustered paths
 
 Exit gate:
@@ -443,18 +464,26 @@ Required proof:
 - clustered operation-routing tests green
 - clustered write-through tests green
 - clustered write-behind tests green
+- backup-no-external-write tests green
 - migration and owner-promotion tests green
+- map-scoped partition-lost tests green when full Hazelcast map/MapStore parity is claimed
+- lazy-load tests green
 - EAGER-load coordination tests green
+- `getAll()` / `putAll()` bulk clustered tests green
 - clear coordination tests green
 - graceful shutdown handoff tests green
+- provenance-capture assertions green for all clustered proof suites: each physical external call is recorded with `memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, and `operationKind`, and no duplicate physical calls are hidden behind idempotent adapter behavior or final-state-only checks
 - failover durability tests green under the documented at-least-once contract
+- counting-store clustered proof suite green
 - real MongoDB clustered proof suite green after adapter single-node readiness is already green
+- all clustered MapStore proof suites must run with at least three separate Helios members as separate Bun processes with distinct TCP listeners and real `TcpClusterTransport`; shared-process, in-memory, or direct-call cluster tests do not satisfy this block
+- required fault coverage includes process-boundary owner crash plus transport-boundary drop/delay injection on owner-routed map operations, backup traffic, migration handoff, and write-behind handoff traffic; direct in-memory state editing or direct internal-service calls do not satisfy this block
 - root and adapter-specific typechecks green
 
 Required output:
 
 ```text
-GATE-CHECK: block=C7 required=10 passed=10 labels=cluster-mapstore-routing,cluster-mapstore-writethrough,cluster-mapstore-writebehind,cluster-mapstore-migration,cluster-mapstore-owner-promotion,cluster-mapstore-eager-load,cluster-mapstore-clear,cluster-mapstore-shutdown-handoff,cluster-mapstore-mongodb-proof,typescript
+GATE-CHECK: block=C7 required=17 passed=17 labels=cluster-mapstore-routing,cluster-mapstore-writethrough,cluster-mapstore-writebehind,cluster-mapstore-backup-no-external-write,cluster-mapstore-migration,cluster-mapstore-owner-promotion,cluster-mapstore-map-partition-lost,cluster-mapstore-lazy-load,cluster-mapstore-eager-load,cluster-mapstore-getall-bulk,cluster-mapstore-putall-bulk,cluster-mapstore-clear,cluster-mapstore-shutdown-handoff,cluster-mapstore-counting-store-proof,cluster-mapstore-mongodb-proof,cluster-mapstore-failover-at-least-once,typescript
 ```
 
 ## Test Matrix
@@ -467,6 +496,7 @@ GATE-CHECK: block=C7 required=10 passed=10 labels=cluster-mapstore-routing,clust
 - `cluster-mapstore-backup-no-external-write`
 - `cluster-mapstore-migration`
 - `cluster-mapstore-owner-promotion`
+- `cluster-mapstore-map-partition-lost`
 - `cluster-mapstore-shutdown-handoff`
 - `cluster-mapstore-failover-at-least-once`
 
@@ -542,4 +572,5 @@ This plan is complete only when all of the following are true:
 - EAGER load, LAZY load, clear, getAll, and putAll have real clustered runtime wiring
 - migration and shutdown semantics preserve the documented at-least-once durability contract
 - at least one real adapter proves the full clustered vertical slice after its single-node proof is complete
+- clustered MapStore proof is backed by separate Helios member processes over real TCP with transport-boundary crash/drop/delay fault injection; shared-process or direct-call simulations do not satisfy the acceptance gate
 - docs, examples, and plan language only claim behavior the repo can actually run end to end

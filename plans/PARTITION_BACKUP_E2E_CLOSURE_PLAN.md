@@ -23,6 +23,8 @@ The target outcome is not "tests for helper methods pass." The target outcome is
 - stale rejoin state is fenced and cannot leak back into service
 - supported partition-scoped services remain correct after crash, rejoin, promotion, and refill
 
+This is a secondary/supporting closure plan only. The authoritative acceptance contract for this work lives first in `plans/TYPESCRIPT_PORT_PLAN.md` Phase 21 and then in `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`. Nothing in this file may be used to narrow scope, substitute weaker proof, omit stricter recovery guarantees, or otherwise downgrade the requirements defined by those authoritative plans. If this file conflicts with either authoritative plan, this file must be treated as wrong and updated rather than followed.
+
 ---
 
 ## Java Reference
@@ -166,6 +168,8 @@ Tasks:
 
 - Route sync request/response through the real `OperationService` network path.
 - Enforce timeout, retry, stale-epoch rejection, ownership validation, and cleanup on member death.
+- Compare owner and backup replica versions per supported service namespace/version tuple and drive sync request/response per namespace or fragment instead of treating partition-level metadata parity as sufficient repair.
+- Handle wrong-target, stale-owner, stale-epoch, and stale-response cases on the receiver path so stale payloads are rejected, in-flight sync state is cleared deterministically, re-request happens only while the node is still the correct replica, and local replica versions are cleared when the node is no longer a replica.
 - Ensure sync requests are invalidated on demotion, shutdown, restart, rejoin, and owner change.
 - Ensure refill/new-backup assignment can trigger the same real sync machinery.
 
@@ -187,6 +191,7 @@ Tasks:
   - anti-entropy sync payload correctness
   - shutdown/destroy cleanup
   - stale-rejoin fencing
+  - proof that intentionally diverged backup payload state is repaired by anti-entropy + replica sync, with owner-equivalent post-repair data/state validated per namespace rather than inferred from partition-table or version metadata
 - Any unsupported service must be explicitly documented as unsupported and excluded from parity
   claims in docs/examples/test-support.
 
@@ -224,10 +229,13 @@ Required scenarios:
 - 3-node owner crash promotes first surviving backup and operations continue on promoted owner
 - promoted owner later refills a new backup when capacity exists
 - dropped/delayed backup traffic is repaired by anti-entropy + replica sync without manual action
+- intentionally diverged backup payload state is repaired for every supported service namespace, and metadata-only parity (partition table, replica-slot occupancy, or version-table convergence) is explicitly rejected as sufficient acceptance proof
 - rejoining member stays fenced until authoritative partition/service-state sync completes
 - owner + all replicas lost emits partition-lost and remains honest about irrecoverable loss
 - recovery metrics and safety/degraded-state reporting reflect repair progress correctly
 - repeated crash/rejoin cycles do not leak zombie repair loops, stale syncs, or duplicate owners
+- C7 proof must run with at least three separate Helios members started as separate Bun processes with distinct TCP listeners and real `TcpClusterTransport` communication; shared-process, in-memory, or direct-call cluster harnesses do not satisfy this block
+- crash, drop, and delay coverage must be injected at the process or transport boundary for backup, replica-sync, and owner-routing traffic; direct state mutation or direct internal-service calls are not acceptable substitutes
 
 Completion gate:
 
@@ -262,9 +270,11 @@ This plan is not complete unless all of the following are true:
 - `HeliosClusterCoordinator` does not own an alternate partition-state truth source
 - owner loss is repaired through the single live promotion/refill pipeline
 - anti-entropy and replica sync are both active runtime behavior, not helper-level or placeholder-only
+- anti-entropy and replica sync are proven through per-service-namespace/version comparison plus repaired service payload/state; metadata-only parity is explicitly insufficient
 - stale rejoin state is fenced until authoritative sync completes
 - supported partition-scoped services are proven correct through failover
 - operator-facing docs/examples/config/test-support describe only the real runtime path
+- the final recovery proof runs on separate Helios member processes over real TCP and includes transport-boundary crash/drop/delay fault injection rather than shared-process or direct-call simulation
 - real multi-node acceptance proof is green
 
 ---

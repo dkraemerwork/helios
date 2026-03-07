@@ -6,6 +6,13 @@ Deliver a production-ready MongoDB-backed MapStore for Helios with test-backed H
 parity for the Mongo/GenericMapStore path, using TypeScript/Bun-native replacements only where
 Java-specific mechanics do not exist.
 
+Phase ownership is split explicitly across the master plan:
+
+- Phase 19 closes single-member MongoDB MapStore production readiness only.
+- Phase 21 closes clustered multi-member MongoDB MapStore readiness on top of the owner-authoritative clustered MapStore core.
+
+Until Phase 21.4 is green, this document may define clustered implementation requirements, but it must not be used to claim clustered Mongo production readiness, ship clustered Mongo docs/examples, or treat clustered Mongo proof as a Phase 19 release gate.
+
 This plan covers:
 
 - core MapStore runtime behavior already present in Helios and the remaining parity gaps
@@ -75,6 +82,8 @@ The Helios MongoDB implementation is considered complete only for the following 
 16. `loadAllKeys()` supports streaming/unbounded datasets through a non-array enumeration path in the core SPI/runtime.
 17. query/index state remains correct after eager/lazy loads for Helios maps using configured predicates and indexes.
 18. real MongoDB integration tests prove startup, CRUD, restart survival, eager/lazy load, shutdown flush, offload, cluster behavior, and failure handling.
+
+Release-gate note: items 10, 11, 15, and the clustered portion of item 18 are Phase 21 closure criteria. Phase 19 may be called production-ready only for the single-member subset of this target; clustered Mongo claims, clustered docs/examples, and clustered proof stay gated behind Phase 21.4.
 
 This target still intentionally avoids porting Hazelcast SQL/DataConnection internals line-by-line.
 
@@ -197,11 +206,17 @@ These decisions close gaps in the current Helios runtime and are mandatory for t
 - only the partition owner / authoritative mutation path may invoke external Mongo persistence.
 - backup application, replication replay, migration replay, and state transfer paths must not
   duplicate external writes or deletes.
+- clustered Mongo proof must capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external Mongo call and must assert against duplicate physical calls directly rather than trusting final document state.
 - write-behind ownership and queued entries must migrate with partition ownership using explicit
   tests for migration, restart, and rebalancing scenarios.
 - authoritative migration handoff is fixed: the source owner serializes pending write-behind state
   into the migration payload, the target owner installs that state before serving partition writes,
   and the source owner stops external flush work as soon as handoff is acknowledged.
+- clustered EAGER Mongo preload must inherit the core one-epoch rule: if a member joins while preload is running, the joiner waits on the active epoch and must not start a second collection-wide `loadAllKeys()` scan.
+- ownership changes during that epoch may only move not-yet-finished work by explicit batch/progress handoff; they must not duplicate Mongo reads or introduce any duplicate Mongo write/delete side effects.
+- owner change is staged and fenced: `beforePromotion`/handoff freezes the retiring owner and transfers Mongo write-behind state, `finalize` installs the new ownership epoch and expected target, and the target must not issue Mongo `store`/`storeAll`/`delete`/`deleteAll`/`load`/`loadAll` calls before finalize commits.
+- all promotion, finalize, retry, flush, and offload-completion paths must validate the partition ownership epoch plus expected source/target member identity and fail closed on mismatch.
+- old-owner fencing is explicit: once handoff starts, the retiring owner rejects new partition mutations for that epoch, stops new Mongo I/O for that partition, and drops late flush completions or retries from the retired epoch.
 
 ### Offload scope
 
@@ -621,6 +636,10 @@ Deliverables:
 - recovery behavior after transient outage
 - offload execution semantics and ordering guarantees
 - cluster owner-only persistence, migration-safe write-behind, and replay-safe semantics
+- clustered EAGER join-during-load continuity: one coordinated preload epoch survives member join/rebalance without deadlock, without a second full Mongo key scan, and without duplicate Mongo reads/writes
+- clustered proof fixtures capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external Mongo call
+- three-member clustered Mongo suites run as separate Helios member processes with distinct TCP listeners over real `TcpClusterTransport`; shared-process, in-memory, or direct-call cluster harnesses are non-gating only
+- owner crash plus transport-boundary drop/delay on owner-routed map-operation, backup, migration-handoff, and replica-sync traffic preserve owner-only external writes and the documented at-least-once durability contract
 
 Tests:
 
@@ -629,8 +648,11 @@ Tests:
 - Mongo outage during store/load/delete
 - restart after outage with pending write-behind flush
 - offload behavior tests for `offload=true` and `offload=false`
-- two-member and multi-member cluster tests proving no duplicate external writes
-- migration/rebalance tests for write-behind ownership transfer
+- two-member and multi-member cluster tests prove no duplicate physical external Mongo writes/deletes by asserting on captured per-call provenance, not just final collection contents
+- migration/rebalance tests for write-behind ownership transfer also assert that promoted owners and backups do not both issue the same physical external call for one logical mutation
+- staged promotion/finalize tests proving the promoted target performs no Mongo writes before finalize and the retired owner cannot leak late Mongo writes after epoch change
+- expected-target/epoch fencing tests proving stale finalize, retry, offload-completion, and flush-ack messages are rejected during owner change
+- two-member clustered EAGER test where member 2 joins mid-load and proves one epoch, one full `loadAllKeys()` scan, no deadlock, and no duplicate Mongo reads/writes for already assigned keys
 
 Exit gate:
 
@@ -665,6 +687,7 @@ Deliverables:
 - dynamic-loading config examples for Mongo-backed maps using supported wiring only
 - operational docs: indexes, write concern, batching, single-column mapping, and document update semantics
 - explicit docs for supported runtime scope: clustered support, offload behavior, `loadAllKeys` streaming semantics, and all supported wiring modes
+- clustered Mongo docs/examples are blocked until Phase 21.4 is green; before that, docs/examples may describe only the single-member, offload, and wiring scope closed in Phase 19
 - exact local/CI test harness instructions for the real MongoDB proof path
 
 Tests:
@@ -678,6 +701,8 @@ Exit gate:
 ### Block M10 - Production proof gate
 
 Goal: do not ship until the full vertical slice is proven.
+
+Phase gate: Block M10 is the full-plan proof gate, not the Phase 19 gate. For Phase 19 closure, only the single-member proof subset may be required or cited. `mapstore-mongodb-clustered`, the clustered multi-member scenario, and any clustered Mongo production-readiness claim remain gated behind Phase 21.4.
 
 Required proof:
 
@@ -693,8 +718,20 @@ Required proof:
 - EAGER preload-before-first-operation scenario green
 - LAZY load-on-miss scenario green
 - supported wiring scenario green for direct `implementation`, `factoryImplementation`, registry-backed config wiring, and dynamic-loading config wiring
+- each supported wiring path must pass as its own independent proof target; one passing path may not satisfy or stand in for any other path
+- the required independent wiring proof set is fixed:
+  - direct `implementation`
+  - direct `factoryImplementation`
+  - registry-backed config wiring
+  - dynamic-loading config wiring from programmatic config
+  - dynamic-loading config wiring from JSON file config
+  - dynamic-loading config wiring from YAML file config
+  - config-origin-relative dynamic-loading resolution for file-based config
+  - installed-package dynamic-loading via bare/package specifier
 - offload scenario green
-- clustered multi-member scenario green
+- clustered multi-member scenario green with per-call provenance capture (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) and duplicate-physical-call assertions for Mongo `store` / `storeAll` / `delete` / `deleteAll`
+- clustered multi-member scenario green on separate Helios member processes over real TCP; shared-process or direct-call cluster tests do not satisfy this proof item
+- clustered failure proof includes process-boundary owner crash plus transport-boundary drop/delay injection on owner-routed map-operation, backup, migration-handoff, and replica-sync traffic
 - query/index consistency scenario green
 - `load-all-keys=false` LAZY-mode scenario green
 - streaming `loadAllKeys()` large-collection scenario green
@@ -711,6 +748,14 @@ bun run test:mapstore:mongodb:core
 bun run test:mapstore:mongodb:offload
 bun run test:mapstore:mongodb:cluster
 bun run test:mapstore:mongodb:e2e
+bun run test:mapstore:mongodb:wiring:implementation
+bun run test:mapstore:mongodb:wiring:factory-implementation
+bun run test:mapstore:mongodb:wiring:registry
+bun run test:mapstore:mongodb:wiring:dynamic-programmatic
+bun run test:mapstore:mongodb:wiring:dynamic-json
+bun run test:mapstore:mongodb:wiring:dynamic-yaml
+bun run test:mapstore:mongodb:wiring:config-origin-relative
+bun run test:mapstore:mongodb:wiring:dynamic-package
 ```
 
 - each proof label below must map to one or more of those committed commands or to a committed CI
@@ -721,7 +766,15 @@ Exact label-to-command mapping is fixed:
 - `typescript` -> `bun run typecheck` and `bun --cwd packages/mongodb run typecheck`
 - `mongodb-unit` -> `bun run test:mapstore:mongodb:unit`
 - `mongodb-e2e` -> `bun run test:mapstore:mongodb:e2e`
-- `mapstore-mongodb-wiring` -> `bun run test:mapstore:mongodb:core`
+- `mapstore-mongodb-wiring-aggregate` -> requires all of `mapstore-mongodb-wiring-implementation`, `mapstore-mongodb-wiring-factory-implementation`, `mapstore-mongodb-wiring-registry`, `mapstore-mongodb-wiring-dynamic-programmatic`, `mapstore-mongodb-wiring-dynamic-json`, `mapstore-mongodb-wiring-dynamic-yaml`, `mapstore-mongodb-wiring-config-origin-relative`, and `mapstore-mongodb-wiring-dynamic-package`; no subset pass is sufficient
+- `mapstore-mongodb-wiring-implementation` -> `bun run test:mapstore:mongodb:wiring:implementation`
+- `mapstore-mongodb-wiring-factory-implementation` -> `bun run test:mapstore:mongodb:wiring:factory-implementation`
+- `mapstore-mongodb-wiring-registry` -> `bun run test:mapstore:mongodb:wiring:registry`
+- `mapstore-mongodb-wiring-dynamic-programmatic` -> `bun run test:mapstore:mongodb:wiring:dynamic-programmatic`
+- `mapstore-mongodb-wiring-dynamic-json` -> `bun run test:mapstore:mongodb:wiring:dynamic-json`
+- `mapstore-mongodb-wiring-dynamic-yaml` -> `bun run test:mapstore:mongodb:wiring:dynamic-yaml`
+- `mapstore-mongodb-wiring-config-origin-relative` -> `bun run test:mapstore:mongodb:wiring:config-origin-relative`
+- `mapstore-mongodb-wiring-dynamic-package` -> `bun run test:mapstore:mongodb:wiring:dynamic-package`
 - `mapstore-mongodb-writethrough` -> `bun run test:mapstore:mongodb:core`
 - `mapstore-mongodb-writebehind` -> `bun run test:mapstore:mongodb:core`
 - `mapstore-mongodb-putall-getall-bulk-runtime` -> `bun run test:mapstore:mongodb:core`
@@ -738,7 +791,7 @@ Exact label-to-command mapping is fixed:
 Required output:
 
 ```text
-GATE-CHECK: block=M10 required=16 passed=16 labels=mongodb-unit,mongodb-e2e,mapstore-mongodb-writethrough,mapstore-mongodb-writebehind,mapstore-mongodb-putall-getall-bulk-runtime,mapstore-mongodb-shutdown-durability,mapstore-mongodb-eager-load,mapstore-mongodb-lazy-load,mapstore-mongodb-restart,mapstore-mongodb-wiring,mapstore-mongodb-offload,mapstore-mongodb-clustered,mapstore-mongodb-query-index-consistency,mapstore-mongodb-outage-recovery,mapstore-mongodb-loadallkeys,typescript
+GATE-CHECK: block=M10 required=24 passed=24 labels=mongodb-unit,mongodb-e2e,mapstore-mongodb-wiring-implementation,mapstore-mongodb-wiring-factory-implementation,mapstore-mongodb-wiring-registry,mapstore-mongodb-wiring-dynamic-programmatic,mapstore-mongodb-wiring-dynamic-json,mapstore-mongodb-wiring-dynamic-yaml,mapstore-mongodb-wiring-config-origin-relative,mapstore-mongodb-wiring-dynamic-package,mapstore-mongodb-wiring-aggregate,mapstore-mongodb-writethrough,mapstore-mongodb-writebehind,mapstore-mongodb-putall-getall-bulk-runtime,mapstore-mongodb-shutdown-durability,mapstore-mongodb-eager-load,mapstore-mongodb-lazy-load,mapstore-mongodb-restart,mapstore-mongodb-offload,mapstore-mongodb-clustered,mapstore-mongodb-query-index-consistency,mapstore-mongodb-outage-recovery,mapstore-mongodb-loadallkeys,typescript
 ```
 
 Exact command contract above is required for Block M10 closure.
@@ -762,7 +815,15 @@ Exact command contract above is required for Block M10 closure.
 - `mapstore-mongodb-restart`
 - `mapstore-mongodb-outage-recovery`
 - `mapstore-mongodb-shutdown-durability`
-- `mapstore-mongodb-wiring`
+- `mapstore-mongodb-wiring-implementation`
+- `mapstore-mongodb-wiring-factory-implementation`
+- `mapstore-mongodb-wiring-registry`
+- `mapstore-mongodb-wiring-dynamic-programmatic`
+- `mapstore-mongodb-wiring-dynamic-json`
+- `mapstore-mongodb-wiring-dynamic-yaml`
+- `mapstore-mongodb-wiring-config-origin-relative`
+- `mapstore-mongodb-wiring-dynamic-package`
+- `mapstore-mongodb-wiring-aggregate`
 - `mapstore-mongodb-putall-getall-bulk-runtime`
 - `mapstore-mongodb-offload`
 - `mapstore-mongodb-clustered`
@@ -832,7 +893,8 @@ This plan is complete only when all of the following are true:
 - `shutdownAsync()` waits for write-behind flush completion before resolving.
 - EAGER preload completes before the first map read/write operation resolves.
 - offload semantics are implemented and verified for Mongo-backed operations.
-- clustered owner-only persistence semantics prevent duplicate external writes during replay, backup, migration, and rebalance.
+- clustered owner-only persistence semantics prevent duplicate external writes during replay, backup, migration, and rebalance, proven by per-call provenance capture (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) and duplicate-physical-call assertions rather than final-state-only checks.
+- clustered Mongo proof uses separate Helios member processes over real TCP and includes transport-boundary crash/drop/delay fault injection; shared-process or direct-call simulations do not satisfy clustered acceptance.
 - `load-all-keys=true|false` both work with explicit semantics, and `load-all-keys=false + EAGER` is rejected deterministically.
 - `loadAllKeys()` supports streaming/unbounded enumeration without full in-memory materialization.
 - query/index state stays correct after eager/lazy loads for Helios maps using configured predicates and indexes.

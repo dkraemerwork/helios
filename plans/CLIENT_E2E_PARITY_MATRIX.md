@@ -171,7 +171,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 
 ---
 
-## 7. Resolved Red Flags (Block 20.5)
+## 7. Block 20.5 Decisions And Remaining Red Flags
 
 - ~~`HeliosInstance.getConfig()` type mismatch~~ — resolved: `HeliosInstance.getConfig()` now returns `InstanceConfig`, a shared interface satisfied by both `HeliosConfig` and `ClientConfig`.
 - `getReliableTopic()` client readiness remains blocked until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`; landing the real ringbuffer-backed runtime does not clear the dependency by itself.

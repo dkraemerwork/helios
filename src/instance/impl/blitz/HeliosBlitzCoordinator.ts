@@ -25,9 +25,13 @@ export class HeliosBlitzCoordinator {
   private _masterMemberId: string | null = null;
   private _memberListVersion = 0;
   private _expectedRegistrants = new Set<string>();
+  private _fenceToken: string | null = null;
 
   setMasterMemberId(masterId: string): void {
-    this._masterMemberId = masterId;
+    if (masterId !== this._masterMemberId) {
+      this._masterMemberId = masterId;
+      this._rotateFenceToken();
+    }
   }
 
   getMasterMemberId(): string | null {
@@ -39,11 +43,36 @@ export class HeliosBlitzCoordinator {
       this._memberListVersion = version;
       this._topology = new BlitzClusterTopology(version);
       this._expectedRegistrants.clear();
+      this._rotateFenceToken();
     }
   }
 
   getMemberListVersion(): number {
     return this._memberListVersion;
+  }
+
+  getFenceToken(): string | null {
+    return this._fenceToken;
+  }
+
+  validateAuthority(
+    masterMemberId: string,
+    memberListVersion: number,
+    fenceToken: string,
+  ): boolean {
+    return (
+      masterMemberId === this._masterMemberId &&
+      memberListVersion === this._memberListVersion &&
+      fenceToken === this._fenceToken
+    );
+  }
+
+  private _rotateFenceToken(): void {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    this._fenceToken = Array.from(bytes, (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
   }
 
   setExpectedRegistrants(memberIds: Set<string>): void {
@@ -69,7 +98,7 @@ export class HeliosBlitzCoordinator {
     msg: BlitzTopologyRequestMsg,
     isMaster: boolean,
   ): BlitzTopologyResponseMsg | null {
-    if (!isMaster || !this._topology || !this._masterMemberId) {
+    if (!isMaster || !this._topology || !this._masterMemberId || !this._fenceToken) {
       return null;
     }
 
@@ -82,6 +111,7 @@ export class HeliosBlitzCoordinator {
       routes,
       masterMemberId: this._masterMemberId,
       memberListVersion: this._memberListVersion,
+      fenceToken: this._fenceToken,
       registrationsComplete,
       clientConnectUrl: "nats://127.0.0.1:4222",
       retryAfterMs: registrationsComplete ? undefined : DEFAULT_RETRY_AFTER_MS,
@@ -109,13 +139,14 @@ export class HeliosBlitzCoordinator {
   }
 
   generateTopologyAnnounce(): BlitzTopologyAnnounceMsg | null {
-    if (!this._topology || !this._masterMemberId) return null;
+    if (!this._topology || !this._masterMemberId || !this._fenceToken) return null;
 
     return {
       type: "BLITZ_TOPOLOGY_ANNOUNCE",
       memberListVersion: this._memberListVersion,
       routes: this._topology.getRoutes(),
       masterMemberId: this._masterMemberId,
+      fenceToken: this._fenceToken,
     };
   }
 

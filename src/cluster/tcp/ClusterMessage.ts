@@ -259,6 +259,7 @@ export interface BlitzTopologyResponseMsg {
   readonly routes: string[];
   readonly masterMemberId: string;
   readonly memberListVersion: number;
+  readonly fenceToken: string;
   readonly registrationsComplete: boolean;
   readonly retryAfterMs?: number;
   readonly clientConnectUrl: string;
@@ -269,6 +270,7 @@ export interface BlitzTopologyAnnounceMsg {
   readonly memberListVersion: number;
   readonly routes: string[];
   readonly masterMemberId: string;
+  readonly fenceToken: string;
 }
 
 export type ClusterMessage =
