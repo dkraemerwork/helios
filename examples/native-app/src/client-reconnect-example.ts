@@ -7,14 +7,20 @@
  *
  * Usage:
  *   bun run examples/native-app/src/client-reconnect-example.ts
+ *
+ * Environment variables:
+ *   HELIOS_CLUSTER_ADDRESS  — server address (default: 127.0.0.1:5701)
+ *   HELIOS_CLUSTER_NAME     — cluster name   (default: dev)
  */
-import { HeliosClient } from "@zenystx/helios-core/client/HeliosClient";
-import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
+import { HeliosClient } from "@zenystx/helios-core/client";
+import { ClientConfig } from "@zenystx/helios-core/client/config";
 
 async function main(): Promise<void> {
     const address = process.env["HELIOS_CLUSTER_ADDRESS"] ?? "127.0.0.1:5701";
+    const clusterName = process.env["HELIOS_CLUSTER_NAME"] ?? "dev";
 
     const config = new ClientConfig();
+    config.setClusterName(clusterName);
     config.getNetworkConfig().addAddress(address);
 
     // ── Connection retry configuration ───────────────────────────────────────
@@ -27,8 +33,9 @@ async function main(): Promise<void> {
         .setJitter(0.2);
 
     // ── Lifecycle listener for connection events ─────────────────────────────
-    console.log("Connecting with reconnect-aware configuration...");
+    console.log(`Connecting to '${clusterName}' at ${address} with reconnect-aware configuration...`);
     const client = HeliosClient.newHeliosClient(config);
+    await client.connect();
 
     const lifecycle = client.getLifecycleService();
     console.log(`Connected. Lifecycle running: ${lifecycle.isRunning()}`);

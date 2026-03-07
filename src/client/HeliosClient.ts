@@ -31,6 +31,19 @@ import type { Member } from "@zenystx/helios-core/cluster/Member";
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
 const TOPIC_SERVICE = "hz:impl:topicService";
+const RELIABLE_TOPIC_SERVICE = "hz:impl:reliableTopicService";
+const EXECUTOR_SERVICE = "hz:impl:executorService";
+
+const RETAINED_DISTRIBUTED_OBJECT_SERVICES = new Set<string>([
+    MAP_SERVICE,
+    QUEUE_SERVICE,
+    TOPIC_SERVICE,
+]);
+
+const NOT_RETAINED_DISTRIBUTED_OBJECT_SERVICES = new Set<string>([
+    RELIABLE_TOPIC_SERVICE,
+    EXECUTOR_SERVICE,
+]);
 
 /**
  * Advanced client features that are explicitly deferred.
@@ -84,6 +97,8 @@ export class HeliosClient implements HeliosInstance {
             this._partitionService,
             null, // invocation service — set after connect()
         );
+        this._proxyManager.setNearCacheManager(this._nearCacheManager);
+        this._proxyManager.setClientConfig(this._config);
     }
 
     // ── Static factory / registry ────────────────────────────────────────────
@@ -149,6 +164,7 @@ export class HeliosClient implements HeliosInstance {
         const connMgr = new ClientConnectionManager(this._config);
         connMgr.setClusterService(this._clusterService);
         connMgr.setPartitionService(this._partitionService);
+        connMgr.setListenerService(this._proxyManager.getListenerService());
         await connMgr.start();
         await connMgr.connectToCluster();
         this._connectionManager = connMgr;
@@ -179,6 +195,16 @@ export class HeliosClient implements HeliosInstance {
 
     getDistributedObject(serviceName: string, name: string): DistributedObject {
         this._ensureActive();
+        if (NOT_RETAINED_DISTRIBUTED_OBJECT_SERVICES.has(serviceName)) {
+            throw new Error(
+                `HeliosClient.getDistributedObject() does not support service "${serviceName}" because that distributed object is not retained on the remote-client contract`,
+            );
+        }
+        if (!RETAINED_DISTRIBUTED_OBJECT_SERVICES.has(serviceName)) {
+            throw new Error(
+                `HeliosClient.getDistributedObject() supports only retained remote services: ${Array.from(RETAINED_DISTRIBUTED_OBJECT_SERVICES).join(", ")}. Received: "${serviceName}"`,
+            );
+        }
         return this._proxyManager.getOrCreateProxy(serviceName, name);
     }
 

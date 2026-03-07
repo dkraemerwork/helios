@@ -30,8 +30,10 @@ export class PutOperation extends MapOperation implements BackupAwareOperation {
         this.sendResponse(
             this.recordStore.put(this._key, this._value, this._ttl, this._maxIdle),
         );
+        this.recordNamespaceMutation();
         // Owner-side external store write
         if (this.mapDataStore.isWithStore()) {
+            this.containerService.ensureExternalMapStoreOperationAllowed(this.partitionId);
             const ne = this.getNodeEngine()!;
             const key = ne.toObject(this._key);
             const value = ne.toObject(this._value);

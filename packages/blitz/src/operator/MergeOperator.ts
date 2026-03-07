@@ -1,5 +1,5 @@
-import { Stage } from '../Stage.ts';
-import type { StageContext } from '../StageContext.ts';
+import { Stage } from '../Stage.js';
+import type { StageContext } from '../StageContext.js';
 
 /**
  * Fan-in operator: passes any received value through unchanged.

@@ -62,6 +62,8 @@ async function connectAndAuth(
     clusterName = "dev",
     clientName = "test-client",
     clientUuid: string | null = null,
+    username: string | null = null,
+    password: string | null = null,
 ): Promise<{
     socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
     response: ReturnType<typeof ClientAuthenticationCodec.decodeResponse>;
@@ -88,8 +90,8 @@ async function connectAndAuth(
     // Send auth request
     const authReq = ClientAuthenticationCodec.encodeRequest(
         clusterName,
-        null,
-        null,
+        username,
+        password,
         clientUuid,
         "BUN",
         1,
@@ -251,6 +253,44 @@ describe("authentication", () => {
 
         const { response, socket } = await connectAndAuth(server.getPort(), "wrong-cluster");
         expect(response.status).toBe(AuthenticationStatus.CREDENTIALS_FAILED.getId());
+        socket.end();
+    });
+
+    test("auth with wrong username/password is rejected when server auth is configured", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+        server = new ClientProtocolServer({
+            clusterName: "dev",
+            port: 0,
+            auth: {
+                username: "admin",
+                password: "secret",
+            },
+        });
+        await server.start();
+
+        const { response, socket } = await connectAndAuth(server.getPort(), "dev", "test-client", null, "admin", "wrong");
+        expect(response.status).toBe(AuthenticationStatus.CREDENTIALS_FAILED.getId());
+        socket.end();
+    });
+
+    test("auth with matching username/password succeeds when server auth is configured", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+        server = new ClientProtocolServer({
+            clusterName: "dev",
+            port: 0,
+            auth: {
+                username: "admin",
+                password: "secret",
+            },
+        });
+        await server.start();
+
+        const { response, socket } = await connectAndAuth(server.getPort(), "dev", "test-client", null, "admin", "secret");
+        expect(response.status).toBe(AuthenticationStatus.AUTHENTICATED.getId());
         socket.end();
     });
 });
@@ -607,6 +647,33 @@ describe("HeliosInstanceImpl integration", () => {
         await Bun.sleep(50);
         const clientPort = instance.getClientProtocolPort();
         expect(clientPort).toBeGreaterThan(0);
+
+        instance.shutdown();
+    });
+
+    test("wires client protocol username/password auth from NetworkConfig", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import(
+            "@zenystx/helios-core/config/HeliosConfig"
+        );
+
+        const config = new HeliosConfig("secured-cluster");
+        config.getNetworkConfig().setClientProtocolPort(0);
+        config.getNetworkConfig().setClientProtocolUsernamePasswordAuth("admin", "secret");
+        const instance = new HeliosInstanceImpl(config);
+
+        await Bun.sleep(50);
+        const clientPort = instance.getClientProtocolPort();
+
+        const failed = await connectAndAuth(clientPort, "secured-cluster", "test-client", null, "admin", "wrong");
+        expect(failed.response.status).toBe(AuthenticationStatus.CREDENTIALS_FAILED.getId());
+        failed.socket.end();
+
+        const success = await connectAndAuth(clientPort, "secured-cluster", "test-client", null, "admin", "secret");
+        expect(success.response.status).toBe(AuthenticationStatus.AUTHENTICATED.getId());
+        success.socket.end();
 
         instance.shutdown();
     });

@@ -1,4 +1,4 @@
-import { BlitzError } from './BlitzError.ts';
+import { BlitzError } from './BlitzError.js';
 
 /**
  * Thrown when a JetStream message is nak'd (negative acknowledgement),

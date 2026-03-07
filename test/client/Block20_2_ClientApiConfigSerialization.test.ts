@@ -17,8 +17,8 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 
 describe("HeliosClient runtime shell", () => {
   test("implements HeliosInstance", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const config = new ClientConfig();
     config.setClusterName("test-cluster");
@@ -38,7 +38,7 @@ describe("HeliosClient runtime shell", () => {
   });
 
   test("default config when no config provided", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
     const client = new HeliosClient();
     expect(client.getName()).toBe("helios-client");
     expect(client.getConfig().getClusterName()).toBe("dev");
@@ -46,8 +46,8 @@ describe("HeliosClient runtime shell", () => {
   });
 
   test("custom instance name from config", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const config = new ClientConfig();
     config.setName("my-client");
     const client = new HeliosClient(config);
@@ -56,7 +56,7 @@ describe("HeliosClient runtime shell", () => {
   });
 
   test("shutdown is idempotent", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
     const client = new HeliosClient();
     client.shutdown();
     client.shutdown(); // must not throw
@@ -64,7 +64,7 @@ describe("HeliosClient runtime shell", () => {
   });
 
   test("distributed object methods throw after shutdown", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
     const client = new HeliosClient();
     client.shutdown();
     expect(() => client.getMap("m")).toThrow(/not active/i);
@@ -76,13 +76,13 @@ describe("HeliosClient runtime shell", () => {
 
 describe("Named-client registry", () => {
   afterEach(async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
     HeliosClient.shutdownAll();
   });
 
   test("newHeliosClient registers client by name", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const config = new ClientConfig();
     config.setName("reg-test");
@@ -92,8 +92,8 @@ describe("Named-client registry", () => {
   });
 
   test("duplicate name throws", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const config = new ClientConfig();
     config.setName("dup-test");
@@ -105,8 +105,8 @@ describe("Named-client registry", () => {
   });
 
   test("shutdownAll shuts down all clients", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const c1 = new ClientConfig();
     c1.setName("sa-1");
@@ -123,8 +123,8 @@ describe("Named-client registry", () => {
   });
 
   test("shutdown removes client from registry", async () => {
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const config = new ClientConfig();
     config.setName("remove-test");
@@ -139,7 +139,7 @@ describe("Named-client registry", () => {
 
 describe("ClientConfig root config", () => {
   test("has clusterName with default 'dev'", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const config = new ClientConfig();
     expect(config.getClusterName()).toBe("dev");
     config.setClusterName("prod");
@@ -147,7 +147,7 @@ describe("ClientConfig root config", () => {
   });
 
   test("has network config", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const config = new ClientConfig();
     const net = config.getNetworkConfig();
     expect(net).toBeDefined();
@@ -156,7 +156,7 @@ describe("ClientConfig root config", () => {
   });
 
   test("has connection strategy config", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const config = new ClientConfig();
     const cs = config.getConnectionStrategyConfig();
     expect(cs).toBeDefined();
@@ -165,7 +165,7 @@ describe("ClientConfig root config", () => {
   });
 
   test("still supports near-cache config", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const { NearCacheConfig } = await import("@zenystx/helios-core/config/NearCacheConfig");
     const config = new ClientConfig();
     config.addNearCacheConfig(new NearCacheConfig("map*"));
@@ -235,7 +235,7 @@ describe("Typed client config surfaces", () => {
 
   test("ClientFailoverConfig with tryCount and multiple configs", async () => {
     const { ClientFailoverConfig } = await import("@zenystx/helios-core/client/config/ClientFailoverConfig");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const fo = new ClientFailoverConfig();
     expect(fo.getTryCount()).toBe(Number.MAX_SAFE_INTEGER);
@@ -312,7 +312,7 @@ network:
 
 describe("Client serialization owner", () => {
   test("ClientSerializationService is created from client config", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
     const config = new ClientConfig();
     const svc = createClientSerializationService(config);
@@ -322,7 +322,7 @@ describe("Client serialization owner", () => {
   });
 
   test("serializes and deserializes primitives", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
     const svc = createClientSerializationService(new ClientConfig());
     const data = svc.toData("hello");
@@ -332,7 +332,7 @@ describe("Client serialization owner", () => {
   });
 
   test("serializes JSON objects via JSON serializer", async () => {
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
     const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
     const svc = createClientSerializationService(new ClientConfig());
     const data = svc.toData({ key: "value" });
@@ -375,19 +375,19 @@ describe("Fail-fast on unsupported config sections", () => {
 describe("Public client surface import verification", () => {
   test("HeliosClient is importable from root barrel", async () => {
     // This proves that src/index.ts exports HeliosClient
-    const mod = await import("@zenystx/helios-core/client/HeliosClient");
+    const mod = await import("@zenystx/helios-core/client");
     expect(mod.HeliosClient).toBeDefined();
   });
 
   test("ClientConfig is importable from root barrel", async () => {
-    const mod = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const mod = await import("@zenystx/helios-core/client/config");
     expect(mod.ClientConfig).toBeDefined();
   });
 
   test("can construct HeliosClient with real config, get lifecycle, and shutdown without internal imports", async () => {
     // This test simulates an external consumer using only public surface
-    const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-    const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    const { HeliosClient } = await import("@zenystx/helios-core/client");
+    const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
     const config = new ClientConfig();
     config.setClusterName("ext-cluster");

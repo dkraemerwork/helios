@@ -1,75 +1,78 @@
 /**
- * Client Acceptance Suite — Real-network acceptance coverage.
+ * Client Acceptance Suite — public client surface acceptance coverage.
  *
- * Validates that every exported distributed object family and every exported
- * advanced feature family is accessible through the public HeliosClient API
- * with correct method signatures, proper proxy wiring, and no hidden stubs.
+ * Validates only the retained, package-public client entrypoints: HeliosClient,
+ * ClientConfig, and root-barrel config exports used by that client surface.
  *
  * These tests verify the client surface contract without requiring a live
- * Helios cluster — they prove the API shape, proxy creation, configuration,
- * and lifecycle are correctly wired. Live-network integration tests are
- * covered separately in Block 20.3/20.4/20.6 protocol suites.
+ * Helios cluster — they prove API shape, public methods, retained config,
+ * and lifecycle wiring only. Internal proxy / near-cache implementation
+ * classes are intentionally excluded from this package-public proof.
+ * Real-network behavior is covered separately in the client E2E suites that
+ * connect over the binary client protocol.
  */
 import { describe, test, expect } from 'bun:test';
 
 // ── Map acceptance ──────────────────────────────────────────────────────────
 
 describe('Client acceptance — Map distributed object', () => {
-    test('HeliosClient.getMap() returns a proxy with IMap methods', async () => {
+    test('HeliosClient.getMap() returns a public map object with retained methods', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
-        const { ClientMapProxy } = await import(
-            '@zenystx/helios-core/client/proxy/ClientMapProxy'
-        );
-        // ClientMapProxy must implement get/put/remove/size/clear/containsKey
-        const proto = ClientMapProxy.prototype;
-        expect(typeof proto.get).toBe('function');
-        expect(typeof proto.put).toBe('function');
-        expect(typeof proto.remove).toBe('function');
-        expect(typeof proto.size).toBe('function');
-        expect(typeof proto.clear).toBe('function');
-        expect(typeof proto.containsKey).toBe('function');
+        const client = new HeliosClient();
+        const map = client.getMap('acceptance-map') as unknown as Record<string, unknown>;
+        expect(typeof map.get).toBe('function');
+        expect(typeof map.put).toBe('function');
+        expect(typeof map.remove).toBe('function');
+        expect(typeof map.size).toBe('function');
+        expect(typeof map.clear).toBe('function');
+        expect(typeof map.containsKey).toBe('function');
+        client.shutdown();
     });
 
-    test('ClientMapProxy has set/delete/getAll/putAll methods', async () => {
-        const { ClientMapProxy } = await import(
-            '@zenystx/helios-core/client/proxy/ClientMapProxy'
+    test('HeliosClient.getMap() exposes retained convenience methods', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client'
         );
-        const proto = ClientMapProxy.prototype;
-        expect(typeof proto.set).toBe('function');
-        expect(typeof proto.delete).toBe('function');
+        const client = new HeliosClient();
+        const map = client.getMap('acceptance-map') as unknown as Record<string, unknown>;
+        expect(typeof map.set).toBe('function');
+        expect(typeof map.delete).toBe('function');
+        client.shutdown();
     });
 });
 
 // ── Queue acceptance ────────────────────────────────────────────────────────
 
 describe('Client acceptance — Queue distributed object', () => {
-    // Covers HeliosClient.getQueue() -> ClientQueueProxy
-    test('ClientQueueProxy has offer/poll/peek/size methods', async () => {
-        const { ClientQueueProxy } = await import(
-            '@zenystx/helios-core/client/proxy/ClientQueueProxy'
+    test('HeliosClient.getQueue() returns a public queue object with retained methods', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client'
         );
-        const proto = ClientQueueProxy.prototype;
-        expect(typeof proto.offer).toBe('function');
-        expect(typeof proto.poll).toBe('function');
-        expect(typeof proto.peek).toBe('function');
-        expect(typeof proto.size).toBe('function');
+        const client = new HeliosClient();
+        const queue = client.getQueue('acceptance-queue') as unknown as Record<string, unknown>;
+        expect(typeof queue.offer).toBe('function');
+        expect(typeof queue.poll).toBe('function');
+        expect(typeof queue.peek).toBe('function');
+        expect(typeof queue.size).toBe('function');
+        client.shutdown();
     });
 });
 
 // ── Topic acceptance ────────────────────────────────────────────────────────
 
 describe('Client acceptance — Topic distributed object', () => {
-    // Covers HeliosClient.getTopic() -> ClientTopicProxy
-    test('ClientTopicProxy has publish/addMessageListener/removeMessageListener', async () => {
-        const { ClientTopicProxy } = await import(
-            '@zenystx/helios-core/client/proxy/ClientTopicProxy'
+    test('HeliosClient.getTopic() returns a public topic object with retained methods', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client'
         );
-        const proto = ClientTopicProxy.prototype;
-        expect(typeof proto.publish).toBe('function');
-        expect(typeof proto.addMessageListener).toBe('function');
-        expect(typeof proto.removeMessageListener).toBe('function');
+        const client = new HeliosClient();
+        const topic = client.getTopic('acceptance-topic') as unknown as Record<string, unknown>;
+        expect(typeof topic.publish).toBe('function');
+        expect(typeof topic.addMessageListener).toBe('function');
+        expect(typeof topic.removeMessageListener).toBe('function');
+        client.shutdown();
     });
 });
 
@@ -78,7 +81,7 @@ describe('Client acceptance — Topic distributed object', () => {
 describe('Client acceptance — Lifecycle', () => {
     test('HeliosClient has shutdown and getLifecycleService', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(typeof HeliosClient.prototype.shutdown).toBe('function');
         expect(typeof HeliosClient.prototype.getLifecycleService).toBe('function');
@@ -86,14 +89,14 @@ describe('Client acceptance — Lifecycle', () => {
 
     test('HeliosClient.shutdownAll is a static method', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(typeof HeliosClient.shutdownAll).toBe('function');
     });
 
     test('HeliosClient.getAllHeliosClients is a static method', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(typeof HeliosClient.getAllHeliosClients).toBe('function');
     });
@@ -102,21 +105,18 @@ describe('Client acceptance — Lifecycle', () => {
 // ── NearCache acceptance ────────────────────────────────────────────────────
 
 describe('Client acceptance — NearCache', () => {
-    test('NearCachedClientMapProxy extends ClientMapProxy', async () => {
-        const { NearCachedClientMapProxy } = await import(
-            '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy'
+    test('public near-cache coverage is limited to retained configuration surface', async () => {
+        const { NearCacheConfig } = await import(
+            '@zenystx/helios-core'
         );
-        const { ClientMapProxy } = await import(
-            '@zenystx/helios-core/client/proxy/ClientMapProxy'
+        const { ClientConfig } = await import(
+            '@zenystx/helios-core/client/config'
         );
-        expect(NearCachedClientMapProxy.prototype instanceof ClientMapProxy).toBeTrue();
-    });
-
-    test('ClientNearCacheManager is importable', async () => {
-        const { ClientNearCacheManager } = await import(
-            '@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager'
-        );
-        expect(ClientNearCacheManager).toBeDefined();
+        const config = new ClientConfig();
+        const nearCacheConfig = new NearCacheConfig('acceptance-*');
+        config.addNearCacheConfig(nearCacheConfig);
+        expect(config.getNearCacheConfig('acceptance-near-cache')).toBe(nearCacheConfig);
+        expect(config.getNearCacheConfigMap().get('acceptance-*')).toBe(nearCacheConfig);
     });
 });
 
@@ -125,7 +125,7 @@ describe('Client acceptance — NearCache', () => {
 describe('Client acceptance — Configuration', () => {
     test('ClientConfig has all expected config accessors', async () => {
         const { ClientConfig } = await import(
-            '@zenystx/helios-core/client/config/ClientConfig'
+            '@zenystx/helios-core/client/config'
         );
         const config = new ClientConfig();
         expect(config.getNetworkConfig()).toBeDefined();
@@ -136,7 +136,7 @@ describe('Client acceptance — Configuration', () => {
 
     test('ClientNetworkConfig has addAddress method', async () => {
         const { ClientConfig } = await import(
-            '@zenystx/helios-core/client/config/ClientConfig'
+            '@zenystx/helios-core/client/config'
         );
         const config = new ClientConfig();
         const network = config.getNetworkConfig();
@@ -149,7 +149,7 @@ describe('Client acceptance — Configuration', () => {
 describe('Client acceptance — Cluster', () => {
     test('HeliosClient.getCluster returns Cluster interface', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(typeof HeliosClient.prototype.getCluster).toBe('function');
     });
@@ -160,7 +160,7 @@ describe('Client acceptance — Cluster', () => {
 describe('Client acceptance — Executor', () => {
     test('HeliosClient.getExecutorService was narrowed out in Block 20.7', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect("getExecutorService" in HeliosClient.prototype).toBe(false);
     });
@@ -171,7 +171,7 @@ describe('Client acceptance — Executor', () => {
 describe('Client acceptance — Deferred features', () => {
     test('DEFERRED_CLIENT_FEATURES explicitly lists all deferred capabilities', async () => {
         const { DEFERRED_CLIENT_FEATURES } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(DEFERRED_CLIENT_FEATURES).toContain('cache');
         expect(DEFERRED_CLIENT_FEATURES).toContain('transactions');

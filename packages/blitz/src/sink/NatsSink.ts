@@ -1,7 +1,7 @@
 import type { NatsConnection } from '@nats-io/transport-node';
 import type { JetStreamClient } from '@nats-io/jetstream';
-import type { BlitzCodec } from '../codec/BlitzCodec.ts';
-import type { Sink } from './Sink.ts';
+import type { BlitzCodec } from '../codec/BlitzCodec.js';
+import type { Sink } from './Sink.js';
 
 class NatsSubjectSink<T> implements Sink<T> {
   readonly name: string;

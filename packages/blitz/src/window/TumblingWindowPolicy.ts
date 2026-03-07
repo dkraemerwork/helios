@@ -1,4 +1,4 @@
-import type { WindowKey, WindowPolicy } from './WindowPolicy.ts';
+import type { WindowKey, WindowPolicy } from './WindowPolicy.js';
 
 export interface TumblingWindowOptions {
     /** Window duration in milliseconds. */

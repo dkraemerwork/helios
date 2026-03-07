@@ -1,8 +1,8 @@
-import { Vertex } from './Vertex.ts';
-import { Edge } from './Edge.ts';
-import { PipelineError } from './errors/PipelineError.ts';
-import type { Source } from './source/Source.ts';
-import type { Sink } from './sink/Sink.ts';
+import { Vertex } from './Vertex.js';
+import { Edge } from './Edge.js';
+import { PipelineError } from './errors/PipelineError.js';
+import type { Source } from './source/Source.js';
+import type { Sink } from './sink/Sink.js';
 
 /**
  * Fluent stage handle returned by {@link Pipeline.readFrom} and each chaining call.

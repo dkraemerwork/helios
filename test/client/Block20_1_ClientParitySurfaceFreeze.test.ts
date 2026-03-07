@@ -35,7 +35,7 @@ describe("Block 20.1 — Client Parity Surface Freeze", () => {
 
   describe("1. HeliosClient implements HeliosInstance", () => {
     it("HeliosClient interface exists and extends HeliosInstance", async () => {
-      const mod = await import("@zenystx/helios-core/client/HeliosClient");
+      const mod = await import("@zenystx/helios-core/client");
       // HeliosClient should be exported as an interface — we verify the type file exists
       expect(mod).toBeDefined();
     });
@@ -43,7 +43,7 @@ describe("Block 20.1 — Client Parity Surface Freeze", () => {
     it("HeliosClient type is assignable to HeliosInstance", async () => {
       // This is a compile-time check. If this file compiles, the contract holds.
       // We import both types and verify structural compatibility via a type-level test.
-      const { HeliosClient: _HC } = await import("@zenystx/helios-core/client/HeliosClient");
+      const { HeliosClient: _HC } = await import("@zenystx/helios-core/client");
       // HeliosClient is a class that must implement HeliosInstance
       expect(typeof _HC).toBe("function");
     });
@@ -51,20 +51,20 @@ describe("Block 20.1 — Client Parity Surface Freeze", () => {
 
   describe("2. getConfig() contract resolution", () => {
     it("InstanceConfig type exists as the shared return type", async () => {
-      const mod = await import("@zenystx/helios-core/core/HeliosInstance");
+      const mod = await import("@zenystx/helios-core");
       // The interface should exist and compile — getConfig() returns InstanceConfig
-      expect(mod).toBeDefined();
+      expect(mod).toHaveProperty("Helios");
     });
 
     it("HeliosConfig satisfies InstanceConfig", async () => {
-      const { HeliosConfig } = await import("@zenystx/helios-core/config/HeliosConfig");
+      const { HeliosConfig } = await import("@zenystx/helios-core");
       const cfg = new HeliosConfig("test");
       // HeliosConfig must have getName() to satisfy InstanceConfig
       expect(cfg.getName()).toBe("test");
     });
 
     it("ClientConfig satisfies InstanceConfig", async () => {
-      const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+      const { ClientConfig } = await import("@zenystx/helios-core/client/config");
       const cfg = new ClientConfig();
       // ClientConfig must have getName() to satisfy InstanceConfig
       expect(cfg.getName()).toBeDefined();
@@ -116,11 +116,12 @@ describe("Block 20.1 — Client Parity Surface Freeze", () => {
     it("package.json has explicit exports only", () => {
       const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
       const exports = pkg.exports ?? {};
-      const keys = Object.keys(exports);
-      // No wildcard patterns
-      for (const key of keys) {
-        expect(key.includes("*")).toBe(false);
-      }
+      expect(Object.keys(exports).sort()).toEqual([
+        ".",
+        "./client",
+        "./client/config",
+        "./server",
+      ]);
     });
   });
 
@@ -188,7 +189,7 @@ describe("Block 20.1 — Client Parity Surface Freeze", () => {
     it("HeliosClient has getConfig() returning InstanceConfig, not HeliosConfig", async () => {
       // Compile-time gate: HeliosClient.getConfig() must return InstanceConfig
       // If this file compiles with the import, the contract is locked
-      const clientMod = await import("@zenystx/helios-core/client/HeliosClient");
+      const clientMod = await import("@zenystx/helios-core/client");
       expect(clientMod.HeliosClient).toBeDefined();
     });
   });

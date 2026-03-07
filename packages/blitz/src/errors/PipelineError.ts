@@ -1,4 +1,4 @@
-import { BlitzError } from './BlitzError.ts';
+import { BlitzError } from './BlitzError.js';
 
 /**
  * Thrown when an unrecoverable error occurs in a pipeline stage.

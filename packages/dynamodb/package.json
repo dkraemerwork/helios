@@ -1,0 +1,42 @@
+{
+  "name": "@zenystx/helios-dynamodb",
+  "version": "1.0.0",
+  "description": "DynamoDB-compatible MapStore for Helios",
+  "type": "module",
+  "private": false,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    },
+    "./*": {
+      "import": "./dist/src/*.js",
+      "types": "./dist/src/*.d.ts"
+    }
+  },
+  "files": [
+    "dist/src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.918.0",
+    "@smithy/node-http-handler": "^4.4.14",
+    "@zenystx/helios-core": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "beta"
+  },
+  "scripts": {
+    "build": "bun run tsc --project tsconfig.build.json",
+    "test": "bun test",
+    "test:integration": "DYNAMODB_ENDPOINT=http://localhost:8000 bun test test/DynamoDbMapStore.integration.test.ts",
+    "typecheck": "bun run tsc --noEmit",
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run build"
+  }
+}

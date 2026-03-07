@@ -1,6 +1,6 @@
-import { Stage } from '../Stage.ts';
-import { NakError } from '../errors/NakError.ts';
-import type { StageContext } from '../StageContext.ts';
+import { Stage } from '../Stage.js';
+import { NakError } from '../errors/NakError.js';
+import type { StageContext } from '../StageContext.js';
 
 /**
  * Calls a side-effect function `fn` for observation (debug, metrics, logging)

@@ -7,8 +7,8 @@ export class ReliableTopicMessageRecord {
   readonly publisherAddress: string | null;
   readonly payload: unknown;
 
-  constructor(payload: unknown, publisherAddress: string | null) {
-    this.publishTime = Date.now();
+  constructor(payload: unknown, publisherAddress: string | null, publishTime?: number) {
+    this.publishTime = publishTime ?? Date.now();
     this.publisherAddress = publisherAddress;
     this.payload = payload;
   }

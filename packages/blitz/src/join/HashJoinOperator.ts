@@ -1,6 +1,6 @@
-import { Stage } from '../Stage.ts';
-import type { StageContext } from '../StageContext.ts';
-import { NakError } from '../errors/NakError.ts';
+import { Stage } from '../Stage.js';
+import type { StageContext } from '../StageContext.js';
+import { NakError } from '../errors/NakError.js';
 
 /**
  * Enriches each event T with data from a side-input lookup (stream-table join).

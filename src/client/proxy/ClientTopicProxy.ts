@@ -4,8 +4,12 @@
  * Port of {@code com.hazelcast.client.impl.proxy.ClientTopicProxy}.
  * Provides the async topic API for remote clients.
  */
+import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
+import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
+import { TopicRemoveMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicRemoveMessageListenerCodec";
+import { Message } from "@zenystx/helios-core/topic/Message";
 
 export class ClientTopicProxy<E = any> extends ClientProxy {
     private _partitionId: number = -1;
@@ -34,12 +38,14 @@ export class ClientTopicProxy<E = any> extends ClientProxy {
 
     addMessageListener(listener: (message: any) => void): string {
         const codec = {
-            encodeAddRequest: () => null,
-            decodeAddResponse: () => `topic-${this.getName()}-${Date.now()}`,
-            encodeRemoveRequest: () => null,
+            encodeAddRequest: () => TopicAddMessageListenerCodec.encodeRequest(this.getName()),
+            decodeAddResponse: (msg: ClientMessage) => TopicAddMessageListenerCodec.decodeResponse(msg),
+            encodeRemoveRequest: (registrationId: string) => TopicRemoveMessageListenerCodec.encodeRequest(this.getName(), registrationId),
+            decodeRemoveResponse: (msg: ClientMessage) => TopicRemoveMessageListenerCodec.decodeResponse(msg),
         };
-        return this.registerListener(codec, (_msg) => {
-            listener(_msg);
+        return this.registerListener(codec, (msg) => {
+            const event = TopicAddMessageListenerCodec.decodeEvent(msg);
+            listener(new Message(this.getName(), this.toObject(event.message), event.publishTime, event.publishingMemberId));
         });
     }
 

@@ -1,13 +1,13 @@
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager, type JetStreamClient, type JetStreamManager } from '@nats-io/jetstream';
 import { Kvm } from '@nats-io/kv';
-import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from './BlitzConfig.ts';
-import { BlitzEvent } from './BlitzEvent.ts';
-import { Pipeline } from './Pipeline.ts';
-import { BatchPipeline } from './batch/BatchPipeline.ts';
-import { NatsServerManager } from './server/NatsServerManager.ts';
-import { NatsServerBinaryResolver } from './server/NatsServerBinaryResolver.ts';
-import type { NatsServerNodeConfig } from './server/NatsServerConfig.ts';
+import { type BlitzConfig, resolveBlitzConfig, type ResolvedBlitzConfig } from './BlitzConfig.js';
+import { BlitzEvent } from './BlitzEvent.js';
+import { Pipeline } from './Pipeline.js';
+import { BatchPipeline } from './batch/BatchPipeline.js';
+import { NatsServerManager } from './server/NatsServerManager.js';
+import { NatsServerBinaryResolver } from './server/NatsServerBinaryResolver.js';
+import type { NatsServerNodeConfig } from './server/NatsServerConfig.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -20,11 +20,18 @@ export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
  * Owns the NATS connection lifecycle: connect, expose JetStream/KV handles, shutdown.
  * Subscribes to `nc.status()` and emits {@link BlitzEvent}s for reconnect and error conditions.
  *
+ * JetStream manager (`jsm`) and KV manager (`kvm`) are lazy-initialized on first
+ * access. This allows BlitzService to connect to a NATS cluster that hasn't yet
+ * elected a Raft leader (e.g. during cluster formation) — core pub/sub works
+ * immediately, and JetStream operations become available once the leader is elected.
+ *
  * Usage:
  * ```typescript
  * const blitz = await BlitzService.connect({ servers: 'nats://localhost:4222' });
  * blitz.on((event) => console.log('BlitzEvent:', event));
- * // ... use blitz.js, blitz.jsm, blitz.kvm ...
+ * // Core NATS pub/sub is available immediately via blitz.nc
+ * // JetStream operations are available once the cluster has a leader:
+ * const jsm = await blitz.getJsm();
  * await blitz.shutdown();
  * ```
  */
@@ -35,32 +42,59 @@ export class BlitzService {
     /** The underlying NATS connection. */
     readonly nc: NatsConnection;
 
-    /** JetStream publish/subscribe client. */
+    /** JetStream publish/subscribe client (available immediately — does not require leader). */
     readonly js: JetStreamClient;
 
-    /** JetStream management API (streams, consumers). */
-    readonly jsm: JetStreamManager;
+    /**
+     * JetStream management API (streams, consumers).
+     * @deprecated Use `getJsm()` for safe lazy initialization. This field is
+     *             initialized eagerly when possible but may be null during
+     *             cluster formation. Kept for backward compatibility.
+     */
+    get jsm(): JetStreamManager {
+        if (this._jsm === null) {
+            throw new Error(
+                'JetStream manager is not yet initialized. The NATS cluster may still be electing a leader. ' +
+                'Use `await blitz.getJsm()` for retry-based initialization, or `blitz.waitForJetStream()` to block until ready.',
+            );
+        }
+        return this._jsm;
+    }
 
-    /** Key-Value store manager. */
-    readonly kvm: Kvm;
+    /**
+     * Key-Value store manager.
+     * @deprecated Use `getKvm()` for safe lazy initialization.
+     */
+    get kvm(): Kvm {
+        if (this._kvm === null) {
+            throw new Error(
+                'KV manager is not yet initialized. The NATS cluster may still be electing a leader. ' +
+                'Use `await blitz.getKvm()` for retry-based initialization, or `blitz.waitForJetStream()` to block until ready.',
+            );
+        }
+        return this._kvm;
+    }
 
+    private _jsm: JetStreamManager | null;
+    private _kvm: Kvm | null;
     private _closed = false;
     private _manager: NatsServerManager | null = null;
     private readonly _listeners: BlitzEventListener[] = [];
     private readonly _runningPipelines = new Map<string, Pipeline>();
+    private _jsmInitPromise: Promise<JetStreamManager> | null = null;
 
     private constructor(
         config: ResolvedBlitzConfig,
         nc: NatsConnection,
         js: JetStreamClient,
-        jsm: JetStreamManager,
-        kvm: Kvm,
+        jsm: JetStreamManager | null,
+        kvm: Kvm | null,
     ) {
         this.config = config;
         this.nc = nc;
         this.js = js;
-        this.jsm = jsm;
-        this.kvm = kvm;
+        this._jsm = jsm;
+        this._kvm = kvm;
 
         // Subscribe to NATS status events and forward as BlitzEvents.
         this._subscribeToStatus();
@@ -87,7 +121,12 @@ export class BlitzService {
     /**
      * Establish a NATS connection and initialize JetStream/KV handles.
      *
-     * @throws if the connection cannot be established within `config.connectTimeoutMs`.
+     * Core NATS connection is established eagerly. JetStream manager and KV
+     * manager initialization is attempted but will not block or fail if the
+     * cluster hasn't elected a Raft leader yet — they become available lazily
+     * via `getJsm()` / `getKvm()` / `waitForJetStream()`.
+     *
+     * @throws if the NATS TCP connection cannot be established within `config.connectTimeoutMs`.
      */
     static async connect(config: BlitzConfig): Promise<BlitzService> {
         const resolved = resolveBlitzConfig(config);
@@ -106,8 +145,20 @@ export class BlitzService {
         });
 
         const js = jetstream(nc);
-        const jsm = await jetstreamManager(nc);
-        const kvm = new Kvm(nc);
+
+        // Attempt eager JetStream manager init (non-blocking best-effort).
+        // If the cluster hasn't elected a leader yet, jsm/kvm stay null
+        // and are initialized lazily on first access via getJsm()/getKvm().
+        let jsm: JetStreamManager | null = null;
+        let kvm: Kvm | null = null;
+        try {
+            jsm = await jetstreamManager(nc, { timeout: 2000 });
+            kvm = new Kvm(nc);
+        } catch {
+            // JetStream not ready yet (cluster forming, no Raft leader).
+            // This is expected during multi-node cluster startup.
+            // jsm/kvm will be lazy-initialized on first access.
+        }
 
         return new BlitzService(resolved, nc, js, jsm, kvm);
     }
@@ -117,6 +168,63 @@ export class BlitzService {
      */
     get isClosed(): boolean {
         return this._closed;
+    }
+
+    /**
+     * Returns true if the JetStream manager has been initialized.
+     * When false, JetStream operations are not yet available (cluster may still
+     * be electing a Raft leader). Use `waitForJetStream()` to block until ready.
+     */
+    get isJetStreamReady(): boolean {
+        return this._jsm !== null;
+    }
+
+    /**
+     * Get the JetStream manager, initializing it lazily if needed.
+     * Retries with backoff until JetStream is available.
+     *
+     * @param timeoutMs Maximum time to wait for JetStream readiness. @default 15000
+     * @throws Error if JetStream does not become available within timeoutMs.
+     */
+    async getJsm(timeoutMs = 15_000): Promise<JetStreamManager> {
+        if (this._jsm !== null) return this._jsm;
+        await this.waitForJetStream(timeoutMs);
+        return this._jsm!;
+    }
+
+    /**
+     * Get the KV manager, initializing it lazily if needed.
+     *
+     * @param timeoutMs Maximum time to wait for JetStream readiness. @default 15000
+     */
+    async getKvm(timeoutMs = 15_000): Promise<Kvm> {
+        if (this._kvm !== null) return this._kvm;
+        await this.waitForJetStream(timeoutMs);
+        return this._kvm!;
+    }
+
+    /**
+     * Wait until JetStream is operational (Raft leader elected).
+     * Polls with 200ms intervals, matching Hazelcast's "fast scan" pattern.
+     *
+     * @param timeoutMs Maximum time to wait. @default 15000
+     * @throws Error if JetStream does not become available within timeoutMs.
+     */
+    async waitForJetStream(timeoutMs = 15_000): Promise<void> {
+        if (this._jsm !== null) return;
+
+        // Deduplicate concurrent calls
+        if (this._jsmInitPromise !== null) {
+            await this._jsmInitPromise;
+            return;
+        }
+
+        this._jsmInitPromise = this._initJetStream(timeoutMs);
+        try {
+            await this._jsmInitPromise;
+        } finally {
+            this._jsmInitPromise = null;
+        }
     }
 
     /**
@@ -216,6 +324,30 @@ export class BlitzService {
         await this.nc.drain();
         // N15 FIX: must await — kills embedded processes and waits for port release
         await this._manager?.shutdown();
+    }
+
+    /**
+     * Poll `jetstreamManager()` with 200ms intervals until it succeeds or timeout.
+     * Mirrors Hazelcast's pattern: fast polling (100-200ms) during cluster formation.
+     */
+    private async _initJetStream(timeoutMs: number): Promise<JetStreamManager> {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            try {
+                const jsm = await jetstreamManager(this.nc, { timeout: 2000 });
+                this._jsm = jsm;
+                this._kvm = new Kvm(this.nc);
+                this._emit(BlitzEvent.NATS_RECONNECTED, { reason: 'jetstream-ready' });
+                return jsm;
+            } catch {
+                // JetStream not ready yet — Raft leader election in progress
+                await new Promise<void>((r) => setTimeout(r, 200));
+            }
+        }
+        throw new Error(
+            `JetStream did not become operational within ${timeoutMs}ms. ` +
+            'The NATS cluster may not have enough nodes for Raft quorum.',
+        );
     }
 
     private _emit(event: BlitzEvent, detail?: unknown): void {

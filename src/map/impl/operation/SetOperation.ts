@@ -29,8 +29,10 @@ export class SetOperation extends MapOperation implements BackupAwareOperation {
     async run(): Promise<void> {
         this.recordStore.set(this._key, this._value, this._ttl, this._maxIdle);
         this.sendResponse(undefined);
+        this.recordNamespaceMutation();
         // Owner-side external store write
         if (this.mapDataStore.isWithStore()) {
+            this.containerService.ensureExternalMapStoreOperationAllowed(this.partitionId);
             const ne = this.getNodeEngine()!;
             const key = ne.toObject(this._key);
             const value = ne.toObject(this._value);

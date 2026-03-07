@@ -33,17 +33,12 @@ export class ClientReliableTopicProxy<E = any> extends ClientProxy {
     }
 
     addMessageListener(listener: (message: any) => void): string {
-        const codec = {
-            encodeAddRequest: () => null,
-            decodeAddResponse: () => `reliable-topic-${this.getName()}-${Date.now()}`,
-            encodeRemoveRequest: () => null,
-        };
-        return this.registerListener(codec, (_msg) => {
-            listener(_msg);
-        });
+        void listener;
+        throw new Error("Reliable topic remote client listeners are not retained in the binary protocol surface");
     }
 
     removeMessageListener(registrationId: string): boolean {
-        return this.deregisterListener(registrationId);
+        void registrationId;
+        throw new Error("Reliable topic remote client listeners are not retained in the binary protocol surface");
     }
 }

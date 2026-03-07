@@ -1,4 +1,4 @@
-import type { Sink } from './Sink.ts';
+import type { Sink } from './Sink.js';
 
 class LogSinkImpl<T> implements Sink<T> {
   readonly name = 'log-sink';

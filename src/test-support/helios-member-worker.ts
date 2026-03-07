@@ -12,8 +12,11 @@ import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
 import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { MongoMapStore } from '../../packages/mongodb/src/MongoMapStore.js';
+import { DynamoDbMapStore } from '../../packages/dynamodb/src/DynamoDbMapStore.js';
 
 // ═══════════════════════════════════════════════════════════
 //  Provenance-recording adapter
@@ -121,6 +124,192 @@ class ProvenanceMapStore implements MapStore<string, string> {
     }
 }
 
+class ProvenanceMongoMapStore implements MapStore<string, string> {
+    readonly records: ProvenanceRecord[] = [];
+    private readonly _memberId: string;
+    private readonly _inner: MongoMapStore<string>;
+    private _instance: HeliosInstanceImpl | null = null;
+
+    constructor(memberId: string, uri: string, database: string, collection: string) {
+        this._memberId = memberId;
+        this._inner = new MongoMapStore({ uri, database, collection });
+    }
+
+    setInstance(instance: HeliosInstanceImpl): void {
+        this._instance = instance;
+    }
+
+    private _record(kind: OperationKind, keys: string[]): void {
+        let partitionId = -1;
+        let replicaRole: ProvenanceRecord['replicaRole'] = 'UNKNOWN';
+        let partitionEpoch = 0;
+
+        if (this._instance && keys.length > 0) {
+            partitionId = this._instance.getPartitionIdForName(keys[0]!);
+            const ownerId = this._instance.getPartitionOwnerId(partitionId);
+            replicaRole = ownerId === this._memberId ? 'PRIMARY' : 'BACKUP';
+            const mapSvc = (this._instance as any)._mapService;
+            if (mapSvc && typeof mapSvc.getPartitionEpoch === 'function') {
+                partitionEpoch = mapSvc.getPartitionEpoch(partitionId);
+            }
+        }
+
+        this.records.push({
+            memberId: this._memberId,
+            partitionId,
+            replicaRole,
+            partitionEpoch,
+            operationKind: kind,
+            keys,
+            ts: Date.now(),
+        });
+    }
+
+    async store(key: string, value: string): Promise<void> {
+        this._record('store', [key]);
+        await this._inner.store(key, value);
+    }
+
+    async storeAll(entries: Map<string, string>): Promise<void> {
+        this._record('storeAll', [...entries.keys()]);
+        await this._inner.storeAll(entries);
+    }
+
+    async delete(key: string): Promise<void> {
+        this._record('delete', [key]);
+        await this._inner.delete(key);
+    }
+
+    async deleteAll(keys: string[]): Promise<void> {
+        this._record('deleteAll', [...keys]);
+        await this._inner.deleteAll(keys);
+    }
+
+    async load(key: string): Promise<string | null> {
+        this._record('load', [key]);
+        return this._inner.load(key);
+    }
+
+    async loadAll(keys: string[]): Promise<Map<string, string>> {
+        this._record('loadAll', [...keys]);
+        return this._inner.loadAll(keys);
+    }
+
+    async loadAllKeys(): Promise<MapKeyStream<string>> {
+        this._record('loadAllKeys', []);
+        return this._inner.loadAllKeys();
+    }
+
+    async init(properties: Map<string, string>, mapName: string): Promise<void> {
+        if (typeof this._inner.init === 'function') {
+            await this._inner.init(properties, mapName);
+        }
+    }
+
+    async destroy(): Promise<void> {
+        if (typeof this._inner.destroy === 'function') {
+            await this._inner.destroy();
+        }
+    }
+
+    getData(): Map<string, string> {
+        return new Map();
+    }
+}
+
+class ProvenanceDynamoDbMapStore implements MapStore<string, string> {
+    readonly records: ProvenanceRecord[] = [];
+    private readonly _memberId: string;
+    private readonly _inner: DynamoDbMapStore<string>;
+    private _instance: HeliosInstanceImpl | null = null;
+
+    constructor(memberId: string, endpoint: string) {
+        this._memberId = memberId;
+        this._inner = new DynamoDbMapStore({ endpoint, autoCreateTable: true });
+    }
+
+    setInstance(instance: HeliosInstanceImpl): void {
+        this._instance = instance;
+    }
+
+    private _record(kind: OperationKind, keys: string[]): void {
+        let partitionId = -1;
+        let replicaRole: ProvenanceRecord['replicaRole'] = 'UNKNOWN';
+        let partitionEpoch = 0;
+
+        if (this._instance && keys.length > 0) {
+            partitionId = this._instance.getPartitionIdForName(keys[0]!);
+            const ownerId = this._instance.getPartitionOwnerId(partitionId);
+            replicaRole = ownerId === this._memberId ? 'PRIMARY' : 'BACKUP';
+            const mapSvc = (this._instance as any)._mapService;
+            if (mapSvc && typeof mapSvc.getPartitionEpoch === 'function') {
+                partitionEpoch = mapSvc.getPartitionEpoch(partitionId);
+            }
+        }
+
+        this.records.push({
+            memberId: this._memberId,
+            partitionId,
+            replicaRole,
+            partitionEpoch,
+            operationKind: kind,
+            keys,
+            ts: Date.now(),
+        });
+    }
+
+    async store(key: string, value: string): Promise<void> {
+        this._record('store', [key]);
+        await this._inner.store(key, value);
+    }
+
+    async storeAll(entries: Map<string, string>): Promise<void> {
+        this._record('storeAll', [...entries.keys()]);
+        await this._inner.storeAll(entries);
+    }
+
+    async delete(key: string): Promise<void> {
+        this._record('delete', [key]);
+        await this._inner.delete(key);
+    }
+
+    async deleteAll(keys: string[]): Promise<void> {
+        this._record('deleteAll', [...keys]);
+        await this._inner.deleteAll(keys);
+    }
+
+    async load(key: string): Promise<string | null> {
+        this._record('load', [key]);
+        return this._inner.load(key);
+    }
+
+    async loadAll(keys: string[]): Promise<Map<string, string>> {
+        this._record('loadAll', [...keys]);
+        return this._inner.loadAll(keys);
+    }
+
+    async loadAllKeys(): Promise<MapKeyStream<string>> {
+        this._record('loadAllKeys', []);
+        return this._inner.loadAllKeys();
+    }
+
+    async init(properties: Map<string, string>, mapName: string): Promise<void> {
+        if (typeof this._inner.init === 'function') {
+            await this._inner.init(properties, mapName);
+        }
+    }
+
+    async destroy(): Promise<void> {
+        if (typeof this._inner.destroy === 'function') {
+            await this._inner.destroy();
+        }
+    }
+
+    getData(): Map<string, string> {
+        return new Map();
+    }
+}
+
 // ═══════════════════════════════════════════════════════════
 //  IPC message types
 // ═══════════════════════════════════════════════════════════
@@ -132,30 +321,38 @@ interface StartMessage {
     port: number;
     peerPorts: number[];
     mapName: string;
+    mapStoreKind?: 'in-memory' | 'mongo' | 'dynamodb';
     writeMode: 'write-through' | 'write-behind';
     writeDelaySeconds?: number;
     writeBatchSize?: number;
     writeCoalescing?: boolean;
     initialLoadMode?: 'EAGER' | 'LAZY';
     seedData?: Record<string, string>;
+    mongoUri?: string;
+    mongoDatabase?: string;
+    mongoCollection?: string;
+    dynamoDbEndpoint?: string;
 }
 
 interface CommandMessage {
     type: 'command';
     id: string;
-    command: 'put' | 'get' | 'remove' | 'putAll' | 'getAll' | 'clear' | 'size';
+    command: 'put' | 'get' | 'remove' | 'putAll' | 'getAll' | 'clear' | 'size' | 'reliableTopicPublish' | 'reliableTopicAddListener' | 'reliableTopicDestroy';
     mapName: string;
     key?: string;
     value?: string;
     entries?: [string, string][];
     keys?: string[];
+    topicName?: string;
+    message?: string;
 }
 
 interface QueryMessage {
     type: 'query';
     id: string;
-    query: 'provenance' | 'clusterSize' | 'partitionOwner' | 'partitionId' | 'isRunning' | 'storeData';
+    query: 'provenance' | 'clusterSize' | 'partitionOwner' | 'partitionId' | 'isRunning' | 'storeData' | 'reliableTopicMessages' | 'reliableTopicState' | 'reliableTopicOwner';
     key?: string;
+    topicName?: string;
 }
 
 interface ShutdownMessage {
@@ -175,7 +372,9 @@ type WorkerMessage = StartMessage | CommandMessage | QueryMessage | ShutdownMess
 // ═══════════════════════════════════════════════════════════
 
 let instance: HeliosInstanceImpl | null = null;
-let store: ProvenanceMapStore | null = null;
+let store: (ProvenanceMapStore | ProvenanceMongoMapStore | ProvenanceDynamoDbMapStore) | null = null;
+const reliableTopicMessages = new Map<string, string[]>();
+const reliableTopicRegistrations = new Map<string, string>();
 
 function reply(id: string, result: any, error?: string): void {
     process.send!({ id, result, error });
@@ -185,9 +384,21 @@ async function handleMessage(msg: WorkerMessage): Promise<void> {
     try {
         switch (msg.type) {
             case 'start': {
-                store = new ProvenanceMapStore(msg.name);
+                if (msg.mapStoreKind === 'mongo') {
+                    if (!msg.mongoUri || !msg.mongoDatabase || !msg.mongoCollection) {
+                        throw new Error('Mongo worker requires mongoUri, mongoDatabase, and mongoCollection');
+                    }
+                    store = new ProvenanceMongoMapStore(msg.name, msg.mongoUri, msg.mongoDatabase, msg.mongoCollection);
+                } else if (msg.mapStoreKind === 'dynamodb') {
+                    if (!msg.dynamoDbEndpoint) {
+                        throw new Error('DynamoDB worker requires dynamoDbEndpoint');
+                    }
+                    store = new ProvenanceDynamoDbMapStore(msg.name, msg.dynamoDbEndpoint);
+                } else {
+                    store = new ProvenanceMapStore(msg.name);
+                }
 
-                if (msg.seedData) {
+                if (msg.seedData && store instanceof ProvenanceMapStore) {
                     for (const [k, v] of Object.entries(msg.seedData)) {
                         store.seed(k, v);
                     }
@@ -265,6 +476,34 @@ async function handleMessage(msg: WorkerMessage): Promise<void> {
                         reply(msg.id, { size: s });
                         break;
                     }
+                    case 'reliableTopicPublish': {
+                        const topic = instance.getReliableTopic<string>(msg.topicName!);
+                        await topic.publishAsync(msg.message!);
+                        reply(msg.id, { ok: true });
+                        break;
+                    }
+                    case 'reliableTopicAddListener': {
+                        const topicName = msg.topicName!;
+                        const topic = instance.getReliableTopic<string>(topicName);
+                        if (!reliableTopicMessages.has(topicName)) {
+                            reliableTopicMessages.set(topicName, []);
+                        }
+                        if (!reliableTopicRegistrations.has(topicName)) {
+                            const registrationId = topic.addMessageListener((message) => {
+                                reliableTopicMessages.get(topicName)!.push(String(message.getMessageObject()));
+                            });
+                            reliableTopicRegistrations.set(topicName, registrationId);
+                        }
+                        reply(msg.id, { ok: true });
+                        break;
+                    }
+                    case 'reliableTopicDestroy': {
+                        const topic = instance.getReliableTopic<string>(msg.topicName!);
+                        topic.destroy();
+                        reliableTopicRegistrations.delete(msg.topicName!);
+                        reply(msg.id, { ok: true });
+                        break;
+                    }
                 }
                 break;
             }
@@ -296,6 +535,31 @@ async function handleMessage(msg: WorkerMessage): Promise<void> {
                     case 'storeData':
                         reply(msg.id, { data: [...store!.getData().entries()] });
                         break;
+                    case 'reliableTopicMessages':
+                        reply(msg.id, { messages: [...(reliableTopicMessages.get(msg.topicName!) ?? [])] });
+                        break;
+                    case 'reliableTopicState': {
+                        const rbService = instance.getRingbufferService();
+                        const rbName = `_hz_rb_${msg.topicName!}`;
+                        const partitionId = rbService.getRingbufferPartitionId(rbName);
+                        const ns = RingbufferService.getRingbufferNamespace(rbName);
+                        const container = rbService.getContainerOrNull(partitionId, ns);
+                        reply(msg.id, {
+                            partitionId,
+                            size: container?.size() ?? 0,
+                            headSequence: container?.headSequence() ?? -1,
+                            tailSequence: container?.tailSequence() ?? -1,
+                        });
+                        break;
+                    }
+                    case 'reliableTopicOwner': {
+                        const rbService = instance.getRingbufferService();
+                        const rbName = `_hz_rb_${msg.topicName!}`;
+                        const partitionId = rbService.getRingbufferPartitionId(rbName);
+                        const owner = instance.getPartitionOwnerId(partitionId);
+                        reply(msg.id, { partitionId, owner });
+                        break;
+                    }
                 }
                 break;
             }
@@ -309,6 +573,8 @@ async function handleMessage(msg: WorkerMessage): Promise<void> {
                 if (instance && instance.isRunning()) {
                     instance.shutdown();
                 }
+                reliableTopicMessages.clear();
+                reliableTopicRegistrations.clear();
                 reply(msg.id, { ok: true });
                 // Give a moment for cleanup then exit
                 setTimeout(() => process.exit(0), 100);

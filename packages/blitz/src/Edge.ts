@@ -1,4 +1,4 @@
-import type { Vertex } from './Vertex.ts';
+import type { Vertex } from './Vertex.js';
 
 /**
  * A directed edge between two {@link Vertex} nodes in the Blitz pipeline DAG.

@@ -1,6 +1,6 @@
-import { Stage } from '../Stage.ts';
-import type { StageContext } from '../StageContext.ts';
-import type { Aggregator } from './Aggregator.ts';
+import { Stage } from '../Stage.js';
+import type { StageContext } from '../StageContext.js';
+import type { Aggregator } from './Aggregator.js';
 
 /**
  * `AggregatingOperator<T, A, R>` — consumes a closed window (list of events)

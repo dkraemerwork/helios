@@ -7,7 +7,7 @@
  * 3. No wildcard export leaks unfinished client internals
  * 4. Separate Bun remote-client example exists
  * 5. Auth, reconnect, and near-cache examples exist
- * 6. Real-network acceptance suites for distributed object families
+ * 6. Client surface acceptance suite exists, with real-network behavior proved separately
  * 7. Hygiene: no member-side protocol handler under src/client
  * 8. Hygiene: no REST fallback in client proof paths
  * 9. Hygiene: no orphan codecs without a real proxy owner
@@ -21,14 +21,14 @@
  * 17. Reconnect example demonstrates real ConnectionRetryConfig usage
  * 18. Final GA verification: production readiness checklist
  */
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '../..');
 
-// Root barrel import — use source path since @zenystx/helios-core resolves
-// to dist/ via package.json exports but tsconfig paths only map subpaths.
+// Root barrel import — use source path so proof stays pinned to the checked-in
+// public barrel even before a dist/ build exists.
 // @ts-expect-error Bun resolves .ts imports at runtime; tsc doesn't allow .ts extensions
 const importRootBarrel = () => import('../../src/index.ts') as Promise<typeof import('@zenystx/helios-core')>;
 
@@ -74,18 +74,70 @@ describe('Root barrel (src/index.ts) — intentional client surface only', () =>
 });
 
 // ── 2. Package exports subpaths ─────────────────────────────────────────────
+//
+// These tests prove the BUILT dist/ targets declared in package.json "exports"
+// actually exist and re-export the expected symbols.  They import from the dist/
+// files directly — NOT through tsconfig path aliases — so they cannot false-green
+// when the build output is missing.
 
 describe('Package exports — ./client and ./client/config subpaths', () => {
-    test('./client subpath exports HeliosClient', async () => {
-        const mod = await import('@zenystx/helios-core/client/HeliosClient');
+    const distClientIndex = resolve(ROOT, 'dist/src/client/index.js');
+    const distClientConfigIndex = resolve(ROOT, 'dist/src/client/config/index.js');
+    const distClientDts = resolve(ROOT, 'dist/src/client/index.d.ts');
+    const distClientConfigDts = resolve(ROOT, 'dist/src/client/config/index.d.ts');
+
+    beforeAll(async () => {
+        // Ensure a fresh build so dist/ targets are available for honest verification.
+        const proc = Bun.spawn(['bun', 'run', 'build'], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' });
+        const exitCode = await proc.exited;
+        if (exitCode !== 0) {
+            const stderr = await new Response(proc.stderr).text();
+            throw new Error(`Build failed (exit ${exitCode}): ${stderr}`);
+        }
+    });
+
+    test('dist/src/client/index.js exists after build', () => {
+        expect(existsSync(distClientIndex)).toBeTrue();
+    });
+
+    test('dist/src/client/index.d.ts exists after build', () => {
+        expect(existsSync(distClientDts)).toBeTrue();
+    });
+
+    test('dist/src/client/config/index.js exists after build', () => {
+        expect(existsSync(distClientConfigIndex)).toBeTrue();
+    });
+
+    test('dist/src/client/config/index.d.ts exists after build', () => {
+        expect(existsSync(distClientConfigDts)).toBeTrue();
+    });
+
+    test('./client dist target exports HeliosClient', async () => {
+        const mod = await import(distClientIndex);
         expect(mod.HeliosClient).toBeDefined();
         expect(typeof mod.HeliosClient).toBe('function');
     });
 
-    test('./client/config subpath exports ClientConfig', async () => {
-        const mod = await import('@zenystx/helios-core/client/config/ClientConfig');
+    test('./client dist target exports DEFERRED_CLIENT_FEATURES', async () => {
+        const mod = await import(distClientIndex);
+        expect(mod.DEFERRED_CLIENT_FEATURES).toBeDefined();
+        expect(Array.isArray(mod.DEFERRED_CLIENT_FEATURES)).toBeTrue();
+    });
+
+    test('./client/config dist target exports ClientConfig', async () => {
+        const mod = await import(distClientConfigIndex);
         expect(mod.ClientConfig).toBeDefined();
         expect(typeof mod.ClientConfig).toBe('function');
+    });
+
+    test('all package.json export targets map to existing dist files', async () => {
+        const pkg = JSON.parse(await Bun.file(resolve(ROOT, 'package.json')).text());
+        for (const [subpath, mapping] of Object.entries(pkg.exports as Record<string, Record<string, string>>)) {
+            const jsTarget = resolve(ROOT, mapping.import);
+            const dtsTarget = resolve(ROOT, mapping.types);
+            expect(existsSync(jsTarget)).toBeTrue();
+            expect(existsSync(dtsTarget)).toBeTrue();
+        }
     });
 });
 
@@ -120,6 +172,7 @@ describe('Separate Bun remote-client example', () => {
         const content = await Bun.file(resolve(ROOT, 'examples/native-app/src/client-example.ts')).text();
         expect(content).toContain('HeliosClient');
         expect(content).toContain('ClientConfig');
+        expect(content).toContain('await client.connect()');
         // Must not import internal client modules
         expect(content).not.toContain('ClientInvocation');
         expect(content).not.toContain('ClientConnectionManager');
@@ -137,6 +190,7 @@ describe('Auth, reconnect, and near-cache client examples', () => {
         const content = await Bun.file(resolve(ROOT, 'examples/native-app/src/client-auth-example.ts')).text();
         expect(content).toContain('getSecurityConfig');
         expect(content).toContain('HeliosClient');
+        expect(content).toContain('await client.connect()');
     });
 
     test('reconnect example exists', () => {
@@ -147,25 +201,49 @@ describe('Auth, reconnect, and near-cache client examples', () => {
         const content = await Bun.file(resolve(ROOT, 'examples/native-app/src/client-reconnect-example.ts')).text();
         expect(content).toContain('getConnectionStrategyConfig');
         expect(content).toContain('HeliosClient');
+        expect(content).toContain('await client.connect()');
     });
 
     test('near-cache example exists', () => {
         expect(existsSync(resolve(ROOT, 'examples/native-app/src/client-nearcache-example.ts'))).toBeTrue();
     });
 
-    test('near-cache example uses NearCacheConfig', async () => {
+    test('near-cache example uses exported public package paths for NearCacheConfig', async () => {
         const content = await Bun.file(resolve(ROOT, 'examples/native-app/src/client-nearcache-example.ts')).text();
         expect(content).toContain('NearCacheConfig');
         expect(content).toContain('addNearCacheConfig');
         expect(content).toContain('HeliosClient');
+        expect(content).toContain('await client.connect()');
+        expect(content).toContain('from "@zenystx/helios-core"');
+        expect(content).not.toContain('@zenystx/helios-core/config/NearCacheConfig');
+        expect(content).not.toContain('@zenystx/helios-core/config/InMemoryFormat');
+        expect(content).not.toContain('@zenystx/helios-core/config/EvictionConfig');
+        expect(content).not.toContain('@zenystx/helios-core/config/EvictionPolicy');
+        expect(content).not.toContain('@zenystx/helios-core/config/MaxSizePolicy');
     });
 });
 
-// ── 6. Real-network acceptance suites for distributed object families ───────
+// ── 6. Client surface acceptance suite + honest real-network boundary ───────
 
-describe('Real-network acceptance suite coverage', () => {
+describe('Client acceptance suite coverage', () => {
     test('acceptance suite file exists', () => {
         expect(existsSync(resolve(ROOT, 'test/client/acceptance/ClientAcceptanceSuite.test.ts'))).toBeTrue();
+    });
+
+    test('acceptance suite is explicitly shape-only, not a live-cluster claim', async () => {
+        const content = await Bun.file(resolve(ROOT, 'test/client/acceptance/ClientAcceptanceSuite.test.ts')).text();
+        expect(content).toContain('public client surface acceptance coverage');
+        expect(content).toContain('without requiring a live');
+        expect(content).toContain('Internal proxy / near-cache implementation');
+        expect(content).toContain('Real-network behavior is covered separately');
+        expect(content).not.toContain('Real-network acceptance coverage');
+    });
+
+    test('acceptance suite does not import internal client paths', async () => {
+        const content = await Bun.file(resolve(ROOT, 'test/client/acceptance/ClientAcceptanceSuite.test.ts')).text();
+        expect(content).not.toContain('/client/proxy/');
+        expect(content).not.toContain('/client/impl/');
+        expect(content).not.toContain('/client/map/impl/');
     });
 
     test('acceptance suite covers Map operations', async () => {
@@ -193,6 +271,13 @@ describe('Real-network acceptance suite coverage', () => {
     test('acceptance suite covers near-cache', async () => {
         const content = await Bun.file(resolve(ROOT, 'test/client/acceptance/ClientAcceptanceSuite.test.ts')).text();
         expect(content).toContain('NearCache');
+    });
+
+    test('external Bun app proof uses a separate Bun process for the network claim', async () => {
+        const content = await Bun.file(resolve(ROOT, 'test/client/e2e/ClientExternalBunAppE2E.test.ts')).text();
+        expect(content).toContain('separate Bun process');
+        expect(content).toContain('Bun.spawn');
+        expect(content).not.toContain('cannot spawn a truly separate Bun process');
     });
 });
 
@@ -270,15 +355,17 @@ describe('Hygiene — no orphan codecs', () => {
 // ── 10. DEFERRED_CLIENT_FEATURES are explicitly listed ──────────────────────
 
 describe('DEFERRED_CLIENT_FEATURES — explicit, not hidden stubs', () => {
+    const distClientIndex = resolve(ROOT, 'dist/src/client/index.js');
+
     test('deferred features include known deferred items', async () => {
-        const { DEFERRED_CLIENT_FEATURES } = await import('@zenystx/helios-core/client/HeliosClient');
+        const { DEFERRED_CLIENT_FEATURES } = await import(distClientIndex);
         expect(DEFERRED_CLIENT_FEATURES).toContain('cache');
         expect(DEFERRED_CLIENT_FEATURES).toContain('transactions');
         expect(DEFERRED_CLIENT_FEATURES).toContain('sql');
     });
 
     test('deferred features are frozen', async () => {
-        const { DEFERRED_CLIENT_FEATURES } = await import('@zenystx/helios-core/client/HeliosClient');
+        const { DEFERRED_CLIENT_FEATURES } = await import(distClientIndex);
         expect(Object.isFrozen(DEFERRED_CLIENT_FEATURES)).toBeTrue();
     });
 });
@@ -286,8 +373,10 @@ describe('DEFERRED_CLIENT_FEATURES — explicit, not hidden stubs', () => {
 // ── 11. HeliosClient implements HeliosInstance honestly ──────────────────────
 
 describe('HeliosClient implements HeliosInstance', () => {
+    const distClientIndex = resolve(ROOT, 'dist/src/client/index.js');
+
     test('HeliosClient has all required HeliosInstance methods', async () => {
-        const { HeliosClient } = await import('@zenystx/helios-core/client/HeliosClient');
+        const { HeliosClient } = await import(distClientIndex);
         const requiredMethods = [
             'getName', 'getConfig', 'getLifecycleService', 'shutdown',
             'getMap', 'getQueue', 'getTopic', 'getCluster',
@@ -299,7 +388,7 @@ describe('HeliosClient implements HeliosInstance', () => {
     });
 
     test('HeliosClient.newHeliosClient is the factory method', async () => {
-        const { HeliosClient } = await import('@zenystx/helios-core/client/HeliosClient');
+        const { HeliosClient } = await import(distClientIndex);
         expect(typeof HeliosClient.newHeliosClient).toBe('function');
     });
 });
@@ -307,14 +396,16 @@ describe('HeliosClient implements HeliosInstance', () => {
 // ── 12. ClientConfig from subpath ───────────────────────────────────────────
 
 describe('ClientConfig from ./client/config subpath', () => {
-    test('ClientConfig is constructable', async () => {
-        const { ClientConfig } = await import('@zenystx/helios-core/client/config/ClientConfig');
+    const distClientConfigIndex = resolve(ROOT, 'dist/src/client/config/index.js');
+
+    test('ClientConfig is constructable from dist target', async () => {
+        const { ClientConfig } = await import(distClientConfigIndex);
         const config = new ClientConfig();
         expect(config.getName()).toBeDefined();
     });
 
     test('ClientConfig has network, security, and connection strategy accessors', async () => {
-        const { ClientConfig } = await import('@zenystx/helios-core/client/config/ClientConfig');
+        const { ClientConfig } = await import(distClientConfigIndex);
         const config = new ClientConfig();
         expect(typeof config.getNetworkConfig).toBe('function');
         expect(typeof config.getSecurityConfig).toBe('function');
@@ -377,8 +468,17 @@ describe('Final GA verification — production readiness checklist', () => {
         expect(pkg.exports['./client/config']).toBeDefined();
     });
 
+    test('package.json export targets resolve to existing dist files', async () => {
+        const pkg = JSON.parse(await Bun.file(resolve(ROOT, 'package.json')).text());
+        for (const [, mapping] of Object.entries(pkg.exports as Record<string, Record<string, string>>)) {
+            expect(existsSync(resolve(ROOT, mapping.import))).toBeTrue();
+            expect(existsSync(resolve(ROOT, mapping.types))).toBeTrue();
+        }
+    });
+
     test('DEFERRED_CLIENT_FEATURES documents all deferred capabilities', async () => {
-        const { DEFERRED_CLIENT_FEATURES } = await import('@zenystx/helios-core/client/HeliosClient');
+        // Import from built dist target, not tsconfig alias
+        const { DEFERRED_CLIENT_FEATURES } = await import(resolve(ROOT, 'dist/src/client/index.js'));
         // Must be non-empty and contain known deferred items
         expect(DEFERRED_CLIENT_FEATURES.length).toBeGreaterThanOrEqual(5);
     });
@@ -396,6 +496,13 @@ describe('Audit — README remote client documentation', () => {
         const readme = await Bun.file(resolve(ROOT, 'README.md')).text();
         expect(readme).toContain('HeliosClient');
         expect(readme).toContain('ClientConfig');
+        expect(readme).toContain('await client.connect();');
+    });
+
+    test('README avoids stale hardcoded test-count claims', async () => {
+        const readme = await Bun.file(resolve(ROOT, 'README.md')).text();
+        expect(readme).toContain('bun test              # run the full test suite');
+        expect(readme).not.toContain('3,461 tests');
     });
 
     test('README does not claim narrowed-out client methods as remote features', async () => {
@@ -543,7 +650,8 @@ describe('Final verification — remote client production readiness', () => {
     });
 
     test('HeliosClient factory returns an instance (smoke)', async () => {
-        const { HeliosClient } = await import('@zenystx/helios-core/client/HeliosClient');
+        // Import from built dist target, not tsconfig alias
+        const { HeliosClient } = await import(resolve(ROOT, 'dist/src/client/index.js'));
         // newHeliosClient should exist and be callable (it won't connect without a server)
         expect(typeof HeliosClient.newHeliosClient).toBe('function');
     });

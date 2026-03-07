@@ -1,4 +1,4 @@
-import { type HeliosBlitzService } from './HeliosBlitzService.ts';
+import { type HeliosBlitzService } from './HeliosBlitzService.js';
 
 /**
  * Fence-aware wrapper that blocks access to the Helios-owned Blitz instance

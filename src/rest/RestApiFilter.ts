@@ -18,6 +18,7 @@ const PATH_GROUP_MAP: ReadonlyArray<[string, RestEndpointGroup]> = [
     ['/hazelcast/rest/management',       RestEndpointGroup.CLUSTER_WRITE],
     ['/hazelcast/rest/maps',             RestEndpointGroup.DATA],
     ['/hazelcast/rest/queues',           RestEndpointGroup.DATA],
+    ['/helios/monitor',                  RestEndpointGroup.MONITOR],
 ];
 
 const DISABLED_GROUP_BODY = JSON.stringify({

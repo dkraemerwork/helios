@@ -3,9 +3,9 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": ".",
+    "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "allowImportingTsExtensions": true,
     "sourceMap": false,
     "removeComments": false,
     "paths": {

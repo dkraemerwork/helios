@@ -17,5 +17,6 @@ export class RemoveBackupOperation extends MapOperation {
 
     async run(): Promise<void> {
         this.recordStore.delete(this._key);
+        this.recordNamespaceBackupMutation();
     }
 }

@@ -19,6 +19,7 @@ import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConf
 import type { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
 import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
 import type { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
+import type { Credentials } from "@zenystx/helios-core/security/Credentials";
 
 export enum ClientState {
     INITIAL = "INITIAL",
@@ -46,6 +47,7 @@ export class ClientConnectionManager {
     private readonly _channelReaders = new Map<EventloopChannel, { reader: ClientMessageReader; conn: ClientConnection; buffer: Buffer }>();
 
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    private _reconnectPromise: Promise<void> | null = null;
 
     constructor(config: ClientConfig) {
         this._config = config;
@@ -94,10 +96,17 @@ export class ClientConnectionManager {
                 try {
                     const conn = await this._connectAndAuth(addr.host, addr.port);
                     this._activeConnections.set(conn.getMemberUuid()!, conn);
+                    const hadDisconnectedState = this._state === ClientState.DISCONNECTED_FROM_CLUSTER;
                     this._state = ClientState.INITIALIZED_ON_CLUSTER;
 
                     // Start heartbeat
                     this._startHeartbeat();
+
+                    if (hadDisconnectedState) {
+                        this._listenerService?.reconnectListeners();
+                    }
+
+                    this._reconnectPromise = null;
 
                     return;
                 } catch (err: any) {
@@ -209,10 +218,11 @@ export class ClientConnectionManager {
 
         // Send auth request
         const clusterName = this._config.getClusterName();
+        const { username, password } = this._resolveAuthIdentity();
         const authMsg = ClientAuthenticationCodec.encodeRequest(
             clusterName,
-            null,
-            null,
+            username,
+            password,
             this._clientUuid,
             "BUN",
             1,
@@ -289,6 +299,26 @@ export class ClientConnectionManager {
         });
     }
 
+    private _resolveAuthIdentity(): { username: string | null; password: string | null } {
+        const credentials = this._config.getSecurityConfig().getCredentials();
+        if (credentials === null) {
+            return { username: null, password: null };
+        }
+
+        return {
+            username: credentials.getName(),
+            password: this._getPassword(credentials),
+        };
+    }
+
+    private _getPassword(credentials: Credentials): string | null {
+        const maybePasswordCredentials = credentials as unknown as { getPassword?: () => string | null };
+        if (typeof maybePasswordCredentials.getPassword === "function") {
+            return maybePasswordCredentials.getPassword();
+        }
+        return null;
+    }
+
     private _onData(ch: EventloopChannel, data: Buffer): void {
         const state = this._channelReaders.get(ch);
         if (!state) return;
@@ -354,6 +384,7 @@ export class ClientConnectionManager {
 
             if (this._activeConnections.size === 0 && this._alive) {
                 this._state = ClientState.DISCONNECTED_FROM_CLUSTER;
+                this._scheduleReconnect();
             }
         }
     }
@@ -376,5 +407,18 @@ export class ClientConnectionManager {
             msg.includes("credentials") ||
             msg.includes("Authentication failed")
         );
+    }
+
+    private _scheduleReconnect(): void {
+        if (this._reconnectPromise !== null) {
+            return;
+        }
+        const reconnectMode = this._config.getConnectionStrategyConfig().getReconnectMode();
+        if (reconnectMode === "OFF") {
+            return;
+        }
+        this._reconnectPromise = this.connectToCluster().catch(() => {
+            this._reconnectPromise = null;
+        });
     }
 }

@@ -49,7 +49,14 @@ export class TestHeliosInstance {
   constructor(nodeEngine?: TestNodeEngine) {
     this.nodeEngine = nodeEngine ?? new TestNodeEngine();
     this._ringbufferService = new RingbufferService(this.nodeEngine);
-    this._reliableTopicService = new ReliableTopicService("test-instance", new HeliosConfig(), this._ringbufferService);
+    this._reliableTopicService = new ReliableTopicService(
+      "test-instance",
+      new HeliosConfig(),
+      this._ringbufferService,
+      this.nodeEngine.getSerializationService(),
+      null,
+      null,
+    );
     this.nodeEngine.registerService(
       "hz:impl:mapService",
       this._mapContainerService,
@@ -120,6 +127,7 @@ export class TestHeliosInstance {
   getReliableTopic<E>(name: string): ITopic<E> {
     let topic = this.reliableTopics.get(name);
     if (!topic) {
+      this._reliableTopicService.undestroy(name);
       topic = new ReliableTopicProxyImpl<unknown>(
         name,
         this._reliableTopicService,
@@ -143,7 +151,6 @@ export class TestHeliosInstance {
     this.running = false;
     for (const topic of Array.from(this.topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
-    for (const rt of Array.from(this.reliableTopics.values())) rt.destroy();
     this.reliableTopics.clear();
     this.maps.clear();
     this.queues.clear();

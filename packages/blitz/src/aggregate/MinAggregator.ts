@@ -1,5 +1,5 @@
-import type { Aggregator, GroupedAggregator } from './Aggregator.ts';
-import { createGroupedAggregator } from './groupedAggregator.ts';
+import type { Aggregator, GroupedAggregator } from './Aggregator.js';
+import { createGroupedAggregator } from './groupedAggregator.js';
 
 /**
  * Blitz MinAggregator — tracks the minimum of a numeric field.

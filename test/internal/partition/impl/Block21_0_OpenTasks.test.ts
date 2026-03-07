@@ -24,6 +24,12 @@ import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
 import type { MapPartitionLostEvent } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
+import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import { MapService } from '@zenystx/helios-core/map/impl/MapService';
+import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
+import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
 
 function makeMember(host: string, port: number, uuid?: string): Member {
     return new MemberImpl.Builder(new Address(host, port))
@@ -60,6 +66,10 @@ describe('Block 21.0 — Open Tasks', () => {
     describe('Map-scoped partition-lost', () => {
         test('map-scoped partition-lost listener receives events with mapName', () => {
             const service = new InternalPartitionServiceImpl(4);
+            const mapService = new MapContainerService();
+            mapService.getOrCreateRecordStore('myMap', 0);
+            mapService.getOrCreateRecordStore('myMap', 2);
+            service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
             service.firstArrangement([memberA], memberA.getAddress(), 0);
 
             const events: MapPartitionLostEvent[] = [];
@@ -67,7 +77,8 @@ describe('Block 21.0 — Open Tasks', () => {
 
             service.memberRemovedWithRepair(memberA, []);
 
-            expect(events.length).toBe(4);
+            expect(events.length).toBe(2);
+            expect(events.map((e) => e.partitionId).sort((a, b) => a - b)).toEqual([0, 2]);
             for (const e of events) {
                 expect(e.mapName).toBe('myMap');
                 expect(typeof e.partitionId).toBe('number');
@@ -77,6 +88,9 @@ describe('Block 21.0 — Open Tasks', () => {
 
         test('map-scoped listener is scoped to its map name only', () => {
             const service = new InternalPartitionServiceImpl(4);
+            const mapService = new MapContainerService();
+            mapService.getOrCreateRecordStore('mapA', 1);
+            service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
             service.firstArrangement([memberA], memberA.getAddress(), 0);
 
             const mapAEvents: MapPartitionLostEvent[] = [];
@@ -86,15 +100,18 @@ describe('Block 21.0 — Open Tasks', () => {
 
             service.memberRemovedWithRepair(memberA, []);
 
-            // Both listeners fire (generic partition-lost dispatches to all map listeners)
-            expect(mapAEvents.length).toBe(4);
-            expect(mapBEvents.length).toBe(4);
+            expect(mapAEvents.length).toBe(1);
+            expect(mapBEvents.length).toBe(0);
+            expect(mapAEvents[0]?.partitionId).toBe(1);
             expect(mapAEvents.every(e => e.mapName === 'mapA')).toBe(true);
             expect(mapBEvents.every(e => e.mapName === 'mapB')).toBe(true);
         });
 
         test('map-scoped listener can be removed by registration ID', () => {
             const service = new InternalPartitionServiceImpl(4);
+            const mapService = new MapContainerService();
+            mapService.getOrCreateRecordStore('myMap', 0);
+            service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
             service.firstArrangement([memberA], memberA.getAddress(), 0);
 
             const events: MapPartitionLostEvent[] = [];
@@ -106,11 +123,39 @@ describe('Block 21.0 — Open Tasks', () => {
         });
 
         test('IMap.addPartitionLostListener is available on map proxy', () => {
-            // This test validates the IMap interface includes addPartitionLostListener
-            // The actual wiring through MapProxy delegates to partition service
             const service = new InternalPartitionServiceImpl(4);
-            expect(typeof service.onMapPartitionLost).toBe('function');
-            expect(typeof service.removeMapPartitionLostListener).toBe('function');
+            const serializationService = new SerializationServiceImpl(new SerializationConfig());
+            const mapService = new MapContainerService();
+            service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
+            const partitionService = {
+                getPartitionCount: () => 4,
+                getPartitionId: (key: HeapData) => service.getPartitionId(key),
+                getPartitionOwner: () => memberA.getAddress(),
+                isMigrating: () => false,
+                onMapPartitionLost: service.onMapPartitionLost.bind(service),
+                removeMapPartitionLostListener: service.removeMapPartitionLostListener.bind(service),
+            };
+            const nodeEngine = new NodeEngineImpl(serializationService, { partitionService });
+            mapService.setNodeEngine(nodeEngine);
+            nodeEngine.registerService('hz:impl:mapService', mapService);
+
+            const proxy = new MapProxy<string, string>(
+                'orders',
+                mapService.getOrCreateRecordStore('orders', 0),
+                nodeEngine,
+                mapService,
+            );
+
+            const events: MapPartitionLostEvent[] = [];
+            const listenerId = proxy.addPartitionLostListener((event) => events.push(event));
+
+            service.firstArrangement([memberA], memberA.getAddress(), 0);
+            service.memberRemovedWithRepair(memberA, []);
+
+            expect(events.length).toBe(1);
+            expect(events[0]?.partitionId).toBe(0);
+            expect(events.every((event) => event.mapName === 'orders')).toBe(true);
+            expect(proxy.removePartitionLostListener(listenerId)).toBe(true);
         });
     });
 
@@ -204,6 +249,29 @@ describe('Block 21.0 — Open Tasks', () => {
             // Run cycle — should generate anti-entropy ops
             const ops = service.runAntiEntropyCycleForTest();
             expect(ops.length).toBeGreaterThan(0);
+        });
+
+        test('_runAntiEntropyCycle dispatches live anti-entropy work to backup targets', () => {
+            const service = new InternalPartitionServiceImpl(PARTITION_COUNT);
+            service.firstArrangement([memberA, memberB], memberA.getAddress(), 1);
+
+            const replicaManager = new PartitionReplicaManager(PARTITION_COUNT, 20);
+            service.setReplicaManager(replicaManager);
+            service.setLocalMemberUuid(memberA.getUuid());
+
+            const dispatched: Array<{ targetUuid: string; partitionId: number; replicaIndex: number }> = [];
+            service.setAntiEntropyDispatcher((targetUuid, op) => {
+                dispatched.push({
+                    targetUuid,
+                    partitionId: op.partitionId,
+                    replicaIndex: op.targetReplicaIndex,
+                });
+            });
+
+            service.runAntiEntropyCycleForTest();
+
+            expect(dispatched.length).toBeGreaterThan(0);
+            expect(dispatched.every((entry) => entry.targetUuid === memberB.getUuid())).toBe(true);
         });
     });
 

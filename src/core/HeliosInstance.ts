@@ -31,7 +31,9 @@ export interface HeliosInstance {
 
   /**
    * Returns a distributed object by service name and object name.
-   * @throws Error if the service name is not recognised.
+   * Members may support additional service names beyond the shared remote-client
+   * contract; remote clients retain only map, queue, and topic here.
+   * @throws Error if the service name is not recognised or not retained.
    */
   getDistributedObject(serviceName: string, name: string): DistributedObject;
 

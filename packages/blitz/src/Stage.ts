@@ -1,4 +1,4 @@
-import type { StageContext } from './StageContext.ts';
+import type { StageContext } from './StageContext.js';
 
 /**
  * A processing stage in a Blitz pipeline.

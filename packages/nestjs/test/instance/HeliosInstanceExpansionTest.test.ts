@@ -24,6 +24,10 @@ import { HeliosModule } from '@zenystx/helios-nestjs/HeliosModule';
 import { HELIOS_INSTANCE_TOKEN } from '@zenystx/helios-nestjs/HeliosInstanceDefinition';
 import { Inject, Injectable } from '@nestjs/common';
 
+type HeliosInstanceWithReplicatedMap = HeliosInstance & {
+    getReplicatedMap<K, V>(name: string): ReplicatedMap<K, V>;
+};
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -38,11 +42,13 @@ class TestService {
 describe('Block 7.3 — HeliosInstance interface expansion', () => {
     let impl: HeliosInstanceImpl;
     let hz: HeliosInstance;
+    let memberHz: HeliosInstanceWithReplicatedMap;
 
     beforeEach(() => {
         impl = new HeliosInstanceImpl();
         // Assign to the interface type — compile-time check that the impl satisfies the interface
         hz = impl;
+        memberHz = impl as HeliosInstanceWithReplicatedMap;
     });
 
     afterEach(() => {
@@ -86,26 +92,26 @@ describe('Block 7.3 — HeliosInstance interface expansion', () => {
 
     describe('getReplicatedMap()', () => {
         it('should return a ReplicatedMap', () => {
-            const rm: ReplicatedMap<string, number> = hz.getReplicatedMap('rm1');
+            const rm: ReplicatedMap<string, number> = memberHz.getReplicatedMap('rm1');
             expect(rm).toBeDefined();
         });
 
         it('should support put and get', () => {
-            const rm = hz.getReplicatedMap<string, number>('rm-put');
+            const rm = memberHz.getReplicatedMap<string, number>('rm-put');
             rm.put('x', 42);
             expect(rm.get('x')).toBe(42);
         });
 
         it('should return the same instance for the same name', () => {
-            expect(hz.getReplicatedMap('rmap')).toBe(hz.getReplicatedMap('rmap'));
+            expect(memberHz.getReplicatedMap('rmap')).toBe(memberHz.getReplicatedMap('rmap'));
         });
 
         it('should return different instances for different names', () => {
-            expect(hz.getReplicatedMap('r1')).not.toBe(hz.getReplicatedMap('r2'));
+            expect(memberHz.getReplicatedMap('r1')).not.toBe(memberHz.getReplicatedMap('r2'));
         });
 
         it('should support remove, size, isEmpty, containsKey, clear', () => {
-            const rm = hz.getReplicatedMap<string, string>('rm-ops');
+            const rm = memberHz.getReplicatedMap<string, string>('rm-ops');
             expect(rm.isEmpty()).toBe(true);
             rm.put('k', 'v');
             expect(rm.size()).toBe(1);
@@ -115,7 +121,7 @@ describe('Block 7.3 — HeliosInstance interface expansion', () => {
         });
 
         it('should return the name via getName()', () => {
-            expect(hz.getReplicatedMap('named-rm').getName()).toBe('named-rm');
+            expect(memberHz.getReplicatedMap('named-rm').getName()).toBe('named-rm');
         });
     });
 
@@ -229,7 +235,7 @@ describe('Block 7.3 — HeliosInstance interface expansion', () => {
             }).compile();
 
             const svc = moduleRef.get(TestService);
-            const rm = svc.hz.getReplicatedMap<string, string>('nestjs-rm');
+            const rm = (svc.hz as HeliosInstanceWithReplicatedMap).getReplicatedMap<string, string>('nestjs-rm');
             rm.put('key', 'val');
             expect(rm.get('key')).toBe('val');
             await moduleRef.close();

@@ -13,8 +13,8 @@
  *   HELIOS_CLUSTER_ADDRESS  — server address (default: 127.0.0.1:5701)
  *   HELIOS_CLUSTER_NAME     — cluster name   (default: dev)
  */
-import { HeliosClient } from "@zenystx/helios-core/client/HeliosClient";
-import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
+import { HeliosClient } from "@zenystx/helios-core/client";
+import { ClientConfig } from "@zenystx/helios-core/client/config";
 
 async function main(): Promise<void> {
     const address = process.env["HELIOS_CLUSTER_ADDRESS"] ?? "127.0.0.1:5701";
@@ -28,38 +28,42 @@ async function main(): Promise<void> {
     // ── Connect ──────────────────────────────────────────────────────────────
     console.log(`Connecting to Helios cluster '${clusterName}' at ${address}...`);
     const client = HeliosClient.newHeliosClient(config);
+    await client.connect();
     console.log(`Connected as '${client.getName()}'.`);
 
-    // ── Map operations ───────────────────────────────────────────────────────
-    const map = client.getMap<string, string>("demo-map");
-    await map.put("greeting", "hello from remote client");
-    const value = await map.get("greeting");
-    console.log(`Map 'demo-map' -> greeting = ${value}`);
+    try {
+        // ── Map operations ───────────────────────────────────────────────────
+        const map = client.getMap<string, string>("demo-map");
+        await map.put("greeting", "hello from remote client");
+        const value = await map.get("greeting");
+        console.log(`Map 'demo-map' -> greeting = ${value}`);
 
-    // ── Queue operations ─────────────────────────────────────────────────────
-    const queue = client.getQueue<string>("demo-queue");
-    await queue.offer("task-1");
-    await queue.offer("task-2");
-    const polled = await queue.poll();
-    console.log(`Queue 'demo-queue' -> polled = ${polled}`);
+        // ── Queue operations ─────────────────────────────────────────────────
+        const queue = client.getQueue<string>("demo-queue");
+        await queue.offer("task-1");
+        await queue.offer("task-2");
+        const polled = await queue.poll();
+        console.log(`Queue 'demo-queue' -> polled = ${polled}`);
 
-    // ── Topic operations ─────────────────────────────────────────────────────
-    const topic = client.getTopic<string>("demo-topic");
-    topic.addMessageListener((msg) => {
-        console.log(`Topic 'demo-topic' received: ${msg.getMessageObject()}`);
-    });
-    await topic.publish("hello from client");
+        // ── Topic operations ─────────────────────────────────────────────────
+        const topic = client.getTopic<string>("demo-topic");
+        topic.addMessageListener((msg) => {
+            console.log(`Topic 'demo-topic' received: ${msg.getMessageObject()}`);
+        });
+        await topic.publish("hello from client");
+        await Bun.sleep(50);
 
-    // ── Cluster info ─────────────────────────────────────────────────────────
-    const cluster = client.getCluster();
-    const members = cluster.getMembers();
-    console.log(`Cluster has ${members.length} member(s):`);
-    for (const member of members) {
-        console.log(`  ${member.getAddress().getHost()}:${member.getAddress().getPort()}`);
+        // ── Cluster info ─────────────────────────────────────────────────────
+        const cluster = client.getCluster();
+        const members = cluster.getMembers();
+        console.log(`Cluster has ${members.length} member(s):`);
+        for (const member of members) {
+            console.log(`  ${member.getAddress().getHost()}:${member.getAddress().getPort()}`);
+        }
+    } finally {
+        // ── Shutdown ─────────────────────────────────────────────────────────
+        client.shutdown();
     }
-
-    // ── Shutdown ─────────────────────────────────────────────────────────────
-    client.shutdown();
     console.log("Client shut down.");
 }
 

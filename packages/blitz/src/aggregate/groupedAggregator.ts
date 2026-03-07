@@ -1,4 +1,4 @@
-import type { Aggregator, GroupedAggregator } from './Aggregator.ts';
+import type { Aggregator, GroupedAggregator } from './Aggregator.js';
 
 /**
  * Creates a grouped aggregator from a base aggregator and a key function.

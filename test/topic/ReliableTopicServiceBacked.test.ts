@@ -1,291 +1,220 @@
 /**
- * Block 19T.1 — Reliable topic service-backed distributed runtime path tests.
- *
- * Proves:
- * - ReliableTopicService uses RingbufferService containers (not direct ArrayRingbuffer)
- * - Ringbuffer wait/notify wakes parked readers on append
- * - Destroy cancels waiting readers
- * - Shutdown cancels all runners and waiting readers
- * - No runtime resurrection after destroy
- * - No surviving runners or timers after shutdown
- * - getReliableTopic() returns fresh instance after destroy
- * - Reliable topic publish routes through RingbufferService container
+ * Phase 19T reliable-topic end-to-end coverage.
  */
-import { describe, it, expect } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { Helios } from "@zenystx/helios-core/Helios";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { ReliableTopicConfig, TopicOverloadPolicy } from "@zenystx/helios-core/config/ReliableTopicConfig";
+import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
-import { TOPIC_RB_PREFIX } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
-import type { Message } from "@zenystx/helios-core/topic/Message";
+import { TOPIC_RB_PREFIX } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { TestHeliosInstance } from "@zenystx/helios-core/test-support/TestHeliosInstance";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// A. ReliableTopicService uses RingbufferService containers
-// ═══════════════════════════════════════════════════════════════════════════════
+async function waitFor<T>(fn: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await fn();
+    if (predicate(value)) {
+      return value;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error("Timed out waiting for condition");
+}
 
-describe("ReliableTopicService — RingbufferService backing", () => {
-  it("uses RingbufferService container instead of direct ArrayRingbuffer", () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
+describe("ReliableTopicService - single-node backing", () => {
+  it("stores publishes in the RingbufferService container", async () => {
+    const instance = new HeliosInstanceImpl(new HeliosConfig("single-node"));
     const topic = instance.getReliableTopic<string>("svc-backed");
 
-    // Publish should store through RingbufferService
-    topic.publish("hello");
+    await topic.publishAsync("hello");
 
-    // Verify the RingbufferService has a container for this topic's ringbuffer
     const rbService = instance.getRingbufferService();
-    expect(rbService).toBeDefined();
-
     const rbName = TOPIC_RB_PREFIX + "svc-backed";
     const partitionId = rbService.getRingbufferPartitionId(rbName);
     const ns = RingbufferService.getRingbufferNamespace(rbName);
     const container = rbService.getContainerOrNull(partitionId, ns);
+
     expect(container).not.toBeNull();
     expect(container!.size()).toBe(1);
-
     instance.shutdown();
   });
 
-  it("listener reads from RingbufferService container", async () => {
-    const config = new HeliosConfig("test");
+  it("BLOCK waits for destroy instead of overwriting when the ringbuffer is full", async () => {
+    const config = new HeliosConfig("block");
+    config.addReliableTopicConfig(
+      new ReliableTopicConfig("blocky").setTopicOverloadPolicy(TopicOverloadPolicy.BLOCK),
+    );
+    config.addRingbufferConfig(new RingbufferConfig("_hz_rb_blocky").setCapacity(1));
+
     const instance = new HeliosInstanceImpl(config);
-    const topic = instance.getReliableTopic<string>("svc-read");
+    const topic = instance.getReliableTopic<string>("blocky");
+    await topic.publishAsync("first");
 
-    const received: string[] = [];
-    topic.addMessageListener((msg: Message<string>) => {
-      received.push(msg.getMessageObject());
-    });
-
-    await Bun.sleep(50);
-    topic.publish("from-service");
+    const pending = topic.publishAsync("second");
     await Bun.sleep(100);
 
-    expect(received).toEqual(["from-service"]);
-    instance.shutdown();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// B. Ringbuffer wait/notify for reliable listeners
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe("Ringbuffer wait/notify — reliable listener wakeup", () => {
-  it("listener wakes up promptly on append instead of polling", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const topic = instance.getReliableTopic<string>("wake");
-
-    const received: string[] = [];
-    const timestamps: number[] = [];
-    topic.addMessageListener((msg: Message<string>) => {
-      received.push(msg.getMessageObject());
-      timestamps.push(Date.now());
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    }, () => {
+      settled = true;
     });
 
-    await Bun.sleep(50);
-
-    const publishTime = Date.now();
-    topic.publish("wakeup-msg");
-
-    // Should receive within ~20ms (not waiting for a 10ms polling interval)
-    await Bun.sleep(50);
-
-    expect(received).toEqual(["wakeup-msg"]);
-    // Delivery should be fast — within 30ms of publish
-    if (timestamps.length > 0) {
-      expect(timestamps[0] - publishTime).toBeLessThan(30);
-    }
-
+    expect(settled).toBe(false);
+    topic.destroy();
+    await expect(pending).rejects.toThrow(/destroyed/i);
     instance.shutdown();
   });
 
-  it("multiple waiting readers all wake up on append", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const topic = instance.getReliableTopic<string>("multi-wake");
-
-    const received1: string[] = [];
-    const received2: string[] = [];
-    topic.addMessageListener((msg: Message<string>) => {
-      received1.push(msg.getMessageObject());
-    });
-    topic.addMessageListener((msg: Message<string>) => {
-      received2.push(msg.getMessageObject());
-    });
-
-    await Bun.sleep(50);
-    topic.publish("shared-msg");
-    await Bun.sleep(100);
-
-    expect(received1).toEqual(["shared-msg"]);
-    expect(received2).toEqual(["shared-msg"]);
-
-    instance.shutdown();
-  });
-
-  it("destroy cancels waiting readers deterministically", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const topic = instance.getReliableTopic<string>("destroy-wait");
-
-    const received: string[] = [];
-    topic.addMessageListener((msg: Message<string>) => {
-      received.push(msg.getMessageObject());
-    });
-
-    await Bun.sleep(50);
+  it("destroy clears the backing ringbuffer and a fresh proxy works again", async () => {
+    const instance = new HeliosInstanceImpl(new HeliosConfig("destroyable"));
+    const topic = instance.getReliableTopic<string>("destroyable");
+    await topic.publishAsync("before");
     topic.destroy();
 
-    // Publishing to a fresh topic after destroy should not reach old listener
-    const fresh = instance.getReliableTopic<string>("destroy-wait");
-    fresh.publish("after-destroy");
-    await Bun.sleep(100);
+    const rbService = instance.getRingbufferService();
+    const rbName = TOPIC_RB_PREFIX + "destroyable";
+    const partitionId = rbService.getRingbufferPartitionId(rbName);
+    const ns = RingbufferService.getRingbufferNamespace(rbName);
+    expect(rbService.getContainerOrNull(partitionId, ns)?.size()).toBe(0);
 
-    expect(received).not.toContain("after-destroy");
-    instance.shutdown();
-  });
-
-  it("shutdown cancels all waiting readers across all topics", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const t1 = instance.getReliableTopic<string>("shutdown-a");
-    const t2 = instance.getReliableTopic<string>("shutdown-b");
-
-    const received: string[] = [];
-    t1.addMessageListener((msg: Message<string>) => received.push("a:" + msg.getMessageObject()));
-    t2.addMessageListener((msg: Message<string>) => received.push("b:" + msg.getMessageObject()));
-
-    await Bun.sleep(50);
-    instance.shutdown();
-
-    // No lingering timers or runners — process exits cleanly
-    await Bun.sleep(100);
-    // No crash is the proof
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// C. End-to-end lifecycle — no resurrection, no surviving runners
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe("Reliable topic — no runtime resurrection after destroy", () => {
-  it("destroyed topic does not receive messages from late publishes", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const topic = instance.getReliableTopic<string>("no-resurrect");
-
-    const received: string[] = [];
-    topic.addMessageListener((msg: Message<string>) => {
-      received.push(msg.getMessageObject());
-    });
-
-    await Bun.sleep(50);
-    topic.publish("before");
-    await Bun.sleep(100);
-    expect(received).toContain("before");
-
-    topic.destroy();
-
-    // Publish on the old proxy should fail or be no-op
-    expect(() => topic.publish("after-destroy")).toThrow();
-
-    instance.shutdown();
-  });
-
-  it("getReliableTopic after destroy returns fresh working instance", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const t1 = instance.getReliableTopic<string>("fresh-after");
-    t1.destroy();
-
-    const t2 = instance.getReliableTopic<string>("fresh-after");
-    expect(t2).not.toBe(t1);
-
-    const received: string[] = [];
-    t2.addMessageListener((msg: Message<string>) => received.push(msg.getMessageObject()));
-    await Bun.sleep(50);
-    t2.publish("fresh-msg");
-    await Bun.sleep(100);
-
-    expect(received).toEqual(["fresh-msg"]);
+    const fresh = instance.getReliableTopic<string>("destroyable");
+    await fresh.publishAsync("after");
+    expect(rbService.getContainerOrNull(partitionId, ns)?.size()).toBe(1);
     instance.shutdown();
   });
 });
 
-describe("Reliable topic — no surviving runners after shutdown", () => {
-  it("no timers or poll loops survive shutdown", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-
-    for (let i = 0; i < 5; i++) {
-      const topic = instance.getReliableTopic<string>(`surv-${i}`);
-      topic.addMessageListener(() => {});
-    }
-
-    await Bun.sleep(50);
-    instance.shutdown();
-    await Bun.sleep(200);
-    // Test passes if process doesn't hang from leaked timers
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// D. Classic topic — end-to-end verification
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe("Classic topic — no resurrection after destroy", () => {
-  it("publish on destroyed classic topic does not reach old listeners", async () => {
-    const config = new HeliosConfig("test");
-    const instance = new HeliosInstanceImpl(config);
-    const topic = instance.getTopic<string>("classic-mortal");
-
-    const received: string[] = [];
-    topic.addMessageListener((msg) => received.push(msg.getMessageObject()));
-    topic.publish("alive");
-    expect(received).toContain("alive");
-
-    topic.destroy();
-
-    // Getting fresh topic and publishing
-    const fresh = instance.getTopic<string>("classic-mortal");
-    const freshReceived: string[] = [];
-    fresh.addMessageListener((msg) => freshReceived.push(msg.getMessageObject()));
-    fresh.publish("reborn");
-    expect(freshReceived).toContain("reborn");
-    expect(received).not.toContain("reborn");
-
-    instance.shutdown();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// E. TestHeliosInstance — honest reliable topic behavior
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe("TestHeliosInstance — reliable topic honesty", () => {
-  it("getReliableTopic works with real ringbuffer-backed publish/listen", async () => {
+describe("ReliableTopicService - test support honesty", () => {
+  it("TestHeliosInstance uses the same service-backed reliable topic path", async () => {
     const instance = new TestHeliosInstance();
     const topic = instance.getReliableTopic<string>("test-rt");
-
     const received: string[] = [];
-    topic.addMessageListener((msg: Message<string>) => {
+
+    topic.addMessageListener((msg) => {
       received.push(msg.getMessageObject());
     });
+    await topic.publishAsync("hello");
 
-    await Bun.sleep(50);
-    topic.publish("test-msg");
-    await Bun.sleep(100);
-
-    expect(received).toEqual(["test-msg"]);
+    expect(received).toEqual(["hello"]);
     instance.shutdown();
   });
+});
 
-  it("destroy and re-get returns fresh instance", () => {
-    const instance = new TestHeliosInstance();
-    const t1 = instance.getReliableTopic<string>("destroy-test");
-    t1.destroy();
-    const t2 = instance.getReliableTopic<string>("destroy-test");
-    expect(t2).not.toBe(t1);
-    instance.shutdown();
+describe("ReliableTopicService - distributed path", () => {
+  const instances: HeliosInstanceImpl[] = [];
+
+  afterEach(async () => {
+    for (const instance of instances) {
+      if (instance.isRunning()) {
+        instance.shutdown();
+      }
+    }
+    instances.length = 0;
+    await Bun.sleep(30);
+  });
+
+  async function waitForClusterSize(instance: HeliosInstanceImpl, size: number): Promise<void> {
+    await waitFor(
+      async () => instance.getCluster().getMembers().length,
+      (value) => value === size,
+    );
+  }
+
+  async function startNode(name: string, port: number, peers: number[]): Promise<HeliosInstanceImpl> {
+    const config = new HeliosConfig(name);
+    config.getNetworkConfig().setPort(port).getJoin().getTcpIpConfig().setEnabled(true);
+    for (const peer of peers) {
+      config.getNetworkConfig().getJoin().getTcpIpConfig().addMember(`localhost:${peer}`);
+    }
+    const instance = await Helios.newInstance(config);
+    instances.push(instance);
+    return instance;
+  }
+
+  async function startTwoMembers(): Promise<{ a: HeliosInstanceImpl; b: HeliosInstanceImpl }> {
+    const a = await startNode("node-a", 15811, []);
+    const b = await startNode("node-b", 15812, [15811]);
+    await waitForClusterSize(a, 2);
+    await waitForClusterSize(b, 2);
+    return { a, b };
+  }
+
+  it("routes publish to the owner, replicates to backup, and delivers to listeners on both members", async () => {
+    const { a, b } = await startTwoMembers();
+    const topicA = a.getReliableTopic<string>("events");
+    const topicB = b.getReliableTopic<string>("events");
+    const receivedA: string[] = [];
+    const receivedB: string[] = [];
+    topicA.addMessageListener((msg) => receivedA.push(msg.getMessageObject()));
+    topicB.addMessageListener((msg) => receivedB.push(msg.getMessageObject()));
+
+    const rbName = TOPIC_RB_PREFIX + "events";
+    const partitionId = a.getRingbufferService().getRingbufferPartitionId(rbName);
+    const ownerId = a.getPartitionOwnerId(partitionId)!;
+    const owner = ownerId === a.getName() ? a : b;
+    const publisher = owner === a ? topicB : topicA;
+    const backup = owner === a ? b : a;
+
+    await publisher.publishAsync("alpha");
+    await waitFor(async () => receivedA, (messages) => messages.includes("alpha"));
+    await waitFor(async () => receivedB, (messages) => messages.includes("alpha"));
+
+    const ns = RingbufferService.getRingbufferNamespace(rbName);
+    expect(owner.getRingbufferService().getContainerOrNull(partitionId, ns)?.size()).toBe(1);
+    expect(backup.getRingbufferService().getContainerOrNull(partitionId, ns)?.size()).toBe(1);
+  });
+
+  it("survives owner loss by promoting the backup-backed state", async () => {
+    const { a, b } = await startTwoMembers();
+    const rbName = TOPIC_RB_PREFIX + "failover";
+    const partitionId = a.getRingbufferService().getRingbufferPartitionId(rbName);
+    const ownerId = a.getPartitionOwnerId(partitionId)!;
+    const owner = ownerId === a.getName() ? a : b;
+    const survivor = owner === a ? b : a;
+    const survivorTopic = survivor.getReliableTopic<string>("failover");
+    const ownerTopic = owner.getReliableTopic<string>("failover");
+    const received: string[] = [];
+    survivorTopic.addMessageListener((msg) => received.push(msg.getMessageObject()));
+
+    await ownerTopic.publishAsync("before-loss");
+    const ns = RingbufferService.getRingbufferNamespace(rbName);
+    await waitFor(
+      async () => survivor.getRingbufferService().getContainerOrNull(partitionId, ns)?.size() ?? 0,
+      (size) => size === 1,
+    );
+
+    owner.shutdown();
+    await waitForClusterSize(survivor, 1);
+
+    await survivorTopic.publishAsync("after-loss");
+    const backupSize = await waitFor(
+      async () => survivor.getRingbufferService().getContainerOrNull(partitionId, ns)?.size() ?? 0,
+      (size) => size === 2,
+    );
+
+    expect(backupSize).toBe(2);
+    expect(received).toEqual(["before-loss", "after-loss"]);
+  });
+
+  it("destroy propagates cluster-wide and shutdown of another member does not block later publishes", async () => {
+    const { a, b } = await startTwoMembers();
+    const destroyedA = a.getReliableTopic<string>("lifecycle");
+    const destroyedB = b.getReliableTopic<string>("lifecycle");
+
+    destroyedA.destroy();
+    await expect(destroyedB.publishAsync("nope")).rejects.toThrow(/destroyed/i);
+
+    a.shutdown();
+    await waitForClusterSize(b, 1);
+
+    const survivorTopic = b.getReliableTopic<string>("post-shutdown");
+    const received: string[] = [];
+    survivorTopic.addMessageListener((msg) => received.push(msg.getMessageObject()));
+    await survivorTopic.publishAsync("still-works");
+    await waitFor(async () => received, (messages) => messages.includes("still-works"));
+    expect(received).toEqual(["still-works"]);
   });
 });

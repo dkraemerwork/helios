@@ -34,6 +34,8 @@ import { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/
 import { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation/MapNearCacheStateHolder';
 import { MapReplicationOperation } from '@zenystx/helios-core/map/impl/operation/MapReplicationOperation';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
 
 /**
  * Epoch-fenced promotion record for a partition. Tracks the ownership epoch,
@@ -144,6 +146,62 @@ export class MapContainerService implements MigrationAwareService {
 
     getRecordStore(mapName: string, partitionId: number): RecordStore | null {
         return this._stores.get(this._storeKey(mapName, partitionId)) ?? null;
+    }
+
+    getPartitionNamespaces(partitionId: number): string[] {
+        const suffix = `:${partitionId}`;
+        const names: string[] = [];
+        for (const key of this._stores.keys()) {
+            if (key.endsWith(suffix)) {
+                names.push(key.slice(0, key.length - suffix.length));
+            }
+        }
+        return names;
+    }
+
+    collectPartitionNamespaceStates(partitionId: number, namespaces?: readonly string[]): ReplicationNamespaceState[] {
+        const targetNamespaces = namespaces === undefined
+            ? this.getPartitionNamespaces(partitionId)
+            : [...namespaces];
+        const states: ReplicationNamespaceState[] = [];
+
+        for (const namespace of targetNamespaces) {
+            const store = this.getRecordStore(namespace, partitionId);
+            const entries: Array<readonly [Data, Data]> = [];
+            let estimatedSizeBytes = 0;
+
+            if (store !== null) {
+                for (const [key, value] of store.entries()) {
+                    entries.push([key, value]);
+                    estimatedSizeBytes += (key.toByteArray()?.length ?? 0) + (value.toByteArray()?.length ?? 0);
+                }
+            }
+
+            states.push({ namespace, entries, estimatedSizeBytes });
+        }
+
+        return states;
+    }
+
+    getOrCreatePartitionContainer(partitionId: number): PartitionContainer {
+        return this._getOrCreatePartitionContainer(partitionId);
+    }
+
+    applyReplicaSyncState(partitionId: number, states: readonly ReplicationNamespaceState[]): void {
+        const container = this._getOrCreatePartitionContainer(partitionId);
+
+        for (const state of states) {
+            const recordStore = this.getOrCreateRecordStore(state.namespace, partitionId);
+            recordStore.clear();
+
+            const partitionStore = container.getRecordStore(state.namespace);
+            partitionStore.clear();
+
+            for (const [key, value] of state.entries) {
+                recordStore.put(key, value, -1, -1);
+                partitionStore.put(key, value, -1, -1);
+            }
+        }
     }
 
     *getAllEntries(mapName: string): IterableIterator<readonly [import('@zenystx/helios-core/internal/serialization/Data').Data, import('@zenystx/helios-core/internal/serialization/Data').Data]> {
@@ -277,6 +335,23 @@ export class MapContainerService implements MigrationAwareService {
      */
     isOldOwnerRetired(partitionId: number): boolean {
         return this._retiredOwnerPartitions.has(partitionId);
+    }
+
+    ensureExternalMapStoreOperationAllowed(partitionId: number): void {
+        if (this.isPartitionFenced(partitionId)) {
+            throw new Error(`Partition ${partitionId} is fenced for external MapStore work`);
+        }
+    }
+
+    getMapCoordinationPartitionId(mapName: string): number {
+        if (!this._nodeEngine) {
+            return 0;
+        }
+        const data = this._nodeEngine.toData(`__mapstore_coord__:${mapName}`);
+        if (data === null) {
+            return 0;
+        }
+        return this._nodeEngine.getPartitionService().getPartitionId(data);
     }
 
     // ═══════════════════════════════════════════════════════════════════

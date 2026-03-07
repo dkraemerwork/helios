@@ -60,6 +60,10 @@ export class ClientInvocationService {
         }
     }
 
+    async invokeOnRandomTarget(msg: ClientMessage): Promise<ClientMessage> {
+        return this.invoke(ClientInvocation.create(msg, -1));
+    }
+
     shutdown(): void {
         this._alive = false;
         // Reject all pending invocations

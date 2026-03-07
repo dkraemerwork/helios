@@ -6,6 +6,8 @@ import { StoreWorker } from './StoreWorker.js';
 import { addedEntry, deletedEntry, DelayedEntryType } from './DelayedEntry.js';
 import type { DelayedEntry } from './DelayedEntry.js';
 
+const DEFAULT_CLEAR_BATCH_SIZE = 10_000;
+
 /**
  * Write-behind map data store implementation.
  *
@@ -120,16 +122,23 @@ export class WriteBehindStore<K, V> implements MapDataStore<K, V> {
     if (pending.length > 0) {
       await this._processor.process(pending);
     }
-    // 2. Execute: collect keys from external store, then delete
+    // 2. Execute: stream keys from external store and delete in batches
     const stream = await this._wrapper.loadAllKeys();
-    const keys: K[] = [];
     try {
-      for await (const k of stream) keys.push(k);
+      const batchSize = DEFAULT_CLEAR_BATCH_SIZE;
+      let batch: K[] = [];
+      for await (const k of stream) {
+        batch.push(k);
+        if (batch.length >= batchSize) {
+          await this._wrapper.deleteAll(batch);
+          batch = [];
+        }
+      }
+      if (batch.length > 0) {
+        await this._wrapper.deleteAll(batch);
+      }
     } finally {
       await stream.close();
-    }
-    if (keys.length > 0) {
-      await this._wrapper.deleteAll(keys);
     }
     // 3. Block: clear queue and staging to prevent post-clear replay
     this._queue.clear();

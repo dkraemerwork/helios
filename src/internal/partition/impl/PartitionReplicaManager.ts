@@ -148,6 +148,22 @@ export class PartitionReplicaManager implements ReplicaVersionManager, BackupRep
         return versions;
     }
 
+    incrementNamespaceReplicaVersionsOnly(partitionId: number, namespace: string, totalBackups: number): bigint[] {
+        const versions = this._getOrCreateNsVersions(partitionId, namespace);
+        for (let i = 1; i <= totalBackups && i < MAX_REPLICA_COUNT; i++) {
+            versions[i]++;
+        }
+        return versions;
+    }
+
+    incrementNamespaceReplicaVersionAtIndex(partitionId: number, namespace: string, replicaIndex: number): bigint[] {
+        const versions = this._getOrCreateNsVersions(partitionId, namespace);
+        if (replicaIndex > 0 && replicaIndex < MAX_REPLICA_COUNT) {
+            versions[replicaIndex]++;
+        }
+        return versions;
+    }
+
     getNamespaceReplicaVersions(partitionId: number, namespace: string): bigint[] {
         const nsMap = this._namespaceVersions[partitionId];
         const versions = nsMap.get(namespace);
@@ -178,6 +194,17 @@ export class PartitionReplicaManager implements ReplicaVersionManager, BackupRep
     markNamespaceReplicaAsSyncRequired(partitionId: number, namespace: string, replicaIndex: number): void {
         const versions = this._getOrCreateNsVersions(partitionId, namespace);
         versions[replicaIndex] = REQUIRES_SYNC;
+    }
+
+    finalizeNamespaceReplicaSync(
+        partitionId: number,
+        replicaIndex: number,
+        namespaceVersions: ReadonlyMap<string, bigint[]>,
+    ): void {
+        for (const [namespace, incomingVersions] of namespaceVersions) {
+            const current = this._getOrCreateNsVersions(partitionId, namespace);
+            current[replicaIndex] = incomingVersions[replicaIndex] ?? 0n;
+        }
     }
 
     // ── Reset ──

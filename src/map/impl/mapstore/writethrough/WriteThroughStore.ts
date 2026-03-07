@@ -1,6 +1,8 @@
 import type { MapDataStore } from '../MapDataStore.js';
 import type { MapStoreWrapper } from '../MapStoreWrapper.js';
 
+const DEFAULT_CLEAR_BATCH_SIZE = 10_000;
+
 export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
   private readonly _writeBatchSize: number;
 
@@ -54,19 +56,21 @@ export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
 
   async clear(): Promise<void> {
     const stream = await this._wrapper.loadAllKeys();
-    const keys: K[] = [];
     try {
-      for await (const k of stream) keys.push(k);
+      const batchSize = this._writeBatchSize > 0 ? this._writeBatchSize : DEFAULT_CLEAR_BATCH_SIZE;
+      let batch: K[] = [];
+      for await (const k of stream) {
+        batch.push(k);
+        if (batch.length >= batchSize) {
+          await this._wrapper.deleteAll(batch);
+          batch = [];
+        }
+      }
+      if (batch.length > 0) {
+        await this._wrapper.deleteAll(batch);
+      }
     } finally {
       await stream.close();
-    }
-    if (keys.length === 0) return;
-    if (this._writeBatchSize <= 0 || keys.length <= this._writeBatchSize) {
-      await this._wrapper.deleteAll(keys);
-      return;
-    }
-    for (let i = 0; i < keys.length; i += this._writeBatchSize) {
-      await this._wrapper.deleteAll(keys.slice(i, i + this._writeBatchSize));
     }
   }
 

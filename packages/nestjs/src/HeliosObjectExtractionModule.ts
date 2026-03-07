@@ -33,6 +33,13 @@ import {
 } from './decorators/inject-distributed-object.decorator';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 
+type MemberOnlyCollections = {
+    getList(name: string): unknown;
+    getSet(name: string): unknown;
+    getMultiMap(name: string): unknown;
+    getReplicatedMap(name: string): unknown;
+};
+
 export interface HeliosObjectExtractionOptions {
     /** Named map token registrations: token → map name (explicit token style). */
     maps?: Record<string, string>;
@@ -103,7 +110,7 @@ export class HeliosObjectExtractionModule {
         for (const name of options.namedLists ?? []) {
             providers.push({
                 provide: getListToken(name),
-                useFactory: (hz: HeliosInstance) => hz.getList(name),
+                useFactory: (hz: HeliosInstance) => (hz as HeliosInstance & MemberOnlyCollections).getList(name),
                 inject: [HELIOS_INSTANCE_TOKEN],
             });
         }
@@ -111,7 +118,7 @@ export class HeliosObjectExtractionModule {
         for (const name of options.namedSets ?? []) {
             providers.push({
                 provide: getSetToken(name),
-                useFactory: (hz: HeliosInstance) => hz.getSet(name),
+                useFactory: (hz: HeliosInstance) => (hz as HeliosInstance & MemberOnlyCollections).getSet(name),
                 inject: [HELIOS_INSTANCE_TOKEN],
             });
         }
@@ -119,7 +126,7 @@ export class HeliosObjectExtractionModule {
         for (const name of options.namedMultiMaps ?? []) {
             providers.push({
                 provide: getMultiMapToken(name),
-                useFactory: (hz: HeliosInstance) => hz.getMultiMap(name),
+                useFactory: (hz: HeliosInstance) => (hz as HeliosInstance & MemberOnlyCollections).getMultiMap(name),
                 inject: [HELIOS_INSTANCE_TOKEN],
             });
         }
@@ -127,7 +134,7 @@ export class HeliosObjectExtractionModule {
         for (const name of options.namedReplicatedMaps ?? []) {
             providers.push({
                 provide: getReplicatedMapToken(name),
-                useFactory: (hz: HeliosInstance) => hz.getReplicatedMap(name),
+                useFactory: (hz: HeliosInstance) => (hz as HeliosInstance & MemberOnlyCollections).getReplicatedMap(name),
                 inject: [HELIOS_INSTANCE_TOKEN],
             });
         }

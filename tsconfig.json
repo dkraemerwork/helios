@@ -28,6 +28,7 @@
     // baseUrl intentionally omitted (deprecated in TS 6.0).
     // All path aliases use explicit relative prefixes below.
     "paths": {
+      "@zenystx/helios-core": ["./src/index.ts"],
       "@zenystx/helios-core/*": ["./src/*"]
     },
 

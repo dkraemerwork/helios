@@ -1,7 +1,7 @@
-import { AckPolicy } from './AckPolicy.ts';
-import { RetryPolicy } from './RetryPolicy.ts';
-import type { DeadLetterSink } from './DeadLetterSink.ts';
-import { NakError } from '../errors/NakError.ts';
+import { AckPolicy } from './AckPolicy.js';
+import { RetryPolicy } from './RetryPolicy.js';
+import type { DeadLetterSink } from './DeadLetterSink.js';
+import { NakError } from '../errors/NakError.js';
 
 /**
  * Minimal interface for a JetStream message passed to FaultHandler.

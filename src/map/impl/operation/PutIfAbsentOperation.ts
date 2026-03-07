@@ -30,8 +30,12 @@ export class PutIfAbsentOperation extends MapOperation implements BackupAwareOpe
     async run(): Promise<void> {
         const existing = this.recordStore.putIfAbsent(this._key, this._value, this._ttl, this._maxIdle);
         this.sendResponse(existing);
+        if (existing === null) {
+            this.recordNamespaceMutation();
+        }
         // Owner-side external store write only when key was absent (existing === null)
         if (existing === null && this.mapDataStore.isWithStore()) {
+            this.containerService.ensureExternalMapStoreOperationAllowed(this.partitionId);
             const ne = this.getNodeEngine()!;
             const key = ne.toObject(this._key);
             const value = ne.toObject(this._value);

@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
-import { BlitzService, type BlitzEventListener } from '../BlitzService.ts';
-import { type Pipeline } from '../Pipeline.ts';
-import { type BatchPipeline } from '../batch/BatchPipeline.ts';
+import { BlitzService, type BlitzEventListener } from '../BlitzService.js';
+import { type Pipeline } from '../Pipeline.js';
+import { type BatchPipeline } from '../batch/BatchPipeline.js';
 
 /**
  * NestJS-injectable wrapper around {@link BlitzService}.

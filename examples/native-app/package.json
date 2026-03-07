@@ -1,13 +1,13 @@
 {
   "name": "helios-demo-app",
   "version": "1.0.0",
-  "description": "Distributed Helios demo with three-node Docker Compose, REST, queue, and topic playgrounds",
+  "description": "Distributed Helios demo with three-node Docker Compose, Blitz NATS streaming, and Binance quote ingestion",
   "private": true,
   "scripts": {
     "start": "bun run src/app.ts",
-    "start:node3": "bun run src/app.ts --name node3 --tcp-port 5703 --rest-port 8083 --control-port 9093 --expected-cluster-size 3",
-    "start:node2": "bun run src/app.ts --name node2 --tcp-port 5702 --rest-port 8082 --control-port 9092 --peer localhost:5703 --expected-cluster-size 3",
-    "start:node1": "bun run src/app.ts --name node1 --tcp-port 5701 --rest-port 8081 --control-port 9091 --peer localhost:5702 --peer localhost:5703 --expected-cluster-size 3",
+    "start:node3": "bun run src/app.ts --name node3 --tcp-port 5703 --rest-port 8083 --control-port 9093 --nats-port 4224 --nats-cluster-port 6224 --expected-cluster-size 3",
+    "start:node2": "bun run src/app.ts --name node2 --tcp-port 5702 --rest-port 8082 --control-port 9092 --peer localhost:5703 --nats-port 4223 --nats-cluster-port 6223 --nats-route nats://127.0.0.1:6224 --expected-cluster-size 3",
+    "start:node1": "bun run src/app.ts --name node1 --tcp-port 5701 --rest-port 8081 --control-port 9091 --peer localhost:5702 --peer localhost:5703 --nats-port 4222 --nats-cluster-port 6222 --nats-route nats://127.0.0.1:6223 --nats-route nats://127.0.0.1:6224 --expected-cluster-size 3",
     "docker:up": "docker compose -f docker-compose.yml up --build",
     "docker:down": "docker compose -f docker-compose.yml down --remove-orphans",
     "docker:logs": "docker compose -f docker-compose.yml logs -f",

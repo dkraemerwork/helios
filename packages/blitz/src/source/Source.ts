@@ -1,4 +1,4 @@
-import type { BlitzCodec } from '../codec/BlitzCodec.ts';
+import type { BlitzCodec } from '../codec/BlitzCodec.js';
 
 /** Message envelope delivered by a Blitz streaming source. */
 export interface SourceMessage<T> {

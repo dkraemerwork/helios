@@ -22,9 +22,11 @@ Anyone editing this file in the future must preserve these rules:
 ## Current State
 
 - Helios v1 core is historically complete through Phase 17 in the archive, but executor production closure is reopened here as Phase 17R because the live runtime still does not prove the Scatter-backed path end to end.
-- Remaining master-plan work is Phase 17R, Phase 18, Phase 19, Phase 19T, Phase 20, and Phase 21.
+- Phases 17R through 21 (including 19, 19T, 20) are complete.
+- Remaining master-plan work is Phase 22 (Distributed Scheduled Executor Service — IScheduledExecutorService Hazelcast parity) and Phase 23 (Blitz Job Supervision — Hazelcast Jet-parity autonomous job lifecycle).
 - Executor scatter-closure implementation detail lives in `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`.
 - The canonical implementation detail for the remaining Blitz work lives in `plans/BLITZ_EMBEDDED_NATS_PLAN.md` Appendix B.
+- Blitz Job Supervision implementation detail lives in `packages/blitz/PLAN-job-supervision.md`.
 - MongoDB MapStore implementation detail lives in `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md`.
 - Topic and reliable-topic implementation detail lives in `plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`.
 - Cluster-safe MapStore implementation detail lives in `plans/CLUSTER_SAFE_MAPSTORE_PLAN.md`.
@@ -33,6 +35,7 @@ Anyone editing this file in the future must preserve these rules:
 - `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md` is the authoritative implementation-detail plan for Phase 21 backup/recovery work.
 - `plans/PARTITION_BACKUP_E2E_CLOSURE_PLAN.md` is secondary historical/supporting guidance only and must not be used to redefine scope, lower proof requirements, or relax any acceptance criterion in this file or in `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`.
 - If any backup/recovery wording conflicts across plans, precedence is: this file (master acceptance contract) -> `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md` (authoritative implementation detail) -> all other supporting plans.
+- Scheduled executor implementation detail lives in `plans/SCHEDULED_EXECUTOR_IMPLEMENTATION_PLAN.md`.
 
 ## Repo-Reality Guardrails
 
@@ -136,6 +139,30 @@ broadcast-replay semantics.
 - clustered proof must capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external MapStore call and must fail on duplicate physical calls, not just incorrect final state
 - all Phase 21 recovery and clustered MapStore proof must run against at least three separate Helios members started as separate Bun processes with distinct TCP listeners and real `TcpClusterTransport` links; shared-process clusters, direct service calls, and in-memory transport shims do not satisfy this phase
 - required proof for this phase includes process-boundary owner crash plus transport-boundary frame drop/delay injection on backup, replica-sync, migration, and owner-routed map-operation traffic; direct in-memory state mutation or direct method-call fault simulation does not satisfy this phase
+
+### Phase 23 — Blitz Job Supervision (Hazelcast Jet-Parity Autonomous Job Lifecycle)
+
+Goal: deliver 100% Hazelcast Jet semantic parity for autonomous job supervision in Blitz, built on NATS + TypeScript + Bun. No stubs, no deferrals, no mock implementations.
+
+- `blitz.newJob(pipeline, config)` returns a `BlitzJob` with full Jet-parity lifecycle: join, cancel, suspend, resume, restart, exportSnapshot, getMetrics, addStatusListener
+- `blitz.newLightJob(pipeline)` returns a lightweight single-member job with no coordination overhead
+- `blitz.getJob(id)`, `blitz.getJob(name)`, `blitz.getJobs()`, `blitz.getJobs(name)` for job lookup
+- job lifecycle state machine matches Jet exactly: NOT_RUNNING → STARTING → RUNNING → COMPLETING → COMPLETED (batch), plus RESTARTING, SUSPENDED_EXPORTING_SNAPSHOT, SUSPENDED, FAILED, CANCELLED
+- streaming runtime engine drives data through the DAG: SourceProcessor → OperatorProcessor → SinkProcessor, connected by bounded AsyncChannel queues for local edges and NATS subjects for distributed edges
+- entire DAG is replicated to every member (like Jet); distribution happens at the edge level, not vertex level
+- distributed edges use NATS JetStream for durable delivery (AT_LEAST_ONCE / EXACTLY_ONCE) or core NATS pub/sub for fire-and-forget (NONE)
+- local edges use zero-copy in-process async channels with backpressure
+- Chandy-Lamport barrier snapshot protocol for exactly-once processing: coordinator injects barriers into sources, barriers flow through DAG, barrier alignment for exactly-once (buffer post-barrier items until all inputs have barriers), immediate save for at-least-once
+- snapshot state stored in NATS KV buckets, keyed by `[jobId, snapshotId, vertexName, processorIndex]`
+- master-supervised job coordination via `BlitzJobCoordinator` using Helios fencing pattern `(masterMemberId, memberListVersion, fenceToken)` for all authoritative operations
+- job registry stored in Helios IMap `__blitz.jobs`
+- auto-scaling: member loss → restart from last snapshot; member join → debounced restart (scaleUpDelayMillis)
+- master failover: new master reads JobRecords from IMap, resumes coordination for RUNNING jobs
+- split-brain protection: minority side suspends protected jobs
+- per-vertex job metrics: itemsIn/Out, queueSize, p50/p99/max latency, snapshot metrics, collected via ITopic request/reply
+- `JobConfig` with full Jet parity: name, processingGuarantee (NONE/AT_LEAST_ONCE/EXACTLY_ONCE), snapshotIntervalMillis, autoScaling, suspendOnFailure, scaleUpDelayMillis, splitBrainProtection, maxProcessorAccumulatedRecords, initialSnapshotName
+- NestJS bridge updated with newJob/newLightJob/getJob/getJobs proxy methods
+- canonical implementation detail lives in `packages/blitz/PLAN-job-supervision.md`
 
 ## Phase 17R Task Breakdown
 
@@ -611,6 +638,379 @@ Tasks:
   `INDEPENDENT-FINAL-VERIFICATION: PASS`
   `TYPESCRIPT-PORT-DONE: PASS`
 
+## Phase 22 — Distributed Scheduled Executor Service (IScheduledExecutorService — Hazelcast parity)
+
+> **Cross-ref:** `plans/SCHEDULED_EXECUTOR_IMPLEMENTATION_PLAN.md` — the authoritative spec for all Phase 22 blocks.
+> **Goal:** Implement Hazelcast-compatible `IScheduledExecutorService` with partition-owned durable scheduling,
+> fixed-rate periodic tasks, member-owned scheduling, full client parity, and production-grade migration/recovery.
+> **Depends on:** Phase 17 (Distributed Executor — `ExecutorContainerService`, `TaskTypeRegistry`, worker execution),
+> Phase 16 (`MigrationAwareService`, `PartitionReplicaManager`, anti-entropy, backup replication, `OperationService`)
+
+### Block 22.0 — `ScheduledExecutorConfig` + `HeliosConfig` extensions (~12 tests)
+
+**Goal:** Add dedicated configuration for the scheduled executor service, matching Hazelcast defaults.
+
+```
+src/config/
+├── ScheduledExecutorConfig.ts
+└── HeliosConfig.ts  (extend)
+```
+
+**TODO — Block 22.0**:
+- [ ] Create `ScheduledExecutorConfig` with fields: `name`, `poolSize` (default 16), `capacity` (default 100), `capacityPolicy` (`PER_NODE` default), `durability` (default 1), `statisticsEnabled` (default true), `scheduleShutdownPolicy` (`GRACEFUL_TRANSFER` | `FORCE_STOP`), `maxHistoryEntriesPerTask`, `mergePolicy` placeholder
+- [ ] Add `CapacityPolicy` enum (`PER_NODE`, `PER_PARTITION`)
+- [ ] Add `ScheduleShutdownPolicy` enum (`GRACEFUL_TRANSFER`, `FORCE_STOP`)
+- [ ] Add validation: `poolSize > 0`, `capacity >= 0`, `durability >= 0`
+- [ ] Extend `HeliosConfig` with `scheduledExecutorConfigs` map and `findScheduledExecutorConfig(name)` lookup
+- [ ] Tests: default values, validation errors, config lookup, capacity policy enum values
+- [ ] Verification: `bun test test/config/ScheduledExecutorConfigTest.test.ts` green
+
+---
+
+### Block 22.1 — `IScheduledExecutorService` + `IScheduledFuture<V>` + `ScheduledTaskHandler` contracts (~15 tests)
+
+Depends on: Block 22.0 (ScheduledExecutorConfig).
+
+**Goal:** Define the full Hazelcast-parity API surface for scheduled execution.
+
+```
+src/scheduledexecutor/
+├── IScheduledExecutorService.ts
+├── IScheduledFuture.ts
+├── ScheduledTaskHandler.ts
+├── ScheduledTaskStatistics.ts
+└── NamedTask.ts
+```
+
+**TODO — Block 22.1**:
+- [ ] Create `IScheduledExecutorService` interface with all Hazelcast-parity methods: `schedule`, `scheduleOnMember`, `scheduleOnKeyOwner`, `scheduleOnAllMembers`, `scheduleOnMembers`, `scheduleAtFixedRate`, `scheduleOnMemberAtFixedRate`, `scheduleOnKeyOwnerAtFixedRate`, `scheduleOnAllMembersAtFixedRate`, `scheduleOnMembersAtFixedRate`, `getScheduledFuture(handler)`, `getAllScheduledFutures()`, `shutdown()`
+- [ ] Create `IScheduledFuture<V>` interface with `getHandler()`, `getStats()`, `dispose()`, `cancel(mayInterruptIfRunning)`, `isDone()`, `isCancelled()`, `get()`, `getDelay()`
+- [ ] Create `ScheduledTaskHandler` with portable structured fields: `schedulerName`, `taskName`, `partitionId` or `memberUuid`, `isAssignedToPartition()`, `isAssignedToMember()`, `toUrn()`, static `of(urn)` reconstruction
+- [ ] Create `ScheduledTaskStatistics` interface with `totalRuns`, `lastRunDuration`, `lastIdleTime`, `totalRunTime`, `totalIdleTime`
+- [ ] Create `NamedTask` interface with `getName()` for named-task identity
+- [ ] No `scheduleWithFixedDelay(...)` — not part of Hazelcast parity
+- [ ] Tests: interface contracts compile, handler serialization/deserialization round-trip, URN format validity
+- [ ] Verification: `bun test test/scheduledexecutor/ScheduledTaskHandlerTest.test.ts` green
+
+---
+
+### Block 22.2 — `ScheduledTaskDescriptor` + state model + `ScheduledTaskStore` (~18 tests)
+
+Depends on: Block 22.1 (contracts).
+
+**Goal:** Build the durable task record, lifecycle state machine, and partition-local storage.
+
+```
+src/scheduledexecutor/impl/
+├── ScheduledTaskDescriptor.ts
+├── ScheduledTaskState.ts
+├── ScheduledTaskStore.ts
+├── RunHistoryEntry.ts
+└── TaskDefinition.ts
+```
+
+**TODO — Block 22.2**:
+- [ ] Create `ScheduledTaskState` enum: `SCHEDULED`, `RUNNING`, `DONE`, `CANCELLED`, `DISPOSED`, `SUSPENDED`
+- [ ] Create `ScheduledTaskDescriptor` with fields: `taskName`, `handlerId`, `executorName`, `taskType`, `scheduleKind` (`ONE_SHOT` | `FIXED_RATE`), `ownerKind` (`PARTITION` | `MEMBER`), `partitionId`/`memberUuid`, `initialDelayMillis`, `periodMillis`, `nextRunAt`, `lastRunStartedAt`, `lastRunCompletedAt`, `runCount`, `state`, `durabilityReplicaCount`, `ownerEpoch`, `version`, `attemptId`
+- [ ] Create `RunHistoryEntry` with fields: `attemptId`, `scheduledTime`, `startTime`, `endTime`, `outcome` (`SUCCESS` | `FAILURE` | `CANCELLED`), `errorSummary`, `ownerEpoch`, `version`
+- [ ] Create `TaskDefinition` with `type` (`SINGLE_RUN` | `AT_FIXED_RATE`), `name`, `command`, `delay`, `period`, `autoDisposable`
+- [ ] Create `ScheduledTaskStore` — partition-local in-memory store with: `schedule(descriptor)`, `get(taskName)`, `getByHandler(handlerId)`, `remove(taskName)`, `getAll()`, `size()`, named-task `fail-if-exists` enforcement, unnamed stable task ID generation via UUID, history retention with oldest-entry eviction by `maxHistoryEntriesPerTask`
+- [ ] State machine validation: legal transitions only (e.g. `SCHEDULED→RUNNING`, `RUNNING→DONE`, `RUNNING→CANCELLED`, `*→DISPOSED`)
+- [ ] Tests: descriptor creation, state transitions (legal + illegal), store CRUD, named-task duplicate rejection, history eviction, handler-based lookup
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledTaskStoreTest.test.ts` green
+
+---
+
+### Block 22.3 — `ScheduledExecutorContainerService` + local one-shot execution (~16 tests)
+
+Depends on: Block 22.2 (task store).
+
+**Goal:** Implement the partition-local container service that manages task stores and dispatches one-shot firings.
+
+```
+src/scheduledexecutor/impl/
+├── ScheduledExecutorContainerService.ts
+├── ScheduledExecutorPartition.ts
+└── ScheduledExecutorMemberBin.ts
+```
+
+**TODO — Block 22.3**:
+- [ ] Create `ScheduledExecutorPartition` — per-partition container holding a `ScheduledTaskStore`, mirroring Hazelcast `ScheduledExecutorPartition`
+- [ ] Create `ScheduledExecutorMemberBin` — member-local container for member-owned tasks (partition ID = -1)
+- [ ] Create `ScheduledExecutorContainerService` — manages partition array + member bin, creates/destroys containers, implements `ManagedService` (`init`, `reset`, `shutdown`), `RemoteService` (`createDistributedObject`, `destroyDistributedObject`)
+- [ ] Implement local one-shot task scheduling: accept a `TaskDefinition`, create descriptor, compute `nextRunAt` from wall-clock + delay, store in partition container
+- [ ] Dispatch ready tasks into existing `ExecutorContainerService` using timer coordinator (not one `setTimeout` per task)
+- [ ] Capture result envelope on completion and transition state to `DONE`
+- [ ] Wall-clock + monotonic hybrid: persist `nextRunAt` as wall-clock epoch, use monotonic time for local wait calculations
+- [ ] Tests: schedule one-shot, verify execution after delay, verify state transitions, verify result capture, verify store persistence
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorContainerServiceTest.test.ts` green
+
+---
+
+### Block 22.4 — Cancel/Dispose/Shutdown local lifecycle (~14 tests)
+
+Depends on: Block 22.3 (container service).
+
+**Goal:** Implement cancel, dispose, and shutdown lifecycle matching Hazelcast semantics.
+
+**TODO — Block 22.4**:
+- [ ] `cancel()`: stop future scheduling, do not interrupt in-flight run, transition to `CANCELLED`, preserve terminal metadata
+- [ ] `dispose()`: permanently remove task state from store, free task name for reuse, free handler target; subsequent access returns `StaleTaskException`
+- [ ] Versioned terminal-write ordering: cancel/dispose vs completion races resolved by record `version` — whoever commits a version increment first wins
+- [ ] `shutdown()`: reject new submissions with `RejectedExecutionException`, existing scheduled tasks continue to their natural completion or cancellation
+- [ ] Stale-task behavior: accessing a disposed handler returns `StaleTaskException`; reconstructing a handler for a disposed task via `getScheduledFuture(handler)` succeeds but any subsequent operation fails with `StaleTaskException`
+- [ ] Tests: cancel before fire prevents execution, cancel during run does not interrupt, dispose removes state, dispose frees name, shutdown rejects new, race scenarios
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorLifecycleTest.test.ts` green
+
+---
+
+### Block 22.5 — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (~14 tests)
+
+Depends on: Block 22.4 (lifecycle).
+
+**Goal:** Wire the scheduled executor into the Helios instance surface.
+
+```
+src/scheduledexecutor/impl/
+└── ScheduledExecutorServiceProxy.ts
+```
+
+**TODO — Block 22.5**:
+- [ ] Create `ScheduledExecutorServiceProxy` implementing `IScheduledExecutorService`, routing all API methods through the container service
+- [ ] Handler-based future reacquisition: `getScheduledFuture(handler)` creates a new `IScheduledFuture` proxy from the handler's encoded partition/member + task name
+- [ ] `getAllScheduledFutures()` fan-out across all partitions and member bin
+- [ ] Wire `getScheduledExecutorService(name)` in `HeliosInstanceImpl` — remove the deferred-feature error throw
+- [ ] Lifecycle integration: register with `NodeEngine`, graceful shutdown hook
+- [ ] Tests: proxy routes to correct partition, handler reacquisition works, getAllScheduledFutures returns all, instance wiring resolves proxy, shutdown cleans up
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorServiceProxyTest.test.ts` green
+
+---
+
+### Block 22.6 — Create/Cancel/Dispose/Get operations + partition routing (~16 tests)
+
+Depends on: Block 22.5 (proxy).
+
+**Goal:** Add distributed operations for scheduled executor CRUD, routed through OperationService.
+
+```
+src/scheduledexecutor/impl/operation/
+├── SubmitToPartitionOperation.ts
+├── SubmitToMemberOperation.ts
+├── CancelTaskOperation.ts
+├── DisposeTaskOperation.ts
+├── GetTaskStateOperation.ts
+└── GetScheduledFutureOperation.ts
+```
+
+**TODO — Block 22.6**:
+- [ ] `SubmitToPartitionOperation`: create task descriptor in target partition's store, return handler
+- [ ] `SubmitToMemberOperation`: create task descriptor in member bin, return handler
+- [ ] `CancelTaskOperation`: locate task by handler, execute cancel lifecycle
+- [ ] `DisposeTaskOperation`: locate task by handler, execute dispose lifecycle
+- [ ] `GetTaskStateOperation`: return current task state/stats by handler
+- [ ] `GetScheduledFutureOperation`: return task descriptor for handler reacquisition
+- [ ] Deterministic partition routing for partition-owned tasks via `PartitionInvocation`
+- [ ] Target routing for member-owned tasks via `TargetInvocation`
+- [ ] Handler lookup validation: reject lookups with mismatched scheduler name
+- [ ] Tests: submit routes to correct partition, cancel/dispose reach correct store, get returns expected state, handler validation rejects bad lookups
+- [ ] Verification: `bun test test/scheduledexecutor/impl/operation/` green
+
+---
+
+### Block 22.7 — `ScheduledTaskScheduler` engine + ready-task dispatch (~16 tests)
+
+Depends on: Block 22.6 (operations).
+
+**Goal:** Build the member-local scheduler loop that fires tasks when their `nextRunAt` arrives.
+
+```
+src/scheduledexecutor/impl/
+└── ScheduledTaskScheduler.ts
+```
+
+**TODO — Block 22.7**:
+- [ ] Member-local scheduler loop that scans only partitions currently owned by this member
+- [ ] Partition-local min-heap (or sorted structure) indexed by `nextRunAt` for efficient ready-task lookup
+- [ ] Wake-on-nearest-boundary: single timer re-armed to the closest `nextRunAt` across all owned partitions
+- [ ] Fenced dispatch: before firing, validate current `ownerEpoch`, `version`, and generate new `attemptId`
+- [ ] Dispatch ready tasks into `ExecutorContainerService` for actual execution
+- [ ] Rehydration: on startup or partition promotion, rebuild ready queue from `ScheduledTaskStore` contents
+- [ ] Capacity enforcement: respect `capacity` and `capacityPolicy` (PER_NODE) before accepting new schedules
+- [ ] Tests: single task fires at correct time, multiple tasks fire in order, epoch mismatch rejects dispatch, rehydration after restart, capacity rejection
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledTaskSchedulerTest.test.ts` green
+
+---
+
+### Block 22.8 — Durable create ack + backup replication (~14 tests)
+
+Depends on: Block 22.7 (scheduler engine).
+
+**Goal:** Make schedule creation durable by replicating to backups before acknowledging to callers.
+
+```
+src/scheduledexecutor/impl/operation/
+└── ScheduledExecutorReplicationOperation.ts
+```
+
+**TODO — Block 22.8**:
+- [ ] Schedule/create operations return success only after required backup acknowledgements (controlled by `durability` config)
+- [ ] `ScheduledExecutorReplicationOperation`: replicate partition-owned schedule metadata to backup replicas
+- [ ] Durability config controls replica count: `durability=0` means primary-only, `durability=1` means one backup, etc.
+- [ ] Capacity is ignored during partition migration to prevent data loss; counts repaired post-migration
+- [ ] Tests: create ack waits for backup, durability=0 does not wait, replication operation transfers full partition state, capacity bypass during migration
+- [ ] Verification: `bun test test/scheduledexecutor/impl/operation/ScheduledExecutorReplicationTest.test.ts` green
+
+---
+
+### Block 22.9 — Fixed-rate periodic engine + no-overlap skip policy (~18 tests)
+
+Depends on: Block 22.8 (replication).
+
+**Goal:** Add Hazelcast-parity fixed-rate scheduling with skip-on-overlap and exception suppression.
+
+**TODO — Block 22.9**:
+- [ ] Fixed-rate reschedule engine: after each run, compute `nextRunAt` aligned to original cadence timeline (`initialDelay + N * period`)
+- [ ] No-overlap skip: if the previous run is still active when `nextRunAt` arrives, skip that scheduled execution entirely
+- [ ] Exception suppression: if a periodic run throws or times out, suppress all future firings and mark the task in a terminal error state
+- [ ] Named periodic task handling: named periodic tasks follow the same `fail-if-exists` duplicate policy
+- [ ] Recovery catch-up: after pause/migration/recovery, coalesce overdue firings to one immediate catch-up run, then compute the next aligned fixed-rate slot
+- [ ] Tests: periodic fires at correct cadence, overlap is skipped, exception stops future runs, catch-up coalesces, next-aligned-slot math is correct, named periodic duplicate rejection
+- [ ] Verification: `bun test test/scheduledexecutor/impl/PeriodicSchedulingTest.test.ts` green
+
+---
+
+### Block 22.10 — `MigrationAwareService` integration + epoch fencing (~16 tests)
+
+Depends on: Block 22.9 (periodic engine).
+
+**Goal:** Make the scheduled executor survive partition migration without duplicate firing.
+
+**TODO — Block 22.10**:
+- [ ] Implement `MigrationAwareService` on `ScheduledExecutorContainerService`
+- [ ] `beforeMigration`: if source and current replica is primary, suspend all tasks in the migrating partition
+- [ ] `commitMigration`: on source, discard partition state for replicas beyond new replica index; on destination as new primary, increment owner epoch, rehydrate ready queues from replicated state, promote suspended tasks
+- [ ] `rollbackMigration`: restore old owner cleanly, resume suspended tasks
+- [ ] Only the new/promoted owner decides whether an overdue task should run or catch up — old owner must not fire after fencing
+- [ ] Epoch increment on every ownership change
+- [ ] Tests: migration preserves task metadata, promoted owner fires overdue task, old owner cannot fire after fence, rollback restores state, epoch increments correctly
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorMigrationTest.test.ts` green
+
+---
+
+### Block 22.11 — Anti-entropy + conflict resolution (~14 tests)
+
+Depends on: Block 22.10 (migration).
+
+**Goal:** Add anti-entropy repair for scheduled task metadata between primary and replicas.
+
+**TODO — Block 22.11**:
+- [ ] Periodic anti-entropy: run on a configurable interval, compare primary state with replica state
+- [ ] Ownership-event-triggered repair: also trigger repair on migration commit, promotion, and member departure
+- [ ] Conflict resolution: highest `ownerEpoch` wins, then highest `version` within the same epoch
+- [ ] Stale metadata repair: primary pushes authoritative state to replicas that have older or missing records
+- [ ] Tombstone handling: disposed tasks propagate tombstones to replicas to prevent resurrection
+- [ ] Tests: stale replica gets repaired, epoch-based conflict resolved correctly, disposed task not resurrected, ownership event triggers repair
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorAntiEntropyTest.test.ts` green
+
+---
+
+### Block 22.12 — Crash recovery + at-least-once replay (~16 tests)
+
+Depends on: Block 22.11 (anti-entropy).
+
+**Goal:** Ensure promoted owners correctly recover scheduled tasks after owner crash.
+
+**TODO — Block 22.12**:
+- [ ] Promoted owner fences retired owner epoch before making any replay or reschedule decisions
+- [ ] One-shot tasks not durably completed (no completion ack in store) are eligible for re-run — at-least-once semantics
+- [ ] Periodic tasks: overdue catch-up coalesces to one immediate run, then resumes on next aligned fixed-rate slot
+- [ ] Version/attempt fencing: a stale completion commit from the old owner (with old `attemptId` or `ownerEpoch`) is rejected by the promoted owner's store
+- [ ] Crash-loop validation: repeated crash/promote cycles do not accumulate orphaned task records or cause runaway re-runs
+- [ ] Tests: one-shot recovery after crash, periodic recovery with catch-up, stale completion rejected, crash-loop stress, no orphaned metadata
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorCrashRecoveryTest.test.ts` green
+
+---
+
+### Block 22.13 — Member-owned scheduling + fanout (~16 tests)
+
+Depends on: Block 22.12 (crash recovery).
+
+**Goal:** Add member-targeted and member-fanout scheduling matching Hazelcast semantics.
+
+**TODO — Block 22.13**:
+- [ ] `scheduleOnMember(...)`: create task descriptor with `ownerKind=MEMBER`, metadata anchored by hashed task ID in partitioned store, target member UUID in record
+- [ ] Member-lifecycle-bound semantics: if the target member leaves, its member-owned tasks are lost (not transparently migrated), matching Hazelcast
+- [ ] `scheduleOnAllMembers(...)`: create one scheduled future per cluster member, return `Map<Member, IScheduledFuture>`
+- [ ] `scheduleOnMembers(...)`: create one scheduled future per specified member
+- [ ] All member fixed-rate variants: `scheduleOnMemberAtFixedRate`, `scheduleOnAllMembersAtFixedRate`, `scheduleOnMembersAtFixedRate`
+- [ ] Member bin container (`partitionId = -1`) manages member-owned task execution
+- [ ] Tests: member-targeted task executes on correct member, member departure loses task, all-members fanout creates correct count, member fixed-rate works
+- [ ] Verification: `bun test test/scheduledexecutor/impl/MemberOwnedSchedulingTest.test.ts` green
+
+---
+
+### Block 22.14 — `ClientScheduledExecutorProxy` + protocol (~18 tests)
+
+Depends on: Block 22.13 (member-owned scheduling).
+
+**Goal:** Add client-side proxy with full parity for scheduling, handler reacquisition, and lifecycle.
+
+```
+src/client/proxy/
+└── ClientScheduledExecutorProxy.ts
+```
+
+**TODO — Block 22.14**:
+- [ ] Create `ClientScheduledExecutorProxy` implementing `IScheduledExecutorService`
+- [ ] Client protocol messages for: submit-to-partition, submit-to-member, cancel, dispose, get-state, get-scheduled-future, get-all-scheduled-futures, shutdown
+- [ ] Reuse `OperationWireCodec` patterns for scheduled executor protocol encoding/decoding
+- [ ] Handler reacquisition across client reconnect: client can call `getScheduledFuture(handler)` after disconnect/reconnect
+- [ ] Stale/disposed error propagation: `StaleTaskException` from server surfaces correctly on client
+- [ ] Full parity: schedule, cancel, dispose, stats, history access all work from client
+- [ ] Tests: client schedule creates task, client cancel works, client dispose works, handler reacquisition after reconnect, stale error propagation, client/server parity for all API methods
+- [ ] Verification: `bun test test/scheduledexecutor/client/ClientScheduledExecutorProxyTest.test.ts` green
+
+---
+
+### Block 22.15 — Stats + metrics + diagnostics (~12 tests)
+
+Depends on: Block 22.14 (client proxy).
+
+**Goal:** Add Hazelcast-parity task statistics, metrics, and operational diagnostics.
+
+**TODO — Block 22.15**:
+- [ ] Implement `ScheduledTaskStatistics`: `totalRuns`, `lastRunDuration`, `lastIdleTime`, `totalRunTime`, `totalIdleTime`
+- [ ] Executor-level counters: pending, started, completed, cancelled, failed, scheduler-lag
+- [ ] Active-schedule gauge: number of currently scheduled (non-terminal) tasks per executor per member
+- [ ] Pool health visibility: integrate with existing executor stats infrastructure
+- [ ] Admin visibility hooks: expose scheduled executor state via diagnostics surface
+- [ ] Document `StatefulTask` parity gap for first release as a known limitation
+- [ ] Tests: stats update on task completion, counters accurate after multiple runs, scheduler-lag metric non-negative, stats accessible from client
+- [ ] Verification: `bun test test/scheduledexecutor/impl/ScheduledExecutorStatsTest.test.ts` green
+
+---
+
+### Block 22.INT — End-to-end rollout acceptance (~20 tests)
+
+Depends on: Block 22.15 (stats).
+
+**Goal:** Full end-to-end acceptance proving the scheduled executor is production-ready within the defined scope.
+
+**TODO — Block 22.INT**:
+- [ ] Config → schedule one-shot → result retrieval → verify correctness
+- [ ] Config → schedule fixed-rate → verify cadence over multiple periods
+- [ ] Cancel/dispose lifecycle: cancel preserves metadata, dispose removes it, stale access after dispose
+- [ ] Handler reacquisition: serialize handler, restart instance, reacquire via `getScheduledFuture(handler)`
+- [ ] Partition migration preserves scheduled tasks: migrate partition, verify task still fires
+- [ ] Member crash recovery with at-least-once replay: crash owner, promote backup, verify one-shot re-runs
+- [ ] Member-owned task loss on target departure: schedule on member, remove member, verify task is lost
+- [ ] Client/server parity E2E: client schedules, cancels, disposes, reacquires handlers — all match server behavior
+- [ ] Shutdown transfer: graceful shutdown durably transfers future schedules
+- [ ] Full regression: `bun test` at root — 0 fail, 0 error
+- [ ] Verification: `bun test` at root green, `bun run tsc --noEmit` clean
+
+---
+
 ### Master Todo List
 
 > Canonical loop-selection source: only the `- [ ] **Block ...` lines in this file.
@@ -648,6 +1048,309 @@ Tasks:
 - [x] **Block 21.5** — Final execution-contract audit + repo honesty gate (reopen earlier blocks/checkpoints on mismatch, no retained throw stubs/placeholders/deferred markers on claimed surfaces, no stale docs/examples/test-support/export claims, no fake/shared-process proof, exact final proof lines required for Phases 17R-21, final independent general-task-agent verification, final repo honesty sweep) — final closure gate
 - [x] **Phase 21 checkpoint** — clustered partition recovery tests green; one partition-service authority is used in production clustered mode; owner crash promotes surviving backups before refill; anti-entropy and replica sync repair stale backups automatically; partition-lost is emitted when no replica survives; map-scoped partition-lost listener/event semantics for clustered maps are wired and tested before any full Hazelcast map/MapStore parity claim; anti-entropy/replica-sync proof includes per-service-namespace/version comparison, intentionally diverged payload-state repair for every supported partition-scoped service, and wrong-target/stale-response rejection; partition metadata parity, replica-slot occupancy, or version-only convergence are explicitly rejected as sufficient proof; service-state replication is closed for all supported partition-scoped services; stale rejoin state is fenced until authoritative sync completes; recovery metrics/events/docs/examples/test-support are aligned with the real runtime path; clustered operation-routing tests green; exactly one external write/delete per logical clustered mutation; backups never write externally while backups; lazy-load, eager-load, `getAll()` bulk, `putAll()` bulk, migration, promotion, clear, and shutdown handoff are fully exercised; one coordinated EAGER load epoch survives member join/rebalance without deadlock, without a second full `loadAllKeys()` sweep, and without duplicate external reads/writes; counting-store proof and Mongo clustered proof are green after Phase 19; clustered proof adapters capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external call; duplicate physical `store` / `storeAll` / `delete` / `deleteAll` calls are asserted absent for healthy-cluster logical mutations and for the migration/promotion/clear/eager-load scenarios that claim cluster safety; all recovery/counting-store/Mongo clustered proof runs use separate Helios member processes over real TCP and include transport-boundary crash/drop/delay fault injection rather than shared-process or direct-call fault simulation; 0 fail, 0 error
 - [x] **Final completion checkpoint** — every reopened block is reclosed honestly; Phases 17R, 18, 19, 19T, 20, and 21 checkpoints are green; the exact `P20-*` proof-label contract is printed verbatim and green; the final footer lines `PHASE-17R-FINAL: PASS`, `PHASE-18-FINAL: PASS`, `PHASE-19-FINAL: PASS`, `PHASE-19T-FINAL: PASS`, `PHASE-20-FINAL: PASS`, `PHASE-21-FINAL: PASS`, `REPO-HONESTY-SWEEP: PASS`, `INDEPENDENT-FINAL-VERIFICATION: PASS`, and `TYPESCRIPT-PORT-DONE: PASS` are all emitted verbatim; no contradictory plan status, stale claim, blocked retained surface, unresolved audit hit, placeholder, throw stub, deferred marker, or fake proof remains anywhere in the repo; 0 fail, 0 error
+- [ ] **Block 22.0** — `ScheduledExecutorConfig` + `HeliosConfig` extensions (`name`, `poolSize`, `capacity`, `capacityPolicy`/`PER_NODE`, `durability`, `statisticsEnabled`, `scheduleShutdownPolicy`/`GRACEFUL_TRANSFER`/`FORCE_STOP`, `maxHistoryEntriesPerTask`, validation, defaults matching Hazelcast) — ~12 tests
+- [ ] **Block 22.1** — `IScheduledExecutorService` + `IScheduledFuture<V>` + `ScheduledTaskHandler` contracts (full Hazelcast-parity API surface: `schedule`, `scheduleOnMember`, `scheduleOnKeyOwner`, `scheduleOnAllMembers`, `scheduleOnMembers`, `scheduleAtFixedRate`, all member/key fixed-rate variants, `getScheduledFuture(handler)`, `getAllScheduledFutures()`, `shutdown()`, portable handler serialization/reconstruction, `ScheduledTaskStatistics` interface) — ~15 tests
+- [ ] **Block 22.2** — `ScheduledTaskDescriptor` + state model + `ScheduledTaskStore` (task record with `taskName`, `handlerId`, `executorName`, `taskType`, `scheduleKind`, `ownerKind`, `ownerEpoch`, `version`, `attemptId`, state enum `scheduled`/`running`/`done`/`cancelled`/`disposed`/`suspended`, run history entries with timing/outcome/attempt/epoch metadata, oldest-entry eviction, named-task `fail-if-exists` duplicate policy, unnamed stable task ID generation) — ~18 tests
+- [ ] **Block 22.3** — `ScheduledExecutorContainerService` + local one-shot execution (partition-local task store management, one-shot delayed task scheduling via timer coordinator, dispatch into existing `ExecutorContainerService`, result envelope capture, wall-clock + monotonic hybrid timing, task state transitions on completion) — ~16 tests
+- [ ] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
+- [ ] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
+- [ ] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
+- [ ] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
+- [ ] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
+- [ ] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
+- [ ] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests
+- [ ] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
+- [ ] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests
+- [ ] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
+- [ ] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
+- [ ] **Block 22.15** — Stats + metrics + diagnostics (`ScheduledTaskStatistics` parity, pending/started/completed/cancelled/failed counters, scheduler-lag metrics, active-schedule gauge, pool health, admin visibility hooks, documented `StatefulTask` parity gap for first release) — ~12 tests
+- [ ] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests
+- [ ] **Phase 22 checkpoint** — All scheduled executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; scheduled executor config wiring, partition-owned and member-owned scheduling, fixed-rate periodic engine, migration/recovery/anti-entropy, client parity, stats/metrics are all exercised and production-ready within the defined scope; `StatefulTask` is documented as a known parity gap for the first release
+- [ ] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
+- [ ] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
+- [ ] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
+- [ ] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
+- [ ] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
+- [ ] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
+- [ ] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
+- [ ] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
+- [ ] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
+- [ ] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
+- [ ] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
+- [ ] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
+- [ ] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
+- [ ] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
+- [ ] **Phase 23 checkpoint** — All Blitz job supervision tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; `blitz.newJob()` returns a BlitzJob with full Jet-parity lifecycle; streaming runtime engine drives data through DAG with source/operator/sink processors connected by AsyncChannel (local) and NATS (distributed) edges; Chandy-Lamport barrier snapshots provide exactly-once and at-least-once guarantees; master-supervised coordination with Helios fencing; auto-scaling with debounced restart on member join/leave; master failover resumes from IMap; job metrics collected cross-member; light jobs work without coordination; NestJS bridge proxies all new methods; no stubs, no deferrals, no mock implementations
+
+## Phase 23 — Blitz Job Supervision (Hazelcast Jet-Parity Autonomous Job Lifecycle)
+
+> **Cross-ref:** `packages/blitz/PLAN-job-supervision.md` — the authoritative spec for all Phase 23 blocks.
+> **Goal:** Implement Hazelcast Jet-compatible autonomous job supervision with full streaming runtime engine,
+> distributed execution, Chandy-Lamport snapshot barriers (exactly-once), master-supervised coordination,
+> auto-scaling/failover, job metrics, and the complete Jet Job API surface.
+> **Depends on:** Phase 18 (Blitz Distributed Embedded Cluster — `HeliosBlitzCoordinator`, `HeliosBlitzLifecycleManager`,
+> fenced authority pattern, NATS cluster formation, IMap/ITopic infrastructure).
+
+### Block 23.0 — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` (~16 tests)
+
+**Goal:** Define all foundational types needed before any runtime code.
+
+**TODO — Block 23.0**:
+- [ ] Create `src/job/JobConfig.ts`: `ProcessingGuarantee` enum (NONE, AT_LEAST_ONCE, EXACTLY_ONCE), `JobConfig` interface, `ResolvedJobConfig` interface, `resolveJobConfig()` with Jet-matching defaults (snapshotIntervalMillis=10000, autoScaling=true, suspendOnFailure=false, scaleUpDelayMillis=10000, splitBrainProtection=false, maxProcessorAccumulatedRecords=16384)
+- [ ] Create `src/job/JobStatus.ts`: `JobStatus` enum with all 10 Jet states (NOT_RUNNING, STARTING, RUNNING, COMPLETING, COMPLETED, FAILED, CANCELLED, SUSPENDED_EXPORTING_SNAPSHOT, SUSPENDED, RESTARTING)
+- [ ] Create `src/job/PipelineDescriptor.ts`: `VertexDescriptor`, `EdgeDescriptor`, `SourceDescriptor`, `SinkDescriptor`, `EdgeType` enum (LOCAL, LOCAL_PARTITIONED, DISTRIBUTED_UNICAST, DISTRIBUTED_PARTITIONED, DISTRIBUTED_BROADCAST, ALL_TO_ONE), `PipelineDescriptor` interface
+- [ ] Create `src/job/engine/ProcessorItem.ts`: union type for data, barrier, eos, watermark items
+- [ ] Create `src/job/JobCommand.ts`: `JobCommand` union type for all inter-member commands (START_EXECUTION, STOP_EXECUTION, INJECT_BARRIER, BARRIER_COMPLETE, EXECUTION_READY, EXECUTION_FAILED, EXECUTION_COMPLETED, COLLECT_METRICS, METRICS_RESPONSE)
+- [ ] Create `src/job/metrics/BlitzJobMetrics.ts`: `BlitzJobMetrics`, `VertexMetrics`, `SnapshotMetrics` interfaces
+- [ ] Tests: config resolver defaults, config validation, status enum values, descriptor serialization round-trip, edge type coverage
+- [ ] Verification: `bun test test/blitz/job/` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.0 — foundation types + JobConfig + JobStatus + PipelineDescriptor — N tests green"`
+
+---
+
+### Block 23.1 — `AsyncChannel` + `LatencyTracker` engine primitives (~18 tests)
+
+Depends on: Block 23.0 (types).
+
+**Goal:** Build the core engine primitives: bounded async queue with backpressure and latency tracking.
+
+**TODO — Block 23.1**:
+- [ ] Create `src/job/engine/AsyncChannel.ts`: bounded async queue with `send()` (blocks when full), `receive()` (blocks when empty), `tryReceive()`, `size`, `isFull`, `close()`, `[Symbol.asyncIterator]()` — implements backpressure via `maxProcessorAccumulatedRecords`
+- [ ] Create `src/job/metrics/LatencyTracker.ts`: circular buffer latency tracker with `record()`, `getP50()`, `getP99()`, `getMax()`, `reset()` — lock-free single-threaded design
+- [ ] Tests: send/receive ordering, backpressure blocks sender when full, receiver blocks when empty, close unblocks waiters, async iterator works, capacity limits enforced, p50/p99/max computation accuracy, buffer rotation
+- [ ] Verification: `bun test test/blitz/job/engine/AsyncChannelTest.test.ts test/blitz/job/metrics/LatencyTrackerTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.1 — AsyncChannel + LatencyTracker engine primitives — N tests green"`
+
+---
+
+### Block 23.2 — `SnapshotStore` + NATS KV snapshot persistence (~14 tests)
+
+Depends on: Block 23.0 (types).
+
+**Goal:** Build the snapshot storage layer backed by NATS KV.
+
+**TODO — Block 23.2**:
+- [ ] Create `src/job/snapshot/SnapshotStore.ts`: NATS KV bucket `__blitz.snapshots.{jobId}`, with `saveProcessorState()`, `loadProcessorState()`, `commitSnapshot()`, `getLatestSnapshotId()`, `pruneSnapshots()`, `destroy()` — keyed by `{snapshotId}.{vertexName}.{processorIndex}`
+- [ ] Tests: save/load round-trip, commit marks snapshot, latest returns most recent committed, prune keeps last N, destroy removes bucket
+- [ ] Verification: `bun test test/blitz/job/snapshot/SnapshotStoreTest.test.ts` green (embedded NATS)
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.2 — SnapshotStore + NATS KV snapshot persistence — N tests green"`
+
+---
+
+### Block 23.3 — Processor implementations: Source, Sink, Operator (~20 tests)
+
+Depends on: Block 23.1 (AsyncChannel), Block 23.2 (SnapshotStore).
+
+**Goal:** Build the per-vertex processors that drive data through the DAG.
+
+**TODO — Block 23.3**:
+- [ ] Create `src/job/engine/SourceProcessor.ts`: wraps `Source<T>`, drives async iterable into outbox, handles barrier injection (pause reading, save offset, forward barrier), EOS detection
+- [ ] Create `src/job/engine/SinkProcessor.ts`: wraps `Sink<T>`, drains inbox, handles barriers (save state, forward), handles EOS (flush sink, signal completion)
+- [ ] Create `src/job/engine/OperatorProcessor.ts`: wraps vertex fn (map/filter/flatMap), reads inbox → applies fn → writes outbox, handles barriers passthrough and state save
+- [ ] Tests: source emits items to outbox, source handles EOS, source pauses on barrier injection, sink drains inbox and writes, sink flushes on EOS, operator map/filter transform correctness, operator barrier passthrough, all processors respect abort signal
+- [ ] Verification: `bun test test/blitz/job/engine/` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.3 — SourceProcessor + SinkProcessor + OperatorProcessor — N tests green"`
+
+---
+
+### Block 23.4 — `ProcessorTasklet` with barrier alignment (~18 tests)
+
+Depends on: Block 23.3 (processors).
+
+**Goal:** Build the per-vertex processing loop with Chandy-Lamport barrier alignment for exactly-once.
+
+**TODO — Block 23.4**:
+- [ ] Create `src/job/engine/ProcessorTasklet.ts`: wraps a processor, manages inbox/outbox, runs processing loop with metrics collection, implements barrier alignment for multi-input vertices (exactly-once: buffer post-barrier items from one input until all inputs have barriers; at-least-once: immediate save), tracks per-vertex metrics (itemsIn, itemsOut, queueSize, latency)
+- [ ] `injectBarrier(snapshotId)`: inject barrier into tasklet's inbox
+- [ ] `saveSnapshot(snapshotId, store)`: save tasklet state to SnapshotStore, return size in bytes
+- [ ] `restoreSnapshot(snapshotId, store)`: restore tasklet state from SnapshotStore
+- [ ] Tests: single-input barrier passthrough, multi-input barrier alignment (buffer until all inputs have barrier), exactly-once vs at-least-once behavior difference, snapshot save/restore round-trip, metrics tracking accuracy, abort signal stops loop
+- [ ] Verification: `bun test test/blitz/job/engine/ProcessorTaskletTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.4 — ProcessorTasklet with Chandy-Lamport barrier alignment — N tests green"`
+
+---
+
+### Block 23.5 — Distributed edge sender/receiver via NATS (~16 tests)
+
+Depends on: Block 23.1 (AsyncChannel), Block 23.0 (types).
+
+**Goal:** Build the NATS transport layer for distributed edges.
+
+**TODO — Block 23.5**:
+- [ ] Create `src/job/engine/DistributedEdgeSender.ts`: consumes from local outbox, serializes items (JSON), publishes to appropriate NATS subject based on edge type (unicast round-robin, partitioned by key hash, broadcast), transmits barriers as NATS messages with `blitz-barrier`/`blitz-snapshot-id` headers
+- [ ] Create `src/job/engine/DistributedEdgeReceiver.ts`: subscribes to NATS subjects, deserializes items, pushes to local inbox, recognizes barrier messages from headers, uses JetStream for durable edges (AT_LEAST_ONCE/EXACTLY_ONCE) and core NATS for fire-and-forget (NONE)
+- [ ] Tests: sender/receiver round-trip for each edge type (unicast, partitioned, broadcast, allToOne), barrier passthrough via NATS headers, JetStream vs core NATS selection by processing guarantee, backpressure from inbox propagates to receiver
+- [ ] Verification: `bun test test/blitz/job/engine/DistributedEdgeTest.test.ts` green (embedded NATS)
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.5 — DistributedEdgeSender + DistributedEdgeReceiver — N tests green"`
+
+---
+
+### Block 23.6 — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` (~18 tests)
+
+Depends on: Block 23.4 (tasklets), Block 23.5 (distributed edges).
+
+**Goal:** Assemble the full DAG execution on a single member and manage multiple job executions per member.
+
+**TODO — Block 23.6**:
+- [ ] Create `src/job/ExecutionPlan.ts`: `ExecutionPlan`, `EdgeRoutingEntry`, `EdgeRoutingTable`, `computeExecutionPlan()` — computes NATS subject routing table from DAG + member topology
+- [ ] Create `src/job/engine/JobExecution.ts`: wires up full DAG on one member — creates AsyncChannels for local edges, ProcessorTasklets for each vertex, DistributedEdgeSenders/Receivers for distributed edges, starts all async loops, stops all on cancel
+- [ ] Create `src/job/BlitzJobExecutor.ts`: manages multiple JobExecutions per member, handles START_EXECUTION/STOP_EXECUTION commands, collects local metrics, injects snapshot barriers
+- [ ] Tests: execution plan computation for various topologies, single DAG execution (source → map → filter → sink), distributed edge wiring, multi-job concurrent execution, metrics collection, abort/stop cleanup
+- [ ] Verification: `bun test test/blitz/job/engine/JobExecutionTest.test.ts test/blitz/job/BlitzJobExecutorTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.6 — ExecutionPlan + JobExecution + BlitzJobExecutor — N tests green"`
+
+---
+
+### Block 23.7 — Pipeline serialization + edge type API (~14 tests)
+
+Depends on: Block 23.0 (PipelineDescriptor).
+
+**Goal:** Make Pipeline serializable and add edge type configuration for distributed execution.
+
+**TODO — Block 23.7**:
+- [ ] Modify `src/Vertex.ts`: add optional `sourceRef` and `sinkRef` fields to store Source/Sink instances
+- [ ] Modify `src/Edge.ts`: add `edgeType: EdgeType` field (default LOCAL), add fluent setters `.distributed()`, `.partitioned(keyFn)`, `.broadcast()`, `.allToOne()`
+- [ ] Modify `src/Pipeline.ts`: add `toDescriptor()` method that serializes DAG to `PipelineDescriptor`, store Source/Sink references on vertices during `readFrom()`/`writeTo()`, thread edge type through GeneralStage fluent API
+- [ ] Tests: toDescriptor round-trip, edge type defaults, fluent edge type API, source/sink reference preservation
+- [ ] Verification: `bun test test/blitz/PipelineDescriptorTest.test.ts` green, existing Pipeline tests still pass
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.7 — Pipeline serialization + edge type API — N tests green"`
+
+---
+
+### Block 23.8 — `BlitzJob` handle + `JobRecord` + status listeners (~16 tests)
+
+Depends on: Block 23.0 (JobStatus, JobConfig).
+
+**Goal:** Build the user-facing job handle and the IMap-stored job record.
+
+**TODO — Block 23.8**:
+- [ ] Create `src/job/JobRecord.ts`: IMap-stored job state with id, name, status, config, pipelineDescriptor, submittedAt, participatingMembers, lastSnapshotId, failureReason, lightJob flag
+- [ ] Create `src/job/BlitzJob.ts`: user-facing handle with `getStatus()`, `join()`, `cancel()`, `suspend()`, `resume()`, `restart()`, `exportSnapshot()`, `getMetrics()`, `addStatusListener()`, `getSubmissionTime()` — delegates to coordinator for cluster operations
+- [ ] Implement status listener notification on every state transition
+- [ ] Implement `join()` as a Promise that resolves on terminal status (COMPLETED, FAILED, CANCELLED)
+- [ ] Tests: status transitions fire listeners, join resolves on completion, join resolves on failure, join resolves on cancel, getStatus returns current state, addStatusListener returns unsubscribe function
+- [ ] Verification: `bun test test/blitz/job/BlitzJobTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.8 — BlitzJob handle + JobRecord + status listeners — N tests green"`
+
+---
+
+### Block 23.9 — `SnapshotCoordinator` + periodic snapshot orchestration (~16 tests)
+
+Depends on: Block 23.2 (SnapshotStore), Block 23.4 (barrier alignment), Block 23.6 (executor).
+
+**Goal:** Build the master-side periodic snapshot coordinator that drives Chandy-Lamport cycles.
+
+**TODO — Block 23.9**:
+- [ ] Create `src/job/snapshot/SnapshotCoordinator.ts`: runs on master, starts periodic timer (snapshotIntervalMillis), initiates snapshot cycles — generates snapshotId, sends INJECT_BARRIER to all members via ITopic, waits for BARRIER_COMPLETE from all members, marks snapshot committed, updates JobRecord.lastSnapshotId
+- [ ] Implement `initiateSnapshot()` for on-demand snapshots (exportSnapshot)
+- [ ] Handle partial member completion (timeout + retry), member-loss during snapshot
+- [ ] Track snapshot metrics: count, duration, size
+- [ ] Tests: periodic snapshot timer fires, barrier injection reaches all members, snapshot completes when all members report, partial member failure handled, on-demand snapshot works, metrics tracked
+- [ ] Verification: `bun test test/blitz/job/snapshot/SnapshotCoordinatorTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.9 — SnapshotCoordinator + periodic snapshot orchestration — N tests green"`
+
+---
+
+### Block 23.10 — `BlitzJobCoordinator` + full job lifecycle management (~22 tests)
+
+Depends on: Block 23.6 (executor), Block 23.8 (BlitzJob, JobRecord), Block 23.9 (SnapshotCoordinator).
+
+**Goal:** Build the master-side job coordinator that manages the full Jet-parity job lifecycle.
+
+**TODO — Block 23.10**:
+- [ ] Create `src/job/BlitzJobCoordinator.ts`: runs on master with Helios fencing pattern `(masterMemberId, memberListVersion, fenceToken)`
+- [ ] Implement `submitJob()`: create JobRecord → store in IMap → STARTING → compute ExecutionPlan → send START_EXECUTION to all members → wait for EXECUTION_READY → RUNNING → start SnapshotCoordinator
+- [ ] Implement `cancelJob()`: validate fence → STOP_EXECUTION(cancel) → CANCELLED → cleanup
+- [ ] Implement `suspendJob()`: SUSPENDED_EXPORTING_SNAPSHOT → final snapshot → STOP_EXECUTION(suspend) → SUSPENDED
+- [ ] Implement `resumeJob()`: NOT_RUNNING → STARTING → restore from snapshot → new ExecutionPlan → START_EXECUTION → RUNNING
+- [ ] Implement `restartJob()`: same as resume but from RESTARTING state
+- [ ] Implement `onMemberLost()`: autoScaling → RESTARTING + restart; !autoScaling + suspendOnFailure → SUSPENDED; else → FAILED
+- [ ] Implement `onMemberJoined()`: autoScaling → debounced restart (scaleUpDelayMillis)
+- [ ] Implement `getJob()`, `getJobByName()`, `getJobs()` from IMap
+- [ ] Implement `onDemotion()`: cancel snapshot coordinators, clear authority; jobs continue on members
+- [ ] Implement `onPromotion()`: read JobRecords from IMap, resume coordination for RUNNING/RESTARTING jobs
+- [ ] Implement split-brain protection: job only runs if alive members >= ceil(total/2)
+- [ ] Implement light job path: skip coordinator, run locally, no IMap storage
+- [ ] Tests: full submit lifecycle, cancel/suspend/resume/restart transitions, member loss failover, member join auto-scale with debounce, job lookup by id and name, demotion/promotion handoff, split-brain protection, light job no-coordination path
+- [ ] Verification: `bun test test/blitz/job/BlitzJobCoordinatorTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.10 — BlitzJobCoordinator + full job lifecycle management — N tests green"`
+
+---
+
+### Block 23.11 — `MetricsCollector` + cross-member metrics aggregation (~12 tests)
+
+Depends on: Block 23.6 (executor metrics), Block 23.10 (coordinator).
+
+**Goal:** Build the cross-member job metrics collection and aggregation.
+
+**TODO — Block 23.11**:
+- [ ] Create `src/job/metrics/MetricsCollector.ts`: `aggregate()` static method combines per-member VertexMetrics into BlitzJobMetrics — sums itemsIn/Out, combines latency distributions, sums snapshot metrics
+- [ ] Wire COLLECT_METRICS / METRICS_RESPONSE flow through ITopic: BlitzJob.getMetrics() → coordinator sends COLLECT_METRICS → each member responds with local metrics → coordinator aggregates with timeout
+- [ ] Tests: single-member aggregation, multi-member aggregation, partial response handling (timeout), latency distribution merging, snapshot metrics aggregation
+- [ ] Verification: `bun test test/blitz/job/metrics/MetricsCollectorTest.test.ts` green
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.11 — MetricsCollector + cross-member metrics aggregation — N tests green"`
+
+---
+
+### Block 23.12 — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge (~16 tests)
+
+Depends on: Block 23.10 (coordinator), Block 23.7 (pipeline serialization).
+
+**Goal:** Wire everything into BlitzService and update all integration surfaces.
+
+**TODO — Block 23.12**:
+- [ ] Modify `src/BlitzService.ts`: add `newJob(pipeline, config)`, `newLightJob(pipeline)`, `getJob(idOrName)`, `getJobs(name?)`, `setCoordinator(coordinator)` — wire BlitzJobCoordinator and BlitzJobExecutor, deprecate `submit()`/`cancel()` (delegate to newJob internally)
+- [ ] Modify `src/BlitzEvent.ts`: add JOB_STARTED, JOB_COMPLETED, JOB_FAILED, JOB_CANCELLED, JOB_SUSPENDED, JOB_RESTARTING, SNAPSHOT_STARTED, SNAPSHOT_COMPLETED events
+- [ ] Modify `src/index.ts`: export all new job types (BlitzJob, JobConfig, JobStatus, ProcessingGuarantee, BlitzJobMetrics, etc.)
+- [ ] Modify `src/nestjs/HeliosBlitzService.ts`: add `newJob()`, `newLightJob()`, `getJob()`, `getJobs()` proxy methods
+- [ ] Standalone mode (no coordinator): newJob() runs locally as light job, full streaming runtime engine works
+- [ ] Cluster mode (with coordinator): newJob() delegates to BlitzJobCoordinator, distributed execution, failover, snapshots
+- [ ] Tests: standalone newJob creates and runs job, cluster newJob distributes, getJob/getJobs work, BlitzEvent fires on lifecycle transitions, NestJS proxy delegates correctly, deprecated submit() still works
+- [ ] Verification: `bun test packages/blitz/` green, existing tests still pass
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.12 — BlitzService integration + BlitzEvent + exports + NestJS bridge — N tests green"`
+
+---
+
+### Block 23.INT — End-to-end Blitz Job Supervision acceptance (~24 tests)
+
+Depends on: Block 23.12 (full integration).
+
+**Goal:** Full end-to-end acceptance proving Blitz job supervision is production-ready with Hazelcast Jet semantic parity.
+
+**TODO — Block 23.INT**:
+- [ ] E2E: `blitz.newJob(pipeline, config)` → pipeline executes → data flows source → operators → sink
+- [ ] E2E: batch job completes when source is exhausted (RUNNING → COMPLETING → COMPLETED)
+- [ ] E2E: streaming job runs until cancel (RUNNING → CANCELLED)
+- [ ] E2E: `job.suspend()` exports snapshot then stops (RUNNING → SUSPENDED_EXPORTING_SNAPSHOT → SUSPENDED)
+- [ ] E2E: `job.resume()` restores from snapshot and continues (SUSPENDED → NOT_RUNNING → STARTING → RUNNING)
+- [ ] E2E: exactly-once processing — barrier alignment produces no duplicates after restart
+- [ ] E2E: at-least-once processing — snapshot restore with possible duplicates
+- [ ] E2E: member loss → job restarts from last snapshot with surviving members
+- [ ] E2E: member join → debounced restart includes new member
+- [ ] E2E: master failover → new master resumes coordination from IMap
+- [ ] E2E: `job.getMetrics()` returns aggregated cross-member metrics
+- [ ] E2E: light job runs without coordination overhead
+- [ ] E2E: `blitz.getJob(id)`, `blitz.getJob(name)`, `blitz.getJobs()` return correct results
+- [ ] E2E: `job.addStatusListener()` fires on every state transition
+- [ ] E2E: split-brain protection suspends jobs on minority side
+- [ ] E2E: distributed edges (partitioned, broadcast, unicast) route data correctly across members
+- [ ] Full regression: `bun test` at root — 0 fail, 0 error
+- [ ] Verification: `bun test` at root green, `bun run typecheck` clean
+- [ ] GREEN
+- [ ] `git commit -m "feat(blitz): Block 23.INT — end-to-end Blitz Job Supervision acceptance — N tests green"`
 
 ## End-to-End Completion Requirements
 
@@ -853,6 +1556,28 @@ When implementing `Block 21.5`, verify all relevant surfaces, not just the maste
 - `src/test-support/`
 - `test/`
 - every exact proof command/label contract already defined by Phases 17R-21 and linked plans
+
+When implementing Phase 23, verify all relevant surfaces, not just `packages/blitz/src/job/`:
+
+- `packages/blitz/PLAN-job-supervision.md`
+- `packages/blitz/src/` — all existing Blitz library code
+- `packages/blitz/src/job/` — all new job supervision code
+- `packages/blitz/src/BlitzService.ts` — newJob/newLightJob/getJob/getJobs/setCoordinator wiring
+- `packages/blitz/src/BlitzEvent.ts` — new job lifecycle events
+- `packages/blitz/src/Pipeline.ts` — toDescriptor(), edge type API
+- `packages/blitz/src/Vertex.ts` — sourceRef/sinkRef fields
+- `packages/blitz/src/Edge.ts` — edgeType, fluent setters
+- `packages/blitz/src/index.ts` — all new exports
+- `packages/blitz/src/nestjs/HeliosBlitzService.ts` — NestJS proxy methods
+- `src/instance/impl/HeliosClusterCoordinator.ts` — BlitzJobCoordinator integration with membership events
+- `src/instance/impl/blitz/HeliosBlitzCoordinator.ts` — fencing pattern reference
+- `src/instance/impl/blitz/HeliosBlitzLifecycleManager.ts` — readiness gates
+- `src/instance/impl/HeliosInstanceImpl.ts` — coordinator wiring for job commands via IMap/ITopic
+- `src/map/IMap.ts` — job registry IMap usage
+- `src/topic/ITopic.ts` — job command broadcast
+- `packages/blitz/test/` — all existing and new Blitz tests
+- `README.md`
+- `examples/native-app/`
 
 ## Commit Convention
 

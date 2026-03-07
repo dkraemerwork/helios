@@ -2,7 +2,7 @@
 
 **Helios** is a distributed in-memory data platform written in TypeScript for [Bun](https://bun.sh). It brings Hazelcast-style distributed data structures, clustering, and stream processing to the JavaScript ecosystem — no JVM required.
 
-- **3,461 tests** passing across 287 files
+- **Comprehensive automated test suite** across core, client, and integrations
 - **Zero external runtime dependencies** for the core
 - **Production serialization** — full binary wire format compatible with Hazelcast clients
 - **Multi-node TCP clustering** — partition replication, anti-entropy repair, vector clock conflict resolution
@@ -20,6 +20,7 @@
 | [`@zenystx/helios-s3`](#helios-mapstore-packages)      | S3-backed MapStore for IMap persistence                            | **Shipped** |
 | [`@zenystx/helios-mongodb`](#helios-mapstore-packages) | MongoDB-backed MapStore for IMap persistence                       | **Shipped** |
 | [`@zenystx/helios-turso`](#helios-mapstore-packages)   | Turso/SQLite-backed MapStore for IMap persistence                  | **Shipped** |
+| [`@zenystx/helios-dynamodb`](#helios-mapstore-packages) | DynamoDB-compatible MapStore for IMap persistence                  | **Shipped** |
 
 ---
 
@@ -30,15 +31,15 @@ bun add @zenystx/helios-core
 ```
 
 ```typescript
-import { Helios } from "@zenystx/helios-core";
+import { Helios, Predicates } from "@zenystx/helios-core";
 
 const hz = Helios.newInstance();
 const map = hz.getMap<string, number>("scores");
 
-map.put("alice", 42);
-map.put("bob", 99);
+await map.put("alice", 42);
+await map.put("bob", 99);
 
-console.log(map.get("alice")); // 42
+console.log(await map.get("alice")); // 42
 console.log(map.values(Predicates.greaterThan("", 50))); // [99]
 
 hz.shutdown();
@@ -77,29 +78,55 @@ Run a second node on port 5702 pointing back at 5701 — they'll form a cluster,
 Connect to a running Helios cluster from a separate process using the binary client protocol.
 
 ```typescript
-import { HeliosClient, ClientConfig } from "@zenystx/helios-core";
+import { HeliosClient } from "@zenystx/helios-core/client";
+import { ClientConfig } from "@zenystx/helios-core/client/config";
 
 const config = new ClientConfig();
 config.setClusterName("dev");
 config.getNetworkConfig().addAddress("127.0.0.1:5701");
 
 const client = HeliosClient.newHeliosClient(config);
+await client.connect();
 
-const map = client.getMap<string, number>("scores");
-await map.put("alice", 42);
-console.log(await map.get("alice")); // 42
+try {
+  const map = client.getMap<string, number>("scores");
+  await map.put("alice", 42);
+  console.log(await map.get("alice")); // 42
 
-const queue = client.getQueue<string>("tasks");
-await queue.offer("build");
+  const queue = client.getQueue<string>("tasks");
+  await queue.offer("build");
 
-const topic = client.getTopic<string>("events");
-topic.addMessageListener((msg) => console.log(msg.getMessageObject()));
-topic.publish("hello");
-
-client.shutdown();
+  const topic = client.getTopic<string>("events");
+  topic.addMessageListener((msg) => console.log(msg.getMessageObject()));
+  await topic.publish("hello");
+} finally {
+  client.shutdown();
+}
 ```
 
-The remote client supports Map, Queue, Topic, ReliableTopic, distributed object lifecycle, near-cache, authentication, and automatic reconnect with listener re-registration. See `examples/native-app/src/client-*.ts` for auth, reconnect, and near-cache examples.
+The remote client supports Map, Queue, Topic, distributed object lifecycle, near-cache, basic username/password authentication, and automatic reconnect with listener re-registration. `getReliableTopic()` remains member-only in v1. See `examples/native-app/src/client-*.ts` for auth, reconnect, and near-cache examples.
+
+To require credentials on the member-side client protocol, configure the server and client with matching values:
+
+```typescript
+import { Helios, HeliosConfig } from "@zenystx/helios-core";
+import { HeliosClient } from "@zenystx/helios-core/client";
+import { ClientConfig } from "@zenystx/helios-core/client/config";
+
+const serverConfig = new HeliosConfig("secured-cluster");
+serverConfig.getNetworkConfig().setClientProtocolPort(5701);
+serverConfig.getNetworkConfig().setClientProtocolUsernamePasswordAuth("admin", "secret");
+
+const member = Helios.newInstance(serverConfig);
+
+const clientConfig = new ClientConfig();
+clientConfig.setClusterName("secured-cluster");
+clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
+clientConfig.getSecurityConfig().setUsernamePasswordIdentity("admin", "secret");
+
+const client = HeliosClient.newHeliosClient(clientConfig);
+await client.connect();
+```
 
 > **Note:** Some member-only data structures (IList, ISet, MultiMap, ReplicatedMap) are not available on the remote client. Use `HeliosInstanceImpl` directly for these. See `DEFERRED_CLIENT_FEATURES` for the full list of deferred capabilities.
 
@@ -163,7 +190,7 @@ curl http://localhost:8081/hazelcast/rest/cluster
 | **ISet**           | Distributed set — add, remove, contains, iteration                                                              |
 | **IList**          | Distributed list with index-based access                                                                        |
 | **ITopic**         | Classic pub/sub messaging with async message listeners                                                          |
-| **ReliableTopic**  | Ringbuffer-backed pub/sub with sequence-tracked consumption, overload policies, and bounded retention           |
+| **ReliableTopic**  | Member-only ringbuffer-backed pub/sub with owner-routed publish acks, plain listeners, overload policies, and bounded retention |
 | **MultiMap**       | One key, many values — add/get/remove per value                                                                 |
 | **ReplicatedMap**  | Fully replicated map on every node — vector clock conflict resolution                                           |
 | **Ringbuffer**     | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies                          |
@@ -213,9 +240,9 @@ cfg.addMapConfig("hot-data", mapCfg);
 const hz = Helios.newInstance(cfg);
 const map = hz.getMap<string, unknown>("hot-data");
 
-map.put("k", "v"); // written to map + propagated
-map.get("k"); // near-cache MISS — fetched and cached locally
-map.get("k"); // near-cache HIT — served instantly from memory
+await map.put("k", "v"); // written to map + propagated
+await map.get("k"); // near-cache MISS — fetched and cached locally
+await map.get("k"); // near-cache HIT — served instantly from memory
 ```
 
 ### Transactions
@@ -410,7 +437,7 @@ await blitz.shutdown();
 git clone <repo-url>
 cd helios
 bun install
-bun test              # 3,461 tests across 287 files
+bun test              # run the full test suite
 bun run tsc --noEmit  # type-check only
 ```
 
@@ -439,7 +466,8 @@ helios/
 │   ├── blitz/              # @zenystx/helios-blitz — stream processing (393 tests)
 │   ├── s3/                 # @zenystx/helios-s3 — S3 MapStore (14 tests)
 │   ├── mongodb/            # @zenystx/helios-mongodb — MongoDB MapStore (15 tests)
-│   └── turso/              # @zenystx/helios-turso — Turso/SQLite MapStore (18 tests)
+│   ├── turso/              # @zenystx/helios-turso — Turso/SQLite MapStore (18 tests)
+│   └── dynamodb/            # @zenystx/helios-dynamodb — DynamoDB-compatible MapStore (46 tests, Scylla/Alternator proven)
 ├── examples/
 │   ├── native-app/         # Two-node demo with REST API
 │   └── nestjs-app/         # NestJS demo application
@@ -452,7 +480,7 @@ helios/
 
 ## Helios MapStore Packages
 
-Plug persistent storage into any `IMap` via the MapStore SPI — write-through on every `put`, or write-behind with batching and retry. Three backends are available out of the box.
+Plug persistent storage into any `IMap` via the MapStore SPI — write-through on every `put`, or write-behind with batching and retry. Four backends are available out of the box.
 
 ```typescript
 import { S3MapStore } from "@zenystx/helios-s3";
@@ -475,8 +503,9 @@ cfg.addMapConfig("persistent-map", mapCfg);
 | **`@zenystx/helios-s3`**      | AWS S3 / S3-compatible  | `bun add @zenystx/helios-s3`      |
 | **`@zenystx/helios-mongodb`** | MongoDB                 | `bun add @zenystx/helios-mongodb` |
 | **`@zenystx/helios-turso`**   | Turso / LibSQL / SQLite | `bun add @zenystx/helios-turso`   |
+| **`@zenystx/helios-dynamodb`** | DynamoDB-compatible (Scylla/Alternator first proven provider) | `bun add @zenystx/helios-dynamodb` |
 
-All three implement the same `MapStore` interface — swap backends without changing application code.
+All four implement the same `MapStore` interface — swap backends without changing application code.
 
 ---
 

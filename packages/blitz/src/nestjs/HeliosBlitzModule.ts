@@ -1,9 +1,9 @@
 import { Module, Global, type DynamicModule, type FactoryProvider, type Provider } from '@nestjs/common';
-import { BlitzService } from '../BlitzService.ts';
-import { type BlitzConfig } from '../BlitzConfig.ts';
-import { HeliosBlitzService } from './HeliosBlitzService.ts';
-import { HELIOS_BLITZ_SERVICE_TOKEN } from './InjectBlitz.decorator.ts';
-import { FenceAwareBlitzProvider } from './FenceAwareBlitzProvider.ts';
+import { BlitzService } from '../BlitzService.js';
+import { type BlitzConfig } from '../BlitzConfig.js';
+import { HeliosBlitzService } from './HeliosBlitzService.js';
+import { HELIOS_BLITZ_SERVICE_TOKEN } from './InjectBlitz.decorator.js';
+import { FenceAwareBlitzProvider } from './FenceAwareBlitzProvider.js';
 
 /** Internal token for the raw BlitzConfig object passed to the async factory. */
 const BLITZ_CONFIG_TOKEN = 'HELIOS_BLITZ_CONFIG';

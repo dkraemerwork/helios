@@ -7,7 +7,7 @@
  * shutdownAsync() lifecycle, no child-process leaks, and distributed-default
  * acceptance across Helios + Blitz + NestJS bridge surfaces.
  */
-import { describe, test, expect } from "bun:test";
+import { afterEach, describe, test, expect } from "bun:test";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import {
@@ -55,6 +55,33 @@ function makeManager(
     },
     memberId,
   );
+}
+
+async function reservePort(): Promise<number> {
+  const server = Bun.listen({
+    hostname: "127.0.0.1",
+    port: 0,
+    socket: {
+      data() {},
+    },
+  });
+  const port = server.port;
+  server.stop();
+  return port;
+}
+
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 5000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+    await Bun.sleep(25);
+  }
+  throw new Error("Timed out waiting for condition");
 }
 
 // ─── 1. First-node-alone boot ─────────────────────────────────────────────
@@ -1229,6 +1256,112 @@ describe("Block 18.5 — HA verification through HeliosInstanceImpl lifecycle", 
     expect(instance.getBlitzService()).toBe(mockService);
 
     instance.shutdown();
+  });
+});
+
+describe("Block 18.5 — live runtime orchestration path", () => {
+  afterEach(() => {
+    HeliosInstanceImpl.setBlitzRuntimeLauncherForTests(null);
+  });
+
+  test("topology responses and announces drive real cutover/restart wiring", async () => {
+    const launches = new Map<string, string[][]>();
+    HeliosInstanceImpl.setBlitzRuntimeLauncherForTests(async ({ instanceName, config, routes }) => {
+      const launchList = launches.get(instanceName) ?? [];
+      launchList.push([...routes]);
+      launches.set(instanceName, launchList);
+      let closed = false;
+      return {
+        manager: {
+          clientUrls: [`nats://127.0.0.1:${config.localPort}`],
+          shutdown: async () => {},
+        },
+        service: {
+          get isClosed() {
+            return closed;
+          },
+          jsm: {
+            getAccountInfo: async () => ({}),
+          },
+          shutdown: async () => {
+            closed = true;
+          },
+        },
+        registration: {
+          serverName: `blitz-${instanceName}`,
+          clientPort: config.localPort!,
+          clusterPort: config.localClusterPort!,
+          advertiseHost: config.advertiseHost ?? "127.0.0.1",
+          clusterName: config.clusterName ?? "helios-blitz-cluster",
+        },
+      };
+    });
+
+    const [tcpPort1, tcpPort2, blitzPort1, blitzPort2, clusterPort1, clusterPort2] =
+      await Promise.all([
+        reservePort(),
+        reservePort(),
+        reservePort(),
+        reservePort(),
+        reservePort(),
+        reservePort(),
+      ]);
+
+    const config1 = new HeliosConfig("live-runtime-node-1");
+    config1.getNetworkConfig().setPort(tcpPort1);
+    config1.getNetworkConfig().getJoin().getTcpIpConfig().setEnabled(true);
+    config1.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: blitzPort1,
+      localClusterPort: clusterPort1,
+    });
+
+    const config2 = new HeliosConfig("live-runtime-node-2");
+    config2.getNetworkConfig().setPort(tcpPort2);
+    config2.getNetworkConfig().getJoin().getTcpIpConfig().setEnabled(true).addMember(`127.0.0.1:${tcpPort1}`);
+    config2.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: blitzPort2,
+      localClusterPort: clusterPort2,
+    });
+
+    const instance1 = new HeliosInstanceImpl(config1);
+    const instance2 = new HeliosInstanceImpl(config2);
+
+    try {
+      await waitFor(() => instance1.isBlitzReady() && instance2.isBlitzReady());
+      expect(instance1.getBlitzService()).not.toBeNull();
+      expect(instance2.getBlitzService()).not.toBeNull();
+
+      expect(launches.get("live-runtime-node-1")).toEqual([
+        [],
+        [`nats://127.0.0.1:${clusterPort2}`],
+      ]);
+      expect(launches.get("live-runtime-node-2")).toEqual([
+        [],
+        [`nats://127.0.0.1:${clusterPort1}`],
+      ]);
+
+      instance1.shutdown();
+
+      await waitFor(() => launches.get("live-runtime-node-2")?.length === 3);
+      await waitFor(() => instance2.isBlitzReady());
+      expect(launches.get("live-runtime-node-2")).toEqual([
+        [],
+        [`nats://127.0.0.1:${clusterPort1}`],
+        [],
+      ]);
+      expect(instance2.getBlitzService()).not.toBeNull();
+    } finally {
+      if (instance1.isRunning()) {
+        await instance1.shutdownAsync();
+      }
+      if (instance2.isRunning()) {
+        await instance2.shutdownAsync();
+      }
+    }
   });
 });
 

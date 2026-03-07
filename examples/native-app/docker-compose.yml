@@ -18,10 +18,15 @@ services:
       HELIOS_CONTROL_PORT: 9093
       HELIOS_EXPECTED_CLUSTER_SIZE: 3
       HELIOS_OBSERVED_TOPICS: demo-events
+      HELIOS_NATS_PORT: 4224
+      HELIOS_NATS_CLUSTER_PORT: 6224
+      HELIOS_NATS_ROUTES: nats://node2:6223,nats://node1:6222
+      HELIOS_BINANCE_SYMBOLS: btcusdt,ethusdt,solusdt
     ports:
       - "5703:5703"
       - "8083:8083"
       - "9093:9093"
+      - "4224:4224"
 
   node2:
     <<: *helios-node
@@ -35,10 +40,15 @@ services:
       HELIOS_EXPECTED_CLUSTER_SIZE: 3
       HELIOS_OBSERVED_TOPICS: demo-events
       HELIOS_PEERS: node3:5703
+      HELIOS_NATS_PORT: 4223
+      HELIOS_NATS_CLUSTER_PORT: 6223
+      HELIOS_NATS_ROUTES: nats://node1:6222,nats://node3:6224
+      HELIOS_BINANCE_SYMBOLS: btcusdt,ethusdt,solusdt
     ports:
       - "5702:5702"
       - "8082:8082"
       - "9092:9092"
+      - "4223:4223"
 
   node1:
     <<: *helios-node
@@ -53,7 +63,12 @@ services:
       HELIOS_EXPECTED_CLUSTER_SIZE: 3
       HELIOS_OBSERVED_TOPICS: demo-events
       HELIOS_PEERS: node2:5702,node3:5703
+      HELIOS_NATS_PORT: 4222
+      HELIOS_NATS_CLUSTER_PORT: 6222
+      HELIOS_NATS_ROUTES: nats://node2:6223,nats://node3:6224
+      HELIOS_BINANCE_SYMBOLS: btcusdt,ethusdt,solusdt
     ports:
       - "5701:5701"
       - "8081:8081"
       - "9091:9091"
+      - "4222:4222"

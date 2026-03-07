@@ -16,21 +16,44 @@ describe("P20-TOPIC — Client Topic E2E", () => {
         await topic.publish("hello-from-client");
     });
 
-    test("addMessageListener returns a registration id", async () => {
+    test("addMessageListener returns a registration id and receives pushed events", async () => {
         ctx = await startE2E("topic-listener-e2e");
         const topic = ctx.client.getTopic<string>("e2e-topic-listen");
-        const regId = topic.addMessageListener(() => {});
+        const received: string[] = [];
+        const regId = topic.addMessageListener((message) => {
+            received.push(message.getMessageObject());
+        });
         expect(regId).toBeDefined();
         expect(typeof regId).toBe("string");
         expect(regId.length).toBeGreaterThan(0);
+
+        let delivered = false;
+        for (let attempt = 0; attempt < 20; attempt++) {
+            const marker = `listener-live-${attempt}`;
+            await ctx.instance.getTopic<string>("e2e-topic-listen").publish(marker);
+            await Bun.sleep(50);
+            if (received.includes(marker)) {
+                delivered = true;
+                break;
+            }
+        }
+
+        expect(delivered).toBeTrue();
     });
 
-    test("removeMessageListener removes a listener", async () => {
+    test("removeMessageListener removes a listener on the member", async () => {
         ctx = await startE2E("topic-removelisten-e2e");
         const topic = ctx.client.getTopic<string>("e2e-topic-rm");
-        const regId = topic.addMessageListener(() => {});
+        const received: string[] = [];
+        const regId = topic.addMessageListener((message) => {
+            received.push(message.getMessageObject());
+        });
         const removed = topic.removeMessageListener(regId);
         expect(removed).toBeTrue();
+
+        await ctx.instance.getTopic<string>("e2e-topic-rm").publish("should-not-arrive");
+        await Bun.sleep(100);
+        expect(received).not.toContain("should-not-arrive");
     });
 
     test("multiple publishes succeed", async () => {

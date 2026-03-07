@@ -1,4 +1,4 @@
-import type { WindowKey } from './WindowPolicy.ts';
+import type { WindowKey } from './WindowPolicy.js';
 import { Kvm } from '@nats-io/kv';
 import type { KV } from '@nats-io/kv';
 

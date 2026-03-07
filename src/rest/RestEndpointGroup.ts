@@ -11,4 +11,6 @@ export enum RestEndpointGroup {
     CLUSTER_WRITE = 'CLUSTER_WRITE',
     /** IMap/IQueue CRUD over REST — disabled by default. */
     DATA = 'DATA',
+    /** Monitoring dashboard — /helios/monitor — disabled by default. Enabled via MonitorConfig. */
+    MONITOR = 'MONITOR',
 }

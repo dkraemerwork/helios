@@ -137,7 +137,7 @@ export class ExecuteCallableOperation extends Operation {
         return {
             taskUuid: this.descriptor.taskUuid,
             status: 'rejected',
-            originMemberUuid: this._originMemberUuid,
+            originMemberUuid: this.descriptor.submitterMemberUuid || this._originMemberUuid,
             resultData: null,
             errorName,
             errorMessage,

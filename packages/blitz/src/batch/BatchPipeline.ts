@@ -1,6 +1,6 @@
-import type { Source } from '../source/Source.ts';
-import type { Sink } from '../sink/Sink.ts';
-import type { BatchResult } from './BatchResult.ts';
+import type { Source } from '../source/Source.js';
+import type { Sink } from '../sink/Sink.js';
+import type { BatchResult } from './BatchResult.js';
 
 // ─── Internal operator chain types ───────────────────────────────────────────
 

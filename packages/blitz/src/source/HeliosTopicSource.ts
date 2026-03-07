@@ -1,7 +1,7 @@
 import type { ITopic } from '@zenystx/helios-core/topic/ITopic';
 import type { MessageListener } from '@zenystx/helios-core/topic/MessageListener';
-import { JsonCodec, type BlitzCodec } from '../codec/BlitzCodec.ts';
-import type { Source, SourceMessage } from './Source.ts';
+import { JsonCodec, type BlitzCodec } from '../codec/BlitzCodec.js';
+import type { Source, SourceMessage } from './Source.js';
 
 class HeliosTopicSourceImpl<T> implements Source<T> {
   readonly name: string;

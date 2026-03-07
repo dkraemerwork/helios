@@ -28,7 +28,7 @@ export class PredicatesService {
     ) {}
 
     /** Seed the map with sample product data. */
-    seed(): void {
+    async seed(): Promise<void> {
         const catalog: Product[] = [
             { id: 'p1', name: 'Wireless Mouse',    price: 29.99,  category: 'electronics' },
             { id: 'p2', name: 'Mechanical Keyboard', price: 89.99, category: 'electronics' },
@@ -39,7 +39,7 @@ export class PredicatesService {
             { id: 'p7', name: 'Pen Set',            price: 12.50,  category: 'stationery'  },
         ];
         for (const p of catalog) {
-            this.products.put(p.id, p);
+            await this.products.put(p.id, p);
         }
         console.log(`  Seeded ${this.products.size()} products into the 'products' map`);
     }

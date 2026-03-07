@@ -4,8 +4,8 @@
  */
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { HeliosClient } from "@zenystx/helios-core/client/HeliosClient";
-import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
+import { HeliosClient } from "@zenystx/helios-core/client";
+import { ClientConfig } from "@zenystx/helios-core/client/config";
 
 let instanceCounter = 0;
 

@@ -42,6 +42,10 @@ export interface ClientProtocolServerOptions {
     enableMapHandler?: boolean;
     /** If provided, MapPut handler writes through this callback. */
     onMapPut?: (name: string, key: Buffer, value: Buffer) => Buffer | null;
+    auth?: {
+        username: string;
+        password: string;
+    } | null;
 }
 
 let sessionCounter = 0;
@@ -56,6 +60,7 @@ export class ClientProtocolServer {
     private readonly _serializationVersion: number;
     private readonly _heartbeatTimeoutMs: number;
     private readonly _heartbeatIntervalMs: number;
+    private readonly _auth: { username: string; password: string } | null;
 
     private readonly _registry: ClientSessionRegistry;
     private readonly _dispatcher: ClientMessageDispatcher;
@@ -71,6 +76,7 @@ export class ClientProtocolServer {
     >();
 
     private _onMapPut: ((name: string, key: Buffer, value: Buffer) => Buffer | null) | null;
+    private _sessionCloseHandler: ((session: ClientSession) => void) | null = null;
 
     constructor(opts: ClientProtocolServerOptions) {
         this._clusterName = opts.clusterName;
@@ -83,6 +89,7 @@ export class ClientProtocolServer {
         this._heartbeatTimeoutMs = opts.heartbeatTimeoutMs ?? 60_000;
         this._heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 10_000;
         this._onMapPut = opts.onMapPut ?? null;
+        this._auth = opts.auth ?? null;
 
         this._registry = new ClientSessionRegistry();
         this._dispatcher = new ClientMessageDispatcher();
@@ -155,6 +162,10 @@ export class ClientProtocolServer {
         }
     }
 
+    setSessionCloseHandler(handler: (session: ClientSession) => void): void {
+        this._sessionCloseHandler = handler;
+    }
+
     // ── connection lifecycle ────────────────────────────────────────────────
 
     private _onConnect(ch: EventloopChannel): void {
@@ -212,6 +223,7 @@ export class ClientProtocolServer {
             const session = state.session;
             this._registry.remove(session.getSessionId());
             this._channelState.delete(ch);
+            this._sessionCloseHandler?.(session);
         }
     }
 
@@ -273,6 +285,26 @@ export class ClientProtocolServer {
                         null,
                         [],
                     );
+                }
+
+                if (this._auth !== null) {
+                    const username = req.username ?? null;
+                    const password = req.password ?? null;
+                    if (username !== this._auth.username || password !== this._auth.password) {
+                        return ClientAuthenticationCodec.encodeResponse(
+                            AuthenticationStatus.CREDENTIALS_FAILED.getId(),
+                            null,
+                            null,
+                            this._serializationVersion,
+                            "1.0.0",
+                            this._partitionCount,
+                            this._clusterId,
+                            false,
+                            null,
+                            null,
+                            [],
+                        );
+                    }
                 }
 
                 // Authenticate

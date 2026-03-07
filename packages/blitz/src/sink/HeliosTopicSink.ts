@@ -1,5 +1,5 @@
 import type { ITopic } from '@zenystx/helios-core/topic/ITopic';
-import type { Sink } from './Sink.ts';
+import type { Sink } from './Sink.js';
 
 class HeliosTopicSinkImpl<T> implements Sink<T> {
   readonly name: string;

@@ -1,4 +1,4 @@
-import type { WindowKey, WindowPolicy } from './WindowPolicy.ts';
+import type { WindowKey, WindowPolicy } from './WindowPolicy.js';
 
 export interface SessionWindowOptions {
     /** Inactivity gap in milliseconds. A new session starts when no event arrives for gapMs. */

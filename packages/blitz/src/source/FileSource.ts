@@ -1,5 +1,5 @@
-import { StringCodec, type BlitzCodec } from '../codec/BlitzCodec.ts';
-import type { Source, SourceMessage } from './Source.ts';
+import { StringCodec, type BlitzCodec } from '../codec/BlitzCodec.js';
+import type { Source, SourceMessage } from './Source.js';
 
 class FileSourceImpl<T> implements Source<T> {
   readonly name: string;

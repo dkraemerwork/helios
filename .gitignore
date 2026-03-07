@@ -14,3 +14,8 @@ src/**/*.d.ts
 src/**/*.d.ts.map
 
 .opencode
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local

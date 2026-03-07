@@ -42,7 +42,7 @@ describe("P20-STARTUP — Client startup E2E", () => {
 
     test("shutdownAll cleans up all clients", async () => {
         ctx = await startE2E("startup-shutdownall-e2e");
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         expect(HeliosClient.getAllHeliosClients().length).toBeGreaterThanOrEqual(1);
         HeliosClient.shutdownAll();
         expect(HeliosClient.getAllHeliosClients().length).toBe(0);

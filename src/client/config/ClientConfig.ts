@@ -121,10 +121,17 @@ export class ClientConfig implements InstanceConfig {
     }
 
     getNearCacheConfig(name: string): NearCacheConfig | null {
+        // 1. Exact match takes highest priority
+        const exact = this._nearCacheConfigMap.get(name);
+        if (exact !== undefined) return exact;
+
+        // 2. Wildcard pattern match
         const matchedPattern = matchingPointLookup(this._nearCacheConfigMap.keys(), name);
         if (matchedPattern !== null) {
             return this._nearCacheConfigMap.get(matchedPattern) ?? null;
         }
+
+        // 3. Fall back to "default" config if present
         return this._nearCacheConfigMap.get('default') ?? null;
     }
 

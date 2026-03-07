@@ -19,6 +19,8 @@ export class NetworkConfig {
     private _restApiConfig: RestApiConfig = new RestApiConfig();
     private _memcacheProtocolConfig: MemcacheProtocolConfig = new MemcacheProtocolConfig();
     private _clientProtocolPort: number = -1;
+    private _clientProtocolUsername: string | null = null;
+    private _clientProtocolPassword: string | null = null;
 
     getPort(): number {
         return this._port;
@@ -151,6 +153,30 @@ export class NetworkConfig {
      */
     setClientProtocolPort(port: number): this {
         this._clientProtocolPort = port;
+        return this;
+    }
+
+    getClientProtocolUsername(): string | null {
+        return this._clientProtocolUsername;
+    }
+
+    getClientProtocolPassword(): string | null {
+        return this._clientProtocolPassword;
+    }
+
+    hasClientProtocolCredentials(): boolean {
+        return this._clientProtocolUsername !== null;
+    }
+
+    setClientProtocolUsernamePasswordAuth(username: string, password: string): this {
+        this._clientProtocolUsername = username;
+        this._clientProtocolPassword = password;
+        return this;
+    }
+
+    clearClientProtocolUsernamePasswordAuth(): this {
+        this._clientProtocolUsername = null;
+        this._clientProtocolPassword = null;
         return this;
     }
 }

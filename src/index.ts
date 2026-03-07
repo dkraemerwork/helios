@@ -134,6 +134,21 @@ export { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
 // ── Discovery ────────────────────────────────────────────────────────────────
 export { createDiscoveryResolver } from "@zenystx/helios-core/discovery/HeliosDiscovery";
 
+// ── Multicast Discovery ──────────────────────────────────────────────────────
+export { MulticastService } from "@zenystx/helios-core/cluster/multicast/MulticastService";
+export type {
+    MulticastMessage,
+    MulticastJoinMessage,
+    MulticastJoinRequest,
+    MulticastSplitBrainMessage,
+    MulticastListener,
+} from "@zenystx/helios-core/cluster/multicast/MulticastService";
+export { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
+export type {
+    MulticastJoinerConfig,
+    MulticastJoinResult,
+} from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
+
 // ── Server / CLI ──────────────────────────────────────────────────────────────
 export { HeliosServer } from "@zenystx/helios-core/server/HeliosServer";
 

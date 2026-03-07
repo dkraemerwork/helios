@@ -33,17 +33,20 @@ export class PartitionReplicaSyncResponse {
     readonly replicaIndex: number;
     readonly namespaceStates: readonly ReplicationNamespaceState[];
     readonly versions: bigint[];
+    readonly namespaceVersions: ReadonlyMap<string, bigint[]>;
 
     constructor(
         partitionId: number,
         replicaIndex: number,
         namespaceStates: readonly ReplicationNamespaceState[],
         versions: bigint[],
+        namespaceVersions?: ReadonlyMap<string, bigint[]>,
     ) {
         this.partitionId = partitionId;
         this.replicaIndex = replicaIndex;
         this.namespaceStates = namespaceStates;
         this.versions = versions;
+        this.namespaceVersions = namespaceVersions ?? new Map();
     }
 
     /**
@@ -76,6 +79,13 @@ export class PartitionReplicaSyncResponse {
 
         // Finalize versions
         replicaManager.finalizeReplicaSync(this.partitionId, this.replicaIndex, this.versions);
+        if (this.namespaceVersions.size > 0) {
+            replicaManager.finalizeNamespaceReplicaSync(
+                this.partitionId,
+                this.replicaIndex,
+                this.namespaceVersions,
+            );
+        }
 
         // Release permit
         replicaManager.releaseReplicaSyncPermits(1);

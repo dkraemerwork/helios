@@ -25,6 +25,7 @@ export class GetOperation extends MapOperation {
         }
         // Load-on-miss from external MapStore on the owner
         if (this.mapDataStore.isWithStore()) {
+            this.containerService.ensureExternalMapStoreOperationAllowed(this.partitionId);
             const ne = this.getNodeEngine()!;
             const key = ne.toObject(this._key);
             const loaded = await this.mapDataStore.load(key);

@@ -167,7 +167,7 @@ describe('Client near-cache metrics', () => {
 describe('Near-cache destroy/shutdown cleanup', () => {
     test('HeliosClient.shutdown() destroys near-cache manager', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         const client = new HeliosClient();
         client.shutdown();
@@ -186,42 +186,42 @@ describe('Near-cache destroy/shutdown cleanup', () => {
 describe('Advanced client surfaces — explicit deferral', () => {
     test('HeliosClient does not expose getCacheManager (JCache deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getCacheManager' in HeliosClient.prototype).toBeFalse();
     });
 
     test('HeliosClient does not expose getTransactionContext (transactions deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getTransactionContext' in HeliosClient.prototype).toBeFalse();
     });
 
     test('HeliosClient does not expose getSql (SQL deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getSql' in HeliosClient.prototype).toBeFalse();
     });
 
     test('HeliosClient does not expose getPNCounter (PN counter deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getPNCounter' in HeliosClient.prototype).toBeFalse();
     });
 
     test('HeliosClient does not expose getFlakeIdGenerator (flake ID deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getFlakeIdGenerator' in HeliosClient.prototype).toBeFalse();
     });
 
     test('DEFERRED_CLIENT_FEATURES lists all deferred services including executor and reliable-topic', async () => {
         const { DEFERRED_CLIENT_FEATURES } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(Array.isArray(DEFERRED_CLIENT_FEATURES)).toBeTrue();
         expect(DEFERRED_CLIENT_FEATURES).toContain('cache');
@@ -233,14 +233,14 @@ describe('Advanced client surfaces — explicit deferral', () => {
 
     test('HeliosClient does not expose getScheduledExecutorService (deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getScheduledExecutorService' in HeliosClient.prototype).toBeFalse();
     });
 
     test('HeliosClient does not expose getCardinalityEstimator (deferred)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getCardinalityEstimator' in HeliosClient.prototype).toBeFalse();
     });
@@ -287,7 +287,7 @@ describe('Package exports — client features aligned', () => {
 describe('Reliable-topic client — NOT-RETAINED', () => {
     test('HeliosClient does not expose getReliableTopic() (NOT-RETAINED)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getReliableTopic' in HeliosClient.prototype).toBeFalse();
     });
@@ -304,7 +304,7 @@ describe('Reliable-topic client — NOT-RETAINED', () => {
 
     test('DEFERRED_CLIENT_FEATURES includes reliable-topic-client', async () => {
         const { DEFERRED_CLIENT_FEATURES } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(DEFERRED_CLIENT_FEATURES).toContain('reliable-topic-client');
     });
@@ -313,7 +313,7 @@ describe('Reliable-topic client — NOT-RETAINED', () => {
 describe('Executor client — NOT-RETAINED', () => {
     test('HeliosClient does not expose getExecutorService() (NOT-RETAINED)', async () => {
         const { HeliosClient } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect('getExecutorService' in HeliosClient.prototype).toBeFalse();
     });
@@ -330,7 +330,7 @@ describe('Executor client — NOT-RETAINED', () => {
 
     test('DEFERRED_CLIENT_FEATURES includes executor', async () => {
         const { DEFERRED_CLIENT_FEATURES } = await import(
-            '@zenystx/helios-core/client/HeliosClient'
+            '@zenystx/helios-core/client'
         );
         expect(DEFERRED_CLIENT_FEATURES).toContain('executor');
     });

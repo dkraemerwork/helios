@@ -1,6 +1,6 @@
 import type { IMap } from '@zenystx/helios-core/map/IMap';
-import { JsonCodec, type BlitzCodec } from '../codec/BlitzCodec.ts';
-import type { Source, SourceMessage } from './Source.ts';
+import { JsonCodec, type BlitzCodec } from '../codec/BlitzCodec.js';
+import type { Source, SourceMessage } from './Source.js';
 
 /** Entry type emitted by HeliosMapSource. */
 export interface MapEntry<K, V> {

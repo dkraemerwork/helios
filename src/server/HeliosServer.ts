@@ -105,6 +105,11 @@ export class HeliosServer {
                 config = new HeliosConfig();
             }
 
+            // Standalone server mode: enable multicast discovery by default
+            // so nodes auto-discover on the LAN without any configuration.
+            // Users can disable it via config file or programmatic API.
+            this._ensureMulticastDefault(config);
+
             this._instance = await Helios.newInstance(config);
             this._state = 'running';
         } catch (err) {
@@ -162,6 +167,26 @@ export class HeliosServer {
     // ──────────────────────────────────────────
     // Signal handling
     // ──────────────────────────────────────────
+
+    /**
+     * If no join method is explicitly enabled, activate multicast discovery
+     * so standalone server nodes auto-discover each other on the LAN.
+     */
+    private _ensureMulticastDefault(config: HeliosConfig): void {
+        const join = config.getNetworkConfig().getJoin();
+        const anyJoinEnabled =
+            join.getTcpIpConfig().isEnabled() ||
+            join.getMulticastConfig().isEnabled() ||
+            join.getAwsConfig().isEnabled() ||
+            join.getGcpConfig().isEnabled() ||
+            join.getAzureConfig().isEnabled() ||
+            join.getKubernetesConfig().isEnabled() ||
+            join.getEurekaConfig().isEnabled();
+
+        if (!anyJoinEnabled) {
+            join.getMulticastConfig().setEnabled(true);
+        }
+    }
 
     /**
      * Wires SIGINT and SIGTERM to graceful shutdown.

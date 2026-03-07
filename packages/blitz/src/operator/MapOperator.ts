@@ -1,6 +1,6 @@
-import { Stage } from '../Stage.ts';
-import { NakError } from '../errors/NakError.ts';
-import type { StageContext } from '../StageContext.ts';
+import { Stage } from '../Stage.js';
+import { NakError } from '../errors/NakError.js';
+import type { StageContext } from '../StageContext.js';
 
 /**
  * Transforms each input value `T` to output `R` by applying `fn`.

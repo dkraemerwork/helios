@@ -15,6 +15,7 @@
     "emitDecoratorMetadata": true,
 
     "paths": {
+      "@zenystx/helios-blitz": ["../blitz/src/index.ts"],
       "@zenystx/helios-core/*": ["../../src/core/*", "../../src/*"],
       "@zenystx/helios-nestjs/*": ["./src/*"]
     },

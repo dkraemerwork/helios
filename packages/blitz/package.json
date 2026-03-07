@@ -2,6 +2,7 @@
   "name": "@zenystx/helios-blitz",
   "version": "1.0.0",
   "description": "Helios Blitz — NATS-backed stream & batch processing engine",
+  "type": "module",
   "private": false,
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -23,6 +24,9 @@
     "dist/src",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "bun build ./src/index.ts --outdir dist/src --target node --format esm --external @nats-io/jetstream --external @nats-io/kv --external @nats-io/transport-node --external @nestjs/common --external @nestjs/core --external @zenystx/helios-core && bun build ./src/nestjs/index.ts --outdir dist/src/nestjs --target node --format esm --external @nats-io/jetstream --external @nats-io/kv --external @nats-io/transport-node --external @nestjs/common --external @nestjs/core --external @zenystx/helios-core && bun run tsc --project tsconfig.build.json",
     "test": "bun test",
@@ -45,7 +49,7 @@
   "author": "Helios Contributors",
   "license": "Apache-2.0",
   "dependencies": {
-    "@zenystx/helios-core": "file:../..",
+    "@zenystx/helios-core": "^1.0.0",
     "@nats-io/jetstream": "^3.3.1",
     "@nats-io/kv": "^3.3.1",
     "@nats-io/transport-node": "^3.3.1",

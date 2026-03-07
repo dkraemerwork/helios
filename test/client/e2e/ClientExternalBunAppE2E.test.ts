@@ -1,10 +1,6 @@
 /**
- * P20-EXTERNAL-BUN-APP — Proves a fresh external Bun app imports only
- * public package paths and talks to a real cluster unchanged.
- *
- * Since we cannot spawn a truly separate Bun process in test, we prove
- * the contract by importing only from public paths (root barrel and
- * subpath exports) and performing real network operations.
+ * P20-EXTERNAL-BUN-APP — Proves a separate Bun process can run the shipped
+ * public example file against a real cluster over the wire.
  */
 import { describe, test, expect, afterEach } from "bun:test";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
@@ -13,6 +9,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "../../..");
+const CLIENT_EXAMPLE = resolve(ROOT, "examples/native-app/src/client-example.ts");
 
 let instance: HeliosInstanceImpl | null = null;
 afterEach(async () => {
@@ -24,54 +21,66 @@ afterEach(async () => {
 });
 
 describe("P20-EXTERNAL-BUN-APP — External Bun app E2E", () => {
-    test("imports only from public package paths", async () => {
-        // Subpath imports — recommended for external apps (avoids barrel circular deps)
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    test("imports only from public package paths (via built dist targets)", async () => {
+        // Import from built dist files — not tsconfig alias — to honestly
+        // prove the package.json export targets are shippable.
+        const distClient = resolve(ROOT, "dist/src/client/index.js");
+        const distClientConfig = resolve(ROOT, "dist/src/client/config/index.js");
+        const { HeliosClient } = await import(distClient);
+        const { ClientConfig } = await import(distClientConfig);
         expect(HeliosClient).toBeDefined();
         expect(ClientConfig).toBeDefined();
         expect(typeof HeliosClient.newHeliosClient).toBe("function");
     });
 
-    test("subpath imports work for HeliosClient", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+    test("public ./client dist target exports HeliosClient", async () => {
+        const { HeliosClient } = await import(resolve(ROOT, "dist/src/client/index.js"));
         expect(typeof HeliosClient.newHeliosClient).toBe("function");
     });
 
-    test("subpath imports work for ClientConfig", async () => {
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+    test("public ./client/config dist target exports ClientConfig", async () => {
+        const { ClientConfig } = await import(resolve(ROOT, "dist/src/client/config/index.js"));
         const config = new ClientConfig();
         expect(config.getName()).toBeDefined();
     });
 
-    test("external app connects to real cluster and performs map operations", async () => {
-        // Start a member
+    test("separate Bun process runs the real public client example against a cluster", async () => {
         const config = new HeliosConfig("external-app-e2e");
         config.getNetworkConfig().setClientProtocolPort(0);
         instance = new HeliosInstanceImpl(config);
         await Bun.sleep(100);
         const port = instance.getClientProtocolPort();
 
-        // Import from public paths only
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const proc = Bun.spawn([
+            "bun",
+            "run",
+            CLIENT_EXAMPLE,
+        ], {
+            cwd: ROOT,
+            env: {
+                ...process.env,
+                HELIOS_CLUSTER_NAME: "external-app-e2e",
+                HELIOS_CLUSTER_ADDRESS: `127.0.0.1:${port}`,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+        });
 
-        const clientConfig = new ClientConfig();
-        clientConfig.setClusterName("external-app-e2e");
-        clientConfig.getNetworkConfig().addAddress(`127.0.0.1:${port}`);
-        clientConfig.setName(`ext-app-${Date.now()}`);
+        const [stdout, stderr, exitCode] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+            proc.exited,
+        ]);
 
-        const client = HeliosClient.newHeliosClient(clientConfig);
-        await client.connect();
-
-        const map = client.getMap<string, string>("ext-map");
-        await map.put("hello", "world");
-        expect(await map.get("hello")).toBe("world");
-
-        client.shutdown();
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe("");
+        expect(stdout).toContain("Connecting to Helios cluster 'external-app-e2e'");
+        expect(stdout).toContain("Map 'demo-map' -> greeting = hello from remote client");
+        expect(stdout).toContain("Queue 'demo-queue' -> polled = task-1");
+        expect(stdout).toContain("Client shut down.");
     });
 
-    test("example files exist and use only public imports", () => {
+    test("example files exist and near-cache example uses only exported public imports", async () => {
         const examples = [
             "examples/native-app/src/client-example.ts",
             "examples/native-app/src/client-auth-example.ts",
@@ -81,6 +90,16 @@ describe("P20-EXTERNAL-BUN-APP — External Bun app E2E", () => {
         for (const ex of examples) {
             expect(existsSync(resolve(ROOT, ex))).toBeTrue();
         }
+
+        const nearCacheExample = await Bun.file(resolve(ROOT, "examples/native-app/src/client-nearcache-example.ts")).text();
+        expect(nearCacheExample).toContain('from "@zenystx/helios-core"');
+        expect(nearCacheExample).toContain('from "@zenystx/helios-core/client"');
+        expect(nearCacheExample).toContain('from "@zenystx/helios-core/client/config"');
+        expect(nearCacheExample).not.toContain("@zenystx/helios-core/config/NearCacheConfig");
+        expect(nearCacheExample).not.toContain("@zenystx/helios-core/config/InMemoryFormat");
+        expect(nearCacheExample).not.toContain("@zenystx/helios-core/config/EvictionConfig");
+        expect(nearCacheExample).not.toContain("@zenystx/helios-core/config/EvictionPolicy");
+        expect(nearCacheExample).not.toContain("@zenystx/helios-core/config/MaxSizePolicy");
     });
 
     test("package.json exports include client subpaths", async () => {

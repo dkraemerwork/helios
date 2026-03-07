@@ -24,6 +24,7 @@ export class HeliosBlitzCoordinator {
   private _memberListVersion = 0;
   private _expectedRegistrants = new Set<string>();
   private _fenceToken: string | null = null;
+  private _hasAuthoritativeFenceToken = false;
   private _pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly _reconciler = new BlitzReplicaReconciler(1, 0);
 
@@ -39,6 +40,7 @@ export class HeliosBlitzCoordinator {
     if (masterId !== this._masterMemberId) {
       this._masterMemberId = masterId;
       this._rotateFenceToken();
+      this._hasAuthoritativeFenceToken = false;
       this._syncReconcilerAuthority();
     }
   }
@@ -53,6 +55,7 @@ export class HeliosBlitzCoordinator {
       this._topology = new BlitzClusterTopology(version);
       this._expectedRegistrants.clear();
       this._rotateFenceToken();
+      this._hasAuthoritativeFenceToken = false;
       this._reconciler.onMemberListVersionChange(version);
       this._syncReconcilerAuthority();
     }
@@ -129,6 +132,7 @@ export class HeliosBlitzCoordinator {
 
     const registrationsComplete = this.isRegistrationComplete();
     const routes = this._topology.getRoutes();
+    const leaderRegistration = this._topology.getRegistration(this._masterMemberId);
 
     return {
       type: "BLITZ_TOPOLOGY_RESPONSE",
@@ -138,7 +142,9 @@ export class HeliosBlitzCoordinator {
       memberListVersion: this._memberListVersion,
       fenceToken: this._fenceToken,
       registrationsComplete,
-      clientConnectUrl: "nats://127.0.0.1:4222",
+      clientConnectUrl: leaderRegistration
+        ? `nats://${leaderRegistration.advertiseHost}:${leaderRegistration.clientPort}`
+        : "nats://127.0.0.1:4222",
       retryAfterMs: registrationsComplete ? undefined : DEFAULT_RETRY_AFTER_MS,
     };
   }
@@ -182,10 +188,10 @@ export class HeliosBlitzCoordinator {
   validateIncomingAuthoritative(
     msg: BlitzTopologyResponseMsg | BlitzTopologyAnnounceMsg,
   ): boolean {
-    return this.validateAuthority(
-      msg.masterMemberId,
-      msg.memberListVersion,
-      msg.fenceToken,
+    return (
+      msg.masterMemberId === this._masterMemberId &&
+      msg.memberListVersion === this._memberListVersion &&
+      (!this._hasAuthoritativeFenceToken || msg.fenceToken === this._fenceToken)
     );
   }
 
@@ -199,6 +205,9 @@ export class HeliosBlitzCoordinator {
     if (!this.validateIncomingAuthoritative(msg)) {
       return { accepted: false };
     }
+    this._fenceToken = msg.fenceToken;
+    this._hasAuthoritativeFenceToken = true;
+    this._syncReconcilerAuthority();
     return {
       accepted: true,
       routes: msg.routes,
@@ -218,6 +227,9 @@ export class HeliosBlitzCoordinator {
     if (!this.validateIncomingAuthoritative(msg)) {
       return { accepted: false };
     }
+    this._fenceToken = msg.fenceToken;
+    this._hasAuthoritativeFenceToken = true;
+    this._syncReconcilerAuthority();
     return {
       accepted: true,
       routes: msg.routes,
@@ -278,6 +290,7 @@ export class HeliosBlitzCoordinator {
 
     // Rotate fence token so old-epoch authority is invalid
     this._rotateFenceToken();
+    this._hasAuthoritativeFenceToken = false;
 
     // Cascade demotion to the reconciler — cancels outstanding jobs,
     // clears pending work, and nullifies authority

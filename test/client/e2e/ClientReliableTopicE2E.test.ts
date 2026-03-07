@@ -12,12 +12,12 @@ import { describe, test, expect } from "bun:test";
 
 describe("P20-RELIABLE-TOPIC — NOT-RETAINED", () => {
     test("getReliableTopic() is not on HeliosClient (narrowed out)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         expect("getReliableTopic" in HeliosClient.prototype).toBe(false);
     });
 
     test("DEFERRED_CLIENT_FEATURES includes reliable-topic-client", async () => {
-        const { DEFERRED_CLIENT_FEATURES } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { DEFERRED_CLIENT_FEATURES } = await import("@zenystx/helios-core/client");
         expect(DEFERRED_CLIENT_FEATURES).toContain("reliable-topic-client");
     });
 });

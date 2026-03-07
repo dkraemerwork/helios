@@ -52,7 +52,7 @@ describe("ProxyManager", () => {
         const { ClientInvocationService } = await import("@zenystx/helios-core/client/invocation/ClientInvocationService");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -69,7 +69,7 @@ describe("ProxyManager", () => {
         const { ProxyManager } = await import("@zenystx/helios-core/client/proxy/ProxyManager");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -85,7 +85,7 @@ describe("ProxyManager", () => {
         const { ProxyManager } = await import("@zenystx/helios-core/client/proxy/ProxyManager");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -101,7 +101,7 @@ describe("ProxyManager", () => {
         const { ProxyManager } = await import("@zenystx/helios-core/client/proxy/ProxyManager");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -118,7 +118,7 @@ describe("ProxyManager", () => {
         const { ProxyManager } = await import("@zenystx/helios-core/client/proxy/ProxyManager");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -135,7 +135,7 @@ describe("ProxyManager", () => {
         const { ProxyManager } = await import("@zenystx/helios-core/client/proxy/ProxyManager");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -317,7 +317,7 @@ describe("ClientTopicProxy", () => {
     });
 
     test("ClientTopicProxy.addMessageListener does not throw (wired through ClientListenerService)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const topic = client.getTopic("listener-test") as any;
         // Must not throw — should return a registration ID string
@@ -328,7 +328,7 @@ describe("ClientTopicProxy", () => {
     });
 
     test("ClientTopicProxy.removeMessageListener does not throw", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const topic = client.getTopic("listener-remove-test") as any;
         const regId = topic.addMessageListener(() => {});
@@ -344,7 +344,7 @@ describe("ClientTopicProxy", () => {
 
 describe("HeliosClient proxy integration", () => {
     test("HeliosClient.getMap() returns a ClientMapProxy (not a throw-stub)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const map = client.getMap("test");
         expect(map).toBeDefined();
@@ -354,7 +354,7 @@ describe("HeliosClient proxy integration", () => {
     });
 
     test("HeliosClient.getQueue() returns a ClientQueueProxy (not a throw-stub)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const queue = client.getQueue("test");
         expect(queue).toBeDefined();
@@ -363,7 +363,7 @@ describe("HeliosClient proxy integration", () => {
     });
 
     test("HeliosClient.getTopic() returns a ClientTopicProxy (not a throw-stub)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const topic = client.getTopic("test");
         expect(topic).toBeDefined();
@@ -372,7 +372,7 @@ describe("HeliosClient proxy integration", () => {
     });
 
     test("HeliosClient.getMap() returns stable instance for same name", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const m1 = client.getMap("stable");
         const m2 = client.getMap("stable");
@@ -381,7 +381,7 @@ describe("HeliosClient proxy integration", () => {
     });
 
     test("HeliosClient.getDistributedObject() routes to correct proxy type", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const obj = client.getDistributedObject("hz:impl:mapService", "do-test");
         expect(obj).toBeDefined();
@@ -390,8 +390,30 @@ describe("HeliosClient proxy integration", () => {
         client.shutdown();
     });
 
+    test("HeliosClient.getDistributedObject() rejects not-retained reliable-topic and executor services explicitly", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
+        const client = new HeliosClient();
+
+        expect(() => client.getDistributedObject("hz:impl:reliableTopicService", "do-test"))
+            .toThrow(/not retained on the remote-client contract/);
+        expect(() => client.getDistributedObject("hz:impl:executorService", "do-test"))
+            .toThrow(/not retained on the remote-client contract/);
+
+        client.shutdown();
+    });
+
+    test("HeliosClient.getDistributedObject() rejects unknown services with retained-service contract message", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
+        const client = new HeliosClient();
+
+        expect(() => client.getDistributedObject("unknown:service", "do-test"))
+            .toThrow(/supports only retained remote services/);
+
+        client.shutdown();
+    });
+
     test("HeliosClient shutdown destroys all proxies", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         client.getMap("map-1");
         client.getQueue("queue-1");
@@ -405,14 +427,14 @@ describe("HeliosClient proxy integration", () => {
 
 describe("Additional remote proxies", () => {
     test("HeliosClient no longer has getReliableTopic() (narrowed out in Block 20.7)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getReliableTopic" in client).toBe(false);
         client.shutdown();
     });
 
     test("HeliosClient no longer has getExecutorService() (narrowed out in Block 20.7)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getExecutorService" in client).toBe(false);
         client.shutdown();
@@ -439,7 +461,7 @@ describe("No orphan codecs", () => {
 describe("Verification: proxy lifecycle end-to-end", () => {
     test("HeliosClient proxy creation uses only public imports, no internal imports", async () => {
         // This test proves a consumer can use the public client surface
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
 
         // Every proxy type is reachable from the public HeliosClient API
@@ -459,7 +481,7 @@ describe("Verification: proxy lifecycle end-to-end", () => {
     });
 
     test("proxy destroy removes from cache, next get returns new instance", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
 
         const m1 = client.getMap("destroy-verify") as any;
@@ -500,7 +522,7 @@ describe("Verification: proxy lifecycle end-to-end", () => {
         const { ProxyManager } = await import("@zenystx/helios-core/client/proxy/ProxyManager");
         const { ClientPartitionService } = await import("@zenystx/helios-core/client/spi/ClientPartitionService");
         const { createClientSerializationService } = await import("@zenystx/helios-core/client/impl/serialization/ClientSerializationService");
-        const { ClientConfig } = await import("@zenystx/helios-core/client/config/ClientConfig");
+        const { ClientConfig } = await import("@zenystx/helios-core/client/config");
 
         const config = new ClientConfig();
         const serialization = createClientSerializationService(config);
@@ -517,7 +539,7 @@ describe("Verification: proxy lifecycle end-to-end", () => {
     });
 
     test("no deferred listener throws on topic proxy", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
 
         const topic = client.getTopic("no-throw-verify") as any;
@@ -530,7 +552,7 @@ describe("Verification: proxy lifecycle end-to-end", () => {
     });
 
     test("stable proxy identity across all service types", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
 
         // Map

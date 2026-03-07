@@ -23,9 +23,9 @@ export class ReliableTopicProxyImpl<T> implements ITopic<T> {
     return this._name;
   }
 
-  publish(message: T): void {
+  publish(message: T): Promise<void> {
     this._checkDestroyed();
-    this._service.publish(this._name, message);
+    return this._service.publish(this._name, message);
   }
 
   publishAsync(message: T): Promise<void> {

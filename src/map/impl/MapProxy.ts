@@ -38,6 +38,7 @@ import { IndexMatchHint } from '@zenystx/helios-core/query/impl/QueryContext';
 import { canonicalizeAttribute } from '@zenystx/helios-core/query/impl/IndexUtils';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
 import { PutOperation } from '@zenystx/helios-core/map/impl/operation/PutOperation';
 import { GetOperation } from '@zenystx/helios-core/map/impl/operation/GetOperation';
 import { RemoveOperation } from '@zenystx/helios-core/map/impl/operation/RemoveOperation';
@@ -303,7 +304,8 @@ export class MapProxy<K, V> implements IMap<K, V> {
         // This handles entries that exist in the external store but not in RecordStores
         // (e.g., pre-seeded data). ClearOperation handles per-partition record cleanup above.
         if (this._mapDataStore.isWithStore()) {
-            await this._mapDataStore.clear();
+            const coordinationPartitionId = this._containerService.getMapCoordinationPartitionId(this._name);
+            await this._invokeOnPartition<void>(new ExternalStoreClearOperation(this._name), coordinationPartitionId);
         }
         // Clear all index entries
         this._indexRegistry.clearIndexes();
@@ -464,13 +466,30 @@ export class MapProxy<K, V> implements IMap<K, V> {
     addPartitionLostListener(
         listener: (event: import('@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl').MapPartitionLostEvent) => void,
     ): string {
+        const partitionService = this._nodeEngine.getPartitionService() as {
+            onMapPartitionLost?: (mapName: string, listener: (event: import('@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl').MapPartitionLostEvent) => void) => string;
+        };
+
+        if (typeof partitionService.onMapPartitionLost === 'function') {
+            const id = partitionService.onMapPartitionLost(this._name, listener);
+            this._partitionLostListeners.set(id, listener);
+            return id;
+        }
+
         const id = crypto.randomUUID();
         this._partitionLostListeners.set(id, listener);
         return id;
     }
 
     removePartitionLostListener(listenerId: string): boolean {
-        return this._partitionLostListeners.delete(listenerId);
+        const partitionService = this._nodeEngine.getPartitionService() as {
+            removeMapPartitionLostListener?: (listenerId: string) => boolean;
+        };
+        const removedLocal = this._partitionLostListeners.delete(listenerId);
+        if (typeof partitionService.removeMapPartitionLostListener === 'function') {
+            return partitionService.removeMapPartitionLostListener(listenerId) || removedLocal;
+        }
+        return removedLocal;
     }
 
     // ── Locking ───────────────────────────────────────────────────────────

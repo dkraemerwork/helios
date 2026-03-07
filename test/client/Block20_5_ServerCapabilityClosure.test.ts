@@ -16,67 +16,67 @@ import { describe, test, expect } from "bun:test";
 describe("HeliosInstance contract narrowing", () => {
     test("HeliosInstance does NOT include getList()", async () => {
         // HeliosClient implements HeliosInstance — narrowed methods must not exist
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getList" in client).toBe(false);
     });
 
     test("HeliosInstance does NOT include getSet()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getSet" in client).toBe(false);
     });
 
     test("HeliosInstance does NOT include getMultiMap()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getMultiMap" in client).toBe(false);
     });
 
     test("HeliosInstance does NOT include getReplicatedMap()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getReplicatedMap" in client).toBe(false);
     });
 
     test("HeliosInstance retains getMap()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect(typeof client.getMap).toBe("function");
     });
 
     test("HeliosInstance retains getQueue()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect(typeof client.getQueue).toBe("function");
     });
 
     test("HeliosInstance retains getTopic()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect(typeof client.getTopic).toBe("function");
     });
 
     test("HeliosInstance does NOT include getReliableTopic()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getReliableTopic" in client).toBe(false);
     });
 
     test("HeliosInstance does NOT include getExecutorService()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect("getExecutorService" in client).toBe(false);
     });
 
     test("HeliosInstance retains getDistributedObject()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect(typeof client.getDistributedObject).toBe("function");
     });
 
     test("HeliosInstance retains getCluster()", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         expect(typeof client.getCluster).toBe("function");
     });
@@ -118,7 +118,7 @@ describe("HeliosInstanceImpl member-only methods", () => {
 
 describe("HeliosClient has no permanent throw-stubs for retained methods", () => {
     test("retained proxy methods return real proxies (Block 20.6 delivered)", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = HeliosClient.newHeliosClient();
         try {
             // Proxy methods now return real proxy objects (Block 20.6 delivered)
@@ -170,7 +170,7 @@ describe("getDistributedObject covers all retained services on member", () => {
 
 describe("getConfig() contract", () => {
     test("HeliosInstance.getConfig() returns InstanceConfig, satisfied by ClientConfig", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
         const config = client.getConfig();
         expect(typeof config.getName).toBe("function");
@@ -183,7 +183,7 @@ describe("getConfig() contract", () => {
 
 describe("Verification: retained HeliosInstance methods have owners", () => {
     test("every retained method on HeliosClient is a real function, not undefined", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
 
         const retainedMethods = [

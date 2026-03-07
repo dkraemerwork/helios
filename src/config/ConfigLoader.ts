@@ -108,6 +108,11 @@ export function parseRawConfig(raw: unknown, configOrigin?: string): HeliosConfi
         }
     }
 
+    // --- network / join config ---
+    if ('network' in obj && obj['network'] !== null && typeof obj['network'] === 'object') {
+        parseNetworkConfig(obj['network'] as Record<string, unknown>, config);
+    }
+
     // --- blitz config ---
     if ('blitz' in obj && obj['blitz'] !== null && typeof obj['blitz'] === 'object') {
         config.setBlitzConfig(obj['blitz'] as HeliosBlitzRuntimeConfig);
@@ -290,4 +295,93 @@ function parseMapConfig(entry: unknown): MapConfig {
     }
 
     return mc;
+}
+
+// ── Network / Join config parsing ─────────────────────────────────────────
+
+function parseNetworkConfig(raw: Record<string, unknown>, config: HeliosConfig): void {
+    const networkConfig = config.getNetworkConfig();
+
+    if (typeof raw['port'] === 'number') {
+        networkConfig.setPort(raw['port'] as number);
+    }
+
+    if ('join' in raw && raw['join'] !== null && typeof raw['join'] === 'object') {
+        parseJoinConfig(raw['join'] as Record<string, unknown>, config);
+    }
+}
+
+function parseJoinConfig(raw: Record<string, unknown>, config: HeliosConfig): void {
+    const joinConfig = config.getNetworkConfig().getJoin();
+
+    // --- multicast ---
+    if ('multicast' in raw && raw['multicast'] !== null && typeof raw['multicast'] === 'object') {
+        const mc = raw['multicast'] as Record<string, unknown>;
+        const multicastConfig = joinConfig.getMulticastConfig();
+
+        if (typeof mc['enabled'] === 'boolean') {
+            multicastConfig.setEnabled(mc['enabled'] as boolean);
+        }
+        if (typeof mc['multicast-group'] === 'string') {
+            multicastConfig.setMulticastGroup(mc['multicast-group'] as string);
+        }
+        if (typeof mc['multicastGroup'] === 'string') {
+            multicastConfig.setMulticastGroup(mc['multicastGroup'] as string);
+        }
+        if (typeof mc['multicast-port'] === 'number') {
+            multicastConfig.setMulticastPort(mc['multicast-port'] as number);
+        }
+        if (typeof mc['multicastPort'] === 'number') {
+            multicastConfig.setMulticastPort(mc['multicastPort'] as number);
+        }
+        if (typeof mc['multicast-timeout-seconds'] === 'number') {
+            multicastConfig.setMulticastTimeoutSeconds(mc['multicast-timeout-seconds'] as number);
+        }
+        if (typeof mc['multicastTimeoutSeconds'] === 'number') {
+            multicastConfig.setMulticastTimeoutSeconds(mc['multicastTimeoutSeconds'] as number);
+        }
+        if (typeof mc['multicast-time-to-live'] === 'number') {
+            multicastConfig.setMulticastTimeToLive(mc['multicast-time-to-live'] as number);
+        }
+        if (typeof mc['multicastTimeToLive'] === 'number') {
+            multicastConfig.setMulticastTimeToLive(mc['multicastTimeToLive'] as number);
+        }
+        if (typeof mc['loopback-mode-enabled'] === 'boolean') {
+            multicastConfig.setLoopbackModeEnabled(mc['loopback-mode-enabled'] as boolean);
+        }
+        if (typeof mc['loopbackModeEnabled'] === 'boolean') {
+            multicastConfig.setLoopbackModeEnabled(mc['loopbackModeEnabled'] as boolean);
+        }
+        if (Array.isArray(mc['trusted-interfaces'])) {
+            const ifaces = new Set<string>();
+            for (const iface of mc['trusted-interfaces'] as unknown[]) {
+                if (typeof iface === 'string') ifaces.add(iface);
+            }
+            multicastConfig.setTrustedInterfaces(ifaces);
+        }
+        if (Array.isArray(mc['trustedInterfaces'])) {
+            const ifaces = new Set<string>();
+            for (const iface of mc['trustedInterfaces'] as unknown[]) {
+                if (typeof iface === 'string') ifaces.add(iface);
+            }
+            multicastConfig.setTrustedInterfaces(ifaces);
+        }
+    }
+
+    // --- tcp-ip ---
+    if ('tcp-ip' in raw && raw['tcp-ip'] !== null && typeof raw['tcp-ip'] === 'object') {
+        const tc = raw['tcp-ip'] as Record<string, unknown>;
+        const tcpIpConfig = joinConfig.getTcpIpConfig();
+
+        if (typeof tc['enabled'] === 'boolean') {
+            tcpIpConfig.setEnabled(tc['enabled'] as boolean);
+        }
+        if (Array.isArray(tc['members'])) {
+            for (const member of tc['members'] as unknown[]) {
+                if (typeof member === 'string') {
+                    tcpIpConfig.addMember(member);
+                }
+            }
+        }
+    }
 }

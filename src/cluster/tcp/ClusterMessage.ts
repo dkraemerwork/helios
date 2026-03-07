@@ -148,6 +148,38 @@ export interface BackupAckMsg {
   readonly callId: number;
 }
 
+export interface RecoveryAntiEntropyMsg {
+  readonly type: "RECOVERY_ANTI_ENTROPY";
+  readonly senderId: string;
+  readonly partitionId: number;
+  readonly replicaIndex: number;
+  readonly primaryVersions: string[];
+  readonly namespaceVersions: Record<string, string[]>;
+}
+
+export interface RecoverySyncRequestMsg {
+  readonly type: "RECOVERY_SYNC_REQUEST";
+  readonly requesterId: string;
+  readonly partitionId: number;
+  readonly replicaIndex: number;
+  readonly dirtyNamespaces: string[];
+}
+
+export interface RecoverySyncNamespaceStateMsg {
+  readonly namespace: string;
+  readonly entries: readonly [EncodedData, EncodedData][];
+  readonly estimatedSizeBytes: number;
+}
+
+export interface RecoverySyncResponseMsg {
+  readonly type: "RECOVERY_SYNC_RESPONSE";
+  readonly partitionId: number;
+  readonly replicaIndex: number;
+  readonly versions: string[];
+  readonly namespaceVersions: Record<string, string[]>;
+  readonly namespaceStates: readonly RecoverySyncNamespaceStateMsg[];
+}
+
 export interface QueueRequestMsg {
   readonly type: "QUEUE_REQUEST";
   readonly requestId: string;
@@ -236,6 +268,50 @@ export interface TopicAckMsg {
   readonly error?: string;
 }
 
+export interface ReliableTopicPublishRequestMsg {
+  readonly type: "RELIABLE_TOPIC_PUBLISH_REQUEST";
+  readonly requestId: string;
+  readonly topicName: string;
+  readonly data: EncodedData;
+  readonly sourceNodeId: string;
+}
+
+export interface ReliableTopicPublishAckMsg {
+  readonly type: "RELIABLE_TOPIC_PUBLISH_ACK";
+  readonly requestId: string;
+  readonly error?: string;
+}
+
+export interface ReliableTopicMessageMsg {
+  readonly type: "RELIABLE_TOPIC_MESSAGE";
+  readonly topicName: string;
+  readonly sequence: number;
+  readonly publishTime: number;
+  readonly publisherAddress: string | null;
+  readonly data: EncodedData;
+}
+
+export interface ReliableTopicBackupMsg {
+  readonly type: "RELIABLE_TOPIC_BACKUP";
+  readonly requestId: string | null;
+  readonly topicName: string;
+  readonly sequence: number;
+  readonly publishTime: number;
+  readonly publisherAddress: string | null;
+  readonly data: EncodedData;
+  readonly sourceNodeId: string;
+}
+
+export interface ReliableTopicBackupAckMsg {
+  readonly type: "RELIABLE_TOPIC_BACKUP_ACK";
+  readonly requestId: string;
+}
+
+export interface ReliableTopicDestroyMsg {
+  readonly type: "RELIABLE_TOPIC_DESTROY";
+  readonly topicName: string;
+}
+
 // ── Blitz topology protocol messages ─────────────────────────────────
 
 export interface BlitzNodeRegisterMsg {
@@ -290,6 +366,9 @@ export type ClusterMessage =
   | OperationResponseMsg
   | BackupMsg
   | BackupAckMsg
+  | RecoveryAntiEntropyMsg
+  | RecoverySyncRequestMsg
+  | RecoverySyncResponseMsg
   | QueueRequestMsg
   | QueueResponseMsg
   | QueueStateSyncMsg
@@ -298,6 +377,12 @@ export type ClusterMessage =
   | TopicMessageMsg
   | TopicPublishRequestMsg
   | TopicAckMsg
+  | ReliableTopicPublishRequestMsg
+  | ReliableTopicPublishAckMsg
+  | ReliableTopicMessageMsg
+  | ReliableTopicBackupMsg
+  | ReliableTopicBackupAckMsg
+  | ReliableTopicDestroyMsg
   | BlitzNodeRegisterMsg
   | BlitzNodeRemoveMsg
   | BlitzTopologyRequestMsg

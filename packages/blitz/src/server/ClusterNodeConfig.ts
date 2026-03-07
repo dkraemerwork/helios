@@ -6,9 +6,9 @@
  * (Phase 18.2+) builds on top of this to manage topology and lifecycle.
  */
 
-import { NatsServerBinaryResolver } from './NatsServerBinaryResolver.ts';
-import { NatsServerManager } from './NatsServerManager.ts';
-import type { NatsServerNodeConfig } from './NatsServerConfig.ts';
+import { NatsServerBinaryResolver } from './NatsServerBinaryResolver.js';
+import { NatsServerManager } from './NatsServerManager.js';
+import type { NatsServerNodeConfig } from './NatsServerConfig.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 

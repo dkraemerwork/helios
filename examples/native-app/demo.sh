@@ -50,5 +50,28 @@ sleep 0.5
 curl -s "$NODE2_CTRL/demo/topics/demo-events/messages" | pretty_print
 curl -s "$NODE3_CTRL/demo/topics/demo-events/messages" | pretty_print
 
+step "Blitz quote streaming — check ingestor status (node1 is the default ingestor)"
+curl -s "$NODE1_CTRL/blitz/quotes/status" | pretty_print
+
+step "Start printing quotes on node2"
+curl -s -X POST "$NODE2_CTRL/blitz/quotes/print/start" | pretty_print
+printf '\nWaiting 5 seconds to collect quotes...\n'
+sleep 5
+
+step "Check recent quotes received on node2"
+curl -s "$NODE2_CTRL/blitz/quotes/recent" | pretty_print
+
+step "Stop printing quotes on node2"
+curl -s -X POST "$NODE2_CTRL/blitz/quotes/print/stop" | pretty_print
+
 step "Done"
-printf 'Use the REST ports (8081-8083) for maps/queues and control ports (9091-9093) for topic publish/inspect.\n'
+printf 'Use the REST ports (8081-8083) for maps/queues and control ports (9091-9093) for topic/quote endpoints.\n'
+printf '\nBlitz quote endpoints (on each node control port):\n'
+printf '  GET  /blitz/quotes/status          — Ingestor + subscriber status\n'
+printf '  GET  /blitz/quotes/recent          — Recent quotes received\n'
+printf '  POST /blitz/quotes/ingest/start    — Start Binance WS ingestion\n'
+printf '  POST /blitz/quotes/ingest/stop     — Stop Binance WS ingestion\n'
+printf '  POST /blitz/quotes/print/start     — Start printing quotes to console\n'
+printf '  POST /blitz/quotes/print/stop      — Stop printing quotes\n'
+printf '\nFailover test: kill a container with "docker kill helios-native-demo-node1-1"\n'
+printf 'Then start ingestion on another node: curl -X POST localhost:9092/blitz/quotes/ingest/start\n'

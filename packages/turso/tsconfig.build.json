@@ -5,7 +5,11 @@
     "declaration": true,
     "sourceMap": true,
     "rootDir": "./src",
-    "outDir": "./dist/src"
+    "outDir": "./dist/src",
+    "paths": {
+      "@zenystx/helios-core": ["../../dist/src/index.d.ts"],
+      "@zenystx/helios-core/*": ["../../dist/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules", "test"]

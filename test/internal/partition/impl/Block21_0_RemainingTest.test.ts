@@ -18,6 +18,8 @@ import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
+import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
@@ -59,9 +61,10 @@ const PARTITION_COUNT = 16;
 // ══════════════════════════════════════════════════════════════════
 describe('Map-scoped partition-lost events', () => {
     test('MapPartitionLostEvent carries map name and partition ID', () => {
-        // InternalPartitionServiceImpl must support map-scoped partition-lost
-        // listeners that re-emit PartitionLostEvent with the map name attached
         const service = new InternalPartitionServiceImpl(PARTITION_COUNT);
+        const mapService = new MapContainerService();
+        mapService.getOrCreateRecordStore('my-map', 3);
+        service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
         expect(typeof service.onMapPartitionLost).toBe('function');
 
         const events: Array<{ mapName: string; partitionId: number; lostReplicaCount: number }> = [];
@@ -71,7 +74,7 @@ describe('Map-scoped partition-lost events', () => {
         service.firstArrangement([memberA], memberA.getAddress(), 0);
         service.memberRemovedWithRepair(memberA, []);
 
-        expect(events.length).toBeGreaterThan(0);
+        expect(events.length).toBe(1);
         for (const e of events) {
             expect(e.mapName).toBe('my-map');
             expect(typeof e.partitionId).toBe('number');
@@ -80,6 +83,9 @@ describe('Map-scoped partition-lost events', () => {
 
     test('map-scoped listener receives only events for its map name', () => {
         const service = new InternalPartitionServiceImpl(4);
+        const mapService = new MapContainerService();
+        mapService.getOrCreateRecordStore('map1', 2);
+        service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
         const map1Events: Array<{ mapName: string }> = [];
         const map2Events: Array<{ mapName: string }> = [];
 
@@ -90,15 +96,17 @@ describe('Map-scoped partition-lost events', () => {
         service.firstArrangement([memberA], memberA.getAddress(), 0);
         service.memberRemovedWithRepair(memberA, []);
 
-        // Both maps should receive events (all partitions lost)
-        expect(map1Events.length).toBe(4);
-        expect(map2Events.length).toBe(4);
+        expect(map1Events.length).toBe(1);
+        expect(map2Events.length).toBe(0);
         for (const e of map1Events) expect(e.mapName).toBe('map1');
         for (const e of map2Events) expect(e.mapName).toBe('map2');
     });
 
     test('removeMapPartitionLostListener stops delivery', () => {
         const service = new InternalPartitionServiceImpl(4);
+        const mapService = new MapContainerService();
+        mapService.getOrCreateRecordStore('test-map', 0);
+        service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
         const events: unknown[] = [];
 
         const id = service.onMapPartitionLost('test-map', (e) => events.push(e));
@@ -114,6 +122,9 @@ describe('Map-scoped partition-lost events', () => {
 
     test('map-scoped partition-lost event has same structure as Hazelcast MapPartitionLostEvent', () => {
         const service = new InternalPartitionServiceImpl(4);
+        const mapService = new MapContainerService();
+        mapService.getOrCreateRecordStore('parity-map', 1);
+        service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
         const events: Array<{ mapName: string; partitionId: number; lostReplicaCount: number }> = [];
 
         service.onMapPartitionLost('parity-map', (e) => events.push(e));
@@ -122,7 +133,7 @@ describe('Map-scoped partition-lost events', () => {
         service.firstArrangement([memberA], memberA.getAddress(), 0);
         service.memberRemovedWithRepair(memberA, []);
 
-        expect(events.length).toBeGreaterThan(0);
+        expect(events.length).toBe(1);
         const e = events[0];
         expect(typeof e.mapName).toBe('string');
         expect(typeof e.partitionId).toBe('number');
@@ -418,6 +429,9 @@ describe('Block 21.0 verification — no stubs, no fakes', () => {
     test('recovery path is production-real with no test-only shortcuts', () => {
         // Verify the full chain: member removal → promotion → partition-lost → metrics
         const service = new InternalPartitionServiceImpl(4);
+        const mapService = new MapContainerService();
+        mapService.getOrCreateRecordStore('users', 0);
+        service.registerMigrationAwareService(MapService.SERVICE_NAME, mapService);
         const memberA = makeMember('127.0.0.1', 5701, 'a');
         const memberB = makeMember('127.0.0.1', 5702, 'b');
         service.firstArrangement([memberA, memberB], memberA.getAddress(), 1);

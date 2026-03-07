@@ -67,7 +67,7 @@ describe("ClientConnectionManager", () => {
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const config = new ClientConfig();
         config.getNetworkConfig().addAddress(`127.0.0.1:${server.getPort()}`);
@@ -82,12 +82,83 @@ describe("ClientConnectionManager", () => {
         await mgr.shutdown();
     });
 
+    test("configured username/password credentials are sent during connect", async () => {
+        const { ClientConnectionManager } = await import(
+            "@zenystx/helios-core/client/connection/ClientConnectionManager"
+        );
+        const { ClientConfig } = await import(
+            "@zenystx/helios-core/client/config"
+        );
+
+        const securedServer = new ClientProtocolServer({
+            clusterName: "dev",
+            port: 0,
+            host: "127.0.0.1",
+            auth: {
+                username: "admin",
+                password: "secret",
+            },
+        });
+        await securedServer.start();
+
+        try {
+            const config = new ClientConfig();
+            config.getNetworkConfig().addAddress(`127.0.0.1:${securedServer.getPort()}`);
+            config.getSecurityConfig().setUsernamePasswordIdentity("admin", "secret");
+
+            const mgr = new ClientConnectionManager(config);
+            await mgr.start();
+            await mgr.connectToCluster();
+
+            expect(mgr.getActiveConnections().length).toBeGreaterThan(0);
+
+            await mgr.shutdown();
+        } finally {
+            await securedServer.shutdown();
+        }
+    });
+
+    test("wrong username/password is rejected as a credential error", async () => {
+        const { ClientConnectionManager } = await import(
+            "@zenystx/helios-core/client/connection/ClientConnectionManager"
+        );
+        const { ClientConfig } = await import(
+            "@zenystx/helios-core/client/config"
+        );
+
+        const securedServer = new ClientProtocolServer({
+            clusterName: "dev",
+            port: 0,
+            host: "127.0.0.1",
+            auth: {
+                username: "admin",
+                password: "secret",
+            },
+        });
+        await securedServer.start();
+
+        try {
+            const config = new ClientConfig();
+            config.getNetworkConfig().addAddress(`127.0.0.1:${securedServer.getPort()}`);
+            config.getSecurityConfig().setUsernamePasswordIdentity("admin", "wrong");
+            config.getConnectionStrategyConfig().getConnectionRetryConfig()
+                .setClusterConnectTimeoutMillis(2000);
+
+            const mgr = new ClientConnectionManager(config);
+            await mgr.start();
+            await expect(mgr.connectToCluster()).rejects.toThrow(/credential|auth/i);
+            await mgr.shutdown();
+        } finally {
+            await securedServer.shutdown();
+        }
+    });
+
     test("auth failure with wrong cluster name is classified as credentials error", async () => {
         const { ClientConnectionManager } = await import(
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const config = new ClientConfig();
         config.setClusterName("wrong-cluster");
@@ -106,7 +177,7 @@ describe("ClientConnectionManager", () => {
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const config = new ClientConfig();
         config.getNetworkConfig().addAddress(`127.0.0.1:${server.getPort()}`);
@@ -130,7 +201,7 @@ describe("ClientConnectionManager", () => {
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const config = new ClientConfig();
         config.getConnectionStrategyConfig().setReconnectMode("OFF");
@@ -156,7 +227,7 @@ describe("ClientConnectionManager", () => {
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const config = new ClientConfig();
         config.getNetworkConfig().addAddress(`127.0.0.1:${server.getPort()}`);
@@ -258,7 +329,7 @@ describe("ClientInvocationService", () => {
             "@zenystx/helios-core/client/invocation/ClientInvocation"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const { MapPutCodec } = await import(
             "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec"
@@ -298,7 +369,7 @@ describe("ClientInvocationService", () => {
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const config = new ClientConfig();
         config.getNetworkConfig().addAddress(`127.0.0.1:${server.getPort()}`);
@@ -475,6 +546,7 @@ describe("ClientListenerService", () => {
                 encodeAddRequest: () => null as any,
                 decodeAddResponse: () => "reg-1",
                 encodeRemoveRequest: () => null as any,
+                decodeRemoveResponse: () => true,
             },
             () => {},
         );
@@ -491,6 +563,7 @@ describe("ClientListenerService", () => {
                 encodeAddRequest: () => null as any,
                 decodeAddResponse: () => "reg-1",
                 encodeRemoveRequest: () => null as any,
+                decodeRemoveResponse: () => true,
             },
             () => {},
         );
@@ -536,6 +609,7 @@ describe("ClientListenerService", () => {
                 encodeAddRequest: () => null as any,
                 decodeAddResponse: () => `reg-${regIds.length}`,
                 encodeRemoveRequest: () => null as any,
+                decodeRemoveResponse: () => true,
             },
             () => {},
         );
@@ -612,7 +686,7 @@ describe("Integration: client runtime end-to-end", () => {
             "@zenystx/helios-core/client/invocation/ClientInvocation"
         );
         const { ClientConfig } = await import(
-            "@zenystx/helios-core/client/config/ClientConfig"
+            "@zenystx/helios-core/client/config"
         );
         const { MapPutCodec } = await import(
             "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec"

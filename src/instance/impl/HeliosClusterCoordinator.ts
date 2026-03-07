@@ -17,6 +17,7 @@ import { ClusterJoinManager } from "@zenystx/helios-core/internal/cluster/impl/C
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { MembersView } from "@zenystx/helios-core/internal/cluster/impl/MembersView";
 import { PartitionReplica } from "@zenystx/helios-core/internal/partition/PartitionReplica";
+import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
 import type { PartitionRuntimeState } from "@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl";
 import { InternalPartitionServiceImpl } from "@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
@@ -25,6 +26,24 @@ import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 type MembershipListener = () => void;
+interface BlitzCoordinatorListener {
+  onAuthorityChanged?(state: {
+    masterMemberId: string | null;
+    memberListVersion: number;
+    isMaster: boolean;
+    joined: boolean;
+    memberIds: string[];
+  }): void;
+  onTopologyResponse?(state: {
+    routes: string[];
+    registrationsComplete: boolean;
+    clientConnectUrl?: string;
+    retryAfterMs?: number;
+  }): void;
+  onTopologyAnnounce?(state: { routes: string[] }): void;
+  onTopologyRegistrationChanged?(): void;
+  onDemotion?(): void;
+}
 const DEFAULT_CLUSTER_NAME = "helios";
 
 export class HeliosClusterCoordinator {
@@ -34,9 +53,11 @@ export class HeliosClusterCoordinator {
   private readonly _joinManager: ClusterJoinManager;
   private readonly _partitionService = new InternalPartitionServiceImpl();
   private readonly _membershipListeners: MembershipListener[] = [];
+  private readonly _blitzCoordinatorListeners: BlitzCoordinatorListener[] = [];
   private readonly _joinRequestedPeers = new Set<string>();
   private readonly _connectedPeers = new Set<string>();
   private readonly _blitzCoordinator = new HeliosBlitzCoordinator();
+  private _lastKnownMasterState = false;
 
   constructor(
     private readonly _instanceName: string,
@@ -70,14 +91,16 @@ export class HeliosClusterCoordinator {
   }
 
   bootstrap(): void {
-    const configuredPeers = this._config
-      .getNetworkConfig()
-      .getJoin()
-      .getTcpIpConfig()
-      .getMembers();
-    if (configuredPeers.length === 0) {
+    const joinConfig = this._config.getNetworkConfig().getJoin();
+    const configuredPeers = joinConfig.getTcpIpConfig().getMembers();
+    const multicastEnabled = joinConfig.getMulticastConfig().isEnabled();
+
+    // If using TCP-IP with no configured peers, or if explicitly called
+    // after multicast discovery determines this node should be master
+    if (configuredPeers.length === 0 || multicastEnabled) {
       this._joinManager.setThisMemberAsMaster();
       this._recomputePartitions();
+      this._syncBlitzCoordinatorState();
       this._notifyMembershipChanged();
     }
   }
@@ -92,6 +115,10 @@ export class HeliosClusterCoordinator {
 
   getLocalMemberId(): string {
     return this._localMember.getUuid();
+  }
+
+  getInternalPartitionService(): InternalPartitionServiceImpl {
+    return this._partitionService;
   }
 
   isJoined(): boolean {
@@ -148,6 +175,10 @@ export class HeliosClusterCoordinator {
     this._membershipListeners.push(listener);
   }
 
+  onBlitzCoordinatorEvent(listener: BlitzCoordinatorListener): void {
+    this._blitzCoordinatorListeners.push(listener);
+  }
+
   handlePeerConnected(peerId: string): void {
     if (peerId === this._localMember.getUuid()) {
       return;
@@ -199,15 +230,27 @@ export class HeliosClusterCoordinator {
         this._handlePartitionState(message);
         return true;
       case "BLITZ_NODE_REGISTER":
-        return this._blitzCoordinator.handleRegister(
+        {
+          const accepted = this._blitzCoordinator.handleRegister(
           message as BlitzNodeRegisterMsg,
           this._clusterService.isMaster(),
-        );
+          );
+          if (accepted) {
+            this._notifyBlitzTopologyRegistrationChanged();
+          }
+          return accepted;
+        }
       case "BLITZ_NODE_REMOVE":
-        return this._blitzCoordinator.handleRemove(
+        {
+          const accepted = this._blitzCoordinator.handleRemove(
           message as BlitzNodeRemoveMsg,
           this._clusterService.isMaster(),
-        );
+          );
+          if (accepted) {
+            this._notifyBlitzTopologyRegistrationChanged();
+          }
+          return accepted;
+        }
       case "BLITZ_TOPOLOGY_REQUEST": {
         const response = this._blitzCoordinator.handleTopologyRequest(
           message as BlitzTopologyRequestMsg,
@@ -219,13 +262,25 @@ export class HeliosClusterCoordinator {
         return response !== null;
       }
       case "BLITZ_TOPOLOGY_RESPONSE":
-        return this._blitzCoordinator.handleIncomingTopologyResponse(
+        {
+          const result = this._blitzCoordinator.handleIncomingTopologyResponse(
           message as import("@zenystx/helios-core/cluster/tcp/ClusterMessage").BlitzTopologyResponseMsg,
-        ).accepted;
+          );
+          if (result.accepted) {
+            this._notifyBlitzTopologyResponse(result);
+          }
+          return result.accepted;
+        }
       case "BLITZ_TOPOLOGY_ANNOUNCE":
-        return this._blitzCoordinator.handleIncomingTopologyAnnounce(
+        {
+          const result = this._blitzCoordinator.handleIncomingTopologyAnnounce(
           message as import("@zenystx/helios-core/cluster/tcp/ClusterMessage").BlitzTopologyAnnounceMsg,
-        ).accepted;
+          );
+          if (result.accepted) {
+            this._notifyBlitzTopologyAnnounce(result.routes ?? []);
+          }
+          return result.accepted;
+        }
       default:
         return false;
     }
@@ -262,6 +317,7 @@ export class HeliosClusterCoordinator {
 
     void this._joinManager.startJoin([joiner]).then(() => {
       this._recomputePartitions();
+      this._syncBlitzCoordinatorState();
 
       const members = this._clusterService.getMembers() as MemberImpl[];
       const wireMembers = members.map((member) => this._toWireMember(member));
@@ -316,6 +372,7 @@ export class HeliosClusterCoordinator {
         this._fromWireMembers(message.members),
       ).toMemberMap(),
     );
+    this._syncBlitzCoordinatorState();
     this._connectToKnownMembers();
     this._notifyMembershipChanged();
   }
@@ -332,19 +389,20 @@ export class HeliosClusterCoordinator {
         this._fromWireMembers(message.members),
       ).toMemberMap(),
     );
+    this._syncBlitzCoordinatorState();
     this._connectToKnownMembers();
     this._notifyMembershipChanged();
   }
 
   private _handlePartitionState(message: PartitionStateMsg): void {
-    this._partitionService.applyPartitionRuntimeState(
+    this._applyRuntimeStateWithPromotionLifecycle(
       this._fromWirePartitionState(message),
-      this._localAddress,
     );
     this._notifyMembershipChanged();
   }
 
   private _removeMember(memberId: string): void {
+    const removedMember = this._clusterService.getMemberByUuid(memberId);
     const currentMembers = (
       this._clusterService.getMembers() as MemberImpl[]
     ).filter((member) => member.getUuid() !== memberId);
@@ -364,7 +422,17 @@ export class HeliosClusterCoordinator {
     this._clusterService.setMemberMap(newView.toMemberMap());
     this._clusterService.setMasterAddress(newMaster.getAddress());
     this._clusterService.setJoined(true);
-    this._recomputePartitions();
+
+    if (removedMember) {
+      const previousState = this._toRuntimeState(this._partitionService);
+      this._partitionService.memberRemovedWithRepair(removedMember, currentMembers);
+      this._applyRuntimeStateWithPromotionLifecycle(
+        this._toRuntimeState(this._partitionService),
+        previousState,
+      );
+    } else {
+      this._recomputePartitions();
+    }
 
     if (newMaster.getUuid() === this._localMember.getUuid()) {
       const wireMembers = currentMembers.map((member) =>
@@ -389,6 +457,7 @@ export class HeliosClusterCoordinator {
       this._broadcastPartitionState();
     }
 
+    this._syncBlitzCoordinatorState();
     this._notifyMembershipChanged();
   }
 
@@ -431,10 +500,96 @@ export class HeliosClusterCoordinator {
       );
       freshPartitionService.getPartition(partitionId).setVersion(nextVersion);
     }
-    this._partitionService.applyPartitionRuntimeState(
+    this._applyRuntimeStateWithPromotionLifecycle(
       this._toRuntimeState(freshPartitionService),
-      this._localAddress,
     );
+  }
+
+  private _applyRuntimeStateWithPromotionLifecycle(
+    state: PartitionRuntimeState,
+    previousState?: PartitionRuntimeState,
+  ): void {
+    const localUuid = this._localMember.getUuid();
+    const promotions: Array<{ partitionId: number; sourceUuid: string; targetUuid: string }> = [];
+    const demotions: PartitionMigrationEvent[] = [];
+    const baselineState = previousState ?? this._toRuntimeState(this._partitionService);
+
+    for (let partitionId = 0; partitionId < this._partitionService.getPartitionCount(); partitionId++) {
+      const currentPartition = this._partitionService.getPartition(partitionId);
+      const currentOwner = baselineState.partitions[partitionId]?.[0] ?? null;
+      const nextOwner = state.partitions[partitionId]?.[0] ?? null;
+      const currentOwnerUuid = currentOwner?.uuid() ?? null;
+      const nextOwnerUuid = nextOwner?.uuid() ?? null;
+
+      if (currentOwnerUuid === nextOwnerUuid) {
+        continue;
+      }
+
+      if (currentOwnerUuid === localUuid) {
+        const event = new PartitionMigrationEvent(partitionId, currentOwner, nextOwner, 'MOVE');
+        for (const [, service] of this._partitionService.getMigrationAwareServices()) {
+          service.beforeMigration(event);
+        }
+        demotions.push(event);
+      }
+
+      if (nextOwnerUuid === localUuid) {
+        const sourceUuid = currentOwnerUuid ?? 'unassigned';
+        currentPartition.beginPromotion(sourceUuid, localUuid);
+        this._notifyServicesBeforePromotion(partitionId, sourceUuid, localUuid);
+        promotions.push({ partitionId, sourceUuid, targetUuid: localUuid });
+      }
+    }
+
+    this._partitionService.applyPartitionRuntimeState(state, this._localAddress);
+
+    for (const promotion of promotions) {
+      this._notifyServicesInstallPromotionState(promotion.partitionId);
+      this._partitionService.getPartition(promotion.partitionId).finalizePromotion();
+      this._notifyServicesFinalizePromotion(
+        promotion.partitionId,
+        promotion.sourceUuid,
+        promotion.targetUuid,
+      );
+    }
+
+    for (const event of demotions) {
+      for (const [, service] of this._partitionService.getMigrationAwareServices()) {
+        service.commitMigration(event);
+      }
+    }
+  }
+
+  private _notifyServicesBeforePromotion(
+    partitionId: number,
+    sourceUuid: string,
+    targetUuid: string,
+  ): void {
+    for (const [, service] of this._partitionService.getMigrationAwareServices()) {
+      if ('beforePromotion' in service && typeof service.beforePromotion === 'function') {
+        service.beforePromotion(partitionId, sourceUuid, targetUuid);
+      }
+    }
+  }
+
+  private _notifyServicesInstallPromotionState(partitionId: number): void {
+    for (const [, service] of this._partitionService.getMigrationAwareServices()) {
+      if ('installPromotionState' in service && typeof service.installPromotionState === 'function') {
+        service.installPromotionState(partitionId);
+      }
+    }
+  }
+
+  private _notifyServicesFinalizePromotion(
+    partitionId: number,
+    sourceUuid: string,
+    targetUuid: string,
+  ): void {
+    for (const [, service] of this._partitionService.getMigrationAwareServices()) {
+      if ('finalizePromotion' in service && typeof service.finalizePromotion === 'function') {
+        service.finalizePromotion(partitionId, sourceUuid, targetUuid);
+      }
+    }
   }
 
   private _broadcastPartitionState(): void {
@@ -539,6 +694,72 @@ export class HeliosClusterCoordinator {
   private _notifyMembershipChanged(): void {
     for (const listener of this._membershipListeners) {
       listener();
+    }
+  }
+
+  private _syncBlitzCoordinatorState(): void {
+    const memberMap = this._clusterService.getMemberMap();
+    const memberIds = Array.from(this._clusterService.getMembers(), (member) =>
+      member.getUuid(),
+    );
+    const currentIsMaster = this._clusterService.isMaster();
+    if (this._lastKnownMasterState && !currentIsMaster) {
+      this._blitzCoordinator.onDemotion();
+      for (const listener of this._blitzCoordinatorListeners) {
+        listener.onDemotion?.();
+      }
+    }
+    this._lastKnownMasterState = currentIsMaster;
+
+    this._blitzCoordinator.setMemberListVersion(memberMap.getVersion());
+    this._blitzCoordinator.setExpectedRegistrants(new Set(memberIds));
+    this._blitzCoordinator.getReplicaReconciler().setIsMaster(currentIsMaster);
+
+    const masterAddress = this._clusterService.getMasterAddress();
+    const masterMemberId =
+      masterAddress === null
+        ? null
+        : this._clusterService.getMember(masterAddress)?.getUuid() ?? null;
+    if (masterMemberId !== null) {
+      this._blitzCoordinator.setMasterMemberId(masterMemberId);
+    }
+
+    for (const listener of this._blitzCoordinatorListeners) {
+      listener.onAuthorityChanged?.({
+        masterMemberId,
+        memberListVersion: memberMap.getVersion(),
+        isMaster: currentIsMaster,
+        joined: this._clusterService.isJoined(),
+        memberIds,
+      });
+    }
+  }
+
+  private _notifyBlitzTopologyResponse(state: {
+    routes?: string[];
+    registrationsComplete?: boolean;
+    clientConnectUrl?: string;
+    retryAfterMs?: number;
+  }): void {
+    for (const listener of this._blitzCoordinatorListeners) {
+      listener.onTopologyResponse?.({
+        routes: state.routes ?? [],
+        registrationsComplete: state.registrationsComplete ?? false,
+        clientConnectUrl: state.clientConnectUrl,
+        retryAfterMs: state.retryAfterMs,
+      });
+    }
+  }
+
+  private _notifyBlitzTopologyAnnounce(routes: string[]): void {
+    for (const listener of this._blitzCoordinatorListeners) {
+      listener.onTopologyAnnounce?.({ routes });
+    }
+  }
+
+  private _notifyBlitzTopologyRegistrationChanged(): void {
+    for (const listener of this._blitzCoordinatorListeners) {
+      listener.onTopologyRegistrationChanged?.();
     }
   }
 }

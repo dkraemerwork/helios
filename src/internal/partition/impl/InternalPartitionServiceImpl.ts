@@ -93,6 +93,10 @@ export interface RecoveryMetrics {
 
 type PartitionLostListener = (event: PartitionLostEvent) => void;
 
+interface PartitionNamespaceAwareService extends MigrationAwareService {
+    getPartitionNamespaces(partitionId: number): string[];
+}
+
 /** Map-scoped partition-lost event — Hazelcast MapPartitionLostEvent parity. */
 export interface MapPartitionLostEvent {
     mapName: string;
@@ -101,6 +105,7 @@ export interface MapPartitionLostEvent {
 }
 
 type MapPartitionLostListener = (event: MapPartitionLostEvent) => void;
+type AntiEntropyDispatcher = (targetUuid: string, op: PartitionBackupReplicaAntiEntropyOp) => void | Promise<void>;
 
 export class InternalPartitionServiceImpl {
     private readonly _stateManager: PartitionStateManager;
@@ -133,6 +138,8 @@ export class InternalPartitionServiceImpl {
     private _replicaManager: PartitionReplicaManager | null = null;
     /** Local member UUID for identifying locally-owned partitions. */
     private _localMemberUuid: string | null = null;
+    /** Live runtime dispatcher for anti-entropy delivery. */
+    private _antiEntropyDispatcher: AntiEntropyDispatcher | null = null;
 
     /** Recovery metrics accumulators. */
     private _metrics: RecoveryMetrics = {
@@ -332,14 +339,42 @@ export class InternalPartitionServiceImpl {
         for (const listener of this._partitionLostListeners.values()) {
             listener(event);
         }
-        // Emit to all registered map-scoped listeners
+        const affectedMapNames = this._getAffectedMapNames(event.partitionId);
+        if (affectedMapNames.size === 0) {
+            return;
+        }
+
         for (const entry of this._mapPartitionLostListeners.values()) {
+            if (!affectedMapNames.has(entry.mapName)) {
+                continue;
+            }
+
             entry.listener({
                 mapName: entry.mapName,
                 partitionId: event.partitionId,
                 lostReplicaCount: event.lostReplicaCount,
             });
         }
+    }
+
+    private _getAffectedMapNames(partitionId: number): Set<string> {
+        const affectedMapNames = new Set<string>();
+
+        for (const service of this._migrationAwareServices.values()) {
+            if (!this._hasPartitionNamespaces(service)) {
+                continue;
+            }
+
+            for (const mapName of service.getPartitionNamespaces(partitionId)) {
+                affectedMapNames.add(mapName);
+            }
+        }
+
+        return affectedMapNames;
+    }
+
+    private _hasPartitionNamespaces(service: MigrationAwareService): service is PartitionNamespaceAwareService {
+        return typeof (service as PartitionNamespaceAwareService).getPartitionNamespaces === 'function';
     }
 
     // ── Map-scoped partition-lost events (R5/R8 parity) ────────
@@ -483,7 +518,18 @@ export class InternalPartitionServiceImpl {
 
         // Generate anti-entropy ops via the task
         const task = new AntiEntropyTask(this._replicaManager);
-        return task.generateOps(localPartitionIds, this._backupCount);
+        const ops = task.generateOps(localPartitionIds, this._backupCount);
+
+        if (this._antiEntropyDispatcher !== null) {
+            for (const op of ops) {
+                const targetReplica = this._stateManager.getPartition(op.partitionId).getReplica(op.targetReplicaIndex);
+                if (targetReplica !== null) {
+                    void this._antiEntropyDispatcher(targetReplica.uuid(), op);
+                }
+            }
+        }
+
+        return ops;
     }
 
     /** Wire the replica manager for anti-entropy dispatch. */
@@ -494,6 +540,22 @@ export class InternalPartitionServiceImpl {
     /** Set the local member UUID for identifying locally-owned partitions. */
     setLocalMemberUuid(uuid: string): void {
         this._localMemberUuid = uuid;
+    }
+
+    setAntiEntropyDispatcher(dispatcher: AntiEntropyDispatcher): void {
+        this._antiEntropyDispatcher = dispatcher;
+    }
+
+    getBackupCount(): number {
+        return this._backupCount;
+    }
+
+    recordNamespaceMutation(partitionId: number, namespace: string): void {
+        this._replicaManager?.incrementNamespaceReplicaVersionsOnly(partitionId, namespace, this._backupCount);
+    }
+
+    applyNamespaceBackupMutation(partitionId: number, namespace: string, replicaIndex: number): void {
+        this._replicaManager?.incrementNamespaceReplicaVersionAtIndex(partitionId, namespace, replicaIndex);
     }
 
     /** Test-only: exposes the anti-entropy cycle result for verification. */

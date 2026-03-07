@@ -1,6 +1,6 @@
 import { appendFile } from 'node:fs/promises';
-import { StringCodec, type BlitzCodec } from '../codec/BlitzCodec.ts';
-import type { Sink } from './Sink.ts';
+import { StringCodec, type BlitzCodec } from '../codec/BlitzCodec.js';
+import type { Sink } from './Sink.js';
 
 class FileSinkImpl<T> implements Sink<T> {
   readonly name: string;

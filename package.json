@@ -2,13 +2,15 @@
   "name": "@zenystx/helios-core",
   "version": "1.0.0",
   "description": "Helios core — TypeScript/Bun port of Hazelcast distributed in-memory platform",
+  "type": "module",
   "private": false,
   "workspaces": [
     "packages/nestjs",
     "packages/blitz",
     "packages/s3",
     "packages/mongodb",
-    "packages/turso"
+    "packages/turso",
+    "packages/dynamodb"
   ],
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -22,18 +24,21 @@
       "types": "./dist/src/server/HeliosServer.d.ts"
     },
     "./client": {
-      "import": "./dist/src/client/HeliosClient.js",
-      "types": "./dist/src/client/HeliosClient.d.ts"
+      "import": "./dist/src/client/index.js",
+      "types": "./dist/src/client/index.d.ts"
     },
     "./client/config": {
-      "import": "./dist/src/client/config/ClientConfig.js",
-      "types": "./dist/src/client/config/ClientConfig.d.ts"
+      "import": "./dist/src/client/config/index.js",
+      "types": "./dist/src/client/config/index.d.ts"
     }
   },
   "files": [
     "dist/src",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "bun run tsc --project tsconfig.build.json",
     "test": "bun test --timeout 30000",
@@ -53,6 +58,8 @@
     "test:mapstore:mongodb:wiring:dynamic-yaml": "bun test test/map/mapstore/wiring/WiringDynamicYaml.test.ts",
     "test:mapstore:mongodb:wiring:config-origin-relative": "bun test test/map/mapstore/wiring/WiringConfigOriginRelative.test.ts",
     "test:mapstore:mongodb:wiring:dynamic-package": "bun test test/map/mapstore/wiring/WiringDynamicPackage.test.ts",
+    "test:mapstore:dynamodb:unit": "bun test packages/dynamodb/test/DynamoDbMapStore.test.ts",
+    "test:mapstore:dynamodb:integration": "bun test packages/dynamodb/test/DynamoDbMapStore.integration.test.ts",
     "test:mapstore:clustered:proof": "bun test test/cluster/tcp/ClusteredMapStoreProofTest.test.ts --timeout 30000",
     "test:mapstore:clustered:multiprocess": "bun test test/cluster/tcp/Block21_4_MultiProcessMapStoreProof.test.ts --timeout 60000",
     "test:mapstore:clustered:mongodb": "bun test packages/mongodb/test/MongoClusteredMapStore.test.ts --timeout 30000",

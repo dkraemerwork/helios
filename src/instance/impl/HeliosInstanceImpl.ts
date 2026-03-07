@@ -76,8 +76,14 @@ import { ExecutorContainerService } from "@zenystx/helios-core/executor/impl/Exe
 import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/ScatterExecutionBackend";
 import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/InlineExecutionBackend";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
+import { MulticastService } from "@zenystx/helios-core/cluster/multicast/MulticastService";
+import { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
+import { PartitionReplicaManager } from "@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager";
+import { PartitionBackupReplicaAntiEntropyOp } from "@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp";
+import { PartitionReplicaSyncResponse } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
+import { BlitzReadinessState } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
 import { MapGetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec";
@@ -92,8 +98,14 @@ import { QueuePollCodec } from "@zenystx/helios-core/client/impl/protocol/codec/
 import { QueueSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueSizeCodec";
 import { QueuePeekCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePeekCodec";
 import { QueueClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueClearCodec";
+import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
+import { TopicRemoveMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicRemoveMessageListenerCodec";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
+import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
+import type { Message } from "@zenystx/helios-core/topic/Message";
+import { encodeData, decodeData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -101,6 +113,78 @@ const QUEUE_SERVICE_NAME = "hz:impl:queueService";
 const TOPIC_SERVICE_NAME = "hz:impl:topicService";
 const RELIABLE_TOPIC_SERVICE_NAME = "hz:impl:reliableTopicService";
 const EXECUTOR_SERVICE_NAME = "hz:impl:executorService";
+
+type BlitzServerManagerLike = {
+  shutdown(): Promise<void>;
+  clientUrls: string[];
+};
+
+type BlitzServiceLike = {
+  shutdown(): Promise<void>;
+  readonly isClosed: boolean;
+  readonly jsm?: { getAccountInfo(): Promise<unknown> };
+};
+
+type BlitzRuntimeHandle = {
+  manager: BlitzServerManagerLike;
+  service: BlitzServiceLike;
+  registration: {
+    serverName: string;
+    clientPort: number;
+    clusterPort: number;
+    advertiseHost: string;
+    clusterName: string;
+  };
+};
+
+type BlitzRuntimeLauncher = (input: {
+  instanceName: string;
+  config: HeliosBlitzRuntimeConfig;
+  routes: string[];
+}) => Promise<BlitzRuntimeHandle>;
+
+const defaultBlitzRuntimeLauncher: BlitzRuntimeLauncher = async ({
+  instanceName,
+  config,
+  routes,
+}) => {
+  const blitz = await import("@zenystx/helios-blitz");
+  const resolved = blitz.resolveClusterNodeConfig({
+    bindHost: config.bindHost,
+    advertiseHost: config.advertiseHost,
+    port: config.localPort,
+    clusterPort: config.localClusterPort,
+    clusterName: config.clusterName,
+    serverName: `blitz-${instanceName}`,
+    routes,
+    dataDir: config.dataDir,
+    startTimeoutMs: config.startTimeoutMs,
+  });
+  const manager = await blitz.clusterNode(resolved);
+  const service = await blitz.BlitzService.connect({
+    servers: manager.clientUrls,
+    connectTimeoutMs: config.startTimeoutMs,
+  });
+  const jsm = await service.getJsm(config.startTimeoutMs);
+  await jsm.getAccountInfo();
+  return {
+    manager,
+    service,
+    registration: {
+      serverName: resolved.serverName,
+      clientPort: resolved.port,
+      clusterPort: resolved.clusterPort,
+      advertiseHost: resolved.advertiseHost,
+      clusterName: resolved.clusterName,
+    },
+  };
+};
+
+interface TopicClientListenerRegistration {
+  topicName: string;
+  registrationId: string;
+  topicListenerId: string;
+}
 
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
@@ -115,6 +199,15 @@ function parseMemberAddress(member: string): [string, number] {
 }
 
 export class HeliosInstanceImpl implements HeliosInstance {
+  private static _blitzRuntimeLauncher: BlitzRuntimeLauncher =
+    defaultBlitzRuntimeLauncher;
+
+  static setBlitzRuntimeLauncherForTests(
+    launcher: BlitzRuntimeLauncher | null,
+  ): void {
+    this._blitzRuntimeLauncher = launcher ?? defaultBlitzRuntimeLauncher;
+  }
+
   private readonly _name: string;
   private readonly _config: HeliosConfig;
   private _nodeEngine!: NodeEngineImpl;
@@ -126,6 +219,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _distributedTopicService: DistributedTopicService | null = null;
   private _reliableTopicService: ReliableTopicService;
   private _ringbufferService!: RingbufferService;
+  private readonly _replicaManager = new PartitionReplicaManager(271, 20);
 
   // Per-name data-structure caches (same name → same instance)
   private readonly _maps = new Map<string, MapProxy<unknown, unknown>>();
@@ -147,9 +241,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
     ReplicatedMapImpl<unknown, unknown>
   >();
   private readonly _executors = new Map<string, ExecutorServiceProxy>();
+  private readonly _executorContainers = new Map<string, ExecutorContainerService>();
+  private _knownExecutorMemberIds = new Set<string>();
 
-  /** TCP transport — non-null when TCP-IP join is enabled. */
+  /** TCP transport — non-null when TCP-IP or multicast join is enabled. */
   private _transport: TcpClusterTransport | null = null;
+
+  /** Multicast service — non-null when multicast join is enabled. */
+  private _multicastService: MulticastService | null = null;
+
+  /** Multicast joiner — non-null when multicast join is enabled. */
+  private _multicastJoiner: MulticastJoiner | null = null;
 
   /** Blitz lifecycle manager — non-null when Blitz distributed-auto or embedded-local is enabled. */
   private _blitzLifecycleManager: HeliosBlitzLifecycleManager | null = null;
@@ -167,6 +269,20 @@ export class HeliosInstanceImpl implements HeliosInstance {
    * Access guarded by the pre-cutover readiness fence via getBlitzService().
    */
   private _blitzService: { shutdown(): Promise<void>; isClosed: boolean } | null = null;
+  private _blitzRegistration:
+    | {
+        serverName: string;
+        clientPort: number;
+        clusterPort: number;
+        advertiseHost: string;
+        clusterName: string;
+      }
+    | null = null;
+  private _blitzAuthorityKey: string | null = null;
+  private _blitzAuthorityEpoch = 0;
+  private _blitzQueue: Promise<void> = Promise.resolve();
+  private _blitzStartupPromise: Promise<void> | null = null;
+  private _blitzCurrentRoutes: string[] = [];
 
   /** Client protocol server — non-null when client protocol port is configured (>= 0). */
   private _clientProtocolServer: ClientProtocolServer | null = null;
@@ -195,6 +311,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Registered async shutdown hooks — awaited during shutdownAsync(). */
   private readonly _shutdownHooks: Array<() => Promise<void>> = [];
+  private readonly _clientTopicListenerRegistrations = new Map<string, TopicClientListenerRegistration>();
+  private readonly _clientSessionTopicListeners = new Map<string, Set<string>>();
 
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
@@ -228,7 +346,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._ringbufferService = new RingbufferService(this._nodeEngine);
 
     // Reliable topic service — always available (single-node ringbuffer-backed via RingbufferService)
-    this._reliableTopicService = new ReliableTopicService(this._name, this._config, this._ringbufferService);
+    this._reliableTopicService = new ReliableTopicService(
+      this._name,
+      this._config,
+      this._ringbufferService,
+      this._ss,
+      this._transport,
+      this._clusterCoordinator,
+    );
 
     // Initialize Blitz lifecycle manager if configured
     this._initBlitzLifecycle();
@@ -304,8 +429,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
   // ── TCP networking ───────────────────────────────────────────────────
 
   private _startNetworking(): void {
-    const tcpIp = this._config.getNetworkConfig().getJoin().getTcpIpConfig();
-    if (!tcpIp.isEnabled()) {
+    const joinConfig = this._config.getNetworkConfig().getJoin();
+    const tcpIp = joinConfig.getTcpIpConfig();
+    const multicast = joinConfig.getMulticastConfig();
+
+    const clusteringEnabled = tcpIp.isEnabled() || multicast.isEnabled();
+    if (!clusteringEnabled) {
       // Single-node mode: default NodeEngine with local-only operation service
       this._nodeEngine = new NodeEngineImpl(this._ss);
       this._mapService.setNodeEngine(this._nodeEngine);
@@ -328,11 +457,27 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
     this._clusterCoordinator.bootstrap();
     this._cluster = this._clusterCoordinator.getCluster();
+    const internalPartitionService = this._clusterCoordinator.getInternalPartitionService();
+    internalPartitionService.setReplicaManager(this._replicaManager);
+    internalPartitionService.setLocalMemberUuid(this._clusterCoordinator.getLocalMemberId());
+    internalPartitionService.setAntiEntropyDispatcher((targetUuid, op) => {
+      this._dispatchAntiEntropy(targetUuid, op);
+    });
+    this._knownExecutorMemberIds = this._captureCurrentMemberIds();
+    this._clusterCoordinator.onMembershipChanged(() => {
+      this._handleExecutorMembershipChange();
+    });
 
     // Build a partition service adapter that delegates to the coordinator
     const coordinator = this._clusterCoordinator;
     const localAddress = coordinator.getLocalAddress();
-    const clusteredPartitionService: PartitionService = {
+    const clusteredPartitionService: PartitionService & {
+      onMapPartitionLost: typeof internalPartitionService.onMapPartitionLost;
+      removeMapPartitionLostListener: typeof internalPartitionService.removeMapPartitionLostListener;
+      recordNamespaceMutation: typeof internalPartitionService.recordNamespaceMutation;
+      applyNamespaceBackupMutation: typeof internalPartitionService.applyNamespaceBackupMutation;
+      getBackupCount: typeof internalPartitionService.getBackupCount;
+    } = {
       getPartitionCount: () => 271,
       getPartitionId: (key: Data) => {
         const hash = key.getPartitionHash();
@@ -345,6 +490,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return coordinator.getMemberAddress(ownerId);
       },
       isMigrating: () => false,
+      onMapPartitionLost: internalPartitionService.onMapPartitionLost.bind(internalPartitionService),
+      removeMapPartitionLostListener: internalPartitionService.removeMapPartitionLostListener.bind(internalPartitionService),
+      recordNamespaceMutation: internalPartitionService.recordNamespaceMutation.bind(internalPartitionService),
+      applyNamespaceBackupMutation: internalPartitionService.applyNamespaceBackupMutation.bind(internalPartitionService),
+      getBackupCount: internalPartitionService.getBackupCount.bind(internalPartitionService),
     };
 
     // Build a routing-mode OperationService with remoteSend wired to transport
@@ -417,6 +567,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._clusterCoordinator!.registerMigrationAwareService(MapService.SERVICE_NAME, this._mapService);
     // Register all MapStoreConfigs so operations can trigger lazy init (Block 21.2)
     this._registerMapStoreConfigs();
+    internalPartitionService.startAntiEntropy();
 
     // Wire transport callbacks
     this._transport.onRemoteInvalidate = (mapName, key) => {
@@ -441,11 +592,26 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._handleOperationResponse(message);
         return;
       }
+      if (message.type === 'RECOVERY_ANTI_ENTROPY') {
+        this._handleRecoveryAntiEntropy(message);
+        return;
+      }
+      if (message.type === 'RECOVERY_SYNC_REQUEST') {
+        this._handleRecoverySyncRequest(message);
+        return;
+      }
+      if (message.type === 'RECOVERY_SYNC_RESPONSE') {
+        this._handleRecoverySyncResponse(message);
+        return;
+      }
 
       if (this._clusterCoordinator?.handleMessage(message) === true) {
         return;
       }
       if (this._distributedQueueService?.handleMessage(message) === true) {
+        return;
+      }
+      if (this._reliableTopicService?.handleMessage(message) === true) {
         return;
       }
       this._distributedTopicService?.handleMessage(message);
@@ -473,11 +639,58 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._clusterCoordinator,
     );
 
-    // Connect to configured peers (fire-and-forget)
-    for (const member of tcpIp.getMembers()) {
-      const [host, peerPort] = parseMemberAddress(member);
-      this._transport.connectToPeer(host, peerPort).catch(() => {});
+    // Connect to configured peers or discover via multicast
+    if (multicast.isEnabled()) {
+      this._startMulticastDiscovery(multicast);
+    } else {
+      for (const member of tcpIp.getMembers()) {
+        const [host, peerPort] = parseMemberAddress(member);
+        this._transport.connectToPeer(host, peerPort).catch(() => {});
+      }
     }
+  }
+
+  /**
+   * Start multicast discovery: creates the MulticastService and MulticastJoiner,
+   * then performs async multicast discovery to find the cluster master.
+   * Once discovered, connects via TCP to the master using the existing join protocol.
+   */
+  private _startMulticastDiscovery(multicastConfig: import('@zenystx/helios-core/config/MulticastConfig').MulticastConfig): void {
+    this._multicastService = MulticastService.create(multicastConfig);
+    if (this._multicastService === null) return;
+
+    this._multicastService.start();
+
+    const boundPort = this._transport!.boundPort();
+    if (boundPort === null) return;
+
+    this._multicastJoiner = new MulticastJoiner({
+      multicastConfig,
+      multicastService: this._multicastService,
+      localAddress: { host: '127.0.0.1', port: boundPort },
+      localUuid: this._name,
+      clusterName: this._config.getName(),
+      partitionCount: 271,
+      version: { major: 1, minor: 0, patch: 0 },
+    });
+
+    // Perform async multicast discovery
+    void this._multicastJoiner.join().then((result) => {
+      if (!this._running) return;
+
+      if (result.masterFound && result.masterAddress !== null) {
+        // Master discovered — connect via TCP
+        this._multicastJoiner?.setJoined();
+        this._transport?.connectToPeer(
+          result.masterAddress.host,
+          result.masterAddress.port,
+        ).catch(() => {});
+      } else {
+        // No master found — this node becomes master
+        this._multicastJoiner?.setAsMaster();
+        this._clusterCoordinator?.bootstrap();
+      }
+    });
   }
 
   /** Pending remote operation responses (callId → resolver). */
@@ -535,6 +748,119 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
   }
 
+  private _dispatchAntiEntropy(
+    targetUuid: string,
+    op: PartitionBackupReplicaAntiEntropyOp,
+  ): void {
+    const namespaceVersions = Object.fromEntries(
+      [...(op.namespaceVersions ?? new Map<string, bigint[]>())].map(([namespace, versions]) => [
+        namespace,
+        versions.map((value: bigint) => value.toString()),
+      ]),
+    );
+    this._transport?.send(targetUuid, {
+      type: 'RECOVERY_ANTI_ENTROPY',
+      senderId: this._clusterCoordinator!.getLocalMemberId(),
+      partitionId: op.partitionId,
+      replicaIndex: op.targetReplicaIndex,
+      primaryVersions: op.primaryVersions.map((value) => value.toString()),
+      namespaceVersions,
+    });
+  }
+
+  private _handleRecoveryAntiEntropy(
+    message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'RECOVERY_ANTI_ENTROPY' }>,
+  ): void {
+    const op = new PartitionBackupReplicaAntiEntropyOp(
+      message.partitionId,
+      message.primaryVersions.map((value) => BigInt(value)),
+      message.replicaIndex,
+      new Map(
+        Object.entries(message.namespaceVersions).map(([namespace, versions]) => [
+          namespace,
+          versions.map((value) => BigInt(value)),
+        ]),
+      ),
+    );
+    const result = op.execute(this._replicaManager);
+    if (!result.syncTriggered) {
+      return;
+    }
+    const acquired = this._replicaManager.tryAcquireReplicaSyncPermits(1);
+    if (acquired === 0) {
+      return;
+    }
+    const ownerId = this.getPartitionOwnerId(message.partitionId);
+    if (ownerId === null) {
+      this._replicaManager.releaseReplicaSyncPermits(1);
+      return;
+    }
+    this._transport?.send(ownerId, {
+      type: 'RECOVERY_SYNC_REQUEST',
+      requesterId: this._clusterCoordinator!.getLocalMemberId(),
+      partitionId: message.partitionId,
+      replicaIndex: message.replicaIndex,
+      dirtyNamespaces: result.dirtyNamespaces,
+    });
+  }
+
+  private _handleRecoverySyncRequest(
+    message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'RECOVERY_SYNC_REQUEST' }>,
+  ): void {
+    const namespaceStates = this._mapService.collectPartitionNamespaceStates(
+      message.partitionId,
+      message.dirtyNamespaces,
+    );
+    const namespaceVersions = Object.fromEntries(
+      message.dirtyNamespaces.map((namespace) => [
+        namespace,
+        this._replicaManager
+          .getNamespaceReplicaVersions(message.partitionId, namespace)
+          .map((value) => value.toString()),
+      ]),
+    );
+    this._transport?.send(message.requesterId, {
+      type: 'RECOVERY_SYNC_RESPONSE',
+      partitionId: message.partitionId,
+      replicaIndex: message.replicaIndex,
+      versions: this._replicaManager
+        .getPartitionReplicaVersions(message.partitionId)
+        .map((value) => value.toString()),
+      namespaceVersions,
+      namespaceStates: namespaceStates.map((state) => ({
+        namespace: state.namespace,
+        estimatedSizeBytes: state.estimatedSizeBytes,
+        entries: state.entries.map(([key, value]) => [encodeData(key), encodeData(value)] as const),
+      })),
+    });
+  }
+
+  private _handleRecoverySyncResponse(
+    message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'RECOVERY_SYNC_RESPONSE' }>,
+  ): void {
+    const namespaceStates = message.namespaceStates.map((state) => ({
+      namespace: state.namespace,
+      estimatedSizeBytes: state.estimatedSizeBytes,
+      entries: state.entries.map(([key, value]) => [decodeData(key), decodeData(value)] as const),
+    }));
+    this._mapService.applyReplicaSyncState(message.partitionId, namespaceStates);
+    new PartitionReplicaSyncResponse(
+      message.partitionId,
+      message.replicaIndex,
+      namespaceStates,
+      message.versions.map((value) => BigInt(value)),
+      new Map(
+        Object.entries(message.namespaceVersions).map(([namespace, versions]) => [
+          namespace,
+          versions.map((value) => BigInt(value)),
+        ]),
+      ),
+    ).apply(
+      this._mapService.getOrCreatePartitionContainer(message.partitionId),
+      this._replicaManager,
+    );
+  }
+
   /** Extract the sender member ID from an OPERATION message. */
   private _findSenderForOperation(message: { senderId: string }): string | null {
     return message.senderId ?? null;
@@ -565,6 +891,306 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this.registerShutdownHook(async () => {
       this._blitzLifecycleManager?.markShutdown();
     });
+
+    this._clusterCoordinator?.onMembershipChanged(() => {
+      this._handleBlitzAuthorityChange();
+    });
+    this._clusterCoordinator?.onBlitzCoordinatorEvent({
+      onAuthorityChanged: () => {
+        this._handleBlitzAuthorityChange();
+      },
+      onTopologyResponse: (state) => {
+        this._scheduleBlitzTask(async (epoch) => {
+          await this._handleIncomingBlitzTopologyResponse(epoch, state);
+        });
+      },
+      onTopologyAnnounce: (state) => {
+        this._scheduleBlitzTask(async (epoch) => {
+          await this._applyBlitzTopology(epoch, state.routes);
+        });
+      },
+      onTopologyRegistrationChanged: () => {
+        this._maybeBroadcastBlitzTopology();
+      },
+      onDemotion: () => {
+        this._handleBlitzDemotion();
+      },
+    });
+
+    this._scheduleBlitzTask(async (epoch) => {
+      await this._ensureBlitzRuntime(epoch, []);
+      this._handleBlitzAuthorityChange();
+    });
+  }
+
+  private _scheduleBlitzTask(
+    task: (epoch: number) => Promise<void>,
+  ): Promise<void> {
+    if (this._blitzLifecycleManager === null) {
+      return Promise.resolve();
+    }
+    const epoch = this._blitzAuthorityEpoch;
+    const run = this._blitzQueue.then(() => task(epoch));
+    this._blitzQueue = run.catch(() => {});
+    return run;
+  }
+
+  async waitForBlitzOrchestration(): Promise<void> {
+    await this._blitzQueue;
+  }
+
+  private _isStaleBlitzEpoch(epoch: number): boolean {
+    return !this._running || this._blitzAuthorityEpoch !== epoch;
+  }
+
+  private async _ensureBlitzRuntime(
+    epoch: number,
+    routes: string[],
+  ): Promise<void> {
+    if (this._blitzLifecycleManager === null || this._isStaleBlitzEpoch(epoch)) {
+      return;
+    }
+    if (this._blitzRegistration !== null && this._sameRoutes(routes)) {
+      return;
+    }
+
+    const readinessBeforeStart = this._blitzLifecycleManager.getReadinessState();
+    const runtime = await HeliosInstanceImpl._blitzRuntimeLauncher({
+      instanceName: this._name,
+      config: this._blitzLifecycleManager.getConfig(),
+      routes,
+    });
+    if (this._isStaleBlitzEpoch(epoch)) {
+      await runtime.service.shutdown().catch(() => {});
+      await runtime.manager.shutdown().catch(() => {});
+      return;
+    }
+
+    await this._shutdownBlitzRuntimeRefs();
+    this._natsServerManager = runtime.manager;
+    this._blitzService = runtime.service;
+    this._blitzRegistration = runtime.registration;
+    this._blitzStartupPromise = Promise.resolve();
+    this._blitzCurrentRoutes = [...routes];
+    if (readinessBeforeStart === BlitzReadinessState.NOT_READY) {
+      this._blitzLifecycleManager.onLocalNodeStarted();
+    }
+  }
+
+  private async _shutdownBlitzRuntimeRefs(): Promise<void> {
+    const service = this._blitzService;
+    const manager = this._natsServerManager;
+    this._blitzService = null;
+    this._natsServerManager = null;
+    this._blitzRegistration = null;
+    this._blitzCurrentRoutes = [];
+    if (service !== null) {
+      await service.shutdown().catch(() => {});
+    }
+    if (manager !== null) {
+      await manager.shutdown().catch(() => {});
+    }
+  }
+
+  private _handleBlitzAuthorityChange(): void {
+    if (this._blitzLifecycleManager === null) {
+      return;
+    }
+
+    if (this._clusterCoordinator === null) {
+      this._blitzLifecycleManager.onTopologyEpochChange(this._name, 1);
+      this._scheduleBlitzTask(async (epoch) => {
+        await this._ensureBlitzRuntime(epoch, []);
+        if (!this._isStaleBlitzEpoch(epoch)) {
+          this._blitzLifecycleManager?.onStandaloneReady();
+        }
+      });
+      return;
+    }
+
+    const coordinator = this._clusterCoordinator.getBlitzCoordinator();
+    const masterMemberId = coordinator.getMasterMemberId();
+    const memberListVersion = coordinator.getMemberListVersion();
+    if (masterMemberId === null || !this._clusterCoordinator.isJoined()) {
+      return;
+    }
+
+    const authorityKey = `${masterMemberId}:${memberListVersion}`;
+    if (authorityKey !== this._blitzAuthorityKey) {
+      this._blitzAuthorityEpoch += 1;
+      this._blitzAuthorityKey = authorityKey;
+      this._blitzLifecycleManager.onTopologyEpochChange(
+        masterMemberId,
+        memberListVersion,
+      );
+    }
+
+    this._scheduleBlitzTask(async (epoch) => {
+      await this._ensureBlitzRuntime(epoch, []);
+      if (this._isStaleBlitzEpoch(epoch)) {
+        return;
+      }
+      await this._registerWithBlitzMaster(epoch);
+      await this._requestBlitzTopology(epoch);
+    });
+  }
+
+  private _handleBlitzDemotion(): void {
+    if (this._blitzLifecycleManager === null) {
+      return;
+    }
+    this._blitzAuthorityEpoch += 1;
+    this._blitzAuthorityKey = null;
+    this._blitzLifecycleManager.onAuthorityLost();
+    this._scheduleBlitzTask(async (epoch) => {
+      await this._shutdownBlitzRuntimeRefs();
+      if (!this._isStaleBlitzEpoch(epoch)) {
+        await this._ensureBlitzRuntime(epoch, []);
+      }
+    });
+  }
+
+  private async _registerWithBlitzMaster(epoch: number): Promise<void> {
+    if (
+      this._clusterCoordinator === null ||
+      this._blitzLifecycleManager === null ||
+      this._blitzRegistration === null ||
+      this._isStaleBlitzEpoch(epoch) ||
+      !this._blitzLifecycleManager.canRegisterWithMaster()
+    ) {
+      return;
+    }
+
+    const baseMessage = this._blitzLifecycleManager.generateRegisterMessage();
+    const message = {
+      type: "BLITZ_NODE_REGISTER" as const,
+      registration: {
+        memberId: baseMessage.registration.memberId,
+        memberListVersion: baseMessage.registration.memberListVersion,
+        serverName: this._blitzRegistration.serverName,
+        clientPort: this._blitzRegistration.clientPort,
+        clusterPort: this._blitzRegistration.clusterPort,
+        advertiseHost: this._blitzRegistration.advertiseHost,
+        clusterName: this._blitzRegistration.clusterName,
+        ready: baseMessage.registration.ready,
+        startedAt: baseMessage.registration.startedAt,
+      },
+    };
+    if (this._clusterCoordinator.getCluster().getLocalMember().getUuid() === this._clusterCoordinator.getBlitzCoordinator().getMasterMemberId()) {
+      this._clusterCoordinator.handleMessage(message);
+    } else {
+      const masterMemberId = this._clusterCoordinator.getBlitzCoordinator().getMasterMemberId();
+      if (masterMemberId !== null) {
+        this._transport?.send(masterMemberId, message);
+      }
+    }
+    this._blitzLifecycleManager.onRegisteredWithMaster();
+    if (
+      this._clusterCoordinator.getCluster().getLocalMember().getUuid() ===
+        this._clusterCoordinator.getBlitzCoordinator().getMasterMemberId() &&
+      this._clusterCoordinator.getBlitzCoordinator().getExpectedRegistrants().size === 1
+    ) {
+      this._blitzLifecycleManager.onStandaloneReady();
+    }
+    this._maybeBroadcastBlitzTopology();
+  }
+
+  private async _requestBlitzTopology(epoch: number): Promise<void> {
+    if (this._clusterCoordinator === null || this._isStaleBlitzEpoch(epoch)) {
+      return;
+    }
+    if (this._clusterCoordinator.getCluster().getLocalMember().getUuid() === this._clusterCoordinator.getBlitzCoordinator().getMasterMemberId()) {
+      this._maybeBroadcastBlitzTopology();
+      return;
+    }
+    const masterMemberId = this._clusterCoordinator.getBlitzCoordinator().getMasterMemberId();
+    if (masterMemberId !== null) {
+      this._transport?.send(masterMemberId, {
+        type: "BLITZ_TOPOLOGY_REQUEST",
+        requestId: crypto.randomUUID(),
+      });
+    }
+  }
+
+  private async _handleIncomingBlitzTopologyResponse(
+    epoch: number,
+    state: {
+      routes: string[];
+      registrationsComplete: boolean;
+      retryAfterMs?: number;
+    },
+  ): Promise<void> {
+    if (this._isStaleBlitzEpoch(epoch)) {
+      return;
+    }
+    if (!state.registrationsComplete) {
+      const retryAfterMs = state.retryAfterMs ?? 1000;
+      this._clusterCoordinator
+        ?.getBlitzCoordinator()
+        .scheduleRetryTimer("blitz-topology-request", () => {
+          this._scheduleBlitzTask(async (nextEpoch) => {
+            await this._requestBlitzTopology(nextEpoch);
+          });
+        }, retryAfterMs);
+      return;
+    }
+    await this._applyBlitzTopology(epoch, state.routes);
+  }
+
+  private _maybeBroadcastBlitzTopology(): void {
+    if (this._clusterCoordinator === null) {
+      return;
+    }
+    const blitzCoordinator = this._clusterCoordinator.getBlitzCoordinator();
+    if (!blitzCoordinator.isRegistrationComplete()) {
+      return;
+    }
+    const announce = blitzCoordinator.generateTopologyAnnounce();
+    if (announce === null) {
+      return;
+    }
+    this._transport?.broadcast(announce);
+    this._scheduleBlitzTask(async (epoch) => {
+      await this._applyBlitzTopology(epoch, announce.routes);
+    });
+  }
+
+  private async _applyBlitzTopology(
+    epoch: number,
+    routes: string[],
+  ): Promise<void> {
+    if (this._blitzLifecycleManager === null || this._isStaleBlitzEpoch(epoch)) {
+      return;
+    }
+    this._clusterCoordinator
+      ?.getBlitzCoordinator()
+      .cancelRetryTimer("blitz-topology-request");
+    const peerRoutes = this._filterPeerRoutes(routes);
+    if (peerRoutes.length === 0) {
+      this._blitzLifecycleManager.onStandaloneReady();
+      return;
+    }
+    if (!this._blitzLifecycleManager.needsClusteredCutover(peerRoutes)) {
+      return;
+    }
+    await this._ensureBlitzRuntime(epoch, peerRoutes);
+    if (!this._isStaleBlitzEpoch(epoch)) {
+      this._blitzLifecycleManager.onClusteredCutoverComplete();
+    }
+  }
+
+  private _filterPeerRoutes(routes: string[]): string[] {
+    const localRoute = this._blitzRegistration === null
+      ? null
+      : `nats://${this._blitzRegistration.advertiseHost}:${this._blitzRegistration.clusterPort}`;
+    return localRoute === null ? [...routes] : routes.filter((route) => route !== localRoute);
+  }
+
+  private _sameRoutes(routes: string[]): boolean {
+    if (this._blitzCurrentRoutes.length !== routes.length) {
+      return false;
+    }
+    return this._blitzCurrentRoutes.every((route, index) => route === routes[index]);
   }
 
   private _startClientProtocolServer(): void {
@@ -578,6 +1204,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
       memberUuid: localMember.getUuid(),
       clusterId: this.getClusterId() ?? crypto.randomUUID(),
       partitionCount: this.getPartitionCount(),
+      auth: this._config.getNetworkConfig().hasClientProtocolCredentials()
+        ? {
+          username: this._config.getNetworkConfig().getClientProtocolUsername()!,
+          password: this._config.getNetworkConfig().getClientProtocolPassword() ?? '',
+        }
+        : null,
+    });
+
+    this._clientProtocolServer.setSessionCloseHandler((session) => {
+      this._removeClientTopicListenersForSession(session.getSessionId());
     });
 
     this._registerClientProtocolHandlers();
@@ -700,6 +1336,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
       await this._distributedTopicService!.publish(req.name, req.message);
       return TopicPublishCodec.encodeResponse();
     });
+
+    srv.registerHandler(TopicAddMessageListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
+      const req = TopicAddMessageListenerCodec.decodeRequest(msg);
+      const registrationId = this._registerClientTopicListener(req.name, msg.getCorrelationId(), session);
+      return TopicAddMessageListenerCodec.encodeResponse(registrationId);
+    });
+
+    srv.registerHandler(TopicRemoveMessageListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
+      const req = TopicRemoveMessageListenerCodec.decodeRequest(msg);
+      return TopicRemoveMessageListenerCodec.encodeResponse(
+        this._removeClientTopicListener(session.getSessionId(), req.registrationId),
+      );
+    });
   }
 
   private _ensureQueueService(): void {
@@ -723,6 +1372,65 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._transport,
         this._clusterCoordinator,
       );
+    }
+  }
+
+  private _registerClientTopicListener(topicName: string, correlationId: number, session: ClientSession): string {
+    this._ensureTopicService();
+    const registrationId = crypto.randomUUID();
+    const topicListenerId = this._distributedTopicService!.addMessageListener(topicName, (message: Message<unknown>) => {
+      const payload = this._ss.toData(message.getMessageObject());
+      if (payload === null) {
+        return;
+      }
+      const eventMessage = TopicAddMessageListenerCodec.encodeEvent(
+        topicName,
+        payload,
+        message.getPublishTime(),
+        message.getPublishingMemberId(),
+      );
+      eventMessage.setCorrelationId(correlationId);
+      session.pushEvent(eventMessage);
+    });
+    this._clientTopicListenerRegistrations.set(registrationId, {
+      topicName,
+      registrationId,
+      topicListenerId,
+    });
+    let sessionRegistrations = this._clientSessionTopicListeners.get(session.getSessionId());
+    if (sessionRegistrations === undefined) {
+      sessionRegistrations = new Set<string>();
+      this._clientSessionTopicListeners.set(session.getSessionId(), sessionRegistrations);
+    }
+    sessionRegistrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientTopicListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientTopicListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientTopicListenerRegistrations.delete(registrationId);
+    const sessionRegistrations = this._clientSessionTopicListeners.get(sessionId);
+    sessionRegistrations?.delete(registrationId);
+    if (sessionRegistrations !== undefined && sessionRegistrations.size === 0) {
+      this._clientSessionTopicListeners.delete(sessionId);
+    }
+    this._ensureTopicService();
+    return this._distributedTopicService!.removeMessageListener(
+      registration.topicName,
+      registration.topicListenerId,
+    );
+  }
+
+  private _removeClientTopicListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionTopicListeners.get(sessionId);
+    if (registrations === undefined) {
+      return;
+    }
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientTopicListener(sessionId, registrationId);
     }
   }
 
@@ -856,18 +1564,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
    * tearing down the instance. Use this when graceful draining is needed.
    */
   async shutdownAsync(): Promise<void> {
+    this._blitzAuthorityEpoch += 1;
     // Await all registered hooks (e.g., executor drain)
     await Promise.allSettled(this._shutdownHooks.map((h) => h()));
-    // Drain BlitzService (NATS connection) before killing process
-    if (this._blitzService !== null) {
-      try { await this._blitzService.shutdown(); } catch { /* swallow */ }
-      this._blitzService = null;
-    }
-    // Kill NATS child processes and await port release
-    if (this._natsServerManager !== null) {
-      try { await this._natsServerManager.shutdown(); } catch { /* swallow */ }
-      this._natsServerManager = null;
-    }
+    await this._shutdownBlitzRuntimeRefs();
     // Await MapStore flush before tearing down (write-behind queues drain deterministically)
     await this._mapService.flushAll();
     this.shutdown();
@@ -875,17 +1575,18 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   shutdown(): void {
     this._running = false;
+    this._blitzAuthorityEpoch += 1;
     // Shut down all executor containers + proxies (fire-and-forget the promises)
     for (const [name, exec] of Array.from(this._executors.entries())) {
-      const containerKey = `helios:executor:container:${name}`;
-      const container = this._nodeEngine.getServiceOrNull<ExecutorContainerService>(containerKey);
+      const container = this._executorContainers.get(name)
+        ?? this._nodeEngine.getServiceOrNull<ExecutorContainerService>(`helios:executor:container:${name}`);
       if (container) container.shutdown().catch(() => {});
       exec.shutdown().catch(() => {});
     }
     this._executors.clear();
+    this._executorContainers.clear();
     for (const topic of Array.from(this._topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
-    for (const rt of Array.from(this._reliableTopics.values())) rt.destroy();
     for (const rm of Array.from(this._replicatedMaps.values())) rm.destroy();
     this._nearCachedMaps.clear();
     this._nearCacheManager.destroyAllNearCaches();
@@ -912,8 +1613,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._natsServerManager.shutdown().catch(() => {});
       this._natsServerManager = null;
     }
+    this._blitzRegistration = null;
+    this._blitzCurrentRoutes = [];
     this._clientProtocolServer?.shutdown().catch(() => {});
     this._clientProtocolServer = null;
+    this._multicastJoiner?.stop();
+    this._multicastJoiner = null;
+    this._multicastService?.stop();
+    this._multicastService = null;
     this._transport?.shutdown();
     this._transport = null;
     this._restServer.stop();
@@ -1030,6 +1737,23 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   getNodeEngine(): NodeEngineImpl {
     return this._nodeEngine;
+  }
+
+  private _captureCurrentMemberIds(): Set<string> {
+    return new Set(this._cluster.getMembers().map((member) => member.getUuid()));
+  }
+
+  private _handleExecutorMembershipChange(): void {
+    const currentMemberIds = this._captureCurrentMemberIds();
+    for (const memberId of this._knownExecutorMemberIds) {
+      if (currentMemberIds.has(memberId)) {
+        continue;
+      }
+      for (const container of this._executorContainers.values()) {
+        container.markTasksLostForMember(memberId);
+      }
+    }
+    this._knownExecutorMemberIds = currentMemberIds;
   }
 
   getRingbufferService(): RingbufferService {
@@ -1247,6 +1971,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getReliableTopic<E>(name: string): ITopic<E> {
     let topic = this._reliableTopics.get(name);
     if (!topic) {
+      this._reliableTopicService.undestroy(name);
       topic = new ReliableTopicProxyImpl<unknown>(
         name,
         this._reliableTopicService,
@@ -1304,6 +2029,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       const container = new ExecutorContainerService(name, config, registry, backend);
       this._nodeEngine.registerService(`helios:executor:container:${name}`, container);
       this._nodeEngine.registerService(`helios:executor:registry:${name}`, registry);
+      this._executorContainers.set(name, container);
 
       proxy = new ExecutorServiceProxy(
         name,

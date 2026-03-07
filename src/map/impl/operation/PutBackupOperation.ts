@@ -23,5 +23,6 @@ export class PutBackupOperation extends MapOperation {
 
     async run(): Promise<void> {
         this.recordStore.set(this._key, this._value, this._ttl, this._maxIdle);
+        this.recordNamespaceBackupMutation();
     }
 }

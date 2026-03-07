@@ -96,12 +96,43 @@ export class HeliosBlitzLifecycleManager {
    * This is the readiness gate — topology registration is only allowed after this.
    */
   onJoinComplete(masterMemberId: string, memberListVersion: number): void {
+    this.onTopologyEpochChange(masterMemberId, memberListVersion);
+  }
+
+  /**
+   * Apply a new authoritative Helios master/member-list epoch.
+   *
+   * Any epoch change fails closed until the node re-registers and either
+   * completes clustered cutover or is explicitly marked standalone-ready.
+   */
+  onTopologyEpochChange(masterMemberId: string, memberListVersion: number): void {
     if (this._shutDown) return;
     this._masterMemberId = masterMemberId;
     this._memberListVersion = memberListVersion;
-    if (this._readinessState === BlitzReadinessState.LOCAL_STARTED ||
-        this._readinessState === BlitzReadinessState.NOT_READY) {
+    if (this._bootstrapPhase === "local-only") {
+      this._readinessState = BlitzReadinessState.READY;
+      return;
+    }
+    this._cutoverDone = false;
+    this._bootstrapPhase = "local";
+    if (this._readinessState !== BlitzReadinessState.NOT_READY) {
       this._readinessState = BlitzReadinessState.JOIN_READY;
+    }
+  }
+
+  /**
+   * Immediately fail closed when the current authority epoch is lost.
+   */
+  onAuthorityLost(): void {
+    if (this._shutDown) return;
+    if (this._bootstrapPhase === "local-only") {
+      this._readinessState = BlitzReadinessState.READY;
+      return;
+    }
+    this._cutoverDone = false;
+    this._bootstrapPhase = "local";
+    if (this._readinessState !== BlitzReadinessState.NOT_READY) {
+      this._readinessState = BlitzReadinessState.LOCAL_STARTED;
     }
   }
 

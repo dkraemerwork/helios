@@ -12,7 +12,11 @@ export class ClearOperation extends MapOperation {
     }
 
     async run(): Promise<void> {
+        const hadEntries = this.recordStore.size() > 0;
         this.recordStore.clear();
+        if (hadEntries) {
+            this.recordNamespaceMutation();
+        }
         this.sendResponse(undefined);
     }
 }

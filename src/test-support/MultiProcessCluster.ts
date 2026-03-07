@@ -39,12 +39,17 @@ export class MultiProcessCluster {
         port: number;
         peerPorts: number[];
         mapName: string;
+        mapStoreKind?: 'in-memory' | 'mongo' | 'dynamodb';
         writeMode: 'write-through' | 'write-behind';
         writeDelaySeconds?: number;
         writeBatchSize?: number;
         writeCoalescing?: boolean;
         initialLoadMode?: 'EAGER' | 'LAZY';
         seedData?: Record<string, string>;
+        mongoUri?: string;
+        mongoDatabase?: string;
+        mongoCollection?: string;
+        dynamoDbEndpoint?: string;
     }): Promise<void> {
         const proc = Bun.spawn(['bun', 'run', WORKER_PATH], {
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -83,12 +88,17 @@ export class MultiProcessCluster {
             port: opts.port,
             peerPorts: opts.peerPorts,
             mapName: opts.mapName,
+            mapStoreKind: opts.mapStoreKind,
             writeMode: opts.writeMode,
             writeDelaySeconds: opts.writeDelaySeconds,
             writeBatchSize: opts.writeBatchSize,
             writeCoalescing: opts.writeCoalescing,
             initialLoadMode: opts.initialLoadMode,
             seedData: opts.seedData,
+            mongoUri: opts.mongoUri,
+            mongoDatabase: opts.mongoDatabase,
+            mongoCollection: opts.mongoCollection,
+            dynamoDbEndpoint: opts.dynamoDbEndpoint,
         });
     }
 
@@ -174,6 +184,59 @@ export class MultiProcessCluster {
             mapName,
         });
         return result.size;
+    }
+
+    async reliableTopicPublish(memberName: string, topicName: string, message: string): Promise<void> {
+        await this._send(memberName, {
+            type: 'command',
+            command: 'reliableTopicPublish',
+            mapName: '__unused__',
+            topicName,
+            message,
+        });
+    }
+
+    async reliableTopicAddListener(memberName: string, topicName: string): Promise<void> {
+        await this._send(memberName, {
+            type: 'command',
+            command: 'reliableTopicAddListener',
+            mapName: '__unused__',
+            topicName,
+        });
+    }
+
+    async reliableTopicDestroy(memberName: string, topicName: string): Promise<void> {
+        await this._send(memberName, {
+            type: 'command',
+            command: 'reliableTopicDestroy',
+            mapName: '__unused__',
+            topicName,
+        });
+    }
+
+    async getReliableTopicMessages(memberName: string, topicName: string): Promise<string[]> {
+        const result = await this._send(memberName, {
+            type: 'query',
+            query: 'reliableTopicMessages',
+            topicName,
+        });
+        return result.messages;
+    }
+
+    async getReliableTopicState(memberName: string, topicName: string): Promise<{ partitionId: number; size: number; headSequence: number; tailSequence: number }> {
+        return this._send(memberName, {
+            type: 'query',
+            query: 'reliableTopicState',
+            topicName,
+        });
+    }
+
+    async getReliableTopicOwner(memberName: string, topicName: string): Promise<{ partitionId: number; owner: string | null }> {
+        return this._send(memberName, {
+            type: 'query',
+            query: 'reliableTopicOwner',
+            topicName,
+        });
     }
 
     /**

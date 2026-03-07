@@ -19,9 +19,12 @@
       "@zenystx/helios-core/*": ["../../src/core/*", "../../src/*"],
       "@zenystx/helios-nestjs": ["../../packages/nestjs/src/index.ts"],
       "@zenystx/helios-nestjs/*": ["../../packages/nestjs/src/*"],
+      "@zenystx/helios-blitz": ["../../packages/blitz/src/index.ts"],
+      "@zenystx/helios-blitz/nestjs": ["../../packages/blitz/src/nestjs/index.ts"],
       "@zenystx/helios-mongodb": ["../../packages/mongodb/src/index.ts"],
       "@zenystx/helios-s3": ["../../packages/s3/src/index.ts"],
-      "@zenystx/helios-turso": ["../../packages/turso/src/index.ts"]
+      "@zenystx/helios-turso": ["../../packages/turso/src/index.ts"],
+      "@zenystx/helios-dynamodb": ["../../packages/dynamodb/src/index.ts"]
     },
 
     "types": ["bun"]

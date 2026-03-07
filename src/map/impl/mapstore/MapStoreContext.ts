@@ -76,16 +76,28 @@ export class MapStoreContext<K, V> {
         );
       }
       const stream = await wrapper.loadAllKeys();
-      const keys: K[] = [];
+      initialEntries = new Map<K, V>();
+      const LOAD_BATCH_SIZE = 10_000;
       try {
-        for await (const k of stream) keys.push(k);
+        let keyBatch: K[] = [];
+        for await (const k of stream) {
+          keyBatch.push(k);
+          if (keyBatch.length >= LOAD_BATCH_SIZE) {
+            const loaded = await wrapper.loadAll(keyBatch);
+            for (const [lk, lv] of loaded) {
+              initialEntries.set(lk, lv);
+            }
+            keyBatch = [];
+          }
+        }
+        if (keyBatch.length > 0) {
+          const loaded = await wrapper.loadAll(keyBatch);
+          for (const [lk, lv] of loaded) {
+            initialEntries.set(lk, lv);
+          }
+        }
       } finally {
         await stream.close();
-      }
-      if (keys.length > 0) {
-        initialEntries = await wrapper.loadAll(keys);
-      } else {
-        initialEntries = new Map<K, V>();
       }
     }
 

@@ -41,4 +41,18 @@ export abstract class MapOperation extends Operation {
         await svc.ensureMapDataStoreInitialized(this.mapName);
         this.mapDataStore = svc.getExistingMapDataStore(this.mapName);
     }
+
+    protected recordNamespaceMutation(): void {
+        const partitionService = this.getNodeEngine()?.getPartitionService() as {
+            recordNamespaceMutation?: (partitionId: number, namespace: string) => void;
+        } | undefined;
+        partitionService?.recordNamespaceMutation?.(this.partitionId, this.mapName);
+    }
+
+    protected recordNamespaceBackupMutation(): void {
+        const partitionService = this.getNodeEngine()?.getPartitionService() as {
+            applyNamespaceBackupMutation?: (partitionId: number, namespace: string, replicaIndex: number) => void;
+        } | undefined;
+        partitionService?.applyNamespaceBackupMutation?.(this.partitionId, this.mapName, this.replicaIndex);
+    }
 }

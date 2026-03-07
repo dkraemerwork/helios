@@ -1,4 +1,4 @@
-import { FilterOperator } from './FilterOperator.ts';
+import { FilterOperator } from './FilterOperator.js';
 
 /**
  * Fan-out operator: routes each message to exactly one of two branches

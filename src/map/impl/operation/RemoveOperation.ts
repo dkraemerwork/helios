@@ -23,8 +23,12 @@ export class RemoveOperation extends MapOperation implements BackupAwareOperatio
     async run(): Promise<void> {
         const old = this.recordStore.remove(this._key);
         this.sendResponse(old);
+        if (old !== null) {
+            this.recordNamespaceMutation();
+        }
         // Owner-side external store delete (only if key existed)
         if (old !== null && this.mapDataStore.isWithStore()) {
+            this.containerService.ensureExternalMapStoreOperationAllowed(this.partitionId);
             const ne = this.getNodeEngine()!;
             const key = ne.toObject(this._key);
             await this.mapDataStore.remove(key, Date.now());

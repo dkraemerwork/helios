@@ -1,10 +1,11 @@
 {
   "name": "@zenystx/helios-nestjs-example",
   "version": "1.0.0",
-  "description": "NestJS example demonstrating near-cache, predicates, and MapStore persistence (MongoDB, S3, Turso) using @zenystx/helios-nestjs",
+  "description": "NestJS example demonstrating near-cache, predicates, MapStore persistence (MongoDB, S3, Turso), and Blitz stream processing (Binance WebSocket) using @zenystx/helios-nestjs",
   "private": true,
   "scripts": {
     "start": "bun run src/main.ts",
+    "stream": "bun run src/client-market-streamer.ts",
     "typecheck": "bun run tsc --noEmit"
   },
   "dependencies": {
@@ -18,7 +19,8 @@
     "rxjs": "^7.8.2",
     "mongodb": "^6.12.0",
     "@aws-sdk/client-s3": "^3.700.0",
-    "@libsql/client": "^0.14.0"
+    "@libsql/client": "^0.14.0",
+    "@aws-sdk/client-dynamodb": "^3.918.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
