@@ -7,14 +7,17 @@
  * - Reconciliation behavior on topology changes
  * - Routable advertise-host correctness
  * - NestJS bridge reuse of Helios-owned Blitz instance
+ * - NestJS bridge fence-awareness
+ * - Live runtime wiring for reconciliation and bridge
  * - Integrated verification of no duplicate runtimes
  */
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, afterEach } from "bun:test";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
 import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
 import { resolveAdvertiseHost } from "@zenystx/helios-core/instance/impl/blitz/AdvertiseHostResolver";
+import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
 
 // ─── 1. Env-helper: HELIOS_BLITZ_MODE=distributed-auto ─────────────────────
 
@@ -305,9 +308,131 @@ describe("Block 18.4 — NestJS bridge fence-awareness", () => {
   });
 });
 
-// ─── 8. Integration: no duplicate runtimes + verification ────────────────────
+// ─── 8. Live runtime wiring: coordinator → reconciler ─────────────────────────
 
-describe("Block 18.4 — No duplicate runtimes verification", () => {
+describe("Block 18.4 — Coordinator wires reconciler on topology changes", () => {
+  test("coordinator exposes a BlitzReplicaReconciler via getReplicaReconciler()", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    const reconciler = coordinator.getReplicaReconciler();
+    expect(reconciler).toBeInstanceOf(BlitzReplicaReconciler);
+  });
+
+  test("coordinator propagates demotion to reconciler", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    const reconciler = coordinator.getReplicaReconciler();
+    reconciler.setAuthority("master-1", 1, coordinator.getFenceToken()!);
+    reconciler.setIsMaster(true);
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+    reconciler.scheduleReconciliationJob("kv-bucket-1");
+
+    coordinator.onDemotion();
+
+    expect(reconciler.getOutstandingJobs().length).toBe(0);
+    expect(reconciler.getPendingUpgrades().length).toBe(0);
+    expect(reconciler.getIsMaster()).toBe(false);
+  });
+
+  test("coordinator propagates memberListVersion change to reconciler", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    const reconciler = coordinator.getReplicaReconciler();
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+
+    coordinator.setMemberListVersion(2);
+
+    expect(reconciler.getPendingUpgrades().length).toBe(0);
+    expect(reconciler.getMemberListVersion()).toBe(2);
+  });
+
+  test("coordinator syncs authority tuple to reconciler on master change", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    const reconciler = coordinator.getReplicaReconciler();
+
+    reconciler.setIsMaster(true);
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+    const job = reconciler.scheduleReconciliationJob("kv-bucket-1");
+    expect(job).not.toBeNull();
+    expect(reconciler.validateJobAuthority(job!)).toBe(true);
+  });
+});
+
+// ─── 9. Live runtime wiring: HeliosInstanceImpl → bridge ─────────────────────
+
+describe("Block 18.4 — HeliosInstanceImpl bridge + reconciler integration", () => {
+  let instance: HeliosInstanceImpl;
+
+  afterEach(() => {
+    if (instance?.isRunning()) instance.shutdown();
+  });
+
+  test("getBlitzServiceForBridge returns the raw service ref for NestJS reuse", () => {
+    const config = new HeliosConfig("bridge-test");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    instance = new HeliosInstanceImpl(config);
+    expect(instance.getBlitzServiceForBridge()).toBeNull();
+
+    const mockService = { shutdown: async () => {}, isClosed: false };
+    instance.setBlitzService(mockService);
+    // Raw bridge accessor returns the service regardless of fence state
+    expect(instance.getBlitzServiceForBridge()).toBe(mockService);
+  });
+
+  test("getBlitzService is fence-gated but getBlitzServiceForBridge is not", () => {
+    const config = new HeliosConfig("fence-gate-test");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    instance = new HeliosInstanceImpl(config);
+    const mockService = { shutdown: async () => {}, isClosed: false };
+    instance.setBlitzService(mockService);
+
+    expect(instance.getBlitzService()).toBeNull();
+    expect(instance.getBlitzServiceForBridge()).toBe(mockService);
+  });
+
+  test("createBlitzFenceCheck delegates to lifecycle manager isBlitzAvailable", () => {
+    const config = new HeliosConfig("fence-fn-test");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    instance = new HeliosInstanceImpl(config);
+    const fenceCheck = instance.createBlitzFenceCheck();
+    expect(fenceCheck()).toBe(false);
+
+    const mgr = instance.getBlitzLifecycleManager()!;
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("master-1", 1);
+    mgr.onRegisteredWithMaster();
+    mgr.onClusteredCutoverComplete();
+    expect(fenceCheck()).toBe(true);
+  });
+});
+
+// ─── 10. Integration: no duplicate runtimes + full wiring verification ───────
+
+describe("Block 18.4 — No duplicate runtimes + full wiring verification", () => {
+  let instance: HeliosInstanceImpl;
+
+  afterEach(() => {
+    if (instance?.isRunning()) instance.shutdown();
+  });
+
   test("HeliosInstanceImpl with blitz config provides getBlitzService accessor", () => {
     const config = new HeliosConfig("blitz-reuse");
     config.setBlitzConfig({
@@ -316,11 +441,9 @@ describe("Block 18.4 — No duplicate runtimes verification", () => {
       localPort: 14222,
       localClusterPort: 16222,
     });
-    const instance = new HeliosInstanceImpl(config);
-    // The instance must expose the Blitz lifecycle for NestJS bridge reuse
+    instance = new HeliosInstanceImpl(config);
     const mgr = instance.getBlitzLifecycleManager();
     expect(mgr).not.toBeNull();
-    instance.shutdown();
   });
 
   test("env-resolved config integrates with HeliosConfig.setBlitzConfig", () => {
@@ -340,13 +463,50 @@ describe("Block 18.4 — No duplicate runtimes verification", () => {
     const reconciler = new BlitzReplicaReconciler(3, 1);
     reconciler.markUnderReplicated("bucket-a", 1, 3);
     reconciler.markUnderReplicated("bucket-b", 1, 3);
-    // Simulate restart — version bump clears cache
     reconciler.onMemberListVersionChange(5);
     expect(reconciler.getPendingUpgrades().length).toBe(0);
-    // Recompute
     reconciler.markUnderReplicated("bucket-a", 2, 3);
     const pending = reconciler.getPendingUpgrades();
     expect(pending.length).toBe(1);
     expect(pending[0].memberListVersion).toBe(5);
+  });
+
+  test("NestJS bridge can create fence-aware module using HeliosInstanceImpl fence check", () => {
+    const config = new HeliosConfig("nestjs-integration");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    instance = new HeliosInstanceImpl(config);
+
+    const fenceCheck = instance.createBlitzFenceCheck();
+    const { HeliosBlitzModule } = require(`${import.meta.dir}/../../packages/blitz/src/nestjs/HeliosBlitzModule.ts`);
+    const mod = HeliosBlitzModule.forHeliosInstanceFenced({
+      fenceCheck,
+      blitzServiceFactory: () => instance.getBlitzServiceForBridge(),
+    });
+    expect(mod.module).toBe(HeliosBlitzModule);
+    expect(mod.global).toBe(true);
+  });
+
+  test("full wiring: coordinator demotion propagates through to reconciler outstanding jobs", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-A");
+    coordinator.setMemberListVersion(1);
+    const reconciler = coordinator.getReplicaReconciler();
+    reconciler.setIsMaster(true);
+    reconciler.setAuthority("master-A", 1, coordinator.getFenceToken()!);
+    reconciler.markUnderReplicated("stream-1", 1, 3);
+    reconciler.markUnderReplicated("kv-state-1", 1, 3);
+    reconciler.scheduleReconciliationJob("stream-1");
+    reconciler.scheduleReconciliationJob("kv-state-1");
+    expect(reconciler.getOutstandingJobs().length).toBe(2);
+
+    coordinator.onDemotion();
+    expect(reconciler.getOutstandingJobs().length).toBe(0);
+    expect(reconciler.getPendingUpgrades().length).toBe(0);
+    expect(reconciler.getIsMaster()).toBe(false);
   });
 });

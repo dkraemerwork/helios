@@ -7,6 +7,7 @@
  * master changes, and generates announce messages.
  */
 import { BlitzClusterTopology } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
+import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
 import type {
   BlitzNodeRegisterMsg,
   BlitzNodeRemoveMsg,
@@ -24,11 +25,21 @@ export class HeliosBlitzCoordinator {
   private _expectedRegistrants = new Set<string>();
   private _fenceToken: string | null = null;
   private _pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly _reconciler = new BlitzReplicaReconciler(1, 0);
+
+  /**
+   * Returns the replica reconciler owned by this coordinator.
+   * The coordinator propagates topology/authority changes to it automatically.
+   */
+  getReplicaReconciler(): BlitzReplicaReconciler {
+    return this._reconciler;
+  }
 
   setMasterMemberId(masterId: string): void {
     if (masterId !== this._masterMemberId) {
       this._masterMemberId = masterId;
       this._rotateFenceToken();
+      this._syncReconcilerAuthority();
     }
   }
 
@@ -42,6 +53,8 @@ export class HeliosBlitzCoordinator {
       this._topology = new BlitzClusterTopology(version);
       this._expectedRegistrants.clear();
       this._rotateFenceToken();
+      this._reconciler.onMemberListVersionChange(version);
+      this._syncReconcilerAuthority();
     }
   }
 
@@ -71,6 +84,20 @@ export class HeliosBlitzCoordinator {
     this._fenceToken = Array.from(bytes, (b) =>
       b.toString(16).padStart(2, "0"),
     ).join("");
+  }
+
+  /**
+   * Sync the current authority tuple to the reconciler so scheduled
+   * reconciliation jobs can capture and revalidate it.
+   */
+  private _syncReconcilerAuthority(): void {
+    if (this._masterMemberId && this._fenceToken) {
+      this._reconciler.setAuthority(
+        this._masterMemberId,
+        this._memberListVersion,
+        this._fenceToken,
+      );
+    }
   }
 
   setExpectedRegistrants(memberIds: Set<string>): void {
@@ -251,5 +278,9 @@ export class HeliosBlitzCoordinator {
 
     // Rotate fence token so old-epoch authority is invalid
     this._rotateFenceToken();
+
+    // Cascade demotion to the reconciler — cancels outstanding jobs,
+    // clears pending work, and nullifies authority
+    this._reconciler.onDemotion();
   }
 }

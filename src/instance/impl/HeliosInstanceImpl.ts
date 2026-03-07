@@ -646,6 +646,34 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._blitzService = service;
   }
 
+  /**
+   * Returns the raw Blitz service reference for NestJS bridge reuse,
+   * bypassing the pre-cutover readiness fence. The NestJS bridge wraps
+   * this with its own fence-aware provider (FenceAwareBlitzProvider).
+   *
+   * Returns null only when the Blitz runtime has not been started.
+   */
+  getBlitzServiceForBridge(): { shutdown(): Promise<void>; isClosed: boolean } | null {
+    return this._blitzService;
+  }
+
+  /**
+   * Creates a fence check function that delegates to the lifecycle manager's
+   * isBlitzAvailable(). Used by the NestJS bridge (FenceAwareBlitzProvider)
+   * to gate access until post-cutover readiness is green.
+   */
+  createBlitzFenceCheck(): () => boolean {
+    return () => this._blitzLifecycleManager?.isBlitzAvailable() ?? false;
+  }
+
+  /**
+   * Returns the BlitzReplicaReconciler from the cluster coordinator,
+   * or null if no cluster coordinator exists (single-node mode).
+   */
+  getBlitzReplicaReconciler(): import('@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler').BlitzReplicaReconciler | null {
+    return this._clusterCoordinator?.getBlitzCoordinator().getReplicaReconciler() ?? null;
+  }
+
   // ── Public TCP helpers ───────────────────────────────────────────────
 
   /**

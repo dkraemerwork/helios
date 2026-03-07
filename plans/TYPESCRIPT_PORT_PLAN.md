@@ -222,15 +222,15 @@ Tasks:
 
 - [x] Add and document `HELIOS_BLITZ_MODE=distributed-auto` behavior.
 - [x] Implement master-owned fenced replica-count upgrade policy for Blitz-owned KV/state.
-- [ ] Define and wire reconciliation behavior so topology changes do not silently corrupt replica expectations.
-- [ ] Require reconciliation jobs to capture `(masterMemberId, memberListVersion, fenceToken)` at schedule time and revalidate it immediately before every apply step; demotion must cancel or hard-fence all outstanding reconciliation work so an old master cannot keep mutating Blitz-owned topology/replica state.
+- [x] Define and wire reconciliation behavior so topology changes do not silently corrupt replica expectations.
+- [x] Require reconciliation jobs to capture `(masterMemberId, memberListVersion, fenceToken)` at schedule time and revalidate it immediately before every apply step; demotion must cancel or hard-fence all outstanding reconciliation work so an old master cannot keep mutating Blitz-owned topology/replica state.
 - [x] Implement routable advertise-host behavior for real multi-node environments.
-- [ ] Reuse the Helios-owned Blitz instance inside the NestJS bridge instead of spinning up parallel unmanaged instances.
-- [ ] Make the NestJS bridge and any other Blitz-facing integration surfaces fence-aware so they cannot expose or reuse the Helios-owned Blitz instance until the Block 18.3 pre-cutover readiness fence has cleared.
-- [ ] Wire reconciliation and fence-aware NestJS/Blitz bridge exposure through the live runtime path used by Helios startup and master-change handling, not only through helper classes or isolated tests.
+- [x] Reuse the Helios-owned Blitz instance inside the NestJS bridge instead of spinning up parallel unmanaged instances.
+- [x] Make the NestJS bridge and any other Blitz-facing integration surfaces fence-aware so they cannot expose or reuse the Helios-owned Blitz instance until the Block 18.3 pre-cutover readiness fence has cleared.
+- [x] Wire reconciliation and fence-aware NestJS/Blitz bridge exposure through the live runtime path used by Helios startup and master-change handling, not only through helper classes or isolated tests.
 - [x] Update exports/docs/examples as needed for the distributed-default mode.
-- [ ] Add tests for env-helper behavior, replica fencing, reconciliation, advertise-host correctness, and NestJS reuse of Helios-owned Blitz.
-- [ ] Run a verification task that proves reconciliation and integration behavior are production ready and not split across duplicate runtimes.
+- [x] Add tests for env-helper behavior, replica fencing, reconciliation, advertise-host correctness, and NestJS reuse of Helios-owned Blitz.
+- [x] Run a verification task that proves reconciliation and integration behavior are production ready and not split across duplicate runtimes.
 
 ### Block 18.5 — Multi-node HA verification
 
@@ -622,7 +622,7 @@ Tasks:
 - [x] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
 - [x] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, `(masterMemberId, memberListVersion, fenceToken)` authority fencing, explicit expected-registrant sweep rules after master change) — ~18 tests
 - [x] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, strict pre-cutover readiness fence, deterministic cleanup on member leave/shutdown, demotion-time authority cancellation) — ~18 tests
-- [ ] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS, fence-aware reconciliation and bridge exposure) — ~16 tests
+- [x] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS, fence-aware reconciliation and bridge exposure) — ~16 tests
 - [ ] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, pre-cutover fail-closed readiness, current-master handoff, stale old-master rejection, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
 - [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, pre-cutover readiness fence, demotion-time cancellation, authority-tuple validation, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error
 - [x] **Block 19.1** — MongoDB MapStore parity/scope freeze + core runtime closure (`plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` binding, document-only scope freeze, `shutdownAsync()` flush await, realistic EAGER timing, `MapKeyStream<K>` closure, bulk/clear/loadAllKeys legality, query/index rebuild, JSON/YAML config-origin wiring) — ~18 tests
