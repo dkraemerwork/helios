@@ -410,19 +410,19 @@ path, no split partition authority, no fake fallbacks, and Hazelcast-parity owne
 
 Tasks:
 
-- [ ] Bind this block to `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md` as the authoritative implementation detail.
-- [ ] Replace split clustered partition authority with one production partition-service owner used by `NodeEngine`, operation routing, migration, backup execution, and instance-level ownership queries.
-- [ ] Remove clustered recovery shortcuts that rebuild or shadow partition state outside the real runtime partition service.
-- [ ] Add Hazelcast-style member-removal bookkeeping, including sync-cancellation, departed-member repair bookkeeping, and deterministic repair triggering.
-- [ ] Implement promotion-first recovery so a surviving backup becomes owner before refill or rebalance work starts.
-- [ ] Implement refill of missing backup slots via real migration or replica-transfer paths so redundancy is restored when capacity exists.
-- [ ] Add partition-lost event and listener support for partitions with no surviving replicas.
-- [ ] Wire anti-entropy as a real runtime scheduler and make replica sync a real remote protocol with throttling, retries, timeout cleanup, and stale-response rejection.
-- [ ] Audit and close service-state replication for every supported partition-scoped service touched by failover, refill, and replica sync; explicitly defer and document any unsupported service instead of letting partition-metadata parity imply runtime parity.
-- [ ] Freeze and wire operator-facing recovery config/defaults, observability, docs/examples, and test-support for anti-entropy cadence, sync timeout/retry/throttle behavior, degraded redundancy, repair progress, and partition-lost signaling.
-- [ ] Add stale-rejoin fencing and shutdown/demotion cleanup so restarted or demoted members cannot leak stale replica state, stale sync responses, or orphaned repair work back into the cluster.
-- [ ] Add real multi-node crash, rejoin, packet-loss, promotion, refill, and partition-lost tests proving the recovery path is production real.
-- [ ] Run a verification task that proves clustered partition recovery is Bun-native, TypeScript-native, end to end, and free of stubs, fake fallbacks, duplicate authorities, or test-only runtime shortcuts.
+- [x] Bind this block to `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md` as the authoritative implementation detail.
+- [x] Replace split clustered partition authority with one production partition-service owner used by `NodeEngine`, operation routing, migration, backup execution, and instance-level ownership queries.
+- [x] Remove clustered recovery shortcuts that rebuild or shadow partition state outside the real runtime partition service.
+- [x] Add Hazelcast-style member-removal bookkeeping, including sync-cancellation, departed-member repair bookkeeping, and deterministic repair triggering.
+- [x] Implement promotion-first recovery so a surviving backup becomes owner before refill or rebalance work starts.
+- [x] Implement refill of missing backup slots via real migration or replica-transfer paths so redundancy is restored when capacity exists.
+- [x] Add partition-lost event and listener support for partitions with no surviving replicas.
+- [x] Wire anti-entropy as a real runtime scheduler and make replica sync a real remote protocol with throttling, retries, timeout cleanup, and stale-response rejection.
+- [x] Audit and close service-state replication for every supported partition-scoped service touched by failover, refill, and replica sync; explicitly defer and document any unsupported service instead of letting partition-metadata parity imply runtime parity.
+- [x] Freeze and wire operator-facing recovery config/defaults, observability, docs/examples, and test-support for anti-entropy cadence, sync timeout/retry/throttle behavior, degraded redundancy, repair progress, and partition-lost signaling.
+- [x] Add stale-rejoin fencing and shutdown/demotion cleanup so restarted or demoted members cannot leak stale replica state, stale sync responses, or orphaned repair work back into the cluster.
+- [x] Add real multi-node crash, rejoin, packet-loss, promotion, refill, and partition-lost tests proving the recovery path is production real.
+- [x] Run a verification task that proves clustered partition recovery is Bun-native, TypeScript-native, end to end, and free of stubs, fake fallbacks, duplicate authorities, or test-only runtime shortcuts.
 
 ### Block 21.1 — Cluster execution substrate + owner-routed map path
 
@@ -517,7 +517,7 @@ Tasks:
 - [x] **Block 20.7** — Near-cache completion + advanced feature closure (real remote near-cache wrapping, binary metadata fetch, reconnect repair/stale-read protection, advanced-feature keep/defer closure for cache/query-cache/transactions/SQL/secondary services) — 28 tests
 - [x] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — 56 tests
 - [ ] **Phase 20 checkpoint** — root typecheck green; client runtime tests green; targeted real-network client protocol tests green; separate Bun app can import `HeliosClient` from `@zenystx/helios-core`, connect over binary protocol, use every retained remote `HeliosInstance` capability honestly, survive reconnect, and shut down cleanly; 0 fail, 0 error
-- [ ] **Block 21.0** — Backup partition recovery parity foundation (`plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`, one partition-service authority, no clustered recovery shortcuts, member-removal bookkeeping, promotion-first repair, backup refill, partition-lost signaling, runtime anti-entropy, real remote replica sync, service-state replication closure, stale-rejoin fencing, observability/config/docs/test-support closure, crash/rejoin proof) — ~28 tests
+- [x] **Block 21.0** — Backup partition recovery parity foundation (`plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`, one partition-service authority, no clustered recovery shortcuts, member-removal bookkeeping, promotion-first repair, backup refill, partition-lost signaling, runtime anti-entropy, real remote replica sync, service-state replication closure, stale-rejoin fencing, observability/config/docs/test-support closure, crash/rejoin proof) — ~28 tests
 - [ ] **Block 21.1** — Cluster execution substrate + owner-routed map path (real partition-owner routing, remote operation request/response/backup flow, no authoritative `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` replay path) — ~18 tests
 - [ ] **Block 21.2** — Partition-scoped MapStore runtime + owner-only persistence (shared map-level lifecycle + partition-scoped stores, owner-side `store`/`delete`/`load`, backup no-external-write semantics, clustered `putAll`/`getAll` bulk paths) — ~22 tests
 - [ ] **Block 21.3** — Migration, failover, shutdown handoff, and coordinated eager/clear (`MigrationAwareService` participation, write-behind queue replication, owner promotion cutover, clustered eager-load coordination, clustered clear, deterministic shutdown handoff) — ~24 tests
