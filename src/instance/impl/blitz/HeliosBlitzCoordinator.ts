@@ -6,10 +6,7 @@
  * computes topology snapshots, manages re-registration sweeps after
  * master changes, and generates announce messages.
  */
-import {
-  BlitzClusterTopology,
-  type BlitzNodeRegistration,
-} from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
+import { BlitzClusterTopology } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
 import type {
   BlitzNodeRegisterMsg,
   BlitzNodeRemoveMsg,
@@ -148,6 +145,55 @@ export class HeliosBlitzCoordinator {
       routes: this._topology.getRoutes(),
       masterMemberId: this._masterMemberId,
       fenceToken: this._fenceToken,
+    };
+  }
+
+  /**
+   * Validate an incoming authoritative BLITZ_TOPOLOGY_RESPONSE or
+   * BLITZ_TOPOLOGY_ANNOUNCE against this node's current master view.
+   */
+  validateIncomingAuthoritative(
+    msg: BlitzTopologyResponseMsg | BlitzTopologyAnnounceMsg,
+  ): boolean {
+    return this.validateAuthority(
+      msg.masterMemberId,
+      msg.memberListVersion,
+      msg.fenceToken,
+    );
+  }
+
+  /**
+   * Process an incoming BLITZ_TOPOLOGY_RESPONSE from the master.
+   * Validates authority fencing before accepting the topology data.
+   */
+  handleIncomingTopologyResponse(
+    msg: BlitzTopologyResponseMsg,
+  ): { accepted: boolean; routes?: string[]; registrationsComplete?: boolean; clientConnectUrl?: string; retryAfterMs?: number } {
+    if (!this.validateIncomingAuthoritative(msg)) {
+      return { accepted: false };
+    }
+    return {
+      accepted: true,
+      routes: msg.routes,
+      registrationsComplete: msg.registrationsComplete,
+      clientConnectUrl: msg.clientConnectUrl,
+      retryAfterMs: msg.retryAfterMs,
+    };
+  }
+
+  /**
+   * Process an incoming BLITZ_TOPOLOGY_ANNOUNCE from the master.
+   * Validates authority fencing before accepting the topology update.
+   */
+  handleIncomingTopologyAnnounce(
+    msg: BlitzTopologyAnnounceMsg,
+  ): { accepted: boolean; routes?: string[] } {
+    if (!this.validateIncomingAuthoritative(msg)) {
+      return { accepted: false };
+    }
+    return {
+      accepted: true,
+      routes: msg.routes,
     };
   }
 

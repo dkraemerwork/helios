@@ -790,6 +790,66 @@ describe("Block 18.2 — Helios Blitz Config, Protocol, and Topology Service", (
       expect(announce!.memberListVersion).toBe(5);
     });
 
+    test("validateIncomingAuthoritative rejects BLITZ_TOPOLOGY_RESPONSE with stale authority tuple", () => {
+      coordinator.setMasterMemberId("master-1");
+      coordinator.setMemberListVersion(5);
+
+      const currentToken = coordinator.getFenceToken()!;
+
+      // Valid authority tuple is accepted
+      const validResponse: BlitzTopologyResponseMsg = {
+        type: "BLITZ_TOPOLOGY_RESPONSE",
+        requestId: "req-1",
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "master-1",
+        memberListVersion: 5,
+        fenceToken: currentToken,
+        registrationsComplete: true,
+        clientConnectUrl: "nats://127.0.0.1:4222",
+      };
+      expect(coordinator.validateIncomingAuthoritative(validResponse)).toBe(true);
+
+      // Stale response from old master is rejected
+      const staleResponse: BlitzTopologyResponseMsg = {
+        type: "BLITZ_TOPOLOGY_RESPONSE",
+        requestId: "req-2",
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "old-master",
+        memberListVersion: 3,
+        fenceToken: "stale-token",
+        registrationsComplete: true,
+        clientConnectUrl: "nats://127.0.0.1:4222",
+      };
+      expect(coordinator.validateIncomingAuthoritative(staleResponse)).toBe(false);
+    });
+
+    test("validateIncomingAuthoritative rejects BLITZ_TOPOLOGY_ANNOUNCE with stale authority tuple", () => {
+      coordinator.setMasterMemberId("master-1");
+      coordinator.setMemberListVersion(5);
+
+      const currentToken = coordinator.getFenceToken()!;
+
+      // Valid announce accepted
+      const validAnnounce: BlitzTopologyAnnounceMsg = {
+        type: "BLITZ_TOPOLOGY_ANNOUNCE",
+        memberListVersion: 5,
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "master-1",
+        fenceToken: currentToken,
+      };
+      expect(coordinator.validateIncomingAuthoritative(validAnnounce)).toBe(true);
+
+      // Stale announce rejected
+      const staleAnnounce: BlitzTopologyAnnounceMsg = {
+        type: "BLITZ_TOPOLOGY_ANNOUNCE",
+        memberListVersion: 3,
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "old-master",
+        fenceToken: "stale-token",
+      };
+      expect(coordinator.validateIncomingAuthoritative(staleAnnounce)).toBe(false);
+    });
+
     test("validateAuthority rejects stale authority tuples from pre-demotion masters", () => {
       coordinator.setMasterMemberId("master-1");
       coordinator.setMemberListVersion(1);
@@ -831,6 +891,85 @@ describe("Block 18.2 — Helios Blitz Config, Protocol, and Topology Service", (
       expect(
         coordinator.validateAuthority("master-2", 1, newToken),
       ).toBe(false);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 8. Transport-path authority fencing (2 tests)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe("Transport-path authority fencing", () => {
+    let coordinator: HeliosBlitzCoordinator;
+
+    beforeEach(() => {
+      coordinator = new HeliosBlitzCoordinator();
+      coordinator.setMasterMemberId("master-1");
+      coordinator.setMemberListVersion(5);
+    });
+
+    test("handleIncomingTopologyResponse accepts valid-authority response and returns routes", () => {
+      const token = coordinator.getFenceToken()!;
+
+      const response: BlitzTopologyResponseMsg = {
+        type: "BLITZ_TOPOLOGY_RESPONSE",
+        requestId: "req-1",
+        routes: ["nats://node-1.local:6222", "nats://node-2.local:6223"],
+        masterMemberId: "master-1",
+        memberListVersion: 5,
+        fenceToken: token,
+        registrationsComplete: true,
+        clientConnectUrl: "nats://127.0.0.1:4222",
+      };
+
+      const result = coordinator.handleIncomingTopologyResponse(response);
+      expect(result.accepted).toBe(true);
+      expect(result.routes).toEqual(["nats://node-1.local:6222", "nats://node-2.local:6223"]);
+      expect(result.registrationsComplete).toBe(true);
+    });
+
+    test("handleIncomingTopologyResponse rejects stale-authority response", () => {
+      const response: BlitzTopologyResponseMsg = {
+        type: "BLITZ_TOPOLOGY_RESPONSE",
+        requestId: "req-2",
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "old-master",
+        memberListVersion: 3,
+        fenceToken: "stale-fence",
+        registrationsComplete: true,
+        clientConnectUrl: "nats://127.0.0.1:4222",
+      };
+
+      const result = coordinator.handleIncomingTopologyResponse(response);
+      expect(result.accepted).toBe(false);
+    });
+
+    test("handleIncomingTopologyAnnounce accepts valid-authority announce", () => {
+      const token = coordinator.getFenceToken()!;
+
+      const announce: BlitzTopologyAnnounceMsg = {
+        type: "BLITZ_TOPOLOGY_ANNOUNCE",
+        memberListVersion: 5,
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "master-1",
+        fenceToken: token,
+      };
+
+      const result = coordinator.handleIncomingTopologyAnnounce(announce);
+      expect(result.accepted).toBe(true);
+      expect(result.routes).toEqual(["nats://node-1.local:6222"]);
+    });
+
+    test("handleIncomingTopologyAnnounce rejects stale-authority announce", () => {
+      const announce: BlitzTopologyAnnounceMsg = {
+        type: "BLITZ_TOPOLOGY_ANNOUNCE",
+        memberListVersion: 3,
+        routes: ["nats://node-1.local:6222"],
+        masterMemberId: "old-master",
+        fenceToken: "stale-fence",
+      };
+
+      const result = coordinator.handleIncomingTopologyAnnounce(announce);
+      expect(result.accepted).toBe(false);
     });
   });
 });

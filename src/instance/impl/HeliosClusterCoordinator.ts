@@ -214,6 +214,14 @@ export class HeliosClusterCoordinator {
         }
         return response !== null;
       }
+      case "BLITZ_TOPOLOGY_RESPONSE":
+        return this._blitzCoordinator.handleIncomingTopologyResponse(
+          message as import("@zenystx/helios-core/cluster/tcp/ClusterMessage").BlitzTopologyResponseMsg,
+        ).accepted;
+      case "BLITZ_TOPOLOGY_ANNOUNCE":
+        return this._blitzCoordinator.handleIncomingTopologyAnnounce(
+          message as import("@zenystx/helios-core/cluster/tcp/ClusterMessage").BlitzTopologyAnnounceMsg,
+        ).accepted;
       default:
         return false;
     }
