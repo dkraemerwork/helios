@@ -2,14 +2,30 @@ import type { MapDataStore } from '../MapDataStore.js';
 import type { MapStoreWrapper } from '../MapStoreWrapper.js';
 
 export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
-  constructor(private readonly _wrapper: MapStoreWrapper<K, V>) {}
+  private readonly _writeBatchSize: number;
+
+  constructor(
+    private readonly _wrapper: MapStoreWrapper<K, V>,
+    writeBatchSize: number = 0,
+  ) {
+    this._writeBatchSize = writeBatchSize > 0 ? writeBatchSize : 0;
+  }
 
   async add(key: K, value: V, _now: number): Promise<void> {
     await this._wrapper.store(key, value);
   }
 
   async addAll(entries: Map<K, V>): Promise<void> {
-    await this._wrapper.storeAll(entries);
+    if (entries.size === 0) return;
+    if (this._writeBatchSize <= 0 || entries.size <= this._writeBatchSize) {
+      await this._wrapper.storeAll(entries);
+      return;
+    }
+    const items = Array.from(entries);
+    for (let i = 0; i < items.length; i += this._writeBatchSize) {
+      const chunk = new Map(items.slice(i, i + this._writeBatchSize));
+      await this._wrapper.storeAll(chunk);
+    }
   }
 
   async remove(key: K, _now: number): Promise<void> {
@@ -36,8 +52,13 @@ export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
     } finally {
       await stream.close();
     }
-    if (keys.length > 0) {
+    if (keys.length === 0) return;
+    if (this._writeBatchSize <= 0 || keys.length <= this._writeBatchSize) {
       await this._wrapper.deleteAll(keys);
+      return;
+    }
+    for (let i = 0; i < keys.length; i += this._writeBatchSize) {
+      await this._wrapper.deleteAll(keys.slice(i, i + this._writeBatchSize));
     }
   }
 

@@ -36,6 +36,11 @@
     "test:watch": "bun test --watch",
     "test:one": "bun test --test-name-pattern",
     "typecheck": "bun run tsc --noEmit",
+    "test:mapstore:mongodb:unit": "bun test packages/mongodb/test/",
+    "test:mapstore:mongodb:core": "bun test test/map/mapstore/Block19_3_BulkIO_Integration.test.ts test/map/mapstore/MapStoreIntegration.test.ts test/map/mapstore/Block19_1_CoreRuntime.test.ts",
+    "test:mapstore:mongodb:offload": "bun test test/map/mapstore/Block19_3_BulkIO_Integration.test.ts --test-name-pattern 'Offload'",
+    "test:mapstore:mongodb:cluster": "bun test test/map/mapstore/Block19_3_BulkIO_Integration.test.ts --test-name-pattern 'restart|cluster'",
+    "test:mapstore:mongodb:e2e": "bun test test/map/mapstore/Block19_3_BulkIO_Integration.test.ts --test-name-pattern 'vertical slice|loadAllKeys|harness'",
     "convert": "bun run scripts/convert-java-tests.ts",
     "prepack": "bun run build",
     "prepublishOnly": "bun run build"

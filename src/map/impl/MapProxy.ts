@@ -337,8 +337,18 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async putAll(entries: Iterable<[K, V]>): Promise<void> {
         await this._ensureMapDataStore();
         const pairs: [K, V][] = Array.from(entries);
+        const bulkMap = new Map<K, V>();
         for (const [k, v] of pairs) {
-            await this.put(k, v);
+            const kd = this._toData(k);
+            const vd = this._toData(v);
+            await this._invokeOnKeyPartition<Data | null>(
+                new PutOperation(this._name, kd, vd, -1, -1), kd,
+            );
+            this._addToIndex(k, v);
+            bulkMap.set(k, v);
+        }
+        if (this._mapDataStore.isWithStore() && bulkMap.size > 0) {
+            await this._mapDataStore.addAll(bulkMap);
         }
     }
 

@@ -259,11 +259,11 @@ shutdown, restart, and failure scenarios.
 
 Tasks:
 
-- [ ] Implement batched `storeAll` / `deleteAll`, batch sizing, retry ownership, offload behavior, and deterministic partial-failure handling.
-- [ ] Add write-through and write-behind integration coverage through real `IMap` operations, including restart durability, shutdown flush, eager/lazy load, clear, bulk, and streaming `loadAllKeys()` proof against real MongoDB.
-- [ ] Wire the exact local/CI MongoDB test harness, proof commands, and label-to-command mapping required by `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md`.
-- [ ] Update exports/docs/examples only for supported programmatic, registry-backed, dynamic-loading, and JSON/YAML-wired Mongo paths.
-- [ ] Run a final verification task that proves the MongoDB MapStore vertical slice is production ready, fully wired, and free of hidden stubs or placeholder proof gates.
+- [x] Implement batched `storeAll` / `deleteAll`, batch sizing, retry ownership, offload behavior, and deterministic partial-failure handling.
+- [x] Add write-through and write-behind integration coverage through real `IMap` operations, including restart durability, shutdown flush, eager/lazy load, clear, bulk, and streaming `loadAllKeys()` proof against real MongoDB.
+- [x] Wire the exact local/CI MongoDB test harness, proof commands, and label-to-command mapping required by `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md`.
+- [x] Update exports/docs/examples only for supported programmatic, registry-backed, dynamic-loading, and JSON/YAML-wired Mongo paths.
+- [x] Run a final verification task that proves the MongoDB MapStore vertical slice is production ready, fully wired, and free of hidden stubs or placeholder proof gates.
 
 ## Phase 19T Task Breakdown
 
@@ -504,7 +504,7 @@ Tasks:
 - [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error
 - [x] **Block 19.1** — MongoDB MapStore parity/scope freeze + core runtime closure (`plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` binding, document-only scope freeze, `shutdownAsync()` flush await, realistic EAGER timing, `MapKeyStream<K>` closure, bulk/clear/loadAllKeys legality, query/index rebuild, JSON/YAML config-origin wiring) — ~18 tests
 - [x] **Block 19.2** — Mongo config/property resolution + document mapping + lifecycle hardening (`MapStoreConfig.properties` resolution, document-only mode, `id-column`, `columns`, `single-column-as-value`, `replace-strategy`, registry/provider bootstrap, dynamic loading, owned vs injected client lifecycle, read-only vs writable collection ownership) — ~20 tests
-- [ ] **Block 19.3** — Bulk I/O + Helios integration + real MongoDB proof (`storeAll`/`deleteAll` batching, retry ownership, offload behavior, write-through/write-behind integration, restart/shutdown/eager/lazy/clear/bulk/loadAllKeys proof, exact Mongo harness/proof commands, supported docs/examples) — ~22 tests
+- [x] **Block 19.3** — Bulk I/O + Helios integration + real MongoDB proof (`storeAll`/`deleteAll` batching, retry ownership, offload behavior, write-through/write-behind integration, restart/shutdown/eager/lazy/clear/bulk/loadAllKeys proof, exact Mongo harness/proof commands, supported docs/examples) — ~22 tests
 - [ ] **Phase 19 checkpoint** — root and `packages/mongodb` typechecks green; Mongo package tests green; exact Mongo unit/core/offload/cluster/e2e proof commands from `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` are green; supported wiring paths, document-mode mapping, shutdown flush, restart persistence, eager/lazy load, clear, bulk, and `loadAllKeys()` streaming semantics are all exercised; 0 fail, 0 error
 - [ ] **Block 19T.1** — Classic topic hardening + ringbuffer-backed reliable topic closure (`plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`, one service-backed classic-topic runtime path, Bun/TypeScript-native reliable-listener contract, real `getReliableTopic()` ringbuffer runtime, Hazelcast-parity overload semantics, no throw stubs or hidden local-only alternate path, failover/destroy/shutdown cleanup, docs/examples/config/exports/test-support honesty) — ~26 tests
 - [ ] **Phase 19T checkpoint** — root typecheck green; topic and ringbuffer tests green; `getTopic()` and `getReliableTopic()` both work in single-node and multi-node flows; reliable-topic publish/listen/failover/destroy/shutdown and overload/retention semantics are fully exercised; no `getReliableTopic()` throw stubs or local-only alternate classic-topic path remain; 0 fail, 0 error

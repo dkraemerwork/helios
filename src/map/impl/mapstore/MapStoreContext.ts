@@ -62,7 +62,7 @@ export class MapStoreContext<K, V> {
       store = new WriteBehindStore<K, V>(wrapper, queue, processor, config.getWriteDelaySeconds() * 1000);
     } else {
       // Write-through
-      store = new WriteThroughStore<K, V>(wrapper);
+      store = new WriteThroughStore<K, V>(wrapper, config.getWriteBatchSize());
     }
 
     // EAGER initial load

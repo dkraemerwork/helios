@@ -269,7 +269,8 @@ describe('putAll bulk path', () => {
     const config = new MapStoreConfig()
       .setEnabled(true)
       .setImplementation(store)
-      .setWriteDelaySeconds(0);
+      .setWriteDelaySeconds(0)
+      .setWriteBatchSize(100); // large batch size → single storeAll call
 
     const ctx = await MapStoreContext.create<string, string>('bulk-put-map', config);
     const dataStore = ctx.getMapDataStore();

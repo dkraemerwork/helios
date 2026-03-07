@@ -42,7 +42,7 @@ export class MapStoreWrapper<K = unknown, V = unknown> {
   }
 
   async storeAll(entries: Map<K, V>): Promise<void> {
-    if (this.isMapStore) {
+    if (this.isMapStore && entries.size > 0) {
       await (this._impl as MapStore<K, V>).storeAll(entries);
     }
   }
@@ -54,7 +54,7 @@ export class MapStoreWrapper<K = unknown, V = unknown> {
   }
 
   async deleteAll(keys: K[]): Promise<void> {
-    if (this.isMapStore) {
+    if (this.isMapStore && keys.length > 0) {
       await (this._impl as MapStore<K, V>).deleteAll(keys);
     }
   }
