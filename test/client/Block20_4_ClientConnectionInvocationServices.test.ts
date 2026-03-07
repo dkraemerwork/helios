@@ -587,10 +587,10 @@ describe("Member-side protocol tasks", () => {
     });
 
     test("distributed object metadata task registered on server", async () => {
-        const { registerDistributedObjectTask } = await import(
+        const { registerDistributedObjectTasks } = await import(
             "@zenystx/helios-core/server/clientprotocol/task/DistributedObjectTask"
         );
-        expect(typeof registerDistributedObjectTask).toBe("function");
+        expect(typeof registerDistributedObjectTasks).toBe("function");
     });
 });
 

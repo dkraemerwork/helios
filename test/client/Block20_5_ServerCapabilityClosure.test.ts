@@ -117,32 +117,32 @@ describe("HeliosInstanceImpl member-only methods", () => {
 // ── HeliosClient stub classification ──
 
 describe("HeliosClient has no permanent throw-stubs for retained methods", () => {
-    test("retained proxy methods throw with Block 20.6 blocking reason, not permanent server blocker", async () => {
+    test("retained proxy methods return real proxies (Block 20.6 delivered)", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
         const client = HeliosClient.newHeliosClient();
         try {
-            const singleArgMethods = ["getMap", "getQueue", "getTopic", "getReliableTopic",
-                "getCluster", "getExecutorService"] as const;
+            // Proxy methods now return real proxy objects (Block 20.6 delivered)
+            const map = client.getMap("test");
+            expect(map).toBeDefined();
+            expect(typeof map.put).toBe("function");
 
-            for (const method of singleArgMethods) {
-                try {
-                    if (method === "getCluster") {
-                        (client as any)[method]();
-                    } else {
-                        (client as any)[method]("test");
-                    }
-                } catch (e: any) {
-                    expect(e.message).toContain("Block 20.6");
-                    expect(e.message).not.toContain("blocked-by-server");
-                }
-            }
+            const queue = client.getQueue("test");
+            expect(queue).toBeDefined();
 
-            // getDistributedObject takes two args
-            try {
-                client.getDistributedObject("hz:impl:mapService", "test");
-            } catch (e: any) {
-                expect(e.message).toContain("Block 20.6");
-            }
+            const topic = client.getTopic("test");
+            expect(topic).toBeDefined();
+
+            const rt = client.getReliableTopic("test");
+            expect(rt).toBeDefined();
+
+            const exec = client.getExecutorService("test");
+            expect(exec).toBeDefined();
+
+            const obj = client.getDistributedObject("hz:impl:mapService", "test");
+            expect(obj).toBeDefined();
+
+            // getCluster is still deferred to Block 20.7
+            expect(() => client.getCluster()).toThrow("Block 20.7");
         } finally {
             client.shutdown();
         }

@@ -367,13 +367,13 @@ Goal: give every remote distributed object one creation path and one real invoca
 
 Tasks:
 
-- [ ] Add client proxy base and proxy-manager ownership for all remote distributed objects.
-- [ ] Add distributed-object create/destroy/list protocol tasks and client-side lifecycle cleanup.
-- [ ] Implement `ClientMapProxy`, `ClientQueueProxy`, and `ClientTopicProxy` over the real invocation/runtime stack.
-- [ ] Implement additional remote proxies only after their backing server/runtime capability is proven by Block 20.5.
-- [ ] Ensure every retained client codec is owned by a real proxy or runtime service, and delete any orphan codec that is not.
-- [ ] Ensure same-name distributed objects return stable proxy instances until destroy/shutdown.
-- [ ] Run a verification task that proves a separate Bun app can use every shipped proxy over real sockets with no internal imports, fake stores, or partial destroy semantics.
+- [x] Add client proxy base and proxy-manager ownership for all remote distributed objects.
+- [x] Add distributed-object create/destroy/list protocol tasks and client-side lifecycle cleanup.
+- [x] Implement `ClientMapProxy`, `ClientQueueProxy`, and `ClientTopicProxy` over the real invocation/runtime stack.
+- [x] Implement additional remote proxies only after their backing server/runtime capability is proven by Block 20.5.
+- [x] Ensure every retained client codec is owned by a real proxy or runtime service, and delete any orphan codec that is not.
+- [x] Ensure same-name distributed objects return stable proxy instances until destroy/shutdown.
+- [x] Run a verification task that proves a separate Bun app can use every shipped proxy over real sockets with no internal imports, fake stores, or partial destroy semantics.
 
 ### Block 20.7 — Near-cache completion + advanced feature closure
 
@@ -513,7 +513,7 @@ Tasks:
 - [x] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
 - [x] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests
 - [x] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
-- [ ] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — ~24 tests
+- [x] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — 36 tests
 - [ ] **Block 20.7** — Near-cache completion + advanced feature closure (real remote near-cache wrapping, binary metadata fetch, reconnect repair/stale-read protection, advanced-feature keep/defer closure for cache/query-cache/transactions/SQL/secondary services) — ~22 tests
 - [ ] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — ~18 tests
 - [ ] **Phase 20 checkpoint** — root typecheck green; client runtime tests green; targeted real-network client protocol tests green; separate Bun app can import `HeliosClient` from `@zenystx/helios-core`, connect over binary protocol, use every retained remote `HeliosInstance` capability honestly, survive reconnect, and shut down cleanly; 0 fail, 0 error

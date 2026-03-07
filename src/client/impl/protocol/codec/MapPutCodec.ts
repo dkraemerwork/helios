@@ -6,6 +6,7 @@ import { DataCodec } from './builtin/DataCodec';
 import { StringCodec } from './builtin/StringCodec';
 import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 
 export class MapPutCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x010100; // 65792
@@ -85,5 +86,16 @@ export class MapPutCodec {
         }
         msg.setFinal();
         return msg;
+    }
+
+    static decodeResponseValue<V>(msg: ClientMessage, serializationService: SerializationServiceImpl): V | null {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // skip initial frame
+        if (!iter.hasNext()) return null;
+        const frame = iter.peekNext();
+        if (frame && frame.isNullFrame()) return null;
+        const data = DataCodec.decode(iter);
+        if (data.toByteArray() === null || data.totalSize() === 0) return null;
+        return serializationService.toObject(data);
     }
 }

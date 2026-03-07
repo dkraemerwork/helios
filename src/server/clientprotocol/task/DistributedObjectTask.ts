@@ -1,17 +1,54 @@
 /**
- * Member-side distributed-object metadata task for the client protocol.
+ * Member-side distributed-object lifecycle tasks for the client protocol.
  *
- * Handles requests from remote clients to query distributed object metadata.
+ * Handles create-proxy, destroy-proxy, and get-distributed-objects requests
+ * from remote clients.
  */
 import type { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
+import { ClientCreateProxyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientCreateProxyCodec";
+import { ClientDestroyProxyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientDestroyProxyCodec";
+import {
+    ClientGetDistributedObjectsCodec,
+    type DistributedObjectInfo,
+} from "@zenystx/helios-core/client/impl/protocol/codec/ClientGetDistributedObjectsCodec";
 
-/** Message type for distributed object metadata requests. */
-export const DISTRIBUTED_OBJECT_REQUEST_TYPE = 0x000600;
+/** Tracks distributed objects created via the client protocol. */
+const distributedObjects = new Map<string, DistributedObjectInfo>();
 
-export function registerDistributedObjectTask(server: ClientProtocolServer): void {
-    server.registerHandler(DISTRIBUTED_OBJECT_REQUEST_TYPE, async (_msg, _session) => {
-        // Placeholder: real implementation will serialize and return
-        // distributed object metadata (service name, object name, etc.)
-        return null;
-    });
+function objectKey(serviceName: string, name: string): string {
+    return `${serviceName}:${name}`;
+}
+
+export function registerDistributedObjectTasks(server: ClientProtocolServer): void {
+    // Create proxy
+    server.registerHandler(
+        ClientCreateProxyCodec.REQUEST_MESSAGE_TYPE,
+        async (msg, _session) => {
+            const req = ClientCreateProxyCodec.decodeRequest(msg);
+            const key = objectKey(req.serviceName, req.name);
+            distributedObjects.set(key, { serviceName: req.serviceName, name: req.name });
+            return ClientCreateProxyCodec.encodeResponse();
+        },
+    );
+
+    // Destroy proxy
+    server.registerHandler(
+        ClientDestroyProxyCodec.REQUEST_MESSAGE_TYPE,
+        async (msg, _session) => {
+            const req = ClientDestroyProxyCodec.decodeRequest(msg);
+            const key = objectKey(req.serviceName, req.name);
+            distributedObjects.delete(key);
+            return ClientDestroyProxyCodec.encodeResponse();
+        },
+    );
+
+    // Get distributed objects
+    server.registerHandler(
+        ClientGetDistributedObjectsCodec.REQUEST_MESSAGE_TYPE,
+        async (_msg, _session) => {
+            return ClientGetDistributedObjectsCodec.encodeResponse(
+                [...distributedObjects.values()],
+            );
+        },
+    );
 }

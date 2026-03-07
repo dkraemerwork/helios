@@ -4,8 +4,8 @@
  * Port of com.hazelcast.client.HazelcastClient.
  *
  * HeliosClient implements HeliosInstance as the locked product contract.
- * Methods that are not yet remotely viable throw UnsupportedOperationError
- * until the corresponding runtime phase delivers them.
+ * Proxy creation is managed by ProxyManager for stable instance caching
+ * and proper lifecycle cleanup.
  *
  * Static methods provide named-client registry and shutdown-all management.
  */
@@ -21,6 +21,14 @@ import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
 import { ClientLifecycleService } from "@zenystx/helios-core/client/impl/lifecycle/ClientLifecycleService";
 import { createClientSerializationService } from "@zenystx/helios-core/client/impl/serialization/ClientSerializationService";
 import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
+import { ProxyManager } from "@zenystx/helios-core/client/proxy/ProxyManager";
+import { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
+
+const MAP_SERVICE = "hz:impl:mapService";
+const QUEUE_SERVICE = "hz:impl:queueService";
+const TOPIC_SERVICE = "hz:impl:topicService";
+const RELIABLE_TOPIC_SERVICE = "hz:impl:reliableTopicService";
+const EXECUTOR_SERVICE = "hz:impl:executorService";
 
 // ── Named-client registry (static) ──────────────────────────────────────────
 
@@ -37,12 +45,20 @@ export class HeliosClient implements HeliosInstance {
   private readonly _name: string;
   private readonly _lifecycleService: ClientLifecycleService;
   private readonly _serializationService: SerializationServiceImpl;
+  private readonly _partitionService: ClientPartitionService;
+  private readonly _proxyManager: ProxyManager;
 
   constructor(config?: ClientConfig) {
     this._config = config ?? new ClientConfig();
     this._name = this._config.getName();
     this._lifecycleService = new ClientLifecycleService();
     this._serializationService = createClientSerializationService(this._config);
+    this._partitionService = new ClientPartitionService();
+    this._proxyManager = new ProxyManager(
+      this._serializationService,
+      this._partitionService,
+      null, // invocation service — set after connect()
+    );
   }
 
   // ── Static factory / registry ────────────────────────────────────────────
@@ -95,41 +111,41 @@ export class HeliosClient implements HeliosInstance {
     this._doShutdown(true);
   }
 
-  // ── Proxy methods — awaiting Block 20.6 proxy manager + remote proxies ──
+  // ── Proxy methods — routed through ProxyManager ──
 
-  getMap<K, V>(_name: string): IMap<K, V> {
+  getMap<K, V>(name: string): IMap<K, V> {
     this._ensureActive();
-    throw new Error("HeliosClient.getMap() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
+    return this._proxyManager.getOrCreateProxy(MAP_SERVICE, name) as unknown as IMap<K, V>;
   }
 
-  getQueue<E>(_name: string): IQueue<E> {
+  getQueue<E>(name: string): IQueue<E> {
     this._ensureActive();
-    throw new Error("HeliosClient.getQueue() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
+    return this._proxyManager.getOrCreateProxy(QUEUE_SERVICE, name) as unknown as IQueue<E>;
   }
 
-  getTopic<E>(_name: string): ITopic<E> {
+  getTopic<E>(name: string): ITopic<E> {
     this._ensureActive();
-    throw new Error("HeliosClient.getTopic() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
+    return this._proxyManager.getOrCreateProxy(TOPIC_SERVICE, name) as unknown as ITopic<E>;
   }
 
-  getReliableTopic<E>(_name: string): ITopic<E> {
+  getReliableTopic<E>(name: string): ITopic<E> {
     this._ensureActive();
-    throw new Error("HeliosClient.getReliableTopic() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
+    return this._proxyManager.getOrCreateProxy(RELIABLE_TOPIC_SERVICE, name) as unknown as ITopic<E>;
   }
 
-  getDistributedObject(_serviceName: string, _name: string): DistributedObject {
+  getDistributedObject(serviceName: string, name: string): DistributedObject {
     this._ensureActive();
-    throw new Error("HeliosClient.getDistributedObject() is not yet implemented — awaiting Block 20.6 proxy manager");
+    return this._proxyManager.getOrCreateProxy(serviceName, name);
   }
 
   getCluster(): Cluster {
     this._ensureActive();
-    throw new Error("HeliosClient.getCluster() is not yet implemented — awaiting Block 20.6 cluster service");
+    throw new Error("HeliosClient.getCluster() is not yet implemented — awaiting Block 20.7 cluster service wiring");
   }
 
-  getExecutorService(_name: string): IExecutorService {
+  getExecutorService(name: string): IExecutorService {
     this._ensureActive();
-    throw new Error("HeliosClient.getExecutorService() is not yet implemented — awaiting Block 20.6 proxy manager and remote executor proxy");
+    return this._proxyManager.getOrCreateProxy(EXECUTOR_SERVICE, name) as unknown as IExecutorService;
   }
 
   // ── Internal ────────────────────────────────────────────────────────────
@@ -142,6 +158,7 @@ export class HeliosClient implements HeliosInstance {
 
   private _doShutdown(removeFromRegistry: boolean): void {
     if (!this._lifecycleService.isRunning()) return;
+    this._proxyManager.destroyAll();
     this._lifecycleService.shutdown();
     this._serializationService.destroy();
     if (removeFromRegistry) {
