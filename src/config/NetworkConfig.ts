@@ -18,6 +18,7 @@ export class NetworkConfig {
     private _outboundPorts: number[] = [];
     private _restApiConfig: RestApiConfig = new RestApiConfig();
     private _memcacheProtocolConfig: MemcacheProtocolConfig = new MemcacheProtocolConfig();
+    private _clientProtocolPort: number = -1;
 
     getPort(): number {
         return this._port;
@@ -134,6 +135,22 @@ export class NetworkConfig {
 
     setMemcacheProtocolConfig(memcacheProtocolConfig: MemcacheProtocolConfig): this {
         this._memcacheProtocolConfig = memcacheProtocolConfig;
+        return this;
+    }
+
+    /**
+     * Returns the client protocol port. -1 means the client protocol server is disabled.
+     * 0 means ephemeral (OS-assigned).
+     */
+    getClientProtocolPort(): number {
+        return this._clientProtocolPort;
+    }
+
+    /**
+     * Set the client protocol port. -1 disables, 0 = ephemeral.
+     */
+    setClientProtocolPort(port: number): this {
+        this._clientProtocolPort = port;
         return this;
     }
 }

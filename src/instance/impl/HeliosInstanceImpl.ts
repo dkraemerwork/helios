@@ -68,6 +68,8 @@ import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/Inlin
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
+import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
+import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -124,6 +126,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Blitz lifecycle manager — non-null when Blitz distributed-auto or embedded-local is enabled. */
   private _blitzLifecycleManager: HeliosBlitzLifecycleManager | null = null;
+
+  /** Client protocol server — non-null when client protocol port is configured (>= 0). */
+  private _clientProtocolServer: ClientProtocolServer | null = null;
 
   /** Current log level (mutable via REST CLUSTER_WRITE). */
   private _logLevel: string = "INFO";
@@ -214,6 +219,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
 
     this._restServer.start();
+
+    // Start client protocol server if configured
+    this._startClientProtocolServer();
   }
 
   // ── TCP networking ───────────────────────────────────────────────────
@@ -309,6 +317,46 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this.registerShutdownHook(async () => {
       this._blitzLifecycleManager?.markShutdown();
     });
+  }
+
+  private _startClientProtocolServer(): void {
+    const clientPort = this._config.getNetworkConfig().getClientProtocolPort();
+    if (clientPort < 0) return;
+
+    const localMember = this._cluster.getLocalMember();
+    this._clientProtocolServer = new ClientProtocolServer({
+      clusterName: this._name,
+      port: clientPort,
+      memberUuid: localMember.getUuid(),
+      clusterId: this.getClusterId() ?? crypto.randomUUID(),
+      partitionCount: this.getPartitionCount(),
+    });
+
+    // Register MapPut handler that writes through to the member's map service
+    this._clientProtocolServer.registerHandler(
+      MapPutCodec.REQUEST_MESSAGE_TYPE,
+      async (msg, _session) => {
+        const req = MapPutCodec.decodeRequest(msg);
+        const partitionId = this._nodeEngine
+          .getPartitionService()
+          .getPartitionId(req.key);
+        const store = this._mapService.getOrCreateRecordStore(
+          req.name,
+          partitionId,
+        );
+        const prev = store.put(req.key, req.value, Number(req.ttl), -1);
+        return MapPutCodec.encodeResponse(prev);
+      },
+    );
+
+    this._clientProtocolServer.start().catch(() => {});
+  }
+
+  /**
+   * Returns the port the client protocol server is listening on, or 0 if not started.
+   */
+  getClientProtocolPort(): number {
+    return this._clientProtocolServer?.getPort() ?? 0;
   }
 
   /**
@@ -449,6 +497,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._nodeEngine.shutdown();
     this._ss.destroy();
     this._blitzLifecycleManager?.markShutdown();
+    this._clientProtocolServer?.shutdown().catch(() => {});
+    this._clientProtocolServer = null;
     this._transport?.shutdown();
     this._transport = null;
     this._restServer.stop();

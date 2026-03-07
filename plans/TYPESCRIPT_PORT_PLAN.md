@@ -325,14 +325,14 @@ Goal: create the real member/server counterpart the remote client will talk to.
 
 Tasks:
 
-- [ ] Add a dedicated member-side client-protocol server/runtime outside `src/client`.
-- [ ] Move any current member-side client-protocol handlers out of `src/client` into server/member packages.
-- [ ] Add client protocol framing/version negotiation compatibility on the member side.
-- [ ] Add authentication request handling, session creation, endpoint/session registry ownership, and disconnect cleanup.
-- [ ] Add request-dispatch registry from client message type to member-side handler.
-- [ ] Add correlation-aware response routing and event-push path support.
-- [ ] Add heartbeat handling and lifecycle bookkeeping for connected clients.
-- [ ] Run a verification task that proves a raw socket client can authenticate, issue at least one request, receive a response, and disconnect cleanly against a real Helios member.
+- [x] Add a dedicated member-side client-protocol server/runtime outside `src/client`.
+- [x] Move any current member-side client-protocol handlers out of `src/client` into server/member packages.
+- [x] Add client protocol framing/version negotiation compatibility on the member side.
+- [x] Add authentication request handling, session creation, endpoint/session registry ownership, and disconnect cleanup.
+- [x] Add request-dispatch registry from client message type to member-side handler.
+- [x] Add correlation-aware response routing and event-push path support.
+- [x] Add heartbeat handling and lifecycle bookkeeping for connected clients.
+- [x] Run a verification task that proves a raw socket client can authenticate, issue at least one request, receive a response, and disconnect cleanly against a real Helios member.
 
 ### Block 20.4 — Client connection manager + invocation/cluster/partition/listener services
 
@@ -510,7 +510,7 @@ Tasks:
 - [ ] **Phase 19T checkpoint** — root typecheck green; topic and ringbuffer tests green; `getTopic()` and `getReliableTopic()` both work in single-node and multi-node flows; reliable-topic publish/listen/failover/destroy/shutdown and overload/retention semantics are fully exercised; no `getReliableTopic()` throw stubs or local-only alternate classic-topic path remain; 0 fail, 0 error
 - [x] **Block 20.1** — Client parity matrix + surface freeze + packaging contract (`src/client` keep/rewrite/move/delete matrix, Hazelcast-to-Helios parity matrix, `HeliosClient implements HeliosInstance`, `getConfig()` contract decision, root export cleanup, wildcard export freeze) — ~12 tests/docs gates
 - [x] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
-- [ ] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
+- [x] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
 - [ ] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests
 - [ ] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
 - [ ] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — ~24 tests

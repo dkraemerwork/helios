@@ -4,7 +4,7 @@
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { DataCodec } from './builtin/DataCodec';
 import { StringCodec } from './builtin/StringCodec';
-import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class MapPutCodec {
@@ -70,9 +70,12 @@ export class MapPutCodec {
         return { name, key, value, threadId, ttl };
     }
 
+    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES; // 12
+
     static encodeResponse(response: Data | null): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
+        const initialFrame = Buffer.allocUnsafe(MapPutCodec.RESPONSE_HEADER_SIZE);
+        initialFrame.fill(0);
         initialFrame.writeUInt32LE(MapPutCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));
         if (response === null) {

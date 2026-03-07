@@ -6,11 +6,10 @@ import { StringCodec } from './builtin/StringCodec';
 import { CodecUtil } from './builtin/CodecUtil';
 import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
 import { ByteArrayCodec } from './builtin/ByteArrayCodec';
-import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { AddressCodec } from './custom/AddressCodec';
 import { MemberInfoCodec } from './custom/MemberInfoCodec';
 import { EntryListUUIDListIntegerCodec } from './builtin/EntryListUUIDListIntegerCodec';
-import { MapCodec } from './builtin/MapCodec';
 import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import type { Address } from '@zenystx/helios-core/cluster/Address';
 
@@ -18,24 +17,26 @@ export class ClientAuthenticationCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x000100; // 256
     static readonly RESPONSE_MESSAGE_TYPE: number = 0x000101;
 
-    // Response initial frame layout:
-    // [0..3]   messageType
-    // [4..4]   status (byte)
-    // [5..5]   serializationVersion (byte)
-    // [6..9]   partitionCount (int)
-    // [10..26] clusterId (uuid, 17 bytes)
-    // [27..27] failoverSupported (bool)
-    private static readonly RESPONSE_STATUS_OFFSET = INT_SIZE_IN_BYTES; // 4
+    // Response initial frame layout (standard response header + payload):
+    // [0..3]   messageType (4 bytes)
+    // [4..11]  correlationId (8 bytes, set by caller via setCorrelationId)
+    // [12..12] status (byte)
+    // [13..13] serializationVersion (byte)
+    // [14..17] partitionCount (int)
+    // [18..34] clusterId (uuid, 17 bytes)
+    // [35..35] failoverSupported (bool)
+    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES; // 12
+    private static readonly RESPONSE_STATUS_OFFSET = ClientAuthenticationCodec.RESPONSE_HEADER_SIZE; // 12
     private static readonly RESPONSE_SERIALIZATION_VERSION_OFFSET =
-        ClientAuthenticationCodec.RESPONSE_STATUS_OFFSET + BYTE_SIZE_IN_BYTES; // 5
+        ClientAuthenticationCodec.RESPONSE_STATUS_OFFSET + BYTE_SIZE_IN_BYTES; // 13
     private static readonly RESPONSE_PARTITION_COUNT_OFFSET =
-        ClientAuthenticationCodec.RESPONSE_SERIALIZATION_VERSION_OFFSET + BYTE_SIZE_IN_BYTES; // 6
+        ClientAuthenticationCodec.RESPONSE_SERIALIZATION_VERSION_OFFSET + BYTE_SIZE_IN_BYTES; // 14
     private static readonly RESPONSE_CLUSTER_ID_OFFSET =
-        ClientAuthenticationCodec.RESPONSE_PARTITION_COUNT_OFFSET + INT_SIZE_IN_BYTES; // 10
+        ClientAuthenticationCodec.RESPONSE_PARTITION_COUNT_OFFSET + INT_SIZE_IN_BYTES; // 18
     private static readonly RESPONSE_FAILOVER_SUPPORTED_OFFSET =
-        ClientAuthenticationCodec.RESPONSE_CLUSTER_ID_OFFSET + UUID_SIZE_IN_BYTES; // 27
+        ClientAuthenticationCodec.RESPONSE_CLUSTER_ID_OFFSET + UUID_SIZE_IN_BYTES; // 35
     static readonly RESPONSE_INITIAL_FRAME_SIZE =
-        ClientAuthenticationCodec.RESPONSE_FAILOVER_SUPPORTED_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 28
+        ClientAuthenticationCodec.RESPONSE_FAILOVER_SUPPORTED_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 36
 
     private constructor() {}
 
@@ -118,6 +119,7 @@ export class ClientAuthenticationCodec {
         const msg = ClientMessage.createForEncode();
 
         const buf = Buffer.allocUnsafe(ClientAuthenticationCodec.RESPONSE_INITIAL_FRAME_SIZE);
+        buf.fill(0, 0, ClientAuthenticationCodec.RESPONSE_HEADER_SIZE);
         buf.writeUInt32LE(ClientAuthenticationCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         buf.writeUInt8(status & 0xff, ClientAuthenticationCodec.RESPONSE_STATUS_OFFSET);
         buf.writeUInt8(serializationVersion & 0xff, ClientAuthenticationCodec.RESPONSE_SERIALIZATION_VERSION_OFFSET);
