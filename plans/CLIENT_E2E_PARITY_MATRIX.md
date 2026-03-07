@@ -103,6 +103,14 @@ Legend:
 | `src/client/impl/statistics/NearCacheMetricsProvider.ts` | keep | statistics | valid if connected to real client runtime |
 | `src/client/impl/protocol/task/map/MapFetchNearCacheInvalidationMetadataTask.ts` | move | `src/server/clientprotocol/task/map/` | member-side handler, not client runtime |
 | `src/client/impl/protocol/task/cache/CacheFetchNearCacheInvalidationMetadataTask.ts` | move | `src/server/clientprotocol/task/cache/` | member-side handler, not client runtime |
+| `src/client/config/ClientNetworkConfig.ts` | keep | config | network config for remote client |
+| `src/client/config/ClientConnectionStrategyConfig.ts` | keep | config | connection strategy config |
+| `src/client/config/ConnectionRetryConfig.ts` | keep | config | exponential backoff retry config |
+| `src/client/config/ClientSecurityConfig.ts` | keep | config | security/credentials config |
+| `src/client/config/ClientFailoverConfig.ts` | keep | config | multi-cluster failover config |
+| `src/client/config/ClientConfigLoader.ts` | keep | config | JSON/YAML client config loading |
+| `src/client/impl/lifecycle/ClientLifecycleService.ts` | keep | lifecycle | client lifecycle management |
+| `src/client/impl/serialization/ClientSerializationService.ts` | keep | serialization | client serialization owner factory |
 
 ---
 

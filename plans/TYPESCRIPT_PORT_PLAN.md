@@ -310,14 +310,14 @@ Goal: define the real client product and finish the config/serialization base be
 
 Tasks:
 
-- [ ] Add `src/client/HeliosClient.ts` and the client runtime shell needed for `HeliosClient` to implement `HeliosInstance`.
-- [ ] Add lifecycle service, shutdown-all tracking, and named-client registry policy for the remote client runtime.
-- [ ] Rewrite `src/client/config/ClientConfig.ts` into the real root client config instead of a near-cache-only helper.
-- [ ] Add typed client config surfaces for network, connection strategy, retry, security, metrics, failover, and any other retained Hazelcast-parity client config sections.
-- [ ] Add production client-config loading and validation for the file/config path external users will actually use.
-- [ ] Establish one real client serialization owner used by all request/response paths.
-- [ ] Fail fast on unsupported config sections instead of silently accepting them.
-- [ ] Run a verification task that proves a separate Bun app can import the public client surface only, construct config, and initialize the real client runtime shell with no internal imports or fake config fallbacks.
+- [x] Add `src/client/HeliosClient.ts` and the client runtime shell needed for `HeliosClient` to implement `HeliosInstance`.
+- [x] Add lifecycle service, shutdown-all tracking, and named-client registry policy for the remote client runtime.
+- [x] Rewrite `src/client/config/ClientConfig.ts` into the real root client config instead of a near-cache-only helper.
+- [x] Add typed client config surfaces for network, connection strategy, retry, security, metrics, failover, and any other retained Hazelcast-parity client config sections.
+- [x] Add production client-config loading and validation for the file/config path external users will actually use.
+- [x] Establish one real client serialization owner used by all request/response paths.
+- [x] Fail fast on unsupported config sections instead of silently accepting them.
+- [x] Run a verification task that proves a separate Bun app can import the public client surface only, construct config, and initialize the real client runtime shell with no internal imports or fake config fallbacks.
 
 ### Block 20.3 — Member-side client protocol server + auth/session lifecycle
 
@@ -509,7 +509,7 @@ Tasks:
 - [x] **Block 19T.1** — Classic topic hardening + ringbuffer-backed reliable topic closure (`plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`, one service-backed classic-topic runtime path, Bun/TypeScript-native reliable-listener contract, real `getReliableTopic()` ringbuffer runtime, Hazelcast-parity overload semantics, no throw stubs or hidden local-only alternate path, failover/destroy/shutdown cleanup, docs/examples/config/exports/test-support honesty) — ~26 tests
 - [ ] **Phase 19T checkpoint** — root typecheck green; topic and ringbuffer tests green; `getTopic()` and `getReliableTopic()` both work in single-node and multi-node flows; reliable-topic publish/listen/failover/destroy/shutdown and overload/retention semantics are fully exercised; no `getReliableTopic()` throw stubs or local-only alternate classic-topic path remain; 0 fail, 0 error
 - [x] **Block 20.1** — Client parity matrix + surface freeze + packaging contract (`src/client` keep/rewrite/move/delete matrix, Hazelcast-to-Helios parity matrix, `HeliosClient implements HeliosInstance`, `getConfig()` contract decision, root export cleanup, wildcard export freeze) — ~12 tests/docs gates
-- [ ] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
+- [x] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
 - [ ] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
 - [ ] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests
 - [ ] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
