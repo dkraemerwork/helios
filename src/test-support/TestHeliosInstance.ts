@@ -15,6 +15,9 @@ import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
 import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
 import { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
 import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
+import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { IList } from "@zenystx/helios-core/collection/IList";
@@ -33,6 +36,8 @@ export class TestHeliosInstance {
   private readonly lists = new Map<string, ListImpl<unknown>>();
   private readonly sets = new Map<string, SetImpl<unknown>>();
   private readonly topics = new Map<string, TopicImpl<unknown>>();
+  private readonly reliableTopics = new Map<string, ITopic<unknown>>();
+  private readonly _reliableTopicService = new ReliableTopicService("test-instance", new HeliosConfig());
   private readonly multiMaps = new Map<
     string,
     MultiMapImpl<unknown, unknown>
@@ -108,10 +113,17 @@ export class TestHeliosInstance {
     return topic as ITopic<E>;
   }
 
-  getReliableTopic<E>(_name: string): ITopic<E> {
-    throw new Error(
-      "ReliableTopic is not implemented yet; use getTopic() for classic topic semantics",
-    );
+  getReliableTopic<E>(name: string): ITopic<E> {
+    let topic = this.reliableTopics.get(name);
+    if (!topic) {
+      topic = new ReliableTopicProxyImpl<unknown>(
+        name,
+        this._reliableTopicService,
+        () => this.reliableTopics.delete(name),
+      );
+      this.reliableTopics.set(name, topic);
+    }
+    return topic as ITopic<E>;
   }
 
   getMultiMap<K, V>(name: string): MultiMap<K, V> {
@@ -126,6 +138,9 @@ export class TestHeliosInstance {
   shutdown(): void {
     this.running = false;
     for (const topic of Array.from(this.topics.values())) topic.destroy();
+    this._reliableTopicService.shutdown();
+    for (const rt of Array.from(this.reliableTopics.values())) rt.destroy();
+    this.reliableTopics.clear();
     this.maps.clear();
     this.queues.clear();
     this.lists.clear();

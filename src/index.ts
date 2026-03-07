@@ -72,6 +72,8 @@ export type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 export type { Message } from "@zenystx/helios-core/topic/Message";
 export type { MessageListener } from "@zenystx/helios-core/topic/MessageListener";
 export { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
+export { ReliableTopicConfig, TopicOverloadPolicy } from "@zenystx/helios-core/config/ReliableTopicConfig";
+export { TopicOverloadException } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 
 // ── MultiMap ──────────────────────────────────────────────────────────────────
 export type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";

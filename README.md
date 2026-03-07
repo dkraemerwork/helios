@@ -129,7 +129,8 @@ curl http://localhost:8081/hazelcast/rest/cluster
 | **IQueue**         | Distributed FIFO queue with blocking offer/poll                                                                 |
 | **ISet**           | Distributed set — add, remove, contains, iteration                                                              |
 | **IList**          | Distributed list with index-based access                                                                        |
-| **ITopic**         | Pub/sub messaging with async message listeners                                                                  |
+| **ITopic**         | Classic pub/sub messaging with async message listeners                                                          |
+| **ReliableTopic**  | Ringbuffer-backed pub/sub with sequence-tracked consumption, overload policies, and bounded retention           |
 | **MultiMap**       | One key, many values — add/get/remove per value                                                                 |
 | **ReplicatedMap**  | Fully replicated map on every node — vector clock conflict resolution                                           |
 | **Ringbuffer**     | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies                          |

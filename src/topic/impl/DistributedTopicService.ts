@@ -33,6 +33,7 @@ interface PendingPublish {
 export class DistributedTopicService {
   private readonly _topics = new Map<string, TopicRuntime>();
   private readonly _pendingPublishes = new Map<string, PendingPublish>();
+  private readonly _destroyedTopics = new Set<string>();
 
   constructor(
     private readonly _instanceName: string,
@@ -114,15 +115,31 @@ export class DistributedTopicService {
   }
 
   removeMessageListener(name: string, registrationId: string): boolean {
-    return this._getOrCreateRuntime(name).listeners.delete(registrationId);
+    const runtime = this._topics.get(name);
+    if (runtime === undefined) return false;
+    return runtime.listeners.delete(registrationId);
   }
 
   getLocalTopicStats(name: string): LocalTopicStats {
     return this._getOrCreateRuntime(name).stats;
   }
 
+  isDestroyed(name: string): boolean {
+    return this._destroyedTopics.has(name);
+  }
+
   destroy(name: string): void {
+    const runtime = this._topics.get(name);
+    if (runtime !== undefined) {
+      runtime.listeners.clear();
+    }
     this._topics.delete(name);
+    this._destroyedTopics.add(name);
+  }
+
+  /** Allow re-creation after destroy (for getTopic() returning fresh instance). */
+  undestroy(name: string): void {
+    this._destroyedTopics.delete(name);
   }
 
   private _handlePublishRequest(
@@ -189,7 +206,11 @@ export class DistributedTopicService {
       message.sourceNodeId,
     );
     for (const listener of Array.from(runtime.listeners.values())) {
-      listener(event);
+      try {
+        listener(event);
+      } catch {
+        // Listener exception isolation: continue to next listener
+      }
       this._recordReceive(message.topicName);
     }
   }

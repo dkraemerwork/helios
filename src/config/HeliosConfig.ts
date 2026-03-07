@@ -10,6 +10,8 @@ import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
+import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig";
+import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry";
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
 
@@ -19,6 +21,8 @@ export class HeliosConfig {
   private readonly _queueConfigs = new Map<string, QueueConfig>();
   private readonly _topicConfigs = new Map<string, TopicConfig>();
   private readonly _executorConfigs = new Map<string, ExecutorConfig>();
+  private readonly _reliableTopicConfigs = new Map<string, ReliableTopicConfig>();
+  private readonly _ringbufferConfigs = new Map<string, RingbufferConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
@@ -99,6 +103,32 @@ export class HeliosConfig {
 
   getTopicConfigs(): ReadonlyMap<string, TopicConfig> {
     return this._topicConfigs;
+  }
+
+  addReliableTopicConfig(config: ReliableTopicConfig): this {
+    this._reliableTopicConfigs.set(config.getName(), config);
+    return this;
+  }
+
+  getReliableTopicConfig(name: string): ReliableTopicConfig {
+    return this._reliableTopicConfigs.get(name) ?? new ReliableTopicConfig(name);
+  }
+
+  getReliableTopicConfigs(): ReadonlyMap<string, ReliableTopicConfig> {
+    return this._reliableTopicConfigs;
+  }
+
+  addRingbufferConfig(config: RingbufferConfig): this {
+    this._ringbufferConfigs.set(config.getName(), config);
+    return this;
+  }
+
+  getRingbufferConfig(name: string): RingbufferConfig {
+    return this._ringbufferConfigs.get(name) ?? new RingbufferConfig(name);
+  }
+
+  getRingbufferConfigs(): ReadonlyMap<string, RingbufferConfig> {
+    return this._ringbufferConfigs;
   }
 
   addExecutorConfig(executorConfig: ExecutorConfig): this {

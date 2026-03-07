@@ -17,6 +17,9 @@
 import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
+import { ReliableTopicConfig, TopicOverloadPolicy } from '@zenystx/helios-core/config/ReliableTopicConfig';
+import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
 import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 
 /**
@@ -119,7 +122,108 @@ export function parseRawConfig(raw: unknown, configOrigin?: string): HeliosConfi
         }
     }
 
+    // --- topic configs ---
+    if ('topics' in obj && obj['topics'] !== undefined) {
+        if (!Array.isArray(obj['topics'])) {
+            throw new Error('"topics" must be an array');
+        }
+        for (const entry of obj['topics'] as unknown[]) {
+            config.addTopicConfig(parseTopicConfig(entry));
+        }
+    }
+
+    // --- reliable-topic configs ---
+    if ('reliable-topics' in obj && obj['reliable-topics'] !== undefined) {
+        if (!Array.isArray(obj['reliable-topics'])) {
+            throw new Error('"reliable-topics" must be an array');
+        }
+        for (const entry of obj['reliable-topics'] as unknown[]) {
+            config.addReliableTopicConfig(parseReliableTopicConfig(entry));
+        }
+    }
+
+    // --- ringbuffer configs ---
+    if ('ringbuffers' in obj && obj['ringbuffers'] !== undefined) {
+        if (!Array.isArray(obj['ringbuffers'])) {
+            throw new Error('"ringbuffers" must be an array');
+        }
+        for (const entry of obj['ringbuffers'] as unknown[]) {
+            config.addRingbufferConfig(parseRingbufferConfig(entry));
+        }
+    }
+
     return config;
+}
+
+function parseTopicConfig(entry: unknown): TopicConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each topic entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    if (typeof e['name'] !== 'string' || (e['name'] as string).trim() === '') {
+        throw new Error('Each topic config entry must have a non-empty "name" field');
+    }
+    const tc = new TopicConfig(e['name'] as string);
+    if (typeof e['globalOrderingEnabled'] === 'boolean') {
+        tc.setGlobalOrderingEnabled(e['globalOrderingEnabled'] as boolean);
+    }
+    if (typeof e['statisticsEnabled'] === 'boolean') {
+        tc.setStatisticsEnabled(e['statisticsEnabled'] as boolean);
+    }
+    if (typeof e['multiThreadingEnabled'] === 'boolean') {
+        tc.setMultiThreadingEnabled(e['multiThreadingEnabled'] as boolean);
+    }
+    return tc;
+}
+
+function parseReliableTopicConfig(entry: unknown): ReliableTopicConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each reliable-topic entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    if (typeof e['name'] !== 'string' || (e['name'] as string).trim() === '') {
+        throw new Error('Each reliable-topic config entry must have a non-empty "name" field');
+    }
+    const rtc = new ReliableTopicConfig(e['name'] as string);
+    if (typeof e['readBatchSize'] === 'number') {
+        rtc.setReadBatchSize(e['readBatchSize'] as number);
+    }
+    if (typeof e['topicOverloadPolicy'] === 'string') {
+        const policyStr = e['topicOverloadPolicy'] as string;
+        const policy = TopicOverloadPolicy[policyStr as keyof typeof TopicOverloadPolicy];
+        if (policy === undefined) {
+            throw new Error(`Invalid topicOverloadPolicy: "${policyStr}". Valid values: ${Object.keys(TopicOverloadPolicy).join(', ')}`);
+        }
+        rtc.setTopicOverloadPolicy(policy);
+    }
+    if (typeof e['statisticsEnabled'] === 'boolean') {
+        rtc.setStatisticsEnabled(e['statisticsEnabled'] as boolean);
+    }
+    return rtc;
+}
+
+function parseRingbufferConfig(entry: unknown): RingbufferConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each ringbuffer entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    if (typeof e['name'] !== 'string' || (e['name'] as string).trim() === '') {
+        throw new Error('Each ringbuffer config entry must have a non-empty "name" field');
+    }
+    const rbc = new RingbufferConfig(e['name'] as string);
+    if (typeof e['capacity'] === 'number') {
+        rbc.setCapacity(e['capacity'] as number);
+    }
+    if (typeof e['backupCount'] === 'number') {
+        rbc.setBackupCount(e['backupCount'] as number);
+    }
+    if (typeof e['asyncBackupCount'] === 'number') {
+        rbc.setAsyncBackupCount(e['asyncBackupCount'] as number);
+    }
+    if (typeof e['timeToLiveSeconds'] === 'number') {
+        rbc.setTimeToLiveSeconds(e['timeToLiveSeconds'] as number);
+    }
+    return rbc;
 }
 
 function parseMapConfig(entry: unknown): MapConfig {

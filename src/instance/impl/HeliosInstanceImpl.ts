@@ -26,9 +26,10 @@ import { QueueProxyImpl } from "@zenystx/helios-core/collection/impl/queue/Queue
 import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
 import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
 import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
-import { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
 import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
 import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
+import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
+import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
 import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService";
@@ -95,6 +96,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _clusterCoordinator: HeliosClusterCoordinator | null = null;
   private _distributedQueueService: DistributedQueueService | null = null;
   private _distributedTopicService: DistributedTopicService | null = null;
+  private _reliableTopicService: ReliableTopicService;
 
   // Per-name data-structure caches (same name → same instance)
   private readonly _maps = new Map<string, MapProxy<unknown, unknown>>();
@@ -106,6 +108,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _lists = new Map<string, ListImpl<unknown>>();
   private readonly _sets = new Map<string, SetImpl<unknown>>();
   private readonly _topics = new Map<string, ITopic<unknown>>();
+  private readonly _reliableTopics = new Map<string, ITopic<unknown>>();
   private readonly _multiMaps = new Map<
     string,
     MultiMapImpl<unknown, unknown>
@@ -163,6 +166,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Near-cache manager — shares the same serialization service as the node engine
     this._nearCacheManager = new DefaultNearCacheManager(this._ss);
+
+    // Reliable topic service — always available (single-node ringbuffer-backed)
+    this._reliableTopicService = new ReliableTopicService(this._name, this._config);
 
     // Lifecycle and cluster
     this._lifecycleService = new HeliosLifecycleService();
@@ -424,6 +430,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     this._executors.clear();
     for (const topic of Array.from(this._topics.values())) topic.destroy();
+    this._reliableTopicService.shutdown();
+    for (const rt of Array.from(this._reliableTopics.values())) rt.destroy();
     for (const rm of Array.from(this._replicatedMaps.values())) rm.destroy();
     this._nearCachedMaps.clear();
     this._nearCacheManager.destroyAllNearCaches();
@@ -434,6 +442,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._lists.clear();
     this._sets.clear();
     this._topics.clear();
+    this._reliableTopics.clear();
     this._multiMaps.clear();
     this._replicatedMaps.clear();
     this._lifecycleService.shutdown();
@@ -736,23 +745,43 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getTopic<E>(name: string): ITopic<E> {
     let topic = this._topics.get(name);
     if (!topic) {
-      topic =
-        this._distributedTopicService === null
-          ? new TopicImpl<unknown>(name)
-          : new TopicProxyImpl<unknown>(
-              name,
-              this._distributedTopicService,
-              this._ss,
-            );
+      // Always use service-backed path — create a DistributedTopicService
+      // even without transport for single-node consistency
+      if (this._distributedTopicService === null) {
+        this._distributedTopicService = new DistributedTopicService(
+          this._name,
+          this._config,
+          this._ss,
+          null,
+          null,
+        );
+      }
+      const service = this._distributedTopicService;
+      // Allow re-creation after prior destroy
+      service.undestroy(name);
+      topic = new TopicProxyImpl<unknown>(name, service, this._ss);
+      // Wrap destroy to also evict from instance cache
+      const originalDestroy = topic.destroy.bind(topic);
+      topic.destroy = () => {
+        originalDestroy();
+        this._topics.delete(name);
+      };
       this._topics.set(name, topic);
     }
     return topic as ITopic<E>;
   }
 
-  getReliableTopic<E>(_name: string): ITopic<E> {
-    throw new Error(
-      "ReliableTopic is not implemented yet; use getTopic() for classic topic semantics",
-    );
+  getReliableTopic<E>(name: string): ITopic<E> {
+    let topic = this._reliableTopics.get(name);
+    if (!topic) {
+      topic = new ReliableTopicProxyImpl<unknown>(
+        name,
+        this._reliableTopicService,
+        () => this._reliableTopics.delete(name),
+      );
+      this._reliableTopics.set(name, topic);
+    }
+    return topic as ITopic<E>;
   }
 
   getMultiMap<K, V>(name: string): MultiMap<K, V> {
