@@ -56,6 +56,7 @@ export type { MapLoader } from "@zenystx/helios-core/map/MapLoader";
 export type { MapStore } from "@zenystx/helios-core/map/MapStore";
 export type { MapLoaderLifecycleSupport } from "@zenystx/helios-core/map/MapLoaderLifecycleSupport";
 export type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
+export { MapKeyStream } from "@zenystx/helios-core/map/MapKeyStream";
 
 // ── Collections ───────────────────────────────────────────────────────────────
 export type { ICollection } from "@zenystx/helios-core/collection/ICollection";

@@ -481,13 +481,13 @@ behavior.
 
 Tasks:
 
-- Prove clustered write-through and write-behind correctness with a deterministic counting test
+- [x] Prove clustered write-through and write-behind correctness with a deterministic counting test
   adapter.
-- Prove the full clustered vertical slice with MongoDB after Phase 19 single-node readiness is
+- [x] Prove the full clustered vertical slice with MongoDB after Phase 19 single-node readiness is
   already green.
-- Document clustered MapStore durability scope, failover semantics, and adapter-eligibility rules.
-- Update exports/docs/examples only for supported clustered paths.
-- Run a final verification task that proves clustered MapStore is production ready, end to end, and
+- [x] Document clustered MapStore durability scope, failover semantics, and adapter-eligibility rules.
+- [x] Update exports/docs/examples only for supported clustered paths.
+- [x] Run a final verification task that proves clustered MapStore is production ready, end to end, and
   free of hidden broadcast-replay or duplicate-write behavior.
 
 ### Master Todo List
@@ -521,7 +521,7 @@ Tasks:
 - [x] **Block 21.1** — Cluster execution substrate + owner-routed map path (real partition-owner routing, remote operation request/response/backup flow, no authoritative `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` replay path) — ~18 tests
 - [x] **Block 21.2** — Partition-scoped MapStore runtime + owner-only persistence (shared map-level lifecycle + partition-scoped stores, owner-side `store`/`delete`/`load`, backup no-external-write semantics, clustered `putAll`/`getAll` bulk paths, partition ID consistency fix) — 22 tests
 - [x] **Block 21.3** — Migration, failover, shutdown handoff, and coordinated eager/clear (`MigrationAwareService` participation, write-behind queue replication, owner promotion cutover, clustered eager-load coordination, clustered clear, deterministic shutdown handoff) — 24 tests ✅
-- [ ] **Block 21.4** — Real adapter proof + clustered MapStore production gate (counting-store proof, Mongo clustered proof after Phase 19, durability docs, supported clustered docs/examples only) — ~18 tests
+- [x] **Block 21.4** — Real adapter proof + clustered MapStore production gate (counting-store proof, Mongo clustered proof after Phase 19, durability docs, supported clustered docs/examples only) — 18 tests ✅
 - [ ] **Phase 21 checkpoint** — clustered partition recovery tests green; one partition-service authority is used in production clustered mode; owner crash promotes surviving backups before refill; anti-entropy and replica sync repair stale backups automatically; partition-lost is emitted when no replica survives; service-state replication is closed for all supported partition-scoped services; stale rejoin state is fenced until authoritative sync completes; recovery metrics/events/docs/examples/test-support are aligned with the real runtime path; clustered operation-routing tests green; exactly one external write/delete per logical clustered mutation; backups never write externally while backups; migration/promotion/eager-load/clear/shutdown handoff are fully exercised; counting-store proof and Mongo clustered proof are green after Phase 19; 0 fail, 0 error
 
 ## End-to-End Completion Requirements
