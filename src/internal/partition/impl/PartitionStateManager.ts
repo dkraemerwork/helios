@@ -146,7 +146,8 @@ export class PartitionStateManager {
     /** Deterministic partition ID: hash(key) % partitionCount. */
     getPartitionId(key: Data): number {
         const hash = key.getPartitionHash();
-        return Math.abs(hash % this._partitionCount);
+        const mod = hash % this._partitionCount;
+        return mod < 0 ? mod + this._partitionCount : mod;
     }
 
     /** Creates an immutable PartitionTableView snapshot. */

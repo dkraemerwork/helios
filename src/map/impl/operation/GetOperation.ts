@@ -3,6 +3,8 @@
  *
  * Read-only operation: fetches the serialized value for the given key.
  * Sends null if the key is absent.
+ *
+ * Block 21.2: Performs load-on-miss from MapStore on the owner.
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
@@ -16,6 +18,26 @@ export class GetOperation extends MapOperation {
     }
 
     async run(): Promise<void> {
-        this.sendResponse(this.recordStore.get(this._key));
+        const data = this.recordStore.get(this._key);
+        if (data !== null) {
+            this.sendResponse(data);
+            return;
+        }
+        // Load-on-miss from external MapStore on the owner
+        if (this.mapDataStore.isWithStore()) {
+            const ne = this.getNodeEngine()!;
+            const key = ne.toObject(this._key);
+            const loaded = await this.mapDataStore.load(key);
+            if (loaded !== null) {
+                const loadedData = ne.toData(loaded);
+                if (loadedData !== null) {
+                    // Store loaded value back into RecordStore
+                    this.recordStore.put(this._key, loadedData, -1, -1);
+                    this.sendResponse(loadedData);
+                    return;
+                }
+            }
+        }
+        this.sendResponse(null);
     }
 }

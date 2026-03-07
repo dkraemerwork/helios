@@ -4,6 +4,8 @@
  * Inserts (key → value) only when key is absent.
  * Sends null on success (entry was new) or the existing value otherwise.
  * Implements BackupAwareOperation — produces a PutBackupOperation.
+ *
+ * Block 21.2: Performs external MapStore write on the owner when key was absent.
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
@@ -26,9 +28,15 @@ export class PutIfAbsentOperation extends MapOperation implements BackupAwareOpe
     }
 
     async run(): Promise<void> {
-        this.sendResponse(
-            this.recordStore.putIfAbsent(this._key, this._value, this._ttl, this._maxIdle),
-        );
+        const existing = this.recordStore.putIfAbsent(this._key, this._value, this._ttl, this._maxIdle);
+        this.sendResponse(existing);
+        // Owner-side external store write only when key was absent (existing === null)
+        if (existing === null && this.mapDataStore.isWithStore()) {
+            const ne = this.getNodeEngine()!;
+            const key = ne.toObject(this._key);
+            const value = ne.toObject(this._value);
+            await this.mapDataStore.add(key, value, Date.now());
+        }
     }
 
     shouldBackup(): boolean { return true; }

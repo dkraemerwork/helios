@@ -7,6 +7,8 @@ export class LoadOnlyMapDataStore<K, V> implements MapDataStore<K, V> {
   async add(_key: K, _value: V, _now: number): Promise<void> {}
   async addAll(_entries: Map<K, V>): Promise<void> {}
   async remove(_key: K, _now: number): Promise<void> {}
+  async addBackup(_key: K, _value: V, _now: number): Promise<void> {}
+  async removeBackup(_key: K, _now: number): Promise<void> {}
 
   async load(key: K): Promise<V | null> {
     return this._wrapper.load(key);

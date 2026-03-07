@@ -57,6 +57,18 @@ export class WriteBehindStore<K, V> implements MapDataStore<K, V> {
     this._stagingArea.set(JSON.stringify(key), entry);
   }
 
+  async addBackup(key: K, value: V, now: number): Promise<void> {
+    // Backup: staging area only for read-your-writes, no queue = no external write
+    const entry = addedEntry(key, value, now + this._writeDelayMs);
+    this._stagingArea.set(JSON.stringify(key), entry);
+  }
+
+  async removeBackup(key: K, now: number): Promise<void> {
+    // Backup: staging area only, no queue = no external delete
+    const entry = deletedEntry<K, V>(key, now + this._writeDelayMs);
+    this._stagingArea.set(JSON.stringify(key), entry);
+  }
+
   async load(key: K): Promise<V | null> {
     const staged = this._stagingArea.get(JSON.stringify(key));
     if (staged !== undefined) {

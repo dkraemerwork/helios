@@ -3,6 +3,8 @@
  *
  * Stores (key → value) without returning the old value (fire-and-forget put).
  * Implements BackupAwareOperation — produces a PutBackupOperation.
+ *
+ * Block 21.2: Performs external MapStore write on the owner.
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
@@ -27,6 +29,13 @@ export class SetOperation extends MapOperation implements BackupAwareOperation {
     async run(): Promise<void> {
         this.recordStore.set(this._key, this._value, this._ttl, this._maxIdle);
         this.sendResponse(undefined);
+        // Owner-side external store write
+        if (this.mapDataStore.isWithStore()) {
+            const ne = this.getNodeEngine()!;
+            const key = ne.toObject(this._key);
+            const value = ne.toObject(this._value);
+            await this.mapDataStore.add(key, value, Date.now());
+        }
     }
 
     shouldBackup(): boolean { return true; }

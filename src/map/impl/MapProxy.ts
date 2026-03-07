@@ -91,6 +91,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
         this._containerService = containerService;
         this._mapStoreConfig = mapStoreConfig ?? null;
 
+        // Register MapStoreConfig in container service so operations on remote
+        // owners can trigger lazy MapDataStore init (Block 21.2)
+        if (this._mapStoreConfig !== null && this._mapStoreConfig.isEnabled()) {
+            this._containerService.registerMapStoreConfig(name, this._mapStoreConfig);
+        }
+
         // Bootstrap indexes from config
         if (mapConfig !== undefined) {
             for (const idxCfg of mapConfig.getIndexConfigs()) {
@@ -177,9 +183,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
             new PutOperation(this._name, kd, vd, -1, -1), kd,
         );
         const oldValue = oldData !== null && oldData !== undefined ? this._toObject<V>(oldData) : null;
-        if (this._mapDataStore.isWithStore()) {
-            await this._mapDataStore.add(key, value, Date.now());
-        }
+        // MapStore write now happens inside PutOperation on the partition owner
         // Index maintenance
         this._updateIndex(key, value, oldValue);
         if (oldValue === null) {
@@ -199,9 +203,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._invokeOnKeyPartition<void>(
             new SetOperation(this._name, kd, vd, -1, -1), kd,
         );
-        if (this._mapDataStore.isWithStore()) {
-            await this._mapDataStore.add(key, value, Date.now());
-        }
+        // MapStore write now happens inside SetOperation on the partition owner
         this._updateIndex(key, value, oldValue);
         if (oldValue === null) {
             this._fireAdded(key, value);
@@ -213,22 +215,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async get(key: K): Promise<V | null> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
+        // GetOperation now handles load-on-miss on the partition owner
         const data = await this._invokeOnKeyPartition<Data | null>(
             new GetOperation(this._name, kd), kd,
         );
         if (data !== null && data !== undefined) {
             return this._toObject<V>(data);
-        }
-        // load-on-miss
-        if (this._mapDataStore.isWithStore()) {
-            const loaded = await this._mapDataStore.load(key);
-            if (loaded !== null) {
-                const loadedData = this._toData(loaded);
-                await this._invokeOnKeyPartition<Data | null>(
-                    new PutOperation(this._name, kd, loadedData, -1, -1), kd,
-                );
-                return loaded;
-            }
         }
         return null;
     }
@@ -239,9 +231,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         const oldData = await this._invokeOnKeyPartition<Data | null>(
             new RemoveOperation(this._name, kd), kd,
         );
-        if (this._mapDataStore.isWithStore()) {
-            await this._mapDataStore.remove(key, Date.now());
-        }
+        // MapStore delete now happens inside RemoveOperation on the partition owner
         if (oldData === null || oldData === undefined) return null;
         const oldValue = this._toObject<V>(oldData);
         // Index maintenance
@@ -260,9 +250,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         const removed = await this._invokeOnKeyPartition<boolean>(
             new DeleteOperation(this._name, kd), kd,
         );
-        if (this._mapDataStore.isWithStore()) {
-            await this._mapDataStore.remove(key, Date.now());
-        }
+        // MapStore delete now happens inside DeleteOperation on the partition owner
         if (removed && oldValue !== null) {
             this._removeFromIndex(key, oldValue);
         }
@@ -326,9 +314,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         if (existing !== null && existing !== undefined) {
             return this._toObject<V>(existing);
         }
-        if (this._mapDataStore.isWithStore()) {
-            await this._mapDataStore.add(key, value, Date.now());
-        }
+        // MapStore write now happens inside PutIfAbsentOperation on the partition owner
         // Index the new entry (only reached when key was absent)
         this._addToIndex(key, value);
         return null;
@@ -337,7 +323,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async putAll(entries: Iterable<[K, V]>): Promise<void> {
         await this._ensureMapDataStore();
         const pairs: [K, V][] = Array.from(entries);
-        const bulkMap = new Map<K, V>();
+        // Each PutOperation handles MapStore write on the partition owner
         for (const [k, v] of pairs) {
             const kd = this._toData(k);
             const vd = this._toData(v);
@@ -345,40 +331,16 @@ export class MapProxy<K, V> implements IMap<K, V> {
                 new PutOperation(this._name, kd, vd, -1, -1), kd,
             );
             this._addToIndex(k, v);
-            bulkMap.set(k, v);
-        }
-        if (this._mapDataStore.isWithStore() && bulkMap.size > 0) {
-            await this._mapDataStore.addAll(bulkMap);
         }
     }
 
     async getAll(keys: K[]): Promise<Map<K, V | null>> {
         await this._ensureMapDataStore();
         const result = new Map<K, V | null>();
-        const missing: K[] = [];
+        // Each get() now handles load-on-miss inside GetOperation on the partition owner
         for (const k of keys) {
             const val = await this.get(k);
-            if (val !== null) {
-                result.set(k, val);
-            } else {
-                missing.push(k);
-            }
-        }
-        if (missing.length > 0 && this._mapDataStore.isWithStore()) {
-            const loaded = await this._mapDataStore.loadAll(missing);
-            for (const [k, v] of loaded) {
-                result.set(k, v);
-                const kd = this._toData(k);
-                const vd = this._toData(v);
-                await this._invokeOnKeyPartition<Data | null>(
-                    new PutOperation(this._name, kd, vd, -1, -1), kd,
-                );
-            }
-            for (const k of missing) {
-                if (!result.has(k)) result.set(k, null);
-            }
-        } else {
-            for (const k of missing) result.set(k, null);
+            result.set(k, val);
         }
         return result;
     }

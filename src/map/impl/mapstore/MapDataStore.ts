@@ -5,6 +5,17 @@ export interface MapDataStore<K, V> {
   addAll(entries: Map<K, V>): Promise<void>;
   /** Called after RecordStore remove. */
   remove(key: K, now: number): Promise<void>;
+  /**
+   * Called on backup replicas after owner replication.
+   * WriteThroughStore: no-op (backup holds in-memory copy only).
+   * WriteBehindStore: queues locally for read-your-writes but no external write.
+   */
+  addBackup(key: K, value: V, now: number): Promise<void>;
+  /**
+   * Called on backup replicas after owner replication of a remove.
+   * WriteThroughStore: no-op. WriteBehindStore: queues locally but no external write.
+   */
+  removeBackup(key: K, now: number): Promise<void>;
   /** Load-on-miss: called when RecordStore returns null. */
   load(key: K): Promise<V | null>;
   /** Batch load-on-miss. */

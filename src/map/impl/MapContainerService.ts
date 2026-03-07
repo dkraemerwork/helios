@@ -27,6 +27,9 @@ export class MapContainerService {
     /** In-flight context init promises to prevent duplicate initialization. */
     private readonly _mapStoreContextInitPromises = new Map<string, Promise<MapStoreContext<unknown, unknown>>>();
 
+    /** Registered MapStoreConfigs per map name — used by operations to trigger lazy init on the owner. */
+    private readonly _mapStoreConfigs = new Map<string, MapStoreConfig>();
+
     /** Optional NodeEngine for EAGER load serialization. */
     private _nodeEngine: NodeEngine | null = null;
 
@@ -134,6 +137,46 @@ export class MapContainerService {
         }
 
         return ctx.getMapDataStore() as MapDataStore<K, V>;
+    }
+
+    /**
+     * Register a MapStoreConfig for a map name so operations can trigger lazy
+     * initialization on the partition owner even if getMap() hasn't been called locally.
+     */
+    registerMapStoreConfig(mapName: string, config: MapStoreConfig): void {
+        this._mapStoreConfigs.set(mapName, config);
+    }
+
+    /**
+     * Returns the already-initialized MapDataStore for the given map, or EmptyMapDataStore
+     * if no MapStoreContext has been created yet. Used by operations running on the
+     * partition owner to perform external store/delete/load calls.
+     */
+    getExistingMapDataStore<K, V>(mapName: string): MapDataStore<K, V> {
+        const ctx = this._mapStoreContexts.get(mapName);
+        if (ctx) {
+            return ctx.getMapDataStore() as MapDataStore<K, V>;
+        }
+        return EmptyMapDataStore.empty<K, V>();
+    }
+
+    /**
+     * Ensures the MapDataStore is initialized for the given map, using a registered
+     * MapStoreConfig if available. Called from MapOperation.beforeRun() on the owner.
+     */
+    async ensureMapDataStoreInitialized(mapName: string): Promise<void> {
+        // Already initialized
+        if (this._mapStoreContexts.has(mapName)) return;
+        // Check registered config
+        const config = this._mapStoreConfigs.get(mapName);
+        if (config && config.isEnabled()) {
+            await this.getOrCreateMapDataStore(mapName, config);
+        }
+    }
+
+    /** Check if a MapStoreConfig is registered for the given map. */
+    hasMapStoreConfig(mapName: string): boolean {
+        return this._mapStoreConfigs.has(mapName);
     }
 
     /**

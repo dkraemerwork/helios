@@ -4,6 +4,8 @@
  * Removes key without returning the old value.
  * Sends true if the key existed (and was deleted), false otherwise.
  * Implements BackupAwareOperation — produces a RemoveBackupOperation.
+ *
+ * Block 21.2: Performs external MapStore delete on the owner.
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
@@ -20,7 +22,14 @@ export class DeleteOperation extends MapOperation implements BackupAwareOperatio
     }
 
     async run(): Promise<void> {
-        this.sendResponse(this.recordStore.delete(this._key));
+        const deleted = this.recordStore.delete(this._key);
+        this.sendResponse(deleted);
+        // Owner-side external store delete (only if key existed)
+        if (deleted && this.mapDataStore.isWithStore()) {
+            const ne = this.getNodeEngine()!;
+            const key = ne.toObject(this._key);
+            await this.mapDataStore.remove(key, Date.now());
+        }
     }
 
     shouldBackup(): boolean { return true; }

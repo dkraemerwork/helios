@@ -243,6 +243,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._nodeEngine = new NodeEngineImpl(this._ss);
       this._mapService.setNodeEngine(this._nodeEngine);
       this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
+      // Register all MapStoreConfigs so operations can trigger lazy init (Block 21.2)
+      this._registerMapStoreConfigs();
       return;
     }
 
@@ -344,6 +346,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     this._mapService.setNodeEngine(this._nodeEngine);
     this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
+    // Register all MapStoreConfigs so operations can trigger lazy init (Block 21.2)
+    this._registerMapStoreConfigs();
 
     // Wire transport callbacks
     this._transport.onRemoteInvalidate = (mapName, key) => {
@@ -821,6 +825,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
    */
   getMapConfig(name: string): MapConfig | null {
     return this._config.getMapConfig(name);
+  }
+
+  /**
+   * Pre-register all MapStoreConfigs from HeliosConfig so operations
+   * forwarded to partition owners can trigger lazy MapDataStore init (Block 21.2).
+   */
+  private _registerMapStoreConfigs(): void {
+    for (const [mapName, mapConfig] of this._config.getMapConfigs()) {
+      const msCfg = mapConfig.getMapStoreConfig();
+      if (msCfg.isEnabled()) {
+        this._mapService.registerMapStoreConfig(mapName, msCfg);
+      }
+    }
   }
 
   // ── Data-structure accessors ─────────────────────────────────────────────

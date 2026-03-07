@@ -32,6 +32,14 @@ export class WriteThroughStore<K, V> implements MapDataStore<K, V> {
     await this._wrapper.delete(key);
   }
 
+  async addBackup(_key: K, _value: V, _now: number): Promise<void> {
+    // Backup: no external write — shadow-state only
+  }
+
+  async removeBackup(_key: K, _now: number): Promise<void> {
+    // Backup: no external delete — shadow-state only
+  }
+
   async load(key: K): Promise<V | null> {
     return this._wrapper.load(key);
   }

@@ -230,7 +230,7 @@ describe('Offload behavior', () => {
 // ── 5. putAll bulk wiring through IMap ───────────────────────────────────────
 
 describe('putAll bulk wiring through IMap', () => {
-  it('IMap.putAll routes to addAll/storeAll not per-key put/store', async () => {
+  it('IMap.putAll stores all entries via owner-routed PutOperations', async () => {
     const store = createTrackingStore<string, string>();
     const storeConfig = new MapStoreConfig()
       .setEnabled(true)
@@ -241,12 +241,11 @@ describe('putAll bulk wiring through IMap', () => {
 
     await map.putAll([['a', '1'], ['b', '2'], ['c', '3']]);
 
-    // Should use storeAll (bulk) not individual store calls
-    expect(store.storeAllCalls.length).toBeGreaterThanOrEqual(1);
-    const totalStored = store.storeAllCalls.reduce((sum, m) => sum + m.size, 0);
+    // Block 21.2: putAll routes through individual PutOperations (owner-scoped).
+    // Each PutOperation calls mapDataStore.add() → store() individually.
+    const totalStored = store.storeCalls.length +
+      store.storeAllCalls.reduce((sum, m) => sum + m.size, 0);
     expect(totalStored).toBe(3);
-    // Individual store should NOT have been called for the bulk entries
-    expect(store.storeCalls.length).toBe(0);
 
     instance.shutdown();
   });
