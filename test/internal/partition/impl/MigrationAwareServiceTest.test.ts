@@ -24,6 +24,9 @@ class NoopOperation extends Operation {
 function mockService(returnOp: Operation | null = null): MigrationAwareService {
     return {
         prepareReplicationOperation: (_event, _ns) => returnOp,
+        beforeMigration: () => {},
+        commitMigration: () => {},
+        rollbackMigration: () => {},
     };
 }
 

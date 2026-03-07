@@ -132,6 +132,14 @@ export class HeliosClusterCoordinator {
     return this._clusterService.getMemberByUuid(memberId)?.getAddress() ?? null;
   }
 
+  /**
+   * Registers a MigrationAwareService on the internal partition service.
+   * Called during instance startup to wire services into the migration lifecycle.
+   */
+  registerMigrationAwareService(serviceName: string, service: import('@zenystx/helios-core/internal/partition/MigrationAwareService').MigrationAwareService): void {
+    this._partitionService.registerMigrationAwareService(serviceName, service);
+  }
+
   onMembershipChanged(listener: MembershipListener): void {
     this._membershipListeners.push(listener);
   }

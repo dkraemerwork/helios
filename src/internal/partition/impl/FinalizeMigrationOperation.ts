@@ -2,8 +2,9 @@
  * Port of {@code com.hazelcast.internal.partition.operation.FinalizeMigrationOperation}.
  *
  * Executed on both source and destination after migration completes (or fails).
- * On success: updates partition replicas and clears the migrating flag.
- * On failure: rolls back by cleaning up PartitionContainer state.
+ * On success: updates partition replicas, notifies services via commitMigration.
+ * On failure: rolls back by cleaning up PartitionContainer state and notifying
+ * services via rollbackMigration.
  *
  * Ref: FinalizeMigrationOperation.java:97, 181-205
  */
@@ -12,6 +13,7 @@ import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/Migr
 import type { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
 import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
+import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
 
 export class FinalizeMigrationOperation extends Operation {
     private readonly _migrationInfo: MigrationInfo;
@@ -47,8 +49,10 @@ export class FinalizeMigrationOperation extends Operation {
     async run(): Promise<void> {
         if (this._success) {
             this._applyMigration();
+            this._notifyServices(true);
         } else {
             this._rollback();
+            this._notifyServices(false);
         }
         this._partition.resetMigrating();
         this.sendResponse(true);
@@ -81,6 +85,31 @@ export class FinalizeMigrationOperation extends Operation {
     private _rollback(): void {
         if (this._container) {
             this._container.cleanUpOnMigration();
+        }
+    }
+
+    /**
+     * Notifies all registered MigrationAwareServices of migration completion or rollback.
+     * On success: calls commitMigration for cleanup of demoted replicas.
+     * On failure: calls rollbackMigration for cleanup of destination-side state.
+     */
+    private _notifyServices(success: boolean): void {
+        if (!this._services) return;
+
+        const info = this._migrationInfo;
+        const event = new PartitionMigrationEvent(
+            info.getPartitionId(),
+            info.getSource(),
+            info.getDestination(),
+            'MOVE',
+        );
+
+        for (const [, service] of this._services) {
+            if (success) {
+                service.commitMigration(event);
+            } else {
+                service.rollbackMigration(event);
+            }
         }
     }
 }

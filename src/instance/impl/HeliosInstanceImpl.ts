@@ -346,6 +346,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     this._mapService.setNodeEngine(this._nodeEngine);
     this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
+    // Register MapContainerService as MigrationAwareService (Block 21.3)
+    this._clusterCoordinator!.registerMigrationAwareService(MapService.SERVICE_NAME, this._mapService);
     // Register all MapStoreConfigs so operations can trigger lazy init (Block 21.2)
     this._registerMapStoreConfigs();
 

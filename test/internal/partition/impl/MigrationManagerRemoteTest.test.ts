@@ -77,6 +77,9 @@ describe('MigrationRequestOperation', () => {
         const mockReplicationOp = { run: mock(() => Promise.resolve()) } as unknown as Operation;
         const mockService: MigrationAwareService = {
             prepareReplicationOperation: mock((_event, _ns) => mockReplicationOp),
+            beforeMigration: () => {},
+            commitMigration: () => {},
+            rollbackMigration: () => {},
         };
         const services = new Map<string, MigrationAwareService>([['map', mockService]]);
 
@@ -91,6 +94,9 @@ describe('MigrationRequestOperation', () => {
         const migration = makeMigrationInfo(3, 5001, 5002);
         const mockService: MigrationAwareService = {
             prepareReplicationOperation: mock(() => null),
+            beforeMigration: () => {},
+            commitMigration: () => {},
+            rollbackMigration: () => {},
         };
         const services = new Map<string, MigrationAwareService>([['map', mockService]]);
         const namespaces: ServiceNamespace[] = [{ getServiceName: () => 'map' }];
@@ -105,6 +111,9 @@ describe('MigrationRequestOperation', () => {
         const mockReplicationOp = { run: runFn, sendResponse: mock(() => {}) } as unknown as Operation;
         const mockService: MigrationAwareService = {
             prepareReplicationOperation: mock(() => mockReplicationOp),
+            beforeMigration: () => {},
+            commitMigration: () => {},
+            rollbackMigration: () => {},
         };
         const services = new Map([['map', mockService]]);
         const namespaces: ServiceNamespace[] = [{ getServiceName: () => 'map' }];
@@ -219,6 +228,9 @@ describe('FinalizeMigrationOperation', () => {
         const rollbackFn = mock(() => {});
         const mockService: MigrationAwareService = {
             prepareReplicationOperation: mock(() => null),
+            beforeMigration: () => {},
+            commitMigration: () => {},
+            rollbackMigration: () => {},
         };
         const services = new Map<string, MigrationAwareService>([['map', mockService]]);
 

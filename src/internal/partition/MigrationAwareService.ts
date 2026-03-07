@@ -21,4 +21,22 @@ export interface MigrationAwareService {
         event: PartitionMigrationEvent,
         namespaces: ServiceNamespace[],
     ): Operation | null;
+
+    /**
+     * Called before migration starts on both source and destination.
+     * Services can prepare for ownership changes (e.g., pause processing).
+     */
+    beforeMigration(event: PartitionMigrationEvent): void;
+
+    /**
+     * Called after migration completes successfully.
+     * Services should finalize state: clean up demoted replicas, activate promoted ones.
+     */
+    commitMigration(event: PartitionMigrationEvent): void;
+
+    /**
+     * Called after migration fails.
+     * Services should roll back any state changes made during beforeMigration.
+     */
+    rollbackMigration(event: PartitionMigrationEvent): void;
 }
