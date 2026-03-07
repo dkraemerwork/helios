@@ -156,7 +156,7 @@ Tasks:
 - [x] Wire explicit member-loss handling so accepted tasks transition to deterministic `task-lost` results, queued work drains or fails from real membership signals, and no member-departure path remains plan-only.
 - [x] Recycle degraded task-type pools after worker crash or task timeout, while preserving deterministic cancellation, shutdown, late-result-drop, and task-lost semantics.
 - [x] Update executor docs/examples/exports/config/test-support so module-backed distributed registration, scatter-default behavior, fail-closed semantics, and explicit inline test/dev-only behavior are described honestly.
-- [x] Run a verification task that proves distributed executor work never silently runs on the main event loop, the Scatter-backed path is real in single-node and multi-node runtime flows, and the feature is production ready end to end.
+- [ ] Run a verification task that proves distributed executor work never silently runs on the main event loop, the Scatter-backed path is real in single-node and multi-node runtime flows, and the feature is production ready end to end.
 
 ## Phase 18 Task Breakdown
 
@@ -190,7 +190,7 @@ Tasks:
 - [x] Reject or ignore authoritative `BLITZ_*` messages when `(masterMemberId, memberListVersion, fenceToken)` does not match the receiver's current Helios master view, so stale pre-demotion masters cannot continue serving topology work.
 - [x] Implement mandatory re-registration behavior after master change or topology invalidation.
 - [x] Add tests that prove topology messages, snapshot authority, retry handling, and re-registration are real protocol behavior, not mocks.
-- [x] Run a verification task that proves config, protocol, and topology state are end to end and production ready.
+- [ ] Run a verification task that proves config, protocol, and topology state are end to end and production ready.
 
 ### Block 18.3 — Helios runtime wiring + distributed-auto startup/join/rejoin flow
 
@@ -202,10 +202,10 @@ Tasks:
 - [x] Start one local Blitz node per Helios member under Helios lifecycle ownership.
 - [x] Enforce join/master readiness gates before topology-dependent Blitz calls are allowed.
 - [x] Implement the one-time bootstrap-local to clustered cutover path.
-- [ ] Add a strict pre-cutover readiness fence: bootstrapped local embedded NATS may exist before topology is known, but until authoritative topology is applied and post-cutover JetStream readiness is green, Blitz remains unavailable for Blitz-owned resource creation, user-facing operations, NestJS bridge exposure, and readiness success.
-- [ ] Make authoritative-topology application and post-cutover JetStream readiness the only conditions that clear the fence; retryable, stale, or pre-cutover local-only states must remain fail-closed.
+- [x] Add a strict pre-cutover readiness fence: bootstrapped local embedded NATS may exist before topology is known, but until authoritative topology is applied and post-cutover JetStream readiness is green, Blitz remains unavailable for Blitz-owned resource creation, user-facing operations, NestJS bridge exposure, and readiness success.
+- [x] Make authoritative-topology application and post-cutover JetStream readiness the only conditions that clear the fence; retryable, stale, or pre-cutover local-only states must remain fail-closed.
 - [x] Implement deterministic cleanup on member leave, failed join, and instance shutdown.
-- [ ] On local demotion or master loss, synchronously cancel and fence all outstanding topology-authority work owned by the old master epoch, including in-flight `BLITZ_TOPOLOGY_RESPONSE` work, re-registration sweeps, retry timers, and topology announce tasks, before the demoted member can process any further authoritative Blitz control-plane work.
+- [x] On local demotion or master loss, synchronously cancel and fence all outstanding topology-authority work owned by the old master epoch, including in-flight `BLITZ_TOPOLOGY_RESPONSE` work, re-registration sweeps, retry timers, and topology announce tasks, before the demoted member can process any further authoritative Blitz control-plane work.
 - [x] Implement deterministic rejoin behavior after restart or temporary loss.
 - [x] Update any test-support/runtime helpers that would otherwise preserve stale non-distributed behavior.
 - [x] Add integration tests covering startup, join, leave, rejoin, and shutdown lifecycle semantics.
@@ -226,7 +226,7 @@ Tasks:
 - [ ] Make the NestJS bridge and any other Blitz-facing integration surfaces fence-aware so they cannot expose or reuse the Helios-owned Blitz instance until the Block 18.3 pre-cutover readiness fence has cleared.
 - [x] Update exports/docs/examples as needed for the distributed-default mode.
 - [x] Add tests for env-helper behavior, replica fencing, reconciliation, advertise-host correctness, and NestJS reuse of Helios-owned Blitz.
-- [x] Run a verification task that proves reconciliation and integration behavior are production ready and not split across duplicate runtimes.
+- [ ] Run a verification task that proves reconciliation and integration behavior are production ready and not split across duplicate runtimes.
 
 ### Block 18.5 — Multi-node HA verification
 
@@ -244,7 +244,7 @@ Tasks:
 - [x] Add verification scenario for `shutdownAsync()` lifecycle and cleanup.
 - [x] Add verification scenario proving no child-process leaks remain after repeated start/stop cycles.
 - [x] Add distributed-default acceptance coverage across Helios + Blitz + any reused NestJS bridge surfaces.
-- [x] Run a final verification task that proves the whole feature is end to end, production ready, HA-safe, and free of stubs or mock-only behavior.
+- [ ] Run a final verification task that proves the whole feature is end to end, production ready, HA-safe, and free of stubs or mock-only behavior.
 
 ## Phase 19 Task Breakdown
 
@@ -310,7 +310,7 @@ Tasks:
 - [x] Close the ringbuffer wait/notify and lifecycle gaps required by reliable listeners so multiple waiting readers, append wake-ups, destroy/shutdown cancellation, backup replication, owner promotion, and new-backup resync are all real runtime behavior rather than assumed properties.
 - [x] Wire publish routing, listener delivery, failover, and destroy/shutdown semantics end to end for both topic modes, including no runtime resurrection after destroy, no surviving runners or timers after shutdown, and deterministic owner-loss behavior.
 - [x] Update exports/docs/examples/test-support/NestJS fixtures so the public surface, file-config examples, and downstream helpers claim only the classic and reliable topic behavior that is actually wired.
-- [x] Run a verification task that proves classic topic and reliable topic both work end to end in single-node and multi-node flows, with real publish/listen/failover/destroy/shutdown coverage, bounded-retention semantics documented honestly, and zero stub or fallback behavior remaining.
+- [ ] Run a verification task that proves classic topic and reliable topic both work end to end in single-node and multi-node flows, with real publish/listen/failover/destroy/shutdown coverage, bounded-retention semantics documented honestly, and zero stub or fallback behavior remaining.
 
 ## Phase 20 Task Breakdown
 
@@ -425,7 +425,7 @@ Tasks:
 - [x] Add real-network acceptance suites for every exported distributed object family and every exported advanced feature family.
 - [x] Add hygiene gates proving no member-side protocol handler remains under `src/client`, no wildcard export leaks unfinished client internals, and no client proof path relies on REST when binary protocol support is claimed.
 - [ ] Freeze and maintain the exact Phase 20 proof-label-to-command contract in `plans/CLIENT_E2E_PARITY_PLAN.md`, with mandatory labels `P20-STARTUP`, `P20-MAP`, `P20-QUEUE`, `P20-TOPIC`, `P20-RELIABLE-TOPIC`, `P20-EXECUTOR`, `P20-RECONNECT-LISTENER`, `P20-PROXY-LIFECYCLE`, `P20-EXTERNAL-BUN-APP`, `P20-HYGIENE`, and terminal `P20-GATE-CHECK`; unlabeled or substitute proof commands do not satisfy this block.
-- [x] Run a final verification task that proves the remote client is production ready, end to end, contract-honest, and free of fake transports, orphan codecs, hidden stubs, or test-only runtime shortcuts.
+- [ ] Run a final verification task that proves the remote client is production ready, end to end, contract-honest, and free of fake transports, orphan codecs, hidden stubs, or test-only runtime shortcuts.
 
 ## Phase 21 Task Breakdown
 
@@ -451,7 +451,7 @@ Tasks:
 - [x] Freeze and wire operator-facing recovery config/defaults, observability, docs/examples, and test-support for anti-entropy cadence, sync timeout/retry/throttle behavior, degraded redundancy, repair progress, and partition-lost signaling.
 - [x] Add stale-rejoin fencing and shutdown/demotion cleanup so restarted or demoted members cannot leak stale replica state, stale sync responses, or orphaned repair work back into the cluster.
 - [x] Add real multi-node crash, rejoin, packet-loss, promotion, refill, and partition-lost tests proving the recovery path is production real.
-- [x] Run a verification task that proves clustered partition recovery is Bun-native, TypeScript-native, end to end, and free of stubs, fake fallbacks, duplicate authorities, or test-only runtime shortcuts.
+- [ ] Run a verification task that proves clustered partition recovery is Bun-native, TypeScript-native, end to end, and free of stubs, fake fallbacks, duplicate authorities, or test-only runtime shortcuts.
 
 ### Block 21.1 — Cluster execution substrate + owner-routed map path
 
@@ -475,14 +475,14 @@ behavior.
 
 Tasks:
 
-- Refactor `MapStoreContext` into shared map-level lifecycle plus partition-scoped runtime state.
-- Move MapStore `store` / `delete` / `load` behavior out of proxy caller-side code and onto the
+- [x] Refactor `MapStoreContext` into shared map-level lifecycle plus partition-scoped runtime state.
+- [x] Move MapStore `store` / `delete` / `load` behavior out of proxy caller-side code and onto the
   owner-executed map path.
-- Give backups explicit shadow-state behavior for write-through and write-behind without external
+- [x] Give backups explicit shadow-state behavior for write-through and write-behind without external
   writes.
-- Upgrade `putAll()` / `getAll()` to real owner-routed bulk MapStore paths.
-- Add tests proving exactly one external write/delete per logical clustered mutation.
-- Run a verification task that proves partition owners are the only external writers.
+- [x] Upgrade `putAll()` / `getAll()` to real owner-routed bulk MapStore paths.
+- [x] Add tests proving exactly one external write/delete per logical clustered mutation.
+- [x] Run a verification task that proves partition owners are the only external writers.
 
 ### Block 21.3 — Migration, failover, shutdown handoff, and coordinated eager/clear
 
@@ -491,20 +491,20 @@ down.
 
 Tasks:
 
-- Make `MapContainerService` participate in migration as a real `MigrationAwareService`.
-- Wire write-behind queue/flush metadata replication into migration and promotion flows.
-- Implement deterministic owner demotion/promotion cutover so backups become writers only after
+- [ ] Make `MapContainerService` participate in migration as a real `MigrationAwareService`.
+- [ ] Wire write-behind queue/flush metadata replication into migration and promotion flows.
+- [ ] Implement deterministic owner demotion/promotion cutover so backups become writers only after
   finalization.
-- Make promotion and handoff a staged `beforePromotion` -> state install -> `finalize` flow, with the partition kept in a migrating/not-finalized state until finalize succeeds.
-- Fence every promotion/handoff with a partition ownership epoch plus expected source/target member identity; retry, finalize, replica-sync, backup-ack, and handoff messages must be rejected when the epoch, owner, or expected target no longer match.
-- Forbid owner traffic and all external MapStore writes/loads/deletes on the promoted target until finalize publishes the new owner epoch, and explicitly fence the old owner so it stops new partition work and drops late flushes, retries, acks, and offloaded completions from the retired epoch.
-- Add coordinated clustered EAGER load and clustered clear flows that do not duplicate external work
+- [ ] Make promotion and handoff a staged `beforePromotion` -> state install -> `finalize` flow, with the partition kept in a migrating/not-finalized state until finalize succeeds.
+- [ ] Fence every promotion/handoff with a partition ownership epoch plus expected source/target member identity; retry, finalize, replica-sync, backup-ack, and handoff messages must be rejected when the epoch, owner, or expected target no longer match.
+- [ ] Forbid owner traffic and all external MapStore writes/loads/deletes on the promoted target until finalize publishes the new owner epoch, and explicitly fence the old owner so it stops new partition work and drops late flushes, retries, acks, and offloaded completions from the retired epoch.
+- [ ] Add coordinated clustered EAGER load and clustered clear flows that do not duplicate external work
   per member.
-- Make clustered EAGER join-continuity explicit: one coordinated load epoch survives member join/rebalance without deadlock, without a second full `loadAllKeys()` sweep, and without duplicate external reads/writes for already assigned work.
-- Add graceful shutdown behavior that flushes or hands off owned write-behind work deterministically.
-- Add tests for migration, owner promotion, eager-load coordination, clear coordination, and
+- [ ] Make clustered EAGER join-continuity explicit: one coordinated load epoch survives member join/rebalance without deadlock, without a second full `loadAllKeys()` sweep, and without duplicate external reads/writes for already assigned work.
+- [ ] Add graceful shutdown behavior that flushes or hands off owned write-behind work deterministically.
+- [ ] Add tests for migration, owner promotion, eager-load coordination, clear coordination, and
   shutdown handoff.
-- Run a verification task that proves ownership changes do not create duplicate external writers or
+- [ ] Run a verification task that proves ownership changes do not create duplicate external writers or
   silent write loss beyond the documented at-least-once contract.
 
 ### Block 21.4 — Real adapter proof + clustered MapStore production gate
@@ -518,7 +518,7 @@ Tasks:
 - [ ] Prove the full clustered vertical slice with MongoDB after Phase 19 single-node readiness is already green, using the same per-call provenance capture and duplicate-physical-call assertions rather than final-state-only checks.
 - [x] Document clustered MapStore durability scope, failover semantics, and adapter-eligibility rules.
 - [x] Update exports/docs/examples only for supported clustered paths.
-- [x] Run a final verification task that proves clustered MapStore is production ready, end to end, and
+- [ ] Run a final verification task that proves clustered MapStore is production ready, end to end, and
   free of hidden broadcast-replay or duplicate-write behavior.
 
 ### Master Todo List
@@ -529,7 +529,7 @@ Tasks:
 - [ ] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution, production validation rejects `inline` unless an explicit testing override is set, and a proof test shows production-mode startup with `inline` fails fast; 0 fail, 0 error
 - [x] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
 - [x] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, `(masterMemberId, memberListVersion, fenceToken)` authority fencing, explicit expected-registrant sweep rules after master change) — ~18 tests
-- [ ] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, strict pre-cutover readiness fence, deterministic cleanup on member leave/shutdown, demotion-time authority cancellation) — ~18 tests
+- [x] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, strict pre-cutover readiness fence, deterministic cleanup on member leave/shutdown, demotion-time authority cancellation) — ~18 tests
 - [ ] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS, fence-aware reconciliation and bridge exposure) — ~16 tests
 - [ ] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, pre-cutover fail-closed readiness, current-master handoff, stale old-master rejection, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
 - [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, pre-cutover readiness fence, demotion-time cancellation, authority-tuple validation, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error

@@ -26,6 +26,7 @@ export class HeliosBlitzCoordinator {
   private _memberListVersion = 0;
   private _expectedRegistrants = new Set<string>();
   private _fenceToken: string | null = null;
+  private _pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   setMasterMemberId(masterId: string): void {
     if (masterId !== this._masterMemberId) {
@@ -152,5 +153,57 @@ export class HeliosBlitzCoordinator {
 
   getTopology(): BlitzClusterTopology | null {
     return this._topology;
+  }
+
+  /**
+   * Schedule a retry timer for topology work.
+   * Tracked so it can be cancelled on demotion.
+   */
+  scheduleRetryTimer(id: string, fn: () => void, delayMs: number): void {
+    this.cancelRetryTimer(id);
+    const timer = setTimeout(fn, delayMs);
+    this._pendingTimers.set(id, timer);
+  }
+
+  cancelRetryTimer(id: string): void {
+    const existing = this._pendingTimers.get(id);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+      this._pendingTimers.delete(id);
+    }
+  }
+
+  hasPendingTimers(): boolean {
+    return this._pendingTimers.size > 0;
+  }
+
+  /**
+   * Synchronously cancel and fence all outstanding topology-authority work
+   * owned by the old master epoch on demotion or master loss.
+   *
+   * Cancels:
+   * - In-flight BLITZ_TOPOLOGY_RESPONSE work (topology cleared)
+   * - Re-registration sweeps (expected registrants cleared)
+   * - Retry timers
+   * - Topology announce tasks (topology cleared)
+   *
+   * Rotates the fence token so any in-flight work that checks authority
+   * after demotion will be rejected.
+   */
+  onDemotion(): void {
+    // Cancel all pending retry timers
+    for (const timer of this._pendingTimers.values()) {
+      clearTimeout(timer);
+    }
+    this._pendingTimers.clear();
+
+    // Clear topology so no stale responses can be generated
+    this._topology = null;
+
+    // Clear expected registrants (re-registration sweep cancelled)
+    this._expectedRegistrants.clear();
+
+    // Rotate fence token so old-epoch authority is invalid
+    this._rotateFenceToken();
   }
 }

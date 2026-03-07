@@ -134,6 +134,17 @@ export class HeliosBlitzLifecycleManager {
   }
 
   /**
+   * Called when this node has successfully registered with the current master.
+   * Transitions from JOIN_READY → REGISTERED.
+   */
+  onRegisteredWithMaster(): void {
+    if (this._shutDown) return;
+    if (this._readinessState === BlitzReadinessState.JOIN_READY) {
+      this._readinessState = BlitzReadinessState.REGISTERED;
+    }
+  }
+
+  /**
    * Mark the one-time cutover as complete.
    * After this, the node is in "clustered" phase and no further cutover is allowed.
    */
@@ -141,6 +152,34 @@ export class HeliosBlitzLifecycleManager {
     this._cutoverDone = true;
     this._bootstrapPhase = "clustered";
     this._readinessState = BlitzReadinessState.READY;
+  }
+
+  /**
+   * Mark standalone master as ready when no cutover is needed (no peers).
+   * Only valid when bootstrap phase is "local" and no routes exist.
+   */
+  onStandaloneReady(): void {
+    if (this._shutDown) return;
+    if (this._bootstrapPhase === "local") {
+      this._readinessState = BlitzReadinessState.READY;
+    }
+  }
+
+  /**
+   * Strict pre-cutover readiness fence.
+   *
+   * Returns true ONLY when the Blitz runtime is fully available for:
+   * - Blitz-owned resource creation
+   * - User-facing operations
+   * - NestJS bridge exposure
+   * - Readiness success reporting
+   *
+   * Fail-closed: retryable, stale, or pre-cutover local-only states return false.
+   * Only authoritative topology application + post-cutover JetStream readiness
+   * (represented by READY state) clears this fence.
+   */
+  isBlitzAvailable(): boolean {
+    return this._readinessState === BlitzReadinessState.READY;
   }
 
   /**

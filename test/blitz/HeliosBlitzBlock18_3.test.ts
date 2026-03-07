@@ -9,6 +9,7 @@ import { describe, test, expect, afterEach } from "bun:test";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { HeliosBlitzLifecycleManager, BlitzReadinessState } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
+import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
 
 // ─── 1. Blitz lifecycle field wiring ────────────────────────────────────────
 
@@ -302,5 +303,259 @@ describe("Block 18.3 — Embedded-local mode bypass", () => {
     // In embedded-local mode, bootstrap phase is immediately "clustered" (no cutover needed)
     expect(mgr!.getBootstrapPhase()).toBe("local-only");
     instance.shutdown();
+  });
+});
+
+// ─── 9. Strict pre-cutover readiness fence ──────────────────────────────────
+
+describe("Block 18.3 — Pre-cutover readiness fence", () => {
+  test("isBlitzAvailable() returns false in NOT_READY state", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    expect(manager.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in LOCAL_STARTED state", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    expect(manager.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in JOIN_READY (pre-cutover)", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    manager.onJoinComplete("master-1", 2);
+    expect(manager.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in REGISTERED (pre-cutover)", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    manager.onJoinComplete("master-1", 2);
+    manager.onRegisteredWithMaster();
+    expect(manager.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns true only after cutover complete (READY)", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    manager.onJoinComplete("master-1", 2);
+    manager.onRegisteredWithMaster();
+    manager.onClusteredCutoverComplete();
+    expect(manager.isBlitzAvailable()).toBe(true);
+  });
+
+  test("isBlitzAvailable() returns false after shutdown even if was READY", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    manager.onJoinComplete("master-1", 2);
+    manager.onRegisteredWithMaster();
+    manager.onClusteredCutoverComplete();
+    expect(manager.isBlitzAvailable()).toBe(true);
+    manager.markShutdown();
+    expect(manager.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() resets to false on rejoin until new cutover", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    manager.onJoinComplete("master-1", 2);
+    manager.onRegisteredWithMaster();
+    manager.onClusteredCutoverComplete();
+    expect(manager.isBlitzAvailable()).toBe(true);
+    manager.onRejoin(3);
+    expect(manager.isBlitzAvailable()).toBe(false);
+  });
+
+  test("embedded-local mode is available immediately after local node started", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "embedded-local",
+      localPort: 14222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    expect(manager.isBlitzAvailable()).toBe(true);
+  });
+
+  test("standalone master with no peers becomes available after onStandaloneReady()", () => {
+    const manager = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    }, "test-member-1");
+    manager.onLocalNodeStarted();
+    manager.onJoinComplete("test-member-1", 1);
+    // Standalone: no routes, no cutover needed, but must explicitly mark ready
+    manager.onStandaloneReady();
+    expect(manager.isBlitzAvailable()).toBe(true);
+  });
+});
+
+// ─── 10. Demotion-time authority cancellation ───────────────────────────────
+
+describe("Block 18.3 — Demotion authority cancellation", () => {
+  test("onDemotion() rotates fence token so old-epoch work is invalid", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    const oldToken = coordinator.getFenceToken()!;
+    expect(oldToken).toBeTruthy();
+
+    coordinator.onDemotion();
+    const newToken = coordinator.getFenceToken()!;
+    expect(newToken).not.toBe(oldToken);
+  });
+
+  test("onDemotion() clears topology so stale responses cannot be generated", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    coordinator.handleRegister({
+      type: "BLITZ_NODE_REGISTER",
+      registration: {
+        memberId: "member-1",
+        memberListVersion: 1,
+        serverName: "blitz-member-1",
+        clientPort: 14222,
+        clusterPort: 16222,
+        advertiseHost: "127.0.0.1",
+        clusterName: "test",
+        ready: true,
+        startedAt: Date.now(),
+      },
+    }, true);
+    expect(coordinator.getTopology()).not.toBeNull();
+
+    coordinator.onDemotion();
+    expect(coordinator.getTopology()).toBeNull();
+  });
+
+  test("onDemotion() clears expected registrants", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    coordinator.setExpectedRegistrants(new Set(["m1", "m2"]));
+    expect(coordinator.getExpectedRegistrants().size).toBe(2);
+
+    coordinator.onDemotion();
+    expect(coordinator.getExpectedRegistrants().size).toBe(0);
+  });
+
+  test("onDemotion() cancels pending retry timers", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+
+    // Schedule a retry timer
+    coordinator.scheduleRetryTimer("req-1", () => {}, 5000);
+    expect(coordinator.hasPendingTimers()).toBe(true);
+
+    coordinator.onDemotion();
+    expect(coordinator.hasPendingTimers()).toBe(false);
+  });
+
+  test("validateAuthority rejects old fence token after demotion", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    const oldToken = coordinator.getFenceToken()!;
+
+    coordinator.onDemotion();
+    expect(coordinator.validateAuthority("master-1", 1, oldToken)).toBe(false);
+  });
+
+  test("handleTopologyRequest returns null after demotion", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    coordinator.handleRegister({
+      type: "BLITZ_NODE_REGISTER",
+      registration: {
+        memberId: "member-1",
+        memberListVersion: 1,
+        serverName: "blitz-member-1",
+        clientPort: 14222,
+        clusterPort: 16222,
+        advertiseHost: "127.0.0.1",
+        clusterName: "test",
+        ready: true,
+        startedAt: Date.now(),
+      },
+    }, true);
+
+    // Can generate response before demotion
+    const resp = coordinator.handleTopologyRequest({
+      type: "BLITZ_TOPOLOGY_REQUEST",
+      requestId: "req-1",
+    }, true);
+    expect(resp).not.toBeNull();
+
+    coordinator.onDemotion();
+
+    // Cannot generate response after demotion
+    const resp2 = coordinator.handleTopologyRequest({
+      type: "BLITZ_TOPOLOGY_REQUEST",
+      requestId: "req-2",
+    }, true);
+    expect(resp2).toBeNull();
+  });
+
+  test("generateTopologyAnnounce returns null after demotion", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("master-1");
+    coordinator.setMemberListVersion(1);
+    coordinator.handleRegister({
+      type: "BLITZ_NODE_REGISTER",
+      registration: {
+        memberId: "member-1",
+        memberListVersion: 1,
+        serverName: "blitz-member-1",
+        clientPort: 14222,
+        clusterPort: 16222,
+        advertiseHost: "127.0.0.1",
+        clusterName: "test",
+        ready: true,
+        startedAt: Date.now(),
+      },
+    }, true);
+
+    expect(coordinator.generateTopologyAnnounce()).not.toBeNull();
+    coordinator.onDemotion();
+    expect(coordinator.generateTopologyAnnounce()).toBeNull();
   });
 });
