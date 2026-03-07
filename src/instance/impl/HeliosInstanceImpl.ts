@@ -181,6 +181,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Near-cache manager — shares the same serialization service as the node engine
     this._nearCacheManager = new DefaultNearCacheManager(this._ss);
 
+    // Validate reliable-topic configs: backing ringbuffer must have backupCount >= 1
+    this._validateReliableTopicConfigs();
+
     // Reliable topic service — always available (single-node ringbuffer-backed)
     this._reliableTopicService = new ReliableTopicService(this._name, this._config);
 
@@ -232,6 +235,23 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Start client protocol server if configured
     this._startClientProtocolServer();
+  }
+
+  // ── config validation ────────────────────────────────────────────────
+
+  private _validateReliableTopicConfigs(): void {
+    const TOPIC_RB_PREFIX = "_hz_rb_";
+    for (const [name] of this._config.getReliableTopicConfigs()) {
+      const rbName = TOPIC_RB_PREFIX + name;
+      const rbConfig = this._config.getRingbufferConfig(rbName);
+      if (rbConfig.getBackupCount() < 1) {
+        throw new Error(
+          `Reliable topic '${name}': backing ringbuffer '${rbName}' has backupCount=${rbConfig.getBackupCount()}, ` +
+          `but the v1 publish completion contract requires backupCount >= 1. ` +
+          `Set backupCount >= 1 on the backing ringbuffer config or remove the reliable-topic config.`,
+        );
+      }
+    }
   }
 
   // ── TCP networking ───────────────────────────────────────────────────

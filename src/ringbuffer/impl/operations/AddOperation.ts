@@ -1,5 +1,8 @@
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
 import { AbstractRingBufferOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AbstractRingBufferOperation';
+import { AddBackupOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AddBackupOperation';
 import { OverflowPolicy } from '@zenystx/helios-core/ringbuffer/OverflowPolicy';
 
 /**
@@ -10,9 +13,13 @@ import { OverflowPolicy } from '@zenystx/helios-core/ringbuffer/OverflowPolicy';
  * - OVERWRITE: always adds (overwrites oldest item)
  *
  * Returns the sequence ID of the stored item, or -1 on FAIL overflow.
+ *
+ * Implements BackupAwareOperation: after a successful add, the operation
+ * produces an AddBackupOperation with sync/async backup counts taken from
+ * the ringbuffer config.
  */
-export class AddOperation extends AbstractRingBufferOperation {
-    private item: Data;
+export class AddOperation extends AbstractRingBufferOperation implements BackupAwareOperation {
+    private readonly item: Data;
     private readonly overflowPolicy: OverflowPolicy;
     private resultSequence: number = -1;
 
@@ -41,6 +48,18 @@ export class AddOperation extends AbstractRingBufferOperation {
 
     shouldBackup(): boolean {
         return this.resultSequence !== -1;
+    }
+
+    getSyncBackupCount(): number {
+        return this.getRingBufferContainer().getConfig().getBackupCount();
+    }
+
+    getAsyncBackupCount(): number {
+        return this.getRingBufferContainer().getConfig().getAsyncBackupCount();
+    }
+
+    getBackupOperation(): Operation {
+        return new AddBackupOperation(this.name, this.item);
     }
 
     getResponse(): number {
