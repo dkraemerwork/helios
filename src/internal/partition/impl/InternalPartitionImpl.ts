@@ -14,6 +14,9 @@ export class InternalPartitionImpl extends AbstractInternalPartition {
     private _version: number;
     private _localReplica: PartitionReplica | null;
     private _isMigrating: boolean;
+    private _ownershipEpoch: number;
+    /** If non-null, partition is in staged promotion and traffic is fenced until finalize. */
+    private _pendingPromotion: { sourceUuid: string; targetUuid: string } | null;
 
     constructor(
         partitionId: number,
@@ -37,6 +40,8 @@ export class InternalPartitionImpl extends AbstractInternalPartition {
         super(partitionId);
         this._localReplica = localReplica;
         this._isMigrating = false;
+        this._ownershipEpoch = 0;
+        this._pendingPromotion = null;
         if (Array.isArray(interceptorOrReplicas)) {
             this._replicas = interceptorOrReplicas as (PartitionReplica | null)[];
             this._version = version ?? 0;
@@ -163,6 +168,52 @@ export class InternalPartitionImpl extends AbstractInternalPartition {
             this._interceptor.replicaChanged(this.partitionId, replicaIndex, oldReplica, newReplica);
         }
         return true;
+    }
+
+    // ── Ownership epoch and staged promotion ────────────────────
+
+    ownershipEpoch(): number {
+        return this._ownershipEpoch;
+    }
+
+    incrementOwnershipEpoch(): number {
+        return ++this._ownershipEpoch;
+    }
+
+    /** Returns true if the partition is in a staged-promotion state awaiting finalize. */
+    isPendingPromotion(): boolean {
+        return this._pendingPromotion !== null;
+    }
+
+    getPendingPromotion(): { sourceUuid: string; targetUuid: string } | null {
+        return this._pendingPromotion;
+    }
+
+    /**
+     * Begin a staged promotion. The partition is fenced for owner traffic until
+     * {@link finalizePromotion} is called.
+     */
+    beginPromotion(sourceUuid: string, targetUuid: string): void {
+        this._pendingPromotion = { sourceUuid, targetUuid };
+        this._isMigrating = true;
+    }
+
+    /**
+     * Finalize a staged promotion: increment the ownership epoch and clear the
+     * pending promotion state, allowing owner traffic to resume.
+     */
+    finalizePromotion(): number {
+        this._pendingPromotion = null;
+        this._isMigrating = false;
+        return this.incrementOwnershipEpoch();
+    }
+
+    /**
+     * Returns true if owner traffic should be fenced for this partition.
+     * Traffic is fenced when a promotion is pending and not yet finalized.
+     */
+    isOwnerTrafficFenced(): boolean {
+        return this._pendingPromotion !== null;
     }
 
     copy(interceptor: PartitionReplicaInterceptor | null): InternalPartitionImpl {

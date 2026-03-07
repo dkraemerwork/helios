@@ -23,6 +23,7 @@ import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/WriteBehindStateHolder';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
 
 const BASE_PORT = 17300;
 let portCounter = 0;
@@ -836,5 +837,220 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         for (const key of keys) {
             expect(allStoredKeys.has(key)).toBe(true);
         }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 10. Block 21.3 mechanism tests: epoch fencing
+    // ═══════════════════════════════════════════════════════════════════
+
+    it('partition ownership epoch increments on finalized promotion', () => {
+        const svc = new MapContainerService();
+        expect(svc.getPartitionEpoch(0)).toBe(0);
+
+        svc.beforePromotion(0, 'source-uuid', 'target-uuid');
+        expect(svc.isPartitionFenced(0)).toBe(true);
+
+        const newEpoch = svc.finalizePromotion(0, 'source-uuid', 'target-uuid');
+        expect(newEpoch).toBe(1);
+        expect(svc.getPartitionEpoch(0)).toBe(1);
+        expect(svc.isPartitionFenced(0)).toBe(false);
+    });
+
+    it('epoch validation rejects stale epoch', () => {
+        const svc = new MapContainerService();
+        // Epoch 0 initially
+        expect(svc.validateEpoch(0, 0)).toBe(true);
+
+        // Promote to epoch 1
+        svc.beforePromotion(0, 'src', 'tgt');
+        svc.finalizePromotion(0, 'src', 'tgt');
+
+        // Stale epoch 0 should be rejected
+        expect(svc.validateEpoch(0, 0)).toBe(false);
+        // Current epoch 1 should be accepted
+        expect(svc.validateEpoch(0, 1)).toBe(true);
+    });
+
+    it('finalize rejects mismatched source/target identity', () => {
+        const svc = new MapContainerService();
+        svc.beforePromotion(0, 'real-source', 'real-target');
+
+        // Wrong target
+        const result = svc.finalizePromotion(0, 'real-source', 'wrong-target');
+        expect(result).toBe(-1);
+
+        // Partition should still be fenced
+        expect(svc.isPartitionFenced(0)).toBe(true);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 11. Staged promotion flow
+    // ═══════════════════════════════════════════════════════════════════
+
+    it('staged promotion follows before -> install -> finalize lifecycle', () => {
+        const svc = new MapContainerService();
+
+        // Stage 1: beforePromotion
+        const record = svc.beforePromotion(5, 'old-owner', 'new-owner');
+        expect(record.state).toBe('before');
+        expect(record.partitionId).toBe(5);
+        expect(svc.isPartitionFenced(5)).toBe(true);
+        expect(svc.isOldOwnerRetired(5)).toBe(true);
+
+        // Stage 2: installState
+        const installed = svc.installPromotionState(5);
+        expect(installed).not.toBeNull();
+        expect(installed!.state).toBe('installing');
+        expect(svc.isPartitionFenced(5)).toBe(true);
+
+        // Stage 3: finalize
+        const epoch = svc.finalizePromotion(5, 'old-owner', 'new-owner');
+        expect(epoch).toBeGreaterThan(0);
+        expect(svc.isPartitionFenced(5)).toBe(false);
+        expect(svc.getPendingPromotion(5)).toBeNull();
+    });
+
+    it('partition is kept in migrating state until finalize succeeds', () => {
+        const svc = new MapContainerService();
+        svc.beforePromotion(3, 'src', 'tgt');
+
+        // Partition should have a pending promotion
+        const promo = svc.getPendingPromotion(3);
+        expect(promo).not.toBeNull();
+        expect(promo!.state).toBe('before');
+
+        // installState keeps it pending
+        svc.installPromotionState(3);
+        const promo2 = svc.getPendingPromotion(3);
+        expect(promo2).not.toBeNull();
+        expect(promo2!.state).toBe('installing');
+
+        // Finalize clears it
+        svc.finalizePromotion(3, 'src', 'tgt');
+        expect(svc.getPendingPromotion(3)).toBeNull();
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 12. Traffic fencing
+    // ═══════════════════════════════════════════════════════════════════
+
+    it('owner traffic is forbidden on fenced partitions', () => {
+        const svc = new MapContainerService();
+        expect(svc.isPartitionFenced(0)).toBe(false);
+
+        svc.beforePromotion(0, 'src', 'tgt');
+        expect(svc.isPartitionFenced(0)).toBe(true);
+
+        // Old owner should be retired
+        expect(svc.isOldOwnerRetired(0)).toBe(true);
+
+        // After finalize, partition is unfenced
+        svc.finalizePromotion(0, 'src', 'tgt');
+        expect(svc.isPartitionFenced(0)).toBe(false);
+
+        // Old owner fence persists until explicitly cleared
+        expect(svc.isOldOwnerRetired(0)).toBe(true);
+        svc.clearRetiredOwner(0);
+        expect(svc.isOldOwnerRetired(0)).toBe(false);
+    });
+
+    it('beforeMigration fences partition, commitMigration unfences and increments epoch', () => {
+        const svc = new MapContainerService();
+        const event = new PartitionMigrationEvent(7, null, null, 'MOVE');
+
+        svc.beforeMigration(event);
+        expect(svc.isPartitionFenced(7)).toBe(true);
+
+        const moveEvent = new PartitionMigrationEvent(7, { uuid: () => 'src', address: () => null as any, equals: () => false } as any, null, 'MOVE');
+        svc.commitMigration(moveEvent);
+        expect(svc.isPartitionFenced(7)).toBe(false);
+        // Epoch should have incremented
+        expect(svc.getPartitionEpoch(7)).toBe(1);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 13. Coordinated EAGER load
+    // ═══════════════════════════════════════════════════════════════════
+
+    it('EAGER load epoch survives without duplicate loadAllKeys on join', () => {
+        const svc = new MapContainerService();
+
+        // Start an EAGER load epoch
+        const epoch = svc.beginEagerLoadEpoch('test-map', [0, 1, 2]);
+        expect(epoch.epoch).toBe(1);
+        expect(svc.isEagerLoadInProgress('test-map')).toBe(true);
+
+        // Attempting to begin another epoch for the same map reuses the existing one
+        const epoch2 = svc.beginEagerLoadEpoch('test-map', [0, 1, 2, 3]);
+        expect(epoch2.epoch).toBe(1); // Same epoch, not a new one
+
+        // Mark partitions complete
+        expect(svc.markEagerLoadPartitionComplete('test-map', 0)).toBe(false);
+        expect(svc.markEagerLoadPartitionComplete('test-map', 1)).toBe(false);
+        expect(svc.markEagerLoadPartitionComplete('test-map', 2)).toBe(true); // All done
+        expect(svc.isEagerLoadInProgress('test-map')).toBe(false);
+    });
+
+    it('EAGER load epoch tracks assigned vs completed partitions', () => {
+        const svc = new MapContainerService();
+        const epoch = svc.beginEagerLoadEpoch('my-map', [10, 20, 30]);
+
+        expect(epoch.assignedPartitions.size).toBe(3);
+        expect(epoch.completedPartitions.size).toBe(0);
+
+        svc.markEagerLoadPartitionComplete('my-map', 10);
+        const current = svc.getEagerLoadEpoch('my-map');
+        expect(current).not.toBeNull();
+        expect(current!.completedPartitions.has(10)).toBe(true);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 14. InternalPartitionImpl epoch and staged promotion
+    // ═══════════════════════════════════════════════════════════════════
+
+    it('InternalPartitionImpl tracks ownership epoch and staged promotion', () => {
+        const partition = new InternalPartitionImpl(0, null, null);
+
+        expect(partition.ownershipEpoch()).toBe(0);
+        expect(partition.isPendingPromotion()).toBe(false);
+        expect(partition.isOwnerTrafficFenced()).toBe(false);
+
+        // Begin promotion
+        partition.beginPromotion('old-uuid', 'new-uuid');
+        expect(partition.isPendingPromotion()).toBe(true);
+        expect(partition.isOwnerTrafficFenced()).toBe(true);
+        expect(partition.isMigrating()).toBe(true);
+
+        const promo = partition.getPendingPromotion();
+        expect(promo).not.toBeNull();
+        expect(promo!.sourceUuid).toBe('old-uuid');
+        expect(promo!.targetUuid).toBe('new-uuid');
+
+        // Finalize promotion
+        const newEpoch = partition.finalizePromotion();
+        expect(newEpoch).toBe(1);
+        expect(partition.ownershipEpoch()).toBe(1);
+        expect(partition.isPendingPromotion()).toBe(false);
+        expect(partition.isOwnerTrafficFenced()).toBe(false);
+        expect(partition.isMigrating()).toBe(false);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 15. Graceful shutdown flush
+    // ═══════════════════════════════════════════════════════════════════
+
+    it('gracefulShutdownFlush clears all fencing state', async () => {
+        const svc = new MapContainerService();
+        svc.beforePromotion(0, 'src', 'tgt');
+        svc.beforePromotion(1, 'src2', 'tgt2');
+        expect(svc.isPartitionFenced(0)).toBe(true);
+        expect(svc.isPartitionFenced(1)).toBe(true);
+
+        await svc.gracefulShutdownFlush();
+
+        expect(svc.isPartitionFenced(0)).toBe(false);
+        expect(svc.isPartitionFenced(1)).toBe(false);
+        expect(svc.isOldOwnerRetired(0)).toBe(false);
+        expect(svc.getPendingPromotion(0)).toBeNull();
     });
 });

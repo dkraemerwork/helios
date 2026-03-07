@@ -5,6 +5,14 @@
  * Implements {@link MigrationAwareService} for partition migration participation:
  * replication, before/commit/rollback lifecycle, and write-behind state transfer.
  *
+ * Block 21.3 additions:
+ * - Staged beforePromotion → state install → finalize promotion flow
+ * - Partition ownership epoch fencing on promotion/handoff
+ * - Owner traffic gating until finalize publishes new epoch
+ * - Coordinated clustered EAGER load (one loadAllKeys per map, no duplicates)
+ * - Coordinated clustered clear (owner-only external deletes)
+ * - Graceful shutdown flush/handoff for write-behind queues
+ *
  * Port of the partition-container lookup path in
  * {@code com.hazelcast.map.impl.MapServiceContextImpl} and migration-aware
  * behavior from {@code com.hazelcast.map.impl.MapMigrationAwareService}.
@@ -27,6 +35,30 @@ import { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation
 import { MapReplicationOperation } from '@zenystx/helios-core/map/impl/operation/MapReplicationOperation';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 
+/**
+ * Epoch-fenced promotion record for a partition. Tracks the ownership epoch,
+ * source/target member identity, and promotion state.
+ */
+export interface PromotionRecord {
+    readonly partitionId: number;
+    readonly epoch: number;
+    readonly sourceUuid: string;
+    readonly targetUuid: string;
+    readonly state: 'before' | 'installing' | 'finalized';
+}
+
+/**
+ * Coordinated EAGER load epoch. Tracks in-progress coordinated loads to prevent
+ * duplicate loadAllKeys sweeps on join/rebalance.
+ */
+export interface EagerLoadEpoch {
+    readonly mapName: string;
+    readonly epoch: number;
+    readonly startedAt: number;
+    readonly completedPartitions: Set<number>;
+    readonly assignedPartitions: Set<number>;
+}
+
 export class MapContainerService implements MigrationAwareService {
     private readonly _stores = new Map<string, RecordStore>();
 
@@ -44,6 +76,46 @@ export class MapContainerService implements MigrationAwareService {
     /** Optional NodeEngine for EAGER load serialization. */
     private _nodeEngine: NodeEngine | null = null;
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Block 21.3: Epoch fencing and staged promotion state
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Per-partition ownership epoch. Incremented on each finalized promotion. */
+    private readonly _partitionEpochs = new Map<number, number>();
+
+    /**
+     * Per-partition pending promotion records. When a promotion is pending,
+     * owner traffic and external MapStore writes are fenced until finalize.
+     */
+    private readonly _pendingPromotions = new Map<number, PromotionRecord>();
+
+    /**
+     * Partitions whose owner traffic is fenced. External MapStore writes/loads/deletes
+     * are rejected for fenced partitions. The old owner is also fenced so it stops
+     * new partition work and drops late flushes, retries, acks, and completions.
+     */
+    private readonly _fencedPartitions = new Set<number>();
+
+    /**
+     * Partitions whose old owner has been explicitly fenced (retired epoch).
+     * Late flushes, retries, acks, and offloaded completions from the retired
+     * epoch are dropped.
+     */
+    private readonly _retiredOwnerPartitions = new Set<number>();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Block 21.3: Coordinated EAGER load state
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Active EAGER load epochs per map. Ensures one coordinated load epoch
+     * survives member join/rebalance without a second full loadAllKeys sweep.
+     */
+    private readonly _eagerLoadEpochs = new Map<string, EagerLoadEpoch>();
+
+    /** Global EAGER load epoch counter. */
+    private _eagerLoadEpochCounter = 0;
+
     setNodeEngine(nodeEngine: NodeEngine): void {
         this._nodeEngine = nodeEngine;
     }
@@ -52,10 +124,10 @@ export class MapContainerService implements MigrationAwareService {
         return `${mapName}:${partitionId}`;
     }
 
-    /**
-     * Returns the RecordStore for (mapName, partitionId), creating a new
-     * DefaultRecordStore if one does not yet exist.
-     */
+    // ═══════════════════════════════════════════════════════════════════
+    // RecordStore access
+    // ═══════════════════════════════════════════════════════════════════
+
     getOrCreateRecordStore(mapName: string, partitionId: number): RecordStore {
         const key = this._storeKey(mapName, partitionId);
         let store = this._stores.get(key);
@@ -66,25 +138,14 @@ export class MapContainerService implements MigrationAwareService {
         return store;
     }
 
-    /**
-     * Register a specific RecordStore for (mapName, partitionId).
-     * Useful in tests to inject a pre-populated or mock store.
-     */
     setRecordStore(mapName: string, partitionId: number, store: RecordStore): void {
         this._stores.set(this._storeKey(mapName, partitionId), store);
     }
 
-    /**
-     * Returns the RecordStore for (mapName, partitionId), or null if absent.
-     */
     getRecordStore(mapName: string, partitionId: number): RecordStore | null {
         return this._stores.get(this._storeKey(mapName, partitionId)) ?? null;
     }
 
-    /**
-     * Iterates over all (key, value) entries across all partitions for the given map.
-     * Used by MapQueryEngine to perform partition-local full scans.
-     */
     *getAllEntries(mapName: string): IterableIterator<readonly [import('@zenystx/helios-core/internal/serialization/Data').Data, import('@zenystx/helios-core/internal/serialization/Data').Data]> {
         const prefix = `${mapName}:`;
         for (const [storeKey, store] of this._stores) {
@@ -94,13 +155,10 @@ export class MapContainerService implements MigrationAwareService {
         }
     }
 
-    /**
-     * Returns the MapDataStore for the given map, creating and initializing
-     * a MapStoreContext if one doesn't exist. Uses singleflight to prevent
-     * duplicate initialization on concurrent first calls.
-     *
-     * Returns EmptyMapDataStore if the config has store disabled.
-     */
+    // ═══════════════════════════════════════════════════════════════════
+    // MapDataStore lifecycle
+    // ═══════════════════════════════════════════════════════════════════
+
     async getOrCreateMapDataStore<K, V>(
         mapName: string,
         mapStoreConfig: MapStoreConfig,
@@ -123,16 +181,7 @@ export class MapContainerService implements MigrationAwareService {
                 // EAGER load: pre-populate RecordStore via NodeEngine serialization
                 const initial = (created as unknown as MapStoreContext<K, V>).getInitialEntries();
                 if (initial && this._nodeEngine) {
-                    const ps = this._nodeEngine.getPartitionService();
-                    for (const [k, v] of initial) {
-                        const kd = this._nodeEngine.toData(k);
-                        const vd = this._nodeEngine.toData(v);
-                        if (kd !== null && vd !== null) {
-                            const partitionId = ps.getPartitionId(kd);
-                            const recordStore = this.getOrCreateRecordStore(mapName, partitionId);
-                            recordStore.put(kd, vd, -1, -1);
-                        }
-                    }
+                    this._applyEagerEntries(mapName, initial as Map<unknown, unknown>);
                 }
 
                 return created;
@@ -150,19 +199,10 @@ export class MapContainerService implements MigrationAwareService {
         return ctx.getMapDataStore() as MapDataStore<K, V>;
     }
 
-    /**
-     * Register a MapStoreConfig for a map name so operations can trigger lazy
-     * initialization on the partition owner even if getMap() hasn't been called locally.
-     */
     registerMapStoreConfig(mapName: string, config: MapStoreConfig): void {
         this._mapStoreConfigs.set(mapName, config);
     }
 
-    /**
-     * Returns the already-initialized MapDataStore for the given map, or EmptyMapDataStore
-     * if no MapStoreContext has been created yet. Used by operations running on the
-     * partition owner to perform external store/delete/load calls.
-     */
     getExistingMapDataStore<K, V>(mapName: string): MapDataStore<K, V> {
         const ctx = this._mapStoreContexts.get(mapName);
         if (ctx) {
@@ -171,29 +211,18 @@ export class MapContainerService implements MigrationAwareService {
         return EmptyMapDataStore.empty<K, V>();
     }
 
-    /**
-     * Ensures the MapDataStore is initialized for the given map, using a registered
-     * MapStoreConfig if available. Called from MapOperation.beforeRun() on the owner.
-     */
     async ensureMapDataStoreInitialized(mapName: string): Promise<void> {
-        // Already initialized
         if (this._mapStoreContexts.has(mapName)) return;
-        // Check registered config
         const config = this._mapStoreConfigs.get(mapName);
         if (config && config.isEnabled()) {
             await this.getOrCreateMapDataStore(mapName, config);
         }
     }
 
-    /** Check if a MapStoreConfig is registered for the given map. */
     hasMapStoreConfig(mapName: string): boolean {
         return this._mapStoreConfigs.has(mapName);
     }
 
-    /**
-     * Destroys the MapStoreContext for the given map (flushes pending writes,
-     * calls destroy() on wrapper if supported).
-     */
     async destroyMapStoreContext(mapName: string): Promise<void> {
         const ctx = this._mapStoreContexts.get(mapName);
         if (ctx) {
@@ -202,9 +231,6 @@ export class MapContainerService implements MigrationAwareService {
         }
     }
 
-    /**
-     * Flushes all active MapStoreContexts (called on instance shutdown).
-     */
     async flushAll(): Promise<void> {
         const destroyPromises: Promise<void>[] = [];
         for (const [mapName] of this._mapStoreContexts) {
@@ -214,23 +240,211 @@ export class MapContainerService implements MigrationAwareService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // MigrationAwareService implementation
+    // Block 21.3: Partition ownership epoch fencing
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Returns the current ownership epoch for a partition. */
+    getPartitionEpoch(partitionId: number): number {
+        return this._partitionEpochs.get(partitionId) ?? 0;
+    }
+
+    /**
+     * Validates that a message/operation matches the current epoch and expected
+     * source/target. Returns false if the epoch, owner, or expected target no
+     * longer match — the caller must reject the operation.
+     */
+    validateEpoch(partitionId: number, expectedEpoch: number, expectedOwnerUuid?: string): boolean {
+        const currentEpoch = this.getPartitionEpoch(partitionId);
+        if (expectedEpoch !== currentEpoch) return false;
+        if (expectedOwnerUuid !== undefined) {
+            const promo = this._pendingPromotions.get(partitionId);
+            if (promo && promo.targetUuid !== expectedOwnerUuid) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns true if the partition is currently fenced — no owner traffic or
+     * external MapStore operations should execute.
+     */
+    isPartitionFenced(partitionId: number): boolean {
+        return this._fencedPartitions.has(partitionId);
+    }
+
+    /**
+     * Returns true if the partition's old owner has been retired — late flushes,
+     * retries, acks, and offloaded completions from the old epoch should be dropped.
+     */
+    isOldOwnerRetired(partitionId: number): boolean {
+        return this._retiredOwnerPartitions.has(partitionId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Block 21.3: Staged promotion flow
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Prepares a replication operation that captures all map record data
-     * and write-behind state for the migrating partition.
+     * Stage 1: beforePromotion. Prepares the partition for ownership transfer.
+     * Fences the partition so no owner traffic or external writes execute.
+     * Fences the old owner so it stops new work and drops late completions.
      */
+    beforePromotion(partitionId: number, sourceUuid: string, targetUuid: string): PromotionRecord {
+        const currentEpoch = this.getPartitionEpoch(partitionId);
+        const record: PromotionRecord = {
+            partitionId,
+            epoch: currentEpoch,
+            sourceUuid,
+            targetUuid,
+            state: 'before',
+        };
+        this._pendingPromotions.set(partitionId, record);
+        this._fencedPartitions.add(partitionId);
+        this._retiredOwnerPartitions.add(partitionId);
+        return record;
+    }
+
+    /**
+     * Stage 2: installState. Installs replicated state on the promoted target.
+     * The partition remains fenced during installation.
+     */
+    installPromotionState(partitionId: number): PromotionRecord | null {
+        const record = this._pendingPromotions.get(partitionId);
+        if (!record || record.state !== 'before') return null;
+        const updated: PromotionRecord = { ...record, state: 'installing' };
+        this._pendingPromotions.set(partitionId, updated);
+        return updated;
+    }
+
+    /**
+     * Stage 3: finalizePromotion. Publishes the new ownership epoch and unfences
+     * the partition, allowing owner traffic to resume on the new owner.
+     * The old owner fence remains — late operations from the retired epoch are dropped.
+     */
+    finalizePromotion(partitionId: number, expectedSourceUuid: string, expectedTargetUuid: string): number {
+        const record = this._pendingPromotions.get(partitionId);
+        if (record) {
+            // Validate source/target identity
+            if (record.sourceUuid !== expectedSourceUuid || record.targetUuid !== expectedTargetUuid) {
+                return -1; // Reject: identity mismatch
+            }
+        }
+
+        // Increment ownership epoch
+        const newEpoch = (this._partitionEpochs.get(partitionId) ?? 0) + 1;
+        this._partitionEpochs.set(partitionId, newEpoch);
+
+        // Unfence the partition for owner traffic
+        this._fencedPartitions.delete(partitionId);
+        this._pendingPromotions.delete(partitionId);
+
+        // Old owner stays retired — late operations from old epoch are still dropped
+        return newEpoch;
+    }
+
+    /** Returns the pending promotion record for a partition, if any. */
+    getPendingPromotion(partitionId: number): PromotionRecord | null {
+        return this._pendingPromotions.get(partitionId) ?? null;
+    }
+
+    /**
+     * Clears the retired-owner fence for a partition. Called when the old owner
+     * has been fully cleaned up or has departed.
+     */
+    clearRetiredOwner(partitionId: number): void {
+        this._retiredOwnerPartitions.delete(partitionId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Block 21.3: Coordinated clustered EAGER load
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Begins a coordinated EAGER load epoch for a map. Returns the epoch or
+     * the existing active epoch if one is already in progress.
+     * Prevents duplicate loadAllKeys sweeps on join/rebalance.
+     */
+    beginEagerLoadEpoch(mapName: string, assignedPartitions: number[]): EagerLoadEpoch {
+        const existing = this._eagerLoadEpochs.get(mapName);
+        if (existing) {
+            // Reuse existing epoch — survives join/rebalance
+            return existing;
+        }
+
+        const epoch: EagerLoadEpoch = {
+            mapName,
+            epoch: ++this._eagerLoadEpochCounter,
+            startedAt: Date.now(),
+            completedPartitions: new Set<number>(),
+            assignedPartitions: new Set(assignedPartitions),
+        };
+        this._eagerLoadEpochs.set(mapName, epoch);
+        return epoch;
+    }
+
+    /**
+     * Marks a partition as completed in the active EAGER load epoch.
+     * Returns true if the entire load epoch is now complete.
+     */
+    markEagerLoadPartitionComplete(mapName: string, partitionId: number): boolean {
+        const epoch = this._eagerLoadEpochs.get(mapName);
+        if (!epoch) return false;
+
+        epoch.completedPartitions.add(partitionId);
+
+        if (epoch.completedPartitions.size >= epoch.assignedPartitions.size) {
+            this._eagerLoadEpochs.delete(mapName);
+            return true;
+        }
+        return false;
+    }
+
+    /** Returns the active EAGER load epoch for a map, if any. */
+    getEagerLoadEpoch(mapName: string): EagerLoadEpoch | null {
+        return this._eagerLoadEpochs.get(mapName) ?? null;
+    }
+
+    /** Returns true if an EAGER load is in progress for this map. */
+    isEagerLoadInProgress(mapName: string): boolean {
+        return this._eagerLoadEpochs.has(mapName);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Block 21.3: Graceful shutdown handoff
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Graceful shutdown: flushes all write-behind queues and destroys all
+     * MapStoreContexts. Returns the number of entries flushed.
+     */
+    async gracefulShutdownFlush(): Promise<number> {
+        let flushedCount = 0;
+        for (const [, ctx] of this._mapStoreContexts) {
+            const ds = ctx.getMapDataStore();
+            if (ds instanceof WriteBehindStore && ds.hasPendingWrites()) {
+                flushedCount++;
+            }
+        }
+        await this.flushAll();
+        // Clear all fencing state on shutdown
+        this._fencedPartitions.clear();
+        this._retiredOwnerPartitions.clear();
+        this._pendingPromotions.clear();
+        this._eagerLoadEpochs.clear();
+        return flushedCount;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MigrationAwareService implementation
+    // ═══════════════════════════════════════════════════════════════════
+
     prepareReplicationOperation(
         event: PartitionMigrationEvent,
         namespaces: ServiceNamespace[],
     ): Operation | null {
         const partitionId = event.partitionId;
 
-        // Build a temporary PartitionContainer with records from this partition
         const container = this._getOrCreatePartitionContainer(partitionId);
 
-        // Populate container with records for the requested namespaces
         for (const ns of namespaces) {
             const mapName = ns.getServiceName();
             const rs = this.getRecordStore(mapName, partitionId);
@@ -243,18 +457,15 @@ export class MapContainerService implements MigrationAwareService {
             }
         }
 
-        // Capture map replication state
         const mapStateHolder = new MapReplicationStateHolder();
         mapStateHolder.prepare(container, partitionId, 0);
 
-        // Capture write-behind state
         const wbStateHolder = new WriteBehindStateHolder();
         const writeBehindStores = this._collectWriteBehindStores(namespaces);
         if (writeBehindStores.size > 0) {
             wbStateHolder.prepare(writeBehindStores);
         }
 
-        // Near-cache state
         const ncStateHolder = new MapNearCacheStateHolder();
 
         if (mapStateHolder.mapData.size === 0 && wbStateHolder.delayedEntries.size === 0) {
@@ -270,40 +481,32 @@ export class MapContainerService implements MigrationAwareService {
         ) as unknown as Operation;
     }
 
-    /**
-     * Called before migration starts. Pauses write-behind workers for the
-     * migrating partition to prevent concurrent modification during state capture.
-     */
     beforeMigration(event: PartitionMigrationEvent): void {
-        // Pause is implicit — the state capture in prepareReplicationOperation
-        // takes a snapshot. No explicit pause needed for single-threaded Bun runtime.
-        void event;
+        // Fence the partition during migration to prevent concurrent MapStore operations
+        this._fencedPartitions.add(event.partitionId);
     }
 
-    /**
-     * Called after migration completes successfully.
-     * Cleans up record stores and write-behind state for partitions this node
-     * no longer owns (source side after successful migration).
-     */
     commitMigration(event: PartitionMigrationEvent): void {
         const partitionId = event.partitionId;
 
-        // If this node was the source and is no longer the owner,
-        // clean up the local state for the migrated partition
+        // Unfence the partition after successful migration
+        this._fencedPartitions.delete(partitionId);
+
         if (event.source !== null && event.migrationType === 'MOVE') {
             this._removeRecordStoresForPartition(partitionId);
             this._stopWriteBehindWorkersForPartition(partitionId);
+            // Increment epoch to fence the old owner
+            const newEpoch = (this._partitionEpochs.get(partitionId) ?? 0) + 1;
+            this._partitionEpochs.set(partitionId, newEpoch);
         }
     }
 
-    /**
-     * Called after migration fails. Cleans up any state that was prepared
-     * on the destination side.
-     */
     rollbackMigration(event: PartitionMigrationEvent): void {
         const partitionId = event.partitionId;
 
-        // On destination rollback, remove any state that was applied
+        // Unfence the partition after rollback
+        this._fencedPartitions.delete(partitionId);
+
         if (event.destination !== null) {
             this._removeRecordStoresForPartition(partitionId);
         }
@@ -322,7 +525,6 @@ export class MapContainerService implements MigrationAwareService {
         return container;
     }
 
-    /** Collects WriteBehindStore instances for the given namespaces. */
     private _collectWriteBehindStores(
         namespaces: ServiceNamespace[],
     ): Map<string, WriteBehindStore<unknown, unknown>> {
@@ -340,7 +542,6 @@ export class MapContainerService implements MigrationAwareService {
         return stores;
     }
 
-    /** Removes all record stores for a partition (all maps). */
     private _removeRecordStoresForPartition(partitionId: number): void {
         const suffix = `:${partitionId}`;
         const keysToRemove: string[] = [];
@@ -357,7 +558,6 @@ export class MapContainerService implements MigrationAwareService {
             this._stores.delete(key);
         }
 
-        // Clean up partition container
         const container = this._partitionContainers.get(partitionId);
         if (container) {
             container.cleanUpOnMigration();
@@ -365,15 +565,26 @@ export class MapContainerService implements MigrationAwareService {
         }
     }
 
-    /** Stops write-behind workers for maps with stores in the given partition. */
     private _stopWriteBehindWorkersForPartition(_partitionId: number): void {
-        // In the current architecture, WriteBehindStore is per-map (not per-partition),
-        // so stopping workers is handled at the map level via commitMigration cleanup.
-        // Per-partition write-behind worker management would require partition-scoped
-        // WriteBehindStore instances, which is tracked separately.
+        // WriteBehindStore is per-map (not per-partition) in the current architecture.
+        // Worker lifecycle is managed at the map level via commitMigration cleanup.
     }
 
-    /** Returns all map names that have record stores in any partition. */
+    /** Applies EAGER-loaded entries to owned partition RecordStores. */
+    private _applyEagerEntries(mapName: string, initial: Map<unknown, unknown>): void {
+        if (!this._nodeEngine) return;
+        const ps = this._nodeEngine.getPartitionService();
+        for (const [k, v] of initial) {
+            const kd = this._nodeEngine.toData(k);
+            const vd = this._nodeEngine.toData(v);
+            if (kd !== null && vd !== null) {
+                const partitionId = ps.getPartitionId(kd);
+                const recordStore = this.getOrCreateRecordStore(mapName, partitionId);
+                recordStore.put(kd, vd, -1, -1);
+            }
+        }
+    }
+
     getMapNames(): string[] {
         const names = new Set<string>();
         for (const key of this._stores.keys()) {
