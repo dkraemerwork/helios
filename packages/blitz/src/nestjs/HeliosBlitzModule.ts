@@ -3,6 +3,7 @@ import { BlitzService } from '../BlitzService.ts';
 import { type BlitzConfig } from '../BlitzConfig.ts';
 import { HeliosBlitzService } from './HeliosBlitzService.ts';
 import { HELIOS_BLITZ_SERVICE_TOKEN } from './InjectBlitz.decorator.ts';
+import { FenceAwareBlitzProvider } from './FenceAwareBlitzProvider.ts';
 
 /** Internal token for the raw BlitzConfig object passed to the async factory. */
 const BLITZ_CONFIG_TOKEN = 'HELIOS_BLITZ_CONFIG';
@@ -77,6 +78,37 @@ export class HeliosBlitzModule {
             module: HeliosBlitzModule,
             global: true,
             providers: [provider],
+            exports: [HELIOS_BLITZ_SERVICE_TOKEN],
+        };
+    }
+
+    /**
+     * Register {@link HeliosBlitzService} by reusing an existing Helios-owned
+     * {@link BlitzService} with fence-awareness: the service is only accessible
+     * after the Block 18.3 pre-cutover readiness fence has cleared.
+     *
+     * Use this in `distributed-auto` mode to prevent the NestJS bridge from
+     * exposing or reusing the Helios-owned Blitz instance before authoritative
+     * topology is applied and post-cutover JetStream readiness is green.
+     */
+    static forHeliosInstanceFenced(options: {
+        fenceCheck: () => boolean;
+        blitzServiceFactory: () => HeliosBlitzService | null;
+    }): DynamicModule {
+        const fenceProviderToken = 'HELIOS_BLITZ_FENCE_PROVIDER';
+        const fenceProvider: FactoryProvider = {
+            provide: fenceProviderToken,
+            useFactory: () => new FenceAwareBlitzProvider(options.fenceCheck, options.blitzServiceFactory()),
+        };
+        const serviceProvider: FactoryProvider = {
+            provide: HELIOS_BLITZ_SERVICE_TOKEN,
+            useFactory: (fence: FenceAwareBlitzProvider) => fence.getService(),
+            inject: [fenceProviderToken],
+        };
+        return {
+            module: HeliosBlitzModule,
+            global: true,
+            providers: [fenceProvider, serviceProvider],
             exports: [HELIOS_BLITZ_SERVICE_TOKEN],
         };
     }

@@ -211,7 +211,101 @@ describe("Block 18.4 — NestJS bridge reuses Helios-owned Blitz instance", () =
   });
 });
 
-// ─── 6. Integration: no duplicate runtimes ──────────────────────────────────
+// ─── 6. Reconciliation fence-token capture and revalidation ──────────────────
+
+describe("Block 18.4 — Reconciliation job fence-token capture + revalidation", () => {
+  test("scheduleReconciliationJob captures authority tuple at schedule time", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("master-1", 1, "token-abc");
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+
+    const job = reconciler.scheduleReconciliationJob("kv-bucket-1");
+    expect(job).not.toBeNull();
+    expect(job!.masterMemberId).toBe("master-1");
+    expect(job!.memberListVersion).toBe(1);
+    expect(job!.fenceToken).toBe("token-abc");
+  });
+
+  test("validateJobAuthority returns true when authority matches current state", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("master-1", 1, "token-abc");
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+    const job = reconciler.scheduleReconciliationJob("kv-bucket-1")!;
+    expect(reconciler.validateJobAuthority(job)).toBe(true);
+  });
+
+  test("validateJobAuthority returns false after authority change (demotion)", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("master-1", 1, "token-abc");
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+    const job = reconciler.scheduleReconciliationJob("kv-bucket-1")!;
+
+    // Simulate demotion — authority changes
+    reconciler.setAuthority("master-2", 2, "token-xyz");
+    expect(reconciler.validateJobAuthority(job)).toBe(false);
+  });
+
+  test("onDemotion cancels all outstanding reconciliation jobs", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("master-1", 1, "token-abc");
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+    reconciler.markUnderReplicated("kv-bucket-2", 1, 3);
+    reconciler.scheduleReconciliationJob("kv-bucket-1");
+    reconciler.scheduleReconciliationJob("kv-bucket-2");
+    expect(reconciler.getOutstandingJobs().length).toBe(2);
+
+    reconciler.onDemotion();
+    expect(reconciler.getOutstandingJobs().length).toBe(0);
+    expect(reconciler.getPendingUpgrades().length).toBe(0);
+  });
+
+  test("onDemotion rotates fence so old master jobs cannot validate", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("master-1", 1, "token-abc");
+    reconciler.markUnderReplicated("kv-bucket-1", 1, 3);
+    const job = reconciler.scheduleReconciliationJob("kv-bucket-1")!;
+
+    reconciler.onDemotion();
+    expect(reconciler.validateJobAuthority(job)).toBe(false);
+  });
+
+  test("scheduleReconciliationJob returns null for unknown resource", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("master-1", 1, "token-abc");
+    const job = reconciler.scheduleReconciliationJob("nonexistent");
+    expect(job).toBeNull();
+  });
+});
+
+// ─── 7. NestJS bridge fence-awareness ────────────────────────────────────────
+
+describe("Block 18.4 — NestJS bridge fence-awareness", () => {
+  test("FenceAwareBlitzProvider blocks access when fence is not cleared", () => {
+    const { FenceAwareBlitzProvider } = require(`${import.meta.dir}/../../packages/blitz/src/nestjs/FenceAwareBlitzProvider.ts`);
+    const provider = new FenceAwareBlitzProvider(() => false, null);
+    expect(() => provider.getService()).toThrow(/fence/i);
+  });
+
+  test("FenceAwareBlitzProvider allows access when fence is cleared", () => {
+    const { FenceAwareBlitzProvider } = require(`${import.meta.dir}/../../packages/blitz/src/nestjs/FenceAwareBlitzProvider.ts`);
+    const mockService = { isClosed: false };
+    const provider = new FenceAwareBlitzProvider(() => true, mockService as any);
+    expect(provider.getService()).toBe(mockService);
+  });
+
+  test("forHeliosInstance with fence guard creates fence-aware module", () => {
+    const { HeliosBlitzModule } = require(`${import.meta.dir}/../../packages/blitz/src/nestjs/HeliosBlitzModule.ts`);
+    expect(typeof HeliosBlitzModule.forHeliosInstanceFenced).toBe("function");
+    const mod = HeliosBlitzModule.forHeliosInstanceFenced({
+      fenceCheck: () => true,
+      blitzServiceFactory: () => null,
+    });
+    expect(mod.module).toBe(HeliosBlitzModule);
+    expect(mod.global).toBe(true);
+  });
+});
+
+// ─── 8. Integration: no duplicate runtimes + verification ────────────────────
 
 describe("Block 18.4 — No duplicate runtimes verification", () => {
   test("HeliosInstanceImpl with blitz config provides getBlitzService accessor", () => {
