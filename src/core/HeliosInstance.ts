@@ -1,10 +1,6 @@
 import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
-import type { IList } from "@zenystx/helios-core/collection/IList";
-import type { ISet } from "@zenystx/helios-core/collection/ISet";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
-import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
-import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
 import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
@@ -14,6 +10,12 @@ import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 /**
  * Primary interface for a Helios cluster member or client.
  * Port of com.hazelcast.core.HazelcastInstance.
+ *
+ * This contract is shared between HeliosInstanceImpl (member) and HeliosClient
+ * (remote client). Only methods with real distributed server-side runtime are
+ * included. Member-only data structures (IList, ISet, MultiMap, ReplicatedMap)
+ * that currently lack distributed service infrastructure are available only on
+ * HeliosInstanceImpl directly and are not part of this shared contract.
  */
 export interface HeliosInstance {
   /** Returns the name of this instance. */
@@ -25,23 +27,11 @@ export interface HeliosInstance {
   /** Returns the distributed queue with the given name. */
   getQueue<E>(name: string): IQueue<E>;
 
-  /** Returns the distributed list with the given name. */
-  getList<E>(name: string): IList<E>;
-
-  /** Returns the distributed set with the given name. */
-  getSet<E>(name: string): ISet<E>;
-
   /** Returns the distributed topic with the given name. */
   getTopic<E>(name: string): ITopic<E>;
 
   /** Returns the reliable topic with the given name. */
   getReliableTopic<E>(name: string): ITopic<E>;
-
-  /** Returns the distributed multi-map with the given name. */
-  getMultiMap<K, V>(name: string): MultiMap<K, V>;
-
-  /** Returns the replicated map with the given name. */
-  getReplicatedMap<K, V>(name: string): ReplicatedMap<K, V>;
 
   /**
    * Returns a distributed object by service name and object name.

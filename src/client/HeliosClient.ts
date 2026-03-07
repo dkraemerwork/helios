@@ -12,11 +12,7 @@
 import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
 import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
-import type { IList } from "@zenystx/helios-core/collection/IList";
-import type { ISet } from "@zenystx/helios-core/collection/ISet";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
-import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
-import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
 import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
@@ -99,61 +95,41 @@ export class HeliosClient implements HeliosInstance {
     this._doShutdown(true);
   }
 
-  // ── Not-yet-implemented remote proxies ──────────────────────────────────
+  // ── Proxy methods — awaiting Block 20.6 proxy manager + remote proxies ──
 
   getMap<K, V>(_name: string): IMap<K, V> {
     this._ensureActive();
-    throw new Error("HeliosClient.getMap() is not yet implemented — blocked on Phase 20 remote proxy runtime");
+    throw new Error("HeliosClient.getMap() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
   }
 
   getQueue<E>(_name: string): IQueue<E> {
     this._ensureActive();
-    throw new Error("HeliosClient.getQueue() is not yet implemented — blocked on Phase 20 remote proxy runtime");
-  }
-
-  getList<E>(_name: string): IList<E> {
-    this._ensureActive();
-    throw new Error("HeliosClient.getList() is not yet implemented — blocked on server-side distributed list semantics");
-  }
-
-  getSet<E>(_name: string): ISet<E> {
-    this._ensureActive();
-    throw new Error("HeliosClient.getSet() is not yet implemented — blocked on server-side distributed set semantics");
+    throw new Error("HeliosClient.getQueue() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
   }
 
   getTopic<E>(_name: string): ITopic<E> {
     this._ensureActive();
-    throw new Error("HeliosClient.getTopic() is not yet implemented — blocked on Phase 20 remote proxy runtime");
+    throw new Error("HeliosClient.getTopic() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
   }
 
   getReliableTopic<E>(_name: string): ITopic<E> {
     this._ensureActive();
-    throw new Error("HeliosClient.getReliableTopic() is not yet implemented — blocked on server-side reliable topic runtime");
-  }
-
-  getMultiMap<K, V>(_name: string): MultiMap<K, V> {
-    this._ensureActive();
-    throw new Error("HeliosClient.getMultiMap() is not yet implemented — blocked on server-side distributed multimap semantics");
-  }
-
-  getReplicatedMap<K, V>(_name: string): ReplicatedMap<K, V> {
-    this._ensureActive();
-    throw new Error("HeliosClient.getReplicatedMap() is not yet implemented — blocked on server-side replicated map runtime");
+    throw new Error("HeliosClient.getReliableTopic() is not yet implemented — awaiting Block 20.6 proxy manager and remote proxy runtime");
   }
 
   getDistributedObject(_serviceName: string, _name: string): DistributedObject {
     this._ensureActive();
-    throw new Error("HeliosClient.getDistributedObject() is not yet implemented — blocked on Phase 20 proxy manager");
+    throw new Error("HeliosClient.getDistributedObject() is not yet implemented — awaiting Block 20.6 proxy manager");
   }
 
   getCluster(): Cluster {
     this._ensureActive();
-    throw new Error("HeliosClient.getCluster() is not yet implemented — blocked on Phase 20 cluster service");
+    throw new Error("HeliosClient.getCluster() is not yet implemented — awaiting Block 20.6 cluster service");
   }
 
   getExecutorService(_name: string): IExecutorService {
     this._ensureActive();
-    throw new Error("HeliosClient.getExecutorService() is not yet implemented — blocked on server-side remote executor runtime");
+    throw new Error("HeliosClient.getExecutorService() is not yet implemented — awaiting Block 20.6 proxy manager and remote executor proxy");
   }
 
   // ── Internal ────────────────────────────────────────────────────────────

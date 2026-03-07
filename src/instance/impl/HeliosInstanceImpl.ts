@@ -75,6 +75,8 @@ import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/Map
 const MAP_SERVICE_NAME = "hz:impl:mapService";
 const QUEUE_SERVICE_NAME = "hz:impl:queueService";
 const TOPIC_SERVICE_NAME = "hz:impl:topicService";
+const RELIABLE_TOPIC_SERVICE_NAME = "hz:impl:reliableTopicService";
+const EXECUTOR_SERVICE_NAME = "hz:impl:executorService";
 
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
@@ -919,6 +921,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
         destroy: async () => {
           /* no-op for in-memory topic */
         },
+      };
+    }
+    if (serviceName === RELIABLE_TOPIC_SERVICE_NAME) {
+      const topic = this.getReliableTopic<unknown>(name);
+      return {
+        getName: () => name,
+        getServiceName: () => RELIABLE_TOPIC_SERVICE_NAME,
+        destroy: async () => { topic.destroy(); },
+      };
+    }
+    if (serviceName === EXECUTOR_SERVICE_NAME) {
+      const executor = this.getExecutorService(name);
+      return {
+        getName: () => name,
+        getServiceName: () => EXECUTOR_SERVICE_NAME,
+        destroy: async () => { await executor.shutdown(); },
       };
     }
     throw new Error(`Unknown distributed object service: '${serviceName}'`);

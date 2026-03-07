@@ -354,12 +354,12 @@ Goal: eliminate any gap between the shared `HeliosInstance` contract and what a 
 
 Tasks:
 
-- [ ] Audit every `HeliosInstance` method against current member/runtime capability and keep the parity matrix current.
-- [ ] Close the server/runtime gaps for any retained remote `HeliosInstance` capability before declaring the client GA-ready.
-- [ ] Resolve current blockers around `getList()`, `getSet()`, `getReliableTopic()`, `getMultiMap()`, `getReplicatedMap()`, `getDistributedObject()`, `getConfig()`, and `getExecutorService()`.
-- [ ] Ensure no `HeliosInstance` method remains on `HeliosClient` as a permanent half-implemented throw-stub.
-- [ ] If a capability cannot honestly be made remote-capable in this phase window, narrow `HeliosInstance` itself before GA rather than letting member and client diverge or shipping a fake remote implementation.
-- [ ] Run a verification task that proves every retained remote `HeliosInstance` method has a named owner, a real runtime path, and a real-network acceptance owner.
+- [x] Audit every `HeliosInstance` method against current member/runtime capability and keep the parity matrix current.
+- [x] Close the server/runtime gaps for any retained remote `HeliosInstance` capability before declaring the client GA-ready.
+- [x] Resolve current blockers around `getList()`, `getSet()`, `getReliableTopic()`, `getMultiMap()`, `getReplicatedMap()`, `getDistributedObject()`, `getConfig()`, and `getExecutorService()`.
+- [x] Ensure no `HeliosInstance` method remains on `HeliosClient` as a permanent half-implemented throw-stub.
+- [x] If a capability cannot honestly be made remote-capable in this phase window, narrow `HeliosInstance` itself before GA rather than letting member and client diverge or shipping a fake remote implementation.
+- [x] Run a verification task that proves every retained remote `HeliosInstance` method has a named owner, a real runtime path, and a real-network acceptance owner.
 
 ### Block 20.6 — Proxy manager + distributed object lifecycle + core remote proxies
 
@@ -512,7 +512,7 @@ Tasks:
 - [x] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
 - [x] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
 - [x] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests
-- [ ] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
+- [x] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
 - [ ] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — ~24 tests
 - [ ] **Block 20.7** — Near-cache completion + advanced feature closure (real remote near-cache wrapping, binary metadata fetch, reconnect repair/stale-read protection, advanced-feature keep/defer closure for cache/query-cache/transactions/SQL/secondary services) — ~22 tests
 - [ ] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — ~18 tests

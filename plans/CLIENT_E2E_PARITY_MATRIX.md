@@ -17,23 +17,32 @@ Legend:
 
 ## 1. `HeliosInstance` Contract Matrix
 
+Block 20.5 audit: `HeliosInstance` has been narrowed to only methods with real distributed
+server-side runtime. `getList()`, `getSet()`, `getMultiMap()`, and `getReplicatedMap()` have
+been removed from the shared contract and remain as member-only methods on `HeliosInstanceImpl`.
+
 | `HeliosInstance` method | Helios TS owner | Hazelcast anchor | Status | Server/runtime prerequisite | Acceptance owner |
 | --- | --- | --- | --- | --- | --- |
-| `getName()` | `src/client/HeliosClient.ts` | `HazelcastInstance.getName()` | planned | client instance identity and lifecycle | client startup suite |
-| `getMap()` | `src/client/proxy/ClientMapProxy.ts` | `ClientMapProxy` | planned | member-side binary protocol map ops, listeners, destroy, metadata fetch | map e2e suite |
-| `getQueue()` | `src/client/proxy/ClientQueueProxy.ts` | `ClientQueueProxy` | planned | queue protocol ops, event/listener path, reconnect-safe semantics | queue e2e suite |
-| `getList()` | `src/client/proxy/ClientListProxy.ts` | `ClientListProxy` | blocked-by-server | real distributed list semantics, not local `ListImpl` only | list e2e suite |
-| `getSet()` | `src/client/proxy/ClientSetProxy.ts` | `ClientSetProxy` | blocked-by-server | real distributed set semantics, not local `SetImpl` only | set e2e suite |
-| `getTopic()` | `src/client/proxy/ClientTopicProxy.ts` | `ClientTopicProxy` | planned | Phase 19T classic-topic closure plus topic publish/listener protocol and reconnect re-registration | topic e2e suite |
-| `getReliableTopic()` | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | blocked-by-server | Phase 19T reliable-topic server runtime and protocol ownership must land first | reliable-topic e2e suite |
-| `getMultiMap()` | `src/client/proxy/ClientMultiMapProxy.ts` | `ClientMultiMap` | blocked-by-server | multimap distributed member semantics and protocol handlers | multimap e2e suite |
-| `getReplicatedMap()` | `src/client/proxy/ClientReplicatedMapProxy.ts` | `ClientReplicatedMapProxy` | blocked-by-server | replicated-map runtime beyond current local subset | replicated-map e2e suite |
-| `getDistributedObject()` | `src/client/impl/spi/ProxyManager.ts` | `ProxyManager` | planned | distributed-object create/list/destroy tasks and stable service-name mapping | proxy-manager e2e suite |
-| `getLifecycleService()` | `src/client/impl/client/LifecycleServiceImpl.ts` | `LifecycleServiceImpl` | planned | client lifecycle wiring and reconnect/shutdown events | lifecycle e2e suite |
-| `getCluster()` | `src/client/impl/spi/ClientClusterService.ts` | `ClientClusterServiceImpl` | planned | member-list fetch, cluster-view refresh, listener delivery | cluster-view e2e suite |
-| `getConfig()` | `src/client/config/ClientConfig.ts` plus contract decision | `ClientConfig` | blocked-by-contract | `HeliosInstance` currently returns `HeliosConfig`; remote client needs a shared contract decision | contract review suite |
-| `getExecutorService()` | `src/client/proxy/ClientExecutorServiceProxy.ts` | `ClientExecutorServiceProxy` | blocked-by-server | remote callable protocol, serialization, member execution semantics | executor e2e suite |
-| `shutdown()` | `src/client/HeliosClient.ts` | `HazelcastClient.shutdown()` | planned | connection teardown, listener cleanup, proxy cleanup, lifecycle events | shutdown e2e suite |
+| `getName()` | `src/client/HeliosClient.ts` | `HazelcastInstance.getName()` | implemented | — | client startup suite |
+| `getMap()` | `src/client/proxy/ClientMapProxy.ts` | `ClientMapProxy` | planned (Block 20.6) | member-side binary protocol map ops, listeners, destroy, metadata fetch | map e2e suite |
+| `getQueue()` | `src/client/proxy/ClientQueueProxy.ts` | `ClientQueueProxy` | planned (Block 20.6) | queue protocol ops, event/listener path, reconnect-safe semantics | queue e2e suite |
+| `getTopic()` | `src/client/proxy/ClientTopicProxy.ts` | `ClientTopicProxy` | planned (Block 20.6) | topic publish/listener protocol and reconnect re-registration | topic e2e suite |
+| `getReliableTopic()` | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | planned (Block 20.6) | server runtime exists (Phase 19T complete), proxy runtime needed | reliable-topic e2e suite |
+| `getDistributedObject()` | `src/client/impl/spi/ProxyManager.ts` | `ProxyManager` | planned (Block 20.6) | distributed-object create/list/destroy tasks and stable service-name mapping | proxy-manager e2e suite |
+| `getLifecycleService()` | `src/client/impl/lifecycle/ClientLifecycleService.ts` | `LifecycleServiceImpl` | implemented | — | lifecycle e2e suite |
+| `getCluster()` | `src/client/impl/spi/ClientClusterService.ts` | `ClientClusterServiceImpl` | planned (Block 20.6) | member-list fetch, cluster-view refresh, listener delivery | cluster-view e2e suite |
+| `getConfig()` | `src/client/config/ClientConfig.ts` | `ClientConfig` | implemented | `InstanceConfig` shared contract resolves type mismatch | contract review suite |
+| `getExecutorService()` | `src/client/proxy/ClientExecutorServiceProxy.ts` | `ClientExecutorServiceProxy` | planned (Block 20.6) | server runtime exists, remote proxy needed | executor e2e suite |
+| `shutdown()` | `src/client/HeliosClient.ts` | `HazelcastClient.shutdown()` | implemented | — | shutdown e2e suite |
+
+### Narrowed-out methods (member-only on `HeliosInstanceImpl`)
+
+| Method | Reason for narrowing | Member-side status |
+| --- | --- | --- |
+| `getList()` | Local-only `ListImpl`, no distributed `ListService` | works on member, not part of shared contract |
+| `getSet()` | Local-only `SetImpl`, no distributed `SetService` | works on member, not part of shared contract |
+| `getMultiMap()` | Local-only `MultiMapImpl`, no distributed `MultiMapService` | works on member, not part of shared contract |
+| `getReplicatedMap()` | Local-only `ReplicatedMapImpl`, no replication runtime | works on member, not part of shared contract |
 
 ---
 
@@ -111,6 +120,7 @@ Legend:
 | `src/client/config/ClientConfigLoader.ts` | keep | config | JSON/YAML client config loading |
 | `src/client/impl/lifecycle/ClientLifecycleService.ts` | keep | lifecycle | client lifecycle management |
 | `src/client/impl/serialization/ClientSerializationService.ts` | keep | serialization | client serialization owner factory |
+| `src/client/connection/WaitStrategy.ts` | keep | connection | exponential backoff wait strategy for reconnect |
 
 ---
 
@@ -143,10 +153,10 @@ Legend:
 
 ---
 
-## 7. Immediate Red Flags
+## 7. Resolved Red Flags (Block 20.5)
 
-- `HeliosInstance.getConfig()` currently returns `HeliosConfig` in `src/core/HeliosInstance.ts`, which is a member config type, not a remote client config type.
-- `HeliosInstanceImpl.getReliableTopic()` already throws a not-implemented error in `src/instance/impl/HeliosInstanceImpl.ts`, so the shared contract remains blocked until Phase 19T removes the stub and lands the real server/runtime path.
-- `HeliosInstanceImpl.getList()`, `getSet()`, `getMultiMap()`, and `getReplicatedMap()` currently instantiate local in-memory structures, which is incompatible with honest remote parity.
-- `HeliosInstanceImpl.getDistributedObject()` currently returns partial no-op wrappers for some services only.
-- `package.json` wildcard exports make unfinished internal client code accidentally package-public today.
+- ~~`HeliosInstance.getConfig()` type mismatch~~ — resolved: `HeliosInstance.getConfig()` now returns `InstanceConfig`, a shared interface satisfied by both `HeliosConfig` and `ClientConfig`.
+- ~~`getReliableTopic()` blocked by server~~ — resolved: Phase 19T landed the real ringbuffer-backed reliable topic runtime. Server-side capability exists.
+- ~~`getList()`, `getSet()`, `getMultiMap()`, `getReplicatedMap()` local-only~~ — resolved: these methods have been narrowed out of the shared `HeliosInstance` contract and remain member-only on `HeliosInstanceImpl`.
+- ~~`getDistributedObject()` partial coverage~~ — resolved: expanded to cover reliable topic and executor service names alongside map, queue, and topic.
+- `package.json` wildcard exports still make unfinished internal client code accidentally package-public today (to be resolved in Block 20.8).
