@@ -69,8 +69,9 @@ Still-open production-closure blockers include:
 - the real Scatter-backed execution path is not yet proven as the production runtime path
 - fail-closed Scatter health, recycle-on-crash-or-timeout behavior, and explicit off-main-
   thread proof remain acceptance-critical
-- docs, examples, config defaults, and published runtime wiring must stay honest about
-  module-backed distributed registration and explicit inline test/dev-only behavior
+- docs, examples, config defaults, validation, and published runtime wiring must stay honest about
+  module-backed distributed registration, restrict `inline` to explicit test/dev-only bootstrap
+  flows, and reject it for production-mode startup unless an explicit testing override is set
 
 ## Critical Repo-Specific Prerequisites
 
@@ -934,8 +935,10 @@ backend change rather than an API rewrite.
 ### Required changes
 
 - introduce an internal execution-backend abstraction owned by Helios
-- keep the public executor API stable while allowing `inline` and `scatter` backends internally
-- add a temporary runtime/config flag for parity testing during the backend swap
+- keep the public executor API stable while allowing `inline` and `scatter` backends internally,
+  but treat `scatter` as the only production backend
+- add a temporary explicit testing override for parity testing during the backend swap, and require
+  production-mode validation to reject `inline` when that override is absent
 - keep stats and lifecycle behavior backend-independent
 
 ### Primary files
@@ -947,12 +950,15 @@ backend change rather than an API rewrite.
 
 ### Test plan (~8 tests)
 
-- executor container can run through the `inline` backend via the new seam
-- backend selection is config-driven and deterministic
+- executor container can run through the `inline` backend via the new seam only under explicit
+  test/dev bootstrap configuration
+- backend selection is config-driven and deterministic, and production-mode validation rejects
+  `inline` unless the explicit testing override is set
 - unsupported backend values fail fast
 - stats snapshots remain stable across backend choice
 - lifecycle behavior (`shutdown`, rejection after close) is backend-independent
-- parity flag defaults remain safe for the current rollout stage
+- proof shows production-mode startup with `inline` fails fast by default and the testing override
+  remains opt-in and non-production
 
 ---
 

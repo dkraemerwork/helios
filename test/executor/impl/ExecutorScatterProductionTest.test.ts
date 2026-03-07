@@ -508,7 +508,56 @@ describe('Block 17R.1 — Executor Scatter Production Closure', () => {
 
     // ── Track E: End-to-end verification ─────────────────────────────────────
 
-    test('24. VERIFICATION: distributed executor work never runs on the main event loop with scatter backend', async () => {
+    // ── Track D: Production-mode inline rejection ─────────────────────────────
+
+    test('24. Production-mode getExecutorService rejects inline backend without testing override', async () => {
+        const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
+        const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
+
+        const execCfg = new ExecutorConfig('my-exec');
+        execCfg.setExecutionBackend('inline');
+
+        const hcfg = new HeliosConfig('prod-inline-reject');
+        hcfg.addExecutorConfig(execCfg);
+
+        const instance = new HeliosInstanceImpl(hcfg);
+        try {
+            expect(() => instance.getExecutorService('my-exec')).toThrow(/inline.*production|production.*inline/i);
+        } finally {
+            instance.shutdown();
+        }
+    });
+
+    test('25. Production-mode getExecutorService allows inline backend with explicit testing override', async () => {
+        const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
+        const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
+
+        const execCfg = new ExecutorConfig('my-exec');
+        execCfg.setExecutionBackend('inline');
+        execCfg.setAllowInlineBackend(true);
+
+        const hcfg = new HeliosConfig('test-inline-override');
+        hcfg.addExecutorConfig(execCfg);
+
+        const instance = new HeliosInstanceImpl(hcfg);
+        try {
+            const exec = instance.getExecutorService('my-exec');
+            expect(exec).toBeDefined();
+        } finally {
+            instance.shutdown();
+        }
+    });
+
+    test('26. ExecutorConfig.setAllowInlineBackend is opt-in and defaults to false', () => {
+        const config = new ExecutorConfig('test');
+        expect(config.getAllowInlineBackend()).toBe(false);
+        config.setAllowInlineBackend(true);
+        expect(config.getAllowInlineBackend()).toBe(true);
+    });
+
+    // ── Track E: End-to-end verification ─────────────────────────────────────
+
+    test('27. VERIFICATION: distributed executor work never runs on the main event loop with scatter backend', async () => {
         const config = new ExecutorConfig('verify');
         config.setExecutionBackend('scatter');
         const registry = new TaskTypeRegistry();

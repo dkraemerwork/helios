@@ -10,7 +10,7 @@ Dependency note:
 
 - client closure for topic surfaces depends on Phase 19T in `plans/TYPESCRIPT_PORT_PLAN.md`
 - classic `getTopic()` client support must wait for the single-path classic-topic runtime contract to be green server-side
-- `getReliableTopic()` must remain `blocked-by-server` until Phase 19T removes the member-side stub and lands the real ringbuffer-backed runtime
+- `getReliableTopic()` must remain `blocked-by-server` until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`; landing the ringbuffer-backed runtime code alone is not sufficient for client readiness claims
 
 ---
 
@@ -52,7 +52,7 @@ Server capability reality from the current codebase:
 - `list`, `set`, `multimap`, `replicated map`: current implementations are explicitly single-node/in-memory subsets, so remote parity is blocked until member-side distributed semantics exist.
 - `executor service`: current API exists, but it includes Helios-specific local-only registration and inline execution behavior that is not remotely portable; remote executor parity is blocked until a real member-targeted client protocol and callable serialization model exist.
 - `transactions`: current service is still documented as single-node-oriented, so remote transactional client parity is blocked until server-side transactional guarantees are cluster-safe.
-- `reliable topic`, `SQL`, `CP`, `scheduled executor`, `PN counter`, `flake ID`: not currently present as releaseable server features and must remain unsupported or deferred unless server runtime lands first. Reliable topic is specifically blocked on Phase 19T in `plans/TYPESCRIPT_PORT_PLAN.md`.
+- `reliable topic`, `SQL`, `CP`, `scheduled executor`, `PN counter`, `flake ID`: not currently present as releaseable server features and must remain unsupported or deferred unless server runtime lands first. Reliable topic is specifically blocked for client-readiness purposes until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`.
 
 Conclusion: current `src/client` is a foundation library and test harness, not a remote client product.
 
@@ -206,6 +206,7 @@ Must also define now:
 - which `HeliosInstance` methods require new member/server work before client GA
 - whether any currently public `HeliosInstance` methods should be reclassified as member-only and removed from the shared contract before client GA cleanup
 - whether any currently exported member internals should stop being root-barrel public during client GA cleanup
+- whenever Phase C1 narrows a `HeliosInstance` method out of the shared contract or introduces a member-only substitute, the same change set must audit `README.md`, `examples/`, `src/test-support/`, shipped fixtures, and parity docs so no remote-client path keeps the old reference alive by implication
 
 Done gate:
 
@@ -474,6 +475,7 @@ Implement:
 - example Bun remote-client app against a multi-member Helios cluster
 - auth example, reconnect example, near-cache example
 - migration notes for embedded member versus remote client usage
+- audit all docs/examples/test-support/fixtures touched by client rollout and remove or rewrite any sample, helper, or fixture that still uses a narrowed-out `HeliosInstance` method or a member-only substitute while presented as remote-client-safe
 
 Done gate:
 
@@ -490,7 +492,7 @@ The client cannot be completed in isolation. The same program must own these mem
 - request-dispatch registry from message type to member-side handler
 - partition table, member list, cluster view, and distributed-object metadata fetch tasks
 - listener registration storage and event fanout to remote clients
-- Phase 19T topic closure for classic topic and reliable topic before any client GA claim on those surfaces
+- Phase 19T checkpoint green for classic topic and reliable topic before any client GA claim on those surfaces
 - distributed-object create/destroy protocol tasks
 - client-aware disconnect cleanup and session teardown
 - error-code mapping for retryable, auth, serialization, and terminal failures
@@ -540,6 +542,58 @@ Rule:
 - no member-side client protocol handler left under `src/client`
 - no codec left without a proxy/service owner
 - no acceptance suite using in-process fake backing stores as proof of remote parity
+
+## 8.5 Mandatory Phase 20 Proof-Command And Label Contract
+
+Phase 20 is not complete unless the exact proof-label contract below is present in this file, kept current, and copied verbatim into the final Phase 20 completion note.
+
+Rules:
+
+- Every retained remote surface must have one owning proof label and one exact runnable command; ad hoc substitute commands do not count.
+- The final completion note must report every label below exactly once as either `green` or `NOT-RETAINED`.
+- `NOT-RETAINED` is allowed only when the corresponding API was explicitly removed or narrowed out of the shared remote contract in the parity matrix and docs; the label still stays in the report.
+- If a command changes, this table must be updated in the same change as the owning suite/example change.
+- A phase-closure claim that omits any label below is invalid.
+
+Mandatory label-to-command map:
+
+- `P20-STARTUP` — `bun test test/client/e2e/ClientStartupE2E.test.ts`
+- `P20-MAP` — `bun test test/client/e2e/ClientMapE2E.test.ts`
+- `P20-QUEUE` — `bun test test/client/e2e/ClientQueueE2E.test.ts`
+- `P20-TOPIC` — `bun test test/client/e2e/ClientTopicE2E.test.ts`
+- `P20-RELIABLE-TOPIC` — `bun test test/client/e2e/ClientReliableTopicE2E.test.ts`
+- `P20-EXECUTOR` — `bun test test/client/e2e/ClientExecutorE2E.test.ts`
+- `P20-RECONNECT-LISTENER` — `bun test test/client/e2e/ClientReconnectListenerRecoveryE2E.test.ts`
+- `P20-PROXY-LIFECYCLE` — `bun test test/client/e2e/ClientProxyLifecycleE2E.test.ts`
+- `P20-EXTERNAL-BUN-APP` — `bun test test/client/e2e/ClientExternalBunAppE2E.test.ts`
+- `P20-HYGIENE` — `bun test test/client/Block20_8_ExamplesDocsExportsGAProof.test.ts`
+- `P20-GATE-CHECK` — `bun run typecheck && bun test test/client/e2e/*.test.ts test/client/Block20_8_ExamplesDocsExportsGAProof.test.ts`
+
+Interpretation requirements:
+
+- `P20-STARTUP` must prove client bootstrap, authentication/session establishment, binary-protocol connect, and clean shutdown against a real member.
+- `P20-MAP`, `P20-QUEUE`, and `P20-TOPIC` must each prove real remote proxy use from a separate client process over sockets, not in-process fake stores.
+- `P20-RELIABLE-TOPIC` is mandatory if `getReliableTopic()` remains in the retained remote surface; otherwise the final note must say `P20-RELIABLE-TOPIC — NOT-RETAINED` and cite the parity-matrix row plus the contract/doc narrowing change.
+- `P20-EXECUTOR` is mandatory if `getExecutorService()` remains in the retained remote surface; otherwise the final note must say `P20-EXECUTOR — NOT-RETAINED` and cite the parity-matrix row plus the contract/doc narrowing change.
+- `P20-RECONNECT-LISTENER` must prove reconnect, listener re-registration, and post-reconnect event delivery.
+- `P20-PROXY-LIFECYCLE` must prove create/list/destroy/re-create semantics and cache cleanup through `ProxyManager`.
+- `P20-EXTERNAL-BUN-APP` must prove a fresh external Bun app imports only public package paths and talks to a real cluster unchanged.
+- `P20-HYGIENE` must prove no member-side protocol handler remains under `src/client`, no wildcard/deep export leaks unfinished internals, and no Phase 20 proof path relies on REST when binary protocol support is claimed.
+- `P20-GATE-CHECK` is the terminal closure command and must be reported as the last line in the final Phase 20 proof note.
+
+Required final proof footer format:
+
+- `P20-STARTUP — green`
+- `P20-MAP — green`
+- `P20-QUEUE — green`
+- `P20-TOPIC — green`
+- `P20-RELIABLE-TOPIC — green` or `P20-RELIABLE-TOPIC — NOT-RETAINED (<matrix/doc citation>)`
+- `P20-EXECUTOR — green` or `P20-EXECUTOR — NOT-RETAINED (<matrix/doc citation>)`
+- `P20-RECONNECT-LISTENER — green`
+- `P20-PROXY-LIFECYCLE — green`
+- `P20-EXTERNAL-BUN-APP — green`
+- `P20-HYGIENE — green`
+- `P20-GATE-CHECK — green`
 
 ---
 
@@ -620,6 +674,7 @@ The client program is not done until all are true:
 - package exports expose only intended public paths
 - a separate Bun app connects to a real cluster over the binary client protocol
 - every `HeliosInstance` capability retained for remote use works remotely end to end
+- no shipped doc, example, test-support helper, or fixture still advertises a narrowed-out `HeliosInstance` method or member-only substitute as part of the remote-client story
 - reconnect, shutdown, and listener recovery are deterministic
 - near-cache is production-safe under invalidation loss and reconnect
 - the capability matrix is honest for every Hazelcast OSS client subsystem considered

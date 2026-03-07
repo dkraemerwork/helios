@@ -992,6 +992,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
       const config = this._config.getExecutorConfig(name);
       const registry = new TaskTypeRegistry();
 
+      // Reject inline backend in production mode unless explicit testing override is set
+      if (config.getExecutionBackend() === 'inline' && !config.getAllowInlineBackend()) {
+        throw new Error(
+          `Executor "${name}" is configured with inline backend but allowInlineBackend is not set. ` +
+          'The inline execution backend is not supported in production. ' +
+          'Use scatter (default) for production, or set allowInlineBackend(true) for test/dev bootstrap flows.',
+        );
+      }
+
       // Create the execution backend based on config
       const backend = config.getExecutionBackend() === 'scatter'
         ? new ScatterExecutionBackend({ poolSize: config.getPoolSize() })

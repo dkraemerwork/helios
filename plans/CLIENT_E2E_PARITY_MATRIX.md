@@ -4,7 +4,7 @@ Control document for `plans/CLIENT_E2E_PARITY_PLAN.md` and `plans/CLIENT_E2E_EXE
 
 Topic dependency note:
 
-- `getTopic()` and `getReliableTopic()` client status is gated by Phase 19T in `plans/TYPESCRIPT_PORT_PLAN.md`
+- `getTopic()` and `getReliableTopic()` client status is gated by the Phase 19T checkpoint in `plans/TYPESCRIPT_PORT_PLAN.md`; landing topic runtime code alone does not clear that dependency
 
 Legend:
 
@@ -27,7 +27,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | `getMap()` | `src/client/proxy/ClientMapProxy.ts` | `ClientMapProxy` | planned (Block 20.6) | member-side binary protocol map ops, listeners, destroy, metadata fetch | map e2e suite |
 | `getQueue()` | `src/client/proxy/ClientQueueProxy.ts` | `ClientQueueProxy` | planned (Block 20.6) | queue protocol ops, event/listener path, reconnect-safe semantics | queue e2e suite |
 | `getTopic()` | `src/client/proxy/ClientTopicProxy.ts` | `ClientTopicProxy` | planned (Block 20.6) | topic publish/listener protocol and reconnect re-registration | topic e2e suite |
-| `getReliableTopic()` | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | planned (Block 20.6) | server runtime exists (Phase 19T complete), proxy runtime needed | reliable-topic e2e suite |
+| `getReliableTopic()` | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | blocked-by-server | Phase 19T checkpoint must be green in `plans/TYPESCRIPT_PORT_PLAN.md`; landing the ringbuffer-backed runtime alone is not sufficient | reliable-topic e2e suite |
 | `getDistributedObject()` | `src/client/impl/spi/ProxyManager.ts` | `ProxyManager` | planned (Block 20.6) | distributed-object create/list/destroy tasks and stable service-name mapping | proxy-manager e2e suite |
 | `getLifecycleService()` | `src/client/impl/lifecycle/ClientLifecycleService.ts` | `LifecycleServiceImpl` | implemented | — | lifecycle e2e suite |
 | `getCluster()` | `src/client/impl/spi/ClientClusterService.ts` | `ClientClusterServiceImpl` | planned (Block 20.6) | member-list fetch, cluster-view refresh, listener delivery | cluster-view e2e suite |
@@ -152,7 +152,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | Transactions | `src/client/proxy/txn/**/*` | transaction proxies | blocked-by-server | cluster-safe transaction semantics |
 | JCache client | `src/client/cache/**/*` | client cache manager/proxy | blocked-by-server | server cache capability audit and protocol support |
 | SQL client | `src/client/sql/**/*` | `SqlClientService` | blocked-by-server | SQL runtime not releaseable today |
-| Reliable topic client | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | blocked-by-server | Phase 19T reliable-topic runtime absent server-side until checkpoint is green |
+| Reliable topic client | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | blocked-by-server | Phase 19T checkpoint must be green in `plans/TYPESCRIPT_PORT_PLAN.md`; code landing alone does not make the client surface ready |
 | PN counter client | `src/client/proxy/ClientPNCounterProxy.ts` | `ClientPNCounterProxy` | blocked-by-server | server runtime absent |
 | Flake ID client | `src/client/proxy/ClientFlakeIdGeneratorProxy.ts` | `ClientFlakeIdGeneratorProxy` | blocked-by-server | server runtime absent |
 | Scheduled executor client | `src/client/proxy/ClientScheduledExecutorProxy.ts` | scheduled executor proxy | blocked-by-server | server runtime absent |
@@ -174,7 +174,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 ## 7. Resolved Red Flags (Block 20.5)
 
 - ~~`HeliosInstance.getConfig()` type mismatch~~ — resolved: `HeliosInstance.getConfig()` now returns `InstanceConfig`, a shared interface satisfied by both `HeliosConfig` and `ClientConfig`.
-- ~~`getReliableTopic()` blocked by server~~ — resolved: Phase 19T landed the real ringbuffer-backed reliable topic runtime. Server-side capability exists.
+- `getReliableTopic()` client readiness remains blocked until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`; landing the real ringbuffer-backed runtime does not clear the dependency by itself.
 - ~~`getList()`, `getSet()`, `getMultiMap()`, `getReplicatedMap()` local-only~~ — resolved: these methods have been narrowed out of the shared `HeliosInstance` contract and remain member-only on `HeliosInstanceImpl`.
 - ~~`getDistributedObject()` partial coverage~~ — resolved: expanded to cover reliable topic and executor service names alongside map, queue, and topic.
 - `package.json` wildcard exports still make unfinished internal client code accidentally package-public today (to be resolved in Block 20.8).

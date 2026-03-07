@@ -29,8 +29,9 @@ keeps fallback paths that make the feature non-production.
 - Distributed `submit*` requires module-backed worker materialization metadata
   (`modulePath`, `exportName`); closure-only registrations stay local-only via
   `submitLocal()` and `executeLocal()`.
-- `scatter` is the production default backend. `inline` remains an explicit opt-in for
-  tests, development, and parity checks only.
+- `scatter` is the only supported production backend. `inline` is restricted to explicit test/dev
+  bootstrap and parity-check flows only, and production-mode startup must reject it unless an
+  explicit testing override is set.
 - If Scatter is configured but unavailable, unhealthy, or degraded beyond Helios safety
   rules, fail closed; never silently move distributed executor work back onto the main
   event loop.
@@ -130,11 +131,15 @@ When this block is done:
 
 ### Track D - Defaults, health, and recycle policy
 
-- Make `scatter` the default backend for production executor configs and keep `inline`
-  explicit for tests and development only.
-- Define the exact defaulting rules through `ExecutorConfig`, `HeliosConfig`, and any
-  file-config or bootstrap entrypoint touched by executor config so production, dev, and
-  test behavior are honest and deterministic.
+- Make `scatter` the only production backend and keep `inline` legal only for explicit test/dev
+  bootstrap flows.
+- Define the exact defaulting and validation rules through `ExecutorConfig`, `HeliosConfig`, and
+  any file-config or bootstrap entrypoint touched by executor config so production-mode startup
+  rejects `inline` unless an explicit testing override is set, while dev and test behavior stay
+  honest and deterministic.
+- Define the explicit testing override contract by name and scope, require it to be opt-in rather
+  than inferred from backend choice alone, and forbid docs/examples from presenting it as a
+  production runtime switch.
 - Fail fast if the configured Scatter backend cannot initialize, cannot spawn healthy
   workers, or loses the minimum health required by Helios semantics.
 - Recycle the affected task-type pool on worker crash or task timeout.
@@ -155,12 +160,14 @@ When this block is done:
   - worker crash recycle
   - timeout recycle
   - fail-closed Scatter startup and health behavior
+  - production-mode startup with executor backend `inline` fails fast unless the explicit testing
+    override is set
   - deterministic shutdown drain and timeout fallback
 - Prove off-main-thread execution by observable worker-thread identity or another
   worker-only signal, not by timing heuristics alone.
 - Update docs, examples, and config guidance to state that distributed tasks must be
-  module-backed and that `inline` is a test and development escape hatch, not a silent
-  production fallback.
+  module-backed and that `inline` is limited to explicit test/dev bootstrap flows with a testing
+  override, not a supported production runtime or silent production fallback.
 - Update exports, test-support utilities, and any file-config documentation so installed
   package use, examples, and tests all describe the same executor rules.
 - Do not close the block until root executor suites and targeted real multi-node executor
@@ -175,7 +182,10 @@ This plan is not complete until all of the following are true:
   lifecycle
 - `src/executor/impl/ExecutionBackend.ts` has a real Scatter-backed production
   implementation
-- `src/config/ExecutorConfig.ts` defaults and validation match the fail-closed policy
+- `src/config/ExecutorConfig.ts` defaults and validation match the fail-closed policy, including
+  rejecting production-mode `inline` unless the explicit testing override is set
+- automated proof shows production-mode startup with executor backend `inline` fails fast without
+  the explicit testing override
 - every distributed task registration is module-backed and worker-materializable
 - no acceptance proof path depends on keeping executor work on the main event loop
 - crash, timeout, shutdown, and member-loss semantics are proven by real tests

@@ -202,6 +202,19 @@ If needed, define an internal envelope type such as `ReliableTopicMessageRecord`
 
 The plan must require that this storage path uses the real ringbuffer runtime, not a bespoke in-memory array or a second hidden topic store.
 
+#### B2.1. Freeze v1 publish-completion contract
+
+Reliable-topic v1 must not leave publish completion open to later interpretation.
+
+The v1 contract is:
+
+- `publish()` / `publishAsync()` complete successfully only after the partition owner has appended the record to the backing ringbuffer and at least one synchronous backup has acknowledged the same append
+- owner-local append by itself is not a completed reliable-topic publish in v1
+- `asyncBackupCount` may improve eventual redundancy, but async backup acknowledgment does not count toward publish completion
+- reliable-topic backing ringbuffer config must resolve to `backupCount >= 1`; any reliable-topic config that would run with zero synchronous backups must fail fast at config-validation time rather than silently degrading the contract
+
+This contract is the only supported reliable-topic completion contract for v1 and must be stated consistently in runtime behavior, tests, docs, and examples.
+
 ### B3. Listener model
 
 Reliable listeners should run as sequence consumers:
@@ -288,6 +301,10 @@ Implementation rule:
 ### C3. Partition ownership and backup behavior
 
 Reliable topic durability is only as strong as ringbuffer replication.
+
+Publish durability must follow the frozen v1 completion contract above: once a reliable-topic publish reports success, the record must already exist on the owner and on at least one synchronous backup that can be promoted after owner loss.
+
+The plan must explicitly reject weaker after-the-fact interpretations such as "success means owner append only unless docs say otherwise" or "success depends on whichever backup mode happened to be configured." If the required sync-backup acknowledgment is not obtained, the publish must fail or remain incomplete rather than being reported as durable success.
 
 Verify and test:
 
@@ -408,7 +425,7 @@ Deliverables:
 - cross-node listener consumption
 - owner failover and continued publish/read behavior
 - backup replication and new-backup resync for ringbuffer-backed topic data
-- explicit publish completion contract: owner append only vs owner append plus sync backup
+- enforce the frozen v1 publish completion contract: success only after owner append plus at least one synchronous backup acknowledgment, with zero-sync-backup reliable-topic configs rejected at validation time
 
 Exit criteria:
 
@@ -423,6 +440,7 @@ Deliverables:
 - local stats for reliable topic
 - metrics hooks if needed
 - docs and examples
+- docs and examples that state the exact reliable-topic loss window honestly: after publish success, a single-member owner loss must not lose the message because one synchronous backup has already acknowledged it; before completion, the publish may still fail or be lost; loss is still possible if all acknowledged replicas are lost before further replication
 - smoke tests using both topic modes side by side
 - file-based config examples and docs
 - downstream test-support and package fixture parity
@@ -514,6 +532,9 @@ Reliable topic:
 - reliable topic owner failover preserves unread messages
 - reliable topic continues after listener node restart if within retention window
 - reliable topic publish durability matches the documented completion contract
+- reliable topic owner crash before sync-backup acknowledgment does not produce a false successful publish result
+- reliable topic owner crash immediately after successful publish still preserves the acknowledged message on promoted backup
+- reliable topic failover tests prove the exact v1 contract, not just eventual recovery after an unspecified replication window
 - new backup receives ringbuffer state after join
 
 ### Soak or resilience tests
@@ -533,6 +554,9 @@ This plan is complete only when all of the following are true:
 - reliable-listener and plain-listener adaptation semantics are both explicit and tested
 - reliable topic has deterministic stale-sequence behavior
 - multi-node tests cover publish, consume, failover, and destroy paths
+- reliable-topic publish completion is frozen to owner append plus synchronous-backup acknowledgment, with no zero-sync-backup durable mode hidden behind config
+- failover tests prove that an acknowledged reliable-topic publish survives owner promotion exactly as documented
+- docs and examples state the exact post-ack and pre-ack loss window honestly rather than implying stronger or weaker durability than the runtime provides
 - docs explain when to choose classic topic vs reliable topic
 - no `getReliableTopic()` throw stubs remain in repo test-support or fixture implementations
 - file-based config can create both classic and reliable topic setups

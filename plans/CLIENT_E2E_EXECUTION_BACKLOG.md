@@ -11,7 +11,7 @@ Principles:
 Dependency note:
 
 - client work for `getTopic()` depends on the Phase 19T classic-topic checkpoint in `plans/TYPESCRIPT_PORT_PLAN.md`
-- client work for `getReliableTopic()` must not start until the Phase 19T reliable-topic checkpoint is green server-side
+- client work for `getReliableTopic()` must not start, and no reliable-topic readiness claim may be made, until the Phase 19T reliable-topic checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`
 
 ---
 
@@ -85,6 +85,7 @@ Goal: define the public remote contract and lock package boundaries.
 - expose only supported public entrypoints from the package root
 - remove accidental deep-import publication for client internals
 - decide whether any current `HeliosInstance` methods must be split out or narrowed before client GA
+- if B1 narrows any `HeliosInstance` method or introduces a member-only replacement, queue the matching docs/examples/test-support/fixture cleanup immediately instead of deferring those references to the release phase
 
 ### Exit Gate
 
@@ -419,9 +420,35 @@ Goal: make the client consumable and keep it honest.
 - reconnect example
 - near-cache example
 
+### Mandatory Proof Owners And Commands
+
+Add and keep the exact Phase 20 proof-label contract from `plans/CLIENT_E2E_PARITY_PLAN.md` in sync with implementation.
+
+Required owning proof files:
+
+- new: `test/client/e2e/ClientStartupE2E.test.ts`
+- new: `test/client/e2e/ClientMapE2E.test.ts`
+- new: `test/client/e2e/ClientQueueE2E.test.ts`
+- new: `test/client/e2e/ClientTopicE2E.test.ts`
+- new if retained: `test/client/e2e/ClientReliableTopicE2E.test.ts`
+- new if retained: `test/client/e2e/ClientExecutorE2E.test.ts`
+- new: `test/client/e2e/ClientReconnectListenerRecoveryE2E.test.ts`
+- new: `test/client/e2e/ClientProxyLifecycleE2E.test.ts`
+- new: `test/client/e2e/ClientExternalBunAppE2E.test.ts`
+- retain/update: `test/client/Block20_8_ExamplesDocsExportsGAProof.test.ts`
+
+Work Items:
+
+- bind each required proof file to its exact label and command in `plans/CLIENT_E2E_PARITY_PLAN.md`
+- do not let map, queue, topic, reconnect/listener recovery, proxy lifecycle, external Bun app, or hygiene proof collapse into a shared catch-all suite
+- if reliable-topic or executor is removed from the retained remote contract, keep the proof label and record it as `NOT-RETAINED` with parity-matrix and docs citations rather than deleting the row
+- require the final Phase 20 completion note to end with the exact ordered footer from the parity plan, including the terminal `P20-GATE-CHECK — green` line
+- audit `README.md`, `examples/`, `src/test-support/`, and shipped fixtures for stale shared-contract references and update or remove any member-only substitute or narrowed-out method usage before client GA
+
 ### Exit Gate
 
 - external user can install, import documented paths only, and run the examples unchanged
+- exact proof-label report exists and includes `P20-STARTUP`, `P20-MAP`, `P20-QUEUE`, `P20-TOPIC`, `P20-RELIABLE-TOPIC`, `P20-EXECUTOR`, `P20-RECONNECT-LISTENER`, `P20-PROXY-LIFECYCLE`, `P20-EXTERNAL-BUN-APP`, `P20-HYGIENE`, and final `P20-GATE-CHECK`
 
 ---
 
@@ -432,3 +459,4 @@ Goal: make the client consumable and keep it honest.
 - close package wildcard exports that leak internal client files
 - ensure every acceptance test uses the binary client protocol, not REST, when claiming remote support
 - ensure every public `HeliosInstance` method on `HeliosClient` has a real acceptance test owner
+- audit and scrub docs/examples/test-support/fixtures whenever `HeliosInstance` is narrowed so no stale member-only substitute or removed-method reference survives into client GA

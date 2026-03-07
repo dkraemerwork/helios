@@ -1211,11 +1211,15 @@ Request/response messages must also carry:
 - `masterMemberId` on `BLITZ_TOPOLOGY_RESPONSE`
 - `registrationsComplete` on `BLITZ_TOPOLOGY_RESPONSE`
 - `retryAfterMs` on retryable `BLITZ_TOPOLOGY_RESPONSE`
+- `masterMemberId`, `memberListVersion`, and `fenceToken` on every master-authored authoritative `BLITZ_TOPOLOGY_RESPONSE` and `BLITZ_TOPOLOGY_ANNOUNCE`
+- `fenceToken` is an opaque master-epoch token minted by the current Helios master and rotated immediately on every master change/demotion before any new authoritative Blitz message is emitted
 
 ### Topology source of truth
 
 - the current Helios master is the source of truth for Blitz topology snapshots
 - the snapshot generation should be derived from Helios membership state, preferably `memberListVersion`, instead of an unrelated mutable counter
+- the authoritative control-plane identity is the tuple `(masterMemberId, memberListVersion, fenceToken)`, not `memberListVersion` alone
+- every authoritative topology action must capture that tuple when scheduled and revalidate it immediately before sending a response, publishing an announce, or committing topology-owned state; if the tuple no longer matches the current Helios view, the work must fail closed as stale
 - topology data is rebuilt from live members plus active Blitz registrations; it must not depend on a single in-memory counter surviving master failover
 - when master changes, the new master cannot infer Blitz metadata from Helios membership alone; every Blitz-ready node must re-send `BLITZ_NODE_REGISTER` after master change or membership-version change under a new master
 - the expected registrant set for a re-registration sweep is: every currently joined Helios member with Blitz distributed-auto enabled and a locally started Blitz node for the current `memberListVersion`
@@ -1232,15 +1236,18 @@ Request/response messages must also carry:
 7. if the node is not the current Helios master, it requests the current seed topology via `BLITZ_TOPOLOGY_REQUEST`
 8. the current Helios master returns a deterministic `BLITZ_TOPOLOGY_RESPONSE` with `requestId`, routable peers, `masterMemberId`, and `memberListVersion`
 9. the joining node reconciles that snapshot with its local node config and, if authoritative routes differ from bootstrap-local config, performs one controlled restart into final clustered `clusterNode` config
-10. after successful clustered local JetStream readiness, the node marks itself ready and the master may publish `BLITZ_TOPOLOGY_ANNOUNCE` to newer joiners
+10. immediately after receiving authoritative topology, the node enters a strict pre-cutover fence: bootstrap-local NATS may continue running only as a control-plane prerequisite, but Blitz must not create Blitz-owned resources, expose the NestJS bridge, serve user-facing Blitz operations, or report readiness success until authoritative topology has been applied and post-cutover JetStream readiness is green
+11. after successful clustered local JetStream readiness in the authoritative post-cutover config, the node clears the fence, marks itself ready, and the master may publish `BLITZ_TOPOLOGY_ANNOUNCE` to newer joiners
 
 ### Cluster-node cutover rule
 
 - `clusterNode` is startup-configured; live route reconfiguration is **not** part of v1
-- a node may boot a temporary local-only embedded NATS process before topology is known
-- once authoritative topology is received, the node performs at most one controlled restart into its final clustered config before it is allowed to mark itself `ready`
+- a node may boot a temporary local-only embedded NATS process before topology is known, but that bootstrap-local process is strictly pre-cutover and must remain fenced from Blitz-owned resource creation, NestJS bridge exposure, user-facing Blitz operations, and readiness success
+- once authoritative topology is received, the node performs at most one controlled restart into its final clustered config before it is allowed to clear the fence or mark itself `ready`
+- the fence clears only after authoritative topology has been applied and post-cutover local JetStream readiness is green in the final clustered config
 - after a node is marked `ready`, later topology changes do not force restart; they only affect future joiners and reconciliation work
 - if authoritative routes differ from bootstrap-local config, restart is mandatory; silent live mutation is forbidden in v1
+- retryable, stale, incomplete, or pre-cutover states always remain fail-closed rather than exposing a degraded Blitz surface
 
 ### Master handoff behavior
 
@@ -1250,12 +1257,21 @@ Request/response messages must also carry:
 - the newly elected/current Helios master becomes the authority for future joins only after a mandatory Blitz node re-registration sweep repopulates topology metadata
 - no already-running node should need to reconnect just because Helios master changed
 
+### Demotion fencing and cancellation
+
+- when a node loses Helios mastership, it must immediately stop serving authoritative Blitz topology or reconciliation work for the old master epoch
+- local demotion must synchronously cancel or hard-fence all outstanding topology-authority work, including in-flight `BLITZ_TOPOLOGY_RESPONSE` assembly, delayed retries, registration-sweep timers, pending `BLITZ_TOPOLOGY_ANNOUNCE` publications, and reconciliation jobs
+- any old-master work that cannot be physically cancelled must re-check `(masterMemberId, memberListVersion, fenceToken)` immediately before side effects and abort without publishing or mutating state if the tuple is stale
+- the replacement master must mint a new `fenceToken` before emitting any authoritative Blitz message, so late work from the old master epoch is rejected by receivers
+
 ### Retryable topology responses during failover
 
 - if the current Helios master has not yet completed the mandatory re-registration sweep, it must not serve an authoritative topology snapshot
 - instead it returns `BLITZ_TOPOLOGY_RESPONSE` with `registrationsComplete=false`, `masterMemberId`, `memberListVersion`, and `retryAfterMs`
 - that retryable response represents either "waiting for expected registrations" or "operating in degraded post-failover mode"; in both cases the joiner must retry rather than proceed
 - joiners back off and retry against the current master instead of guessing peers locally
+- joiners accept an authoritative topology response only when `(masterMemberId, memberListVersion, fenceToken)` matches the current Helios master view at receive time
+- joiners reject stale responses from a demoted or superseded master even if the payload arrived after a retry window or was already in flight before demotion
 - joiners reject stale responses where `masterMemberId` or `memberListVersion` no longer matches the current Helios view
 
 ### Topology announce semantics
@@ -1263,6 +1279,7 @@ Request/response messages must also carry:
 - `BLITZ_TOPOLOGY_ANNOUNCE` is emitted by the current Helios master after topology changes that affect future joiners
 - receivers use it as an invalidation/re-registration signal, not as an instruction to reconnect an already healthy local NATS node
 - on receiving an announce from a new master or newer `memberListVersion`, Blitz-ready nodes re-send `BLITZ_NODE_REGISTER`
+- receivers must ignore `BLITZ_TOPOLOGY_ANNOUNCE` when `(masterMemberId, memberListVersion, fenceToken)` does not match the current Helios master view, so a demoted former master cannot invalidate or steer future joiners
 
 ### Replication policy
 
@@ -1278,7 +1295,8 @@ Required policy:
 - the **current Helios master** is the sole reconciliation authority for under-replicated Blitz-owned resources
 - under-replicated markers are advisory only; the authoritative source of truth must be recomputable from Helios config (`defaultReplicas`), current ready-node count, and live JetStream/KV state after master failover
 - coordinator metadata may cache under-replicated work, but reconciliation must be restart-safe and refailover-safe by recomputing pending work before acting
-- any cached reconciliation work is fenced by `memberListVersion` so duplicate upgrade/recreate work cannot race across members
+- any cached reconciliation work is fenced by `(masterMemberId, memberListVersion, fenceToken)` so duplicate upgrade/recreate work cannot race across members or survive local demotion
+- outstanding reconciliation work must be cancelled or rendered no-op on demotion before it can mutate Blitz-owned resources under an old master epoch
 
 ### Helios config and env contract
 
@@ -1329,7 +1347,9 @@ The plan must wire lifecycle explicitly:
 - `shutdownAsync()` must await Blitz drain + embedded NATS shutdown
 - `shutdown()` is defined as the immediate legacy shutdown path; Blitz-integrated callers must use `shutdownAsync()` for graceful teardown and tests must assert that contract explicitly
 - Blitz child processes must never outlive Helios instance shutdown
+- `HeliosInstanceImpl` owns the pre-cutover readiness fence and must not publish readiness, hand out the Blitz instance, or allow Blitz-backed operations until the authoritative-topology + post-cutover-JetStream gate is green
 - `HeliosBlitzModule` must reuse an injected Helios-owned Blitz instance in `distributed-auto` mode; it must not call `BlitzService.connect()` independently in that mode
+- `HeliosBlitzModule` must reuse an injected Helios-owned Blitz instance in `distributed-auto` mode, but it may only expose that instance after the pre-cutover readiness fence has cleared
 
 ### Canonical queue mapping
 
@@ -1357,6 +1377,7 @@ Goal: define the missing Helios-owned control plane concretely.
 - add `BLITZ_NODE_REGISTER`, `BLITZ_NODE_REMOVE`, `BLITZ_TOPOLOGY_REQUEST`, `BLITZ_TOPOLOGY_RESPONSE`, and `BLITZ_TOPOLOGY_ANNOUNCE` to `src/cluster/tcp/ClusterMessage.ts`
 - route and handle those messages in `src/instance/impl/HeliosClusterCoordinator.ts` and `src/instance/impl/HeliosInstanceImpl.ts`
 - use current Helios master plus `memberListVersion` as the topology authority mechanism
+- require authoritative `BLITZ_*` messages to carry `(masterMemberId, memberListVersion, fenceToken)` and fail closed when that tuple does not match the receiver's current Helios master view
 - require deterministic re-registration after master change or newer `memberListVersion` under a new master
 - make retryable `BLITZ_TOPOLOGY_RESPONSE` semantics explicit for incomplete post-failover registration windows
 
@@ -1371,6 +1392,7 @@ Goal: wire the Helios-owned control plane into real instance startup/shutdown.
 - request topology snapshot from the current Helios master on join
 - join/rejoin using `clusterNode` primitive plus returned topology, using the one-time controlled restart rule when authoritative routes differ from bootstrap-local config
 - wire shutdown and member-left cleanup so `BLITZ_NODE_REMOVE` and local shutdown behavior are deterministic
+- wire mandatory demotion cleanup so a former master cancels or fences all outstanding topology-authority work before it can emit stale responses or announces
 
 ### Block 18.4 - Replication reconciliation, env helpers, and NestJS bridge
 
@@ -1379,6 +1401,7 @@ Goal: make the distributed flow operable and self-consistent after dynamic clust
 - add Helios-owned env helper for `HELIOS_BLITZ_MODE=distributed-auto`
 - add replication reconciliation logic for Blitz-owned resources created before the full cluster is present
 - assign reconciliation ownership to the current Helios master and fence it with `memberListVersion`
+- strengthen reconciliation fencing to `(masterMemberId, memberListVersion, fenceToken)` and require demotion-time cancellation/fencing of all already-scheduled reconciliation work
 - start with `packages/blitz/src/window/WindowState.ts` and any other Blitz-owned KV/stream creation points
 - make `HeliosBlitzModule` reuse the Helios-owned Blitz instance in `distributed-auto` mode instead of creating its own standalone connection
 - ensure routable `advertiseHost` behavior is tested and documented; no localhost-only assumptions remain in the distributed flow
@@ -1391,6 +1414,7 @@ Goal: prove the full user story works with real Helios members and no plan-time 
 - start 3 Helios/API replicas, each hosting one local NATS node, and verify they form one cluster
 - verify first-node-alone boot, second-node auto-join, and later-node joins
 - verify current Helios master handoff does not break future Blitz joins
+- verify a demoted former master cannot continue serving authoritative topology responses, announces, or reconciliation side effects from work that was queued before handoff
 - verify retryable topology responses during post-failover re-registration windows
 - verify restart/rejoin works after a node leaves and comes back
 - verify Blitz-owned state reaches target replica count after cluster growth
@@ -1404,7 +1428,10 @@ Goal: prove the full user story works with real Helios members and no plan-time 
 - [ ] the topology protocol and metadata service are fully wired with concrete message types and handlers
 - [ ] master change triggers deterministic Blitz node re-registration before future topology snapshots are served
 - [ ] the bootstrap-local -> final-clustered cutover path is deterministic and never relies on live route mutation
+- [ ] before authoritative topology is applied and post-cutover JetStream readiness is green, the node remains fail-closed: no Blitz-owned resource creation, no NestJS bridge exposure, no user-facing Blitz operation success, and no readiness success
 - [ ] Blitz-owned state reaches the configured replica count after cluster growth
 - [ ] reconciliation ownership is master-only and fenced against duplicate upgrades/recreates
+- [ ] authoritative Blitz messages are accepted only when `(masterMemberId, memberListVersion, fenceToken)` matches the current Helios master epoch
+- [ ] demotion immediately cancels or fences outstanding topology/reconciliation work so an old master cannot keep serving control-plane work
 - [ ] Helios master failover does not block future node joins
 - [ ] no embedded NATS child processes leak after Helios shutdown

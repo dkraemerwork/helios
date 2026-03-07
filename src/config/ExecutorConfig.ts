@@ -23,6 +23,7 @@ export class ExecutorConfig {
     private _statisticsEnabled: boolean = true;
     private _splitBrainProtectionName: string | null = null;
     private _executionBackend: 'inline' | 'scatter' = 'scatter';
+    private _allowInlineBackend = false;
 
     constructor(name: string) {
         this._name = name;
@@ -126,6 +127,21 @@ export class ExecutorConfig {
             throw new Error(`Unsupported execution backend: "${backend}". Must be "inline" or "scatter".`);
         }
         this._executionBackend = backend;
+        return this;
+    }
+
+    /**
+     * Whether the inline execution backend is explicitly allowed.
+     * Defaults to false. Must be set to true for test/dev bootstrap flows
+     * that intentionally use the inline backend.
+     * Production-mode startup rejects inline without this override.
+     */
+    getAllowInlineBackend(): boolean {
+        return this._allowInlineBackend;
+    }
+
+    setAllowInlineBackend(allow: boolean): this {
+        this._allowInlineBackend = allow;
         return this;
     }
 
