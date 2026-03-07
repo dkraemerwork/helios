@@ -21,9 +21,13 @@
       "import": "./dist/src/server/HeliosServer.js",
       "types": "./dist/src/server/HeliosServer.d.ts"
     },
-    "./*": {
-      "import": "./dist/src/*.js",
-      "types": "./dist/src/*.d.ts"
+    "./client": {
+      "import": "./dist/src/client/HeliosClient.js",
+      "types": "./dist/src/client/HeliosClient.d.ts"
+    },
+    "./client/config": {
+      "import": "./dist/src/client/config/ClientConfig.js",
+      "types": "./dist/src/client/config/ClientConfig.d.ts"
     }
   },
   "files": [

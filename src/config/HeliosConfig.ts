@@ -14,8 +14,9 @@ import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicCo
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry";
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
+import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 
-export class HeliosConfig {
+export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;
   private readonly _mapConfigs = new Map<string, MapConfig>();
   private readonly _queueConfigs = new Map<string, QueueConfig>();

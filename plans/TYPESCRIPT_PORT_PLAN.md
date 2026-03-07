@@ -296,13 +296,13 @@ Goal: freeze the real client scope before more runtime pieces are added.
 
 Tasks:
 
-- [ ] Turn the remote-client scope into a keep/rewrite/move/delete matrix for every existing file under `src/client/`.
-- [ ] Maintain a Hazelcast-to-Helios parity matrix for every claimed client subsystem and every `HeliosInstance` method retained for remote use.
-- [ ] Lock in `HeliosClient implements HeliosInstance` as the client product contract.
-- [ ] Resolve the shared-contract mismatch around `HeliosInstance.getConfig()` so the remote client does not inherit a member-only config shape by accident.
-- [ ] Freeze which currently public member/server internals must stop being root-barrel package-public during client GA cleanup.
-- [ ] Freeze the package exports policy so wildcard deep-import leakage does not keep unfinished client internals accidentally public.
-- [ ] Run a verification task that proves no current client file is ownerless and no client API contract question remains vague before runtime implementation starts.
+- [x] Turn the remote-client scope into a keep/rewrite/move/delete matrix for every existing file under `src/client/`.
+- [x] Maintain a Hazelcast-to-Helios parity matrix for every claimed client subsystem and every `HeliosInstance` method retained for remote use.
+- [x] Lock in `HeliosClient implements HeliosInstance` as the client product contract.
+- [x] Resolve the shared-contract mismatch around `HeliosInstance.getConfig()` so the remote client does not inherit a member-only config shape by accident.
+- [x] Freeze which currently public member/server internals must stop being root-barrel package-public during client GA cleanup.
+- [x] Freeze the package exports policy so wildcard deep-import leakage does not keep unfinished client internals accidentally public.
+- [x] Run a verification task that proves no current client file is ownerless and no client API contract question remains vague before runtime implementation starts.
 
 ### Block 20.2 — Public client API + config model + serialization foundation
 
@@ -508,7 +508,7 @@ Tasks:
 - [ ] **Phase 19 checkpoint** — root and `packages/mongodb` typechecks green; Mongo package tests green; exact Mongo unit/core/offload/cluster/e2e proof commands from `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` are green; supported wiring paths, document-mode mapping, shutdown flush, restart persistence, eager/lazy load, clear, bulk, and `loadAllKeys()` streaming semantics are all exercised; 0 fail, 0 error
 - [x] **Block 19T.1** — Classic topic hardening + ringbuffer-backed reliable topic closure (`plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`, one service-backed classic-topic runtime path, Bun/TypeScript-native reliable-listener contract, real `getReliableTopic()` ringbuffer runtime, Hazelcast-parity overload semantics, no throw stubs or hidden local-only alternate path, failover/destroy/shutdown cleanup, docs/examples/config/exports/test-support honesty) — ~26 tests
 - [ ] **Phase 19T checkpoint** — root typecheck green; topic and ringbuffer tests green; `getTopic()` and `getReliableTopic()` both work in single-node and multi-node flows; reliable-topic publish/listen/failover/destroy/shutdown and overload/retention semantics are fully exercised; no `getReliableTopic()` throw stubs or local-only alternate classic-topic path remain; 0 fail, 0 error
-- [ ] **Block 20.1** — Client parity matrix + surface freeze + packaging contract (`src/client` keep/rewrite/move/delete matrix, Hazelcast-to-Helios parity matrix, `HeliosClient implements HeliosInstance`, `getConfig()` contract decision, root export cleanup, wildcard export freeze) — ~12 tests/docs gates
+- [x] **Block 20.1** — Client parity matrix + surface freeze + packaging contract (`src/client` keep/rewrite/move/delete matrix, Hazelcast-to-Helios parity matrix, `HeliosClient implements HeliosInstance`, `getConfig()` contract decision, root export cleanup, wildcard export freeze) — ~12 tests/docs gates
 - [ ] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
 - [ ] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
 - [ ] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests

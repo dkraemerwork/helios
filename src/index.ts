@@ -35,6 +35,7 @@ export { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/Bli
 
 // ── Core / Instance ───────────────────────────────────────────────────────────
 export type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
+export type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 export { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 export { BuildInfo } from "@zenystx/helios-core/instance/BuildInfo";
 export { BuildInfoProvider } from "@zenystx/helios-core/instance/BuildInfoProvider";

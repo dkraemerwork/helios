@@ -5,6 +5,7 @@
  * resolved via {@link MatchingPointConfigPatternMatcher} wildcard rules.
  */
 import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { InstanceConfig } from '@zenystx/helios-core/core/InstanceConfig';
 
 /**
  * Port of {@code com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher}.
@@ -77,8 +78,20 @@ function getMatchingPoint(pattern: string, itemName: string): number {
  * Lightweight client config holding named NearCacheConfigs retrieved
  * with wildcard pattern matching.
  */
-export class ClientConfig {
+export class ClientConfig implements InstanceConfig {
+    private _name = "helios-client";
     private readonly _nearCacheConfigMap = new Map<string, NearCacheConfig>();
+
+    /** Returns the client instance name. */
+    getName(): string {
+        return this._name;
+    }
+
+    /** Sets the client instance name. */
+    setName(name: string): this {
+        this._name = name;
+        return this;
+    }
 
     /**
      * Adds a NearCacheConfig. Stored by its configured name.

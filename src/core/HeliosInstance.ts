@@ -9,7 +9,7 @@ import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObj
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
-import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 
 /**
  * Primary interface for a Helios cluster member or client.
@@ -56,7 +56,7 @@ export interface HeliosInstance {
   getCluster(): Cluster;
 
   /** Returns the configuration for this instance. */
-  getConfig(): HeliosConfig;
+  getConfig(): InstanceConfig;
 
   /** Returns the distributed executor service with the given name. */
   getExecutorService(name: string): IExecutorService;

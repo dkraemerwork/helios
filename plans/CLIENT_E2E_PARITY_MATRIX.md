@@ -83,9 +83,18 @@ Legend:
 | `src/client/impl/protocol/ClientMessageReader.ts` | keep | protocol core | real framing primitive |
 | `src/client/impl/protocol/ClientMessageWriter.ts` | keep | protocol core | real framing primitive |
 | `src/client/impl/protocol/util/*` | keep | protocol core | retained if used by live transport |
+| `src/client/impl/protocol/AuthenticationStatus.ts` | keep | connection/auth | authentication status constants |
+| `src/client/impl/protocol/exception/*` | keep | protocol core | protocol error types |
 | `src/client/impl/protocol/codec/ClientAuthenticationCodec.ts` | keep | connection/auth | required for auth handshake |
-| retained request/event codecs | keep | proxy or service owner | only if mapped to a live invocation path |
-| builtin/custom codec helpers | keep-or-delete | protocol core | delete any helper left orphaned after proxy selection |
+| `src/client/impl/protocol/codec/MapPutCodec.ts` | keep | proxy or service owner | retained map operation codec |
+| `src/client/impl/protocol/codec/MapAddEntryListenerCodec.ts` | keep | proxy or service owner | retained map listener codec |
+| `src/client/impl/protocol/codec/MapAddNearCacheInvalidationListenerCodec.ts` | keep | near-cache | retained near-cache invalidation codec |
+| `src/client/impl/protocol/codec/MapFetchNearCacheInvalidationMetadataCodec.ts` | keep | near-cache | retained near-cache metadata codec |
+| `src/client/impl/protocol/codec/CacheAddNearCacheInvalidationListenerCodec.ts` | keep | near-cache | retained cache near-cache invalidation codec |
+| `src/client/impl/protocol/codec/CacheFetchNearCacheInvalidationMetadataCodec.ts` | keep | near-cache | retained cache near-cache metadata codec |
+| `src/client/impl/protocol/codec/builtin/*` | keep | protocol core | builtin type codec helpers used by all operation codecs |
+| `src/client/impl/protocol/codec/custom/*` | keep | protocol core | custom type codec helpers for Address, MemberInfo, etc. |
+| `src/client/HeliosClient.ts` | keep | client entrypoint | public client product surface |
 | `src/client/config/ClientConfig.ts` | rewrite | config root | currently too narrow |
 | `src/client/map/impl/nearcache/NearCachedClientMapProxy.ts` | rewrite | near-cache on top of remote map proxy | currently in-process backing-store shaped |
 | `src/client/cache/impl/nearcache/NearCachedClientCacheProxy.ts` | rewrite | near-cache on top of remote cache proxy | currently in-process backing-store shaped |
