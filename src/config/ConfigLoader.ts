@@ -21,6 +21,7 @@ import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
 import { ReliableTopicConfig, TopicOverloadPolicy } from '@zenystx/helios-core/config/ReliableTopicConfig';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
 import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.
@@ -256,6 +257,36 @@ function parseMapConfig(entry: unknown): MapConfig {
     }
     if (typeof e['readBackupData'] === 'boolean') {
         mc.setReadBackupData(e['readBackupData'] as boolean);
+    }
+
+    // --- map-store config ---
+    if ('map-store' in e && e['map-store'] !== null && typeof e['map-store'] === 'object') {
+        const ms = e['map-store'] as Record<string, unknown>;
+        const msc = new MapStoreConfig();
+
+        if (typeof ms['enabled'] === 'boolean') msc.setEnabled(ms['enabled']);
+        if (typeof ms['className'] === 'string') msc.setClassName(ms['className']);
+        if (typeof ms['factoryClassName'] === 'string') msc.setFactoryClassName(ms['factoryClassName']);
+        if (typeof ms['writeDelaySeconds'] === 'number') msc.setWriteDelaySeconds(ms['writeDelaySeconds']);
+        if (typeof ms['writeBatchSize'] === 'number') msc.setWriteBatchSize(ms['writeBatchSize']);
+        if (typeof ms['writeCoalescing'] === 'boolean') msc.setWriteCoalescing(ms['writeCoalescing']);
+        if (typeof ms['offload'] === 'boolean') msc.setOffload(ms['offload']);
+        if (typeof ms['initialLoadMode'] === 'string') {
+            const mode = InitialLoadMode[ms['initialLoadMode'] as keyof typeof InitialLoadMode];
+            if (mode === undefined) {
+                throw new Error(`Invalid initialLoadMode: "${ms['initialLoadMode']}". Valid values: ${Object.keys(InitialLoadMode).join(', ')}`);
+            }
+            msc.setInitialLoadMode(mode);
+        }
+        if (typeof ms['loadAllKeys'] === 'boolean') msc.setLoadAllKeys(ms['loadAllKeys']);
+
+        if (typeof ms['properties'] === 'object' && ms['properties'] !== null && !Array.isArray(ms['properties'])) {
+            for (const [pk, pv] of Object.entries(ms['properties'] as Record<string, unknown>)) {
+                msc.setProperty(pk, String(pv));
+            }
+        }
+
+        mc.setMapStoreConfig(msc);
     }
 
     return mc;

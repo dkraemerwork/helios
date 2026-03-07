@@ -8,6 +8,13 @@ import { CoalescedWriteBehindQueue } from './writebehind/CoalescedWriteBehindQue
 import { ArrayWriteBehindQueue } from './writebehind/ArrayWriteBehindQueue.js';
 import { WriteBehindProcessor } from './writebehind/WriteBehindProcessor.js';
 import { WriteBehindStore } from './writebehind/WriteBehindStore.js';
+import type { MapStoreProviderRegistry } from './MapStoreProviderRegistry.js';
+import { MapStoreDynamicLoader } from './MapStoreDynamicLoader.js';
+
+export interface MapStoreContextOptions {
+  registry?: MapStoreProviderRegistry;
+  configOrigin?: string | null;
+}
 
 export class MapStoreContext<K, V> {
   private readonly _wrapper: MapStoreWrapper<K, V>;
@@ -27,14 +34,9 @@ export class MapStoreContext<K, V> {
   static async create<K, V>(
     mapName: string,
     config: MapStoreConfig,
+    options?: MapStoreContextOptions,
   ): Promise<MapStoreContext<K, V>> {
-    // Resolve implementation: factory first, then direct implementation
-    const factoryImpl = config.getFactoryImplementation() as any;
-    const directImpl = config.getImplementation();
-
-    const rawImpl = factoryImpl
-      ? await factoryImpl.newMapStore(mapName, config.getProperties())
-      : directImpl;
+    const rawImpl = await MapStoreContext._resolveImplementation(mapName, config, options);
 
     if (!rawImpl) {
       throw new Error(
@@ -88,6 +90,56 @@ export class MapStoreContext<K, V> {
     }
 
     return new MapStoreContext<K, V>(wrapper, store, initialEntries);
+  }
+
+  private static async _resolveImplementation(
+    mapName: string,
+    config: MapStoreConfig,
+    options?: MapStoreContextOptions,
+  ): Promise<unknown> {
+    // 1. Direct factoryImplementation / implementation (programmatic API)
+    const factoryImpl = config.getFactoryImplementation() as any;
+    if (factoryImpl) {
+      return await factoryImpl.newMapStore(mapName, config.getProperties());
+    }
+    const directImpl = config.getImplementation();
+    if (directImpl) {
+      return directImpl;
+    }
+
+    const registry = options?.registry;
+    const configOrigin = options?.configOrigin;
+
+    // 2. factoryClassName — check registry first, then dynamic-load
+    const factoryClassName = config.getFactoryClassName();
+    if (factoryClassName) {
+      const registryHit = registry?.get(factoryClassName);
+      if (registryHit) {
+        return await registryHit.newMapStore(mapName, config.getProperties());
+      }
+      const loaded = await MapStoreDynamicLoader.load(factoryClassName, configOrigin);
+      if (typeof loaded === 'function') {
+        const factory = new (loaded as any)();
+        return await factory.newMapStore(mapName, config.getProperties());
+      }
+      return await (loaded as any).newMapStore(mapName, config.getProperties());
+    }
+
+    // 3. className — check registry first, then dynamic-load
+    const className = config.getClassName();
+    if (className) {
+      const registryHit = registry?.get(className);
+      if (registryHit) {
+        return await registryHit.newMapStore(mapName, config.getProperties());
+      }
+      const loaded = await MapStoreDynamicLoader.load(className, configOrigin);
+      if (typeof loaded === 'function') {
+        return new (loaded as any)();
+      }
+      return loaded;
+    }
+
+    return null;
   }
 
   getMapDataStore(): MapDataStore<K, V> {
