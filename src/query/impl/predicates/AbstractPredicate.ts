@@ -1,6 +1,6 @@
 import type { Predicate } from '../../Predicate';
-import type { QueryableEntry } from '../QueryableEntry';
 import { canonicalizeAttribute } from '../IndexUtils';
+import type { QueryableEntry } from '../QueryableEntry';
 import { isNull } from './PredicateUtils';
 
 /**

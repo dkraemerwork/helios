@@ -12,10 +12,10 @@
  *   - `event: init` with the full MonitorPayload on connection
  */
 
-import type { MetricsRegistry } from '@zenystx/helios-core/monitor/MetricsRegistry';
-import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 import type { MonitorConfig } from '@zenystx/helios-core/config/MonitorConfig';
+import type { MetricsRegistry } from '@zenystx/helios-core/monitor/MetricsRegistry';
 import { renderMonitorDashboard } from '@zenystx/helios-core/monitor/MonitorDashboard';
+import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };

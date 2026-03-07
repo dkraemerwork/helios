@@ -4,9 +4,9 @@
  * Port of Hazelcast {@code ClientEndpointImpl} — tracks auth state, client UUID,
  * heartbeat timing, and provides event-push to the connected client.
  */
-import type { EventloopChannel } from "@zenystx/helios-core/internal/eventloop/Eventloop";
 import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
+import type { EventloopChannel } from "@zenystx/helios-core/internal/eventloop/Eventloop";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 
 export class ClientSession {

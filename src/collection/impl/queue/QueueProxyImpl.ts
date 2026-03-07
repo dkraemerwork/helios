@@ -1,9 +1,9 @@
-import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
-import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 import type { LocalQueueStats } from "@zenystx/helios-core/collection/LocalQueueStats";
-import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
 
 export class QueueProxyImpl<E> implements IQueue<E> {
   constructor(

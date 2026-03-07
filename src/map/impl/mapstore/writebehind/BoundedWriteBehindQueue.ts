@@ -1,6 +1,6 @@
-import type { WriteBehindQueue } from './WriteBehindQueue.js';
 import type { DelayedEntry } from './DelayedEntry.js';
 import { ReachedMaxSizeException } from './ReachedMaxSizeException.js';
+import type { WriteBehindQueue } from './WriteBehindQueue.js';
 
 /**
  * Wraps a WriteBehindQueue with a capacity limit.

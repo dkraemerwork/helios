@@ -4,14 +4,14 @@
  * Verifies that the near cache does not serve stale data after
  * local writes invalidate cached entries.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
-import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
 import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
 import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 function makeProxyAndStore(mapName = 'stalenessTestMap') {
     const config = new NearCacheConfig(mapName)

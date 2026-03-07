@@ -1,5 +1,5 @@
-import { InstancePermission } from './InstancePermission';
 import { ActionConstants } from './ActionConstants';
+import { InstancePermission } from './InstancePermission';
 
 /** Port of com.hazelcast.security.permission.ReplicatedMapPermission */
 export class ReplicatedMapPermission extends InstancePermission {

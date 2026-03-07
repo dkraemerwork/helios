@@ -3,12 +3,12 @@
  *
  * Sends invalidations to Near Caches in batches.
  */
-import { Invalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
-import { InvalidationQueue } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationQueue';
 import { BatchNearCacheInvalidation } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchNearCacheInvalidation';
 import type { Invalidation } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidation';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { InvalidationQueue } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationQueue';
 import type { EventFilter, InvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import { Invalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export interface BatchInvalidatorNodeEngine extends InvalidatorNodeEngine {
     getExecutionService(): {

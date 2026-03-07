@@ -8,7 +8,7 @@
  * This file exists to satisfy the proof-label contract requirement that every
  * mandatory label has a named test file owner.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 describe("P20-RELIABLE-TOPIC — NOT-RETAINED", () => {
     test("getReliableTopic() is not on HeliosClient (narrowed out)", async () => {

@@ -1,12 +1,12 @@
 import type { Predicate } from '../../Predicate';
-import type { IndexRegistry } from '../IndexRegistry';
-import type { Visitor } from './Visitor';
-import type { VisitablePredicate } from './VisitablePredicate';
-import type { NegatablePredicate } from './NegatablePredicate';
-import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
 import { Comparables } from '../Comparables';
-import { isNull } from './PredicateUtils';
+import type { IndexRegistry } from '../IndexRegistry';
+import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
 import { EqualPredicate } from './EqualPredicate';
+import type { NegatablePredicate } from './NegatablePredicate';
+import { isNull } from './PredicateUtils';
+import type { VisitablePredicate } from './VisitablePredicate';
+import type { Visitor } from './Visitor';
 
 /**
  * Predicate that tests attribute inequality.

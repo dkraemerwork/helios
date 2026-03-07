@@ -1,7 +1,7 @@
-import { connect, type NatsConnection } from '@nats-io/transport-node';
 import { jetstreamManager } from '@nats-io/jetstream';
-import type { NatsServerNodeConfig } from './NatsServerConfig.js';
+import { connect, type NatsConnection } from '@nats-io/transport-node';
 import type { ResolvedClusterNodeNatsConfig } from './ClusterNodeConfig.js';
+import type { NatsServerNodeConfig } from './NatsServerConfig.js';
 
 /**
  * Owns the full lifecycle of one or more `nats-server` child processes.

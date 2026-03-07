@@ -8,11 +8,11 @@
  * Block 21.2: Also resolves the MapDataStore so owner-executed operations
  * can perform external store/delete/load calls on the partition owner.
  */
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
-import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
+import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
+import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export abstract class MapOperation extends Operation {
     protected readonly mapName: string;

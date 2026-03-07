@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { NetworkConfig } from '@zenystx/helios-core/config/NetworkConfig';
+import { describe, expect, it } from 'bun:test';
 
 describe('NetworkConfigTest', () => {
     let networkConfig: NetworkConfig;

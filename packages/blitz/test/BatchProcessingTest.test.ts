@@ -6,13 +6,13 @@
  *
  * ~20 tests total.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { BatchPipeline } from '../src/batch/BatchPipeline.ts';
 import type { BatchResult } from '../src/batch/BatchResult.ts';
 import { EndOfStreamDetector } from '../src/batch/EndOfStreamDetector.ts';
-import type { Source, SourceMessage } from '../src/source/Source.ts';
-import type { Sink } from '../src/sink/Sink.ts';
 import { BytesCodec } from '../src/codec/BlitzCodec.ts';
+import type { Sink } from '../src/sink/Sink.ts';
+import type { Source, SourceMessage } from '../src/source/Source.ts';
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 

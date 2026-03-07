@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { ITopic } from '@zenystx/helios-core/topic/ITopic';
 import { TopicImpl } from '@zenystx/helios-core/topic/impl/TopicImpl';
+import { describe, expect, it } from 'bun:test';
 
 function makeTopic<T>(name?: string): ITopic<T> {
     return new TopicImpl<T>(name ?? 'testTopic');

@@ -16,20 +16,20 @@
  *   5. Dropped-invalidation repair: RepairingTask detects miss count above threshold,
  *      marks sequences stale, forcing stale records to be evicted on next read.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
-import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig, LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import type { AsyncCacheBackingStore } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
 import { NearCachedClientCacheProxy } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { LocalUpdatePolicy, NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
+import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
 import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
-import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
-import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
-import type { AsyncCacheBackingStore } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 
 // ── shared helpers ────────────────────────────────────────────────────────────
 

@@ -7,14 +7,11 @@
  * ```
  */
 
-export {
-    HeliosCacheModule,
-    type HeliosCacheModuleOptions,
-    type HeliosCacheModuleAsyncOptions,
-    type HeliosCacheModuleOptionsFactory,
-} from './HeliosCacheModule';
-export { HeliosCache, type IHeliosCacheMap } from './HeliosCache';
-export { Cacheable, type CacheableOptions } from './decorators/cacheable.decorator';
 export { CacheEvict, type CacheEvictOptions } from './decorators/cache-evict.decorator';
 export { CachePut, type CachePutOptions } from './decorators/cache-put.decorator';
 export { CacheableRegistry, type ICacheStore } from './decorators/cache-registry';
+export { Cacheable, type CacheableOptions } from './decorators/cacheable.decorator';
+export { HeliosCache, type IHeliosCacheMap } from './HeliosCache';
+export {
+    HeliosCacheModule, type HeliosCacheModuleAsyncOptions, type HeliosCacheModuleOptions, type HeliosCacheModuleOptionsFactory
+} from './HeliosCacheModule';

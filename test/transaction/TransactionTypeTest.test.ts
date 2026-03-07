@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.transaction.impl.TransactionTypeTest}.
  */
-import { describe, it, expect } from 'bun:test';
 import { TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
+import { describe, expect, it } from 'bun:test';
 
 describe('TransactionTypeTest', () => {
     it('getById_returns_matching_transactionType', () => {

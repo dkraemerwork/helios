@@ -10,14 +10,14 @@
  * - Finding 19: FetchMembersViewOp receiver rejects if it doesn't suspect all prior members
  * - Finding 20: UUID change triggers partition table repair
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { MembershipManager } from '@zenystx/helios-core/internal/cluster/impl/MembershipManager';
-import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
-import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
-import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
+import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
+import { MembershipManager } from '@zenystx/helios-core/internal/cluster/impl/MembershipManager';
+import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 

@@ -4,9 +4,9 @@
  * Abstract base class for Near Cache invalidation. Contains shared functionality
  * for invalidating Near Cache entries by key or clearing all entries.
  */
+import type { Invalidation } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidation';
 import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 import { SingleNearCacheInvalidation } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/SingleNearCacheInvalidation';
-import type { Invalidation } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidation';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export interface EventRegistration {

@@ -1,17 +1,5 @@
-import { describe, test, expect } from 'bun:test';
 import { Aggregators } from '@zenystx/helios-core/aggregation/Aggregators';
-import {
-  createEntryWithValue,
-  createExtractableEntryWithValue,
-  sampleBigDecimals,
-  sampleBigIntegers,
-  sampleDoubles,
-  sampleFloats,
-  sampleIntegers,
-  sampleLongs,
-  sampleValueContainers,
-  addValues,
-} from './helpers/TestSamples';
+import { describe, expect, test } from 'bun:test';
 import {
   sumBigDecimals,
   sumBigIntegers,
@@ -22,6 +10,18 @@ import {
   sumLongs,
   sumValueContainer,
 } from './helpers/Sums';
+import {
+  addValues,
+  createEntryWithValue,
+  createExtractableEntryWithValue,
+  sampleBigDecimals,
+  sampleBigIntegers,
+  sampleDoubles,
+  sampleFloats,
+  sampleIntegers,
+  sampleLongs,
+  sampleValueContainers,
+} from './helpers/TestSamples';
 import { ValueType } from './helpers/ValueContainer';
 
 const ERROR = 1e-8;

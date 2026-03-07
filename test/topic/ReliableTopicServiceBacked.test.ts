@@ -1,15 +1,15 @@
 /**
  * Phase 19T reliable-topic end-to-end coverage.
  */
-import { afterEach, describe, expect, it } from "bun:test";
 import { Helios } from "@zenystx/helios-core/Helios";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { ReliableTopicConfig, TopicOverloadPolicy } from "@zenystx/helios-core/config/ReliableTopicConfig";
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
-import { TOPIC_RB_PREFIX } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { TestHeliosInstance } from "@zenystx/helios-core/test-support/TestHeliosInstance";
+import { TOPIC_RB_PREFIX } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
+import { afterEach, describe, expect, it } from "bun:test";
 
 async function waitFor<T>(fn: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;

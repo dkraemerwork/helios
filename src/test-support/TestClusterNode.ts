@@ -6,19 +6,19 @@
  */
 import { Address } from "@zenystx/helios-core/cluster/Address";
 import { MemberImpl } from "@zenystx/helios-core/cluster/impl/MemberImpl";
-import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
-import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
-import {
-  ClusterJoinManager,
-  type JoinTransport,
-} from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
+import type { ClusterMessage } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import {
   ClusterHeartbeatManager,
   type HeartbeatConfig,
 } from "@zenystx/helios-core/internal/cluster/impl/ClusterHeartbeatManager";
-import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import {
+  ClusterJoinManager,
+  type JoinTransport,
+} from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
+import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { MembersView } from "@zenystx/helios-core/internal/cluster/impl/MembersView";
-import type { ClusterMessage } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 export interface TestClusterNodeConfig {
   readonly clusterName: string;

@@ -4,11 +4,11 @@
  * Tests lifecycle management (create, destroy, reset, shutdown),
  * invalidator selection, and repairing handler registration.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { MapNearCacheNodeEngine } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 function makeNodeEngine(overrides: Partial<MapNearCacheNodeEngine> = {}): MapNearCacheNodeEngine {
     const partitionService = {

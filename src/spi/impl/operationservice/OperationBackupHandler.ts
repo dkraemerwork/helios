@@ -6,10 +6,10 @@
  * It increments replica versions, caps backup counts by cluster size,
  * and dispatches backup copies via BackupSender.
  */
-import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { Address } from '@zenystx/helios-core/cluster/Address';
 import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
 import { isBackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 /**
  * Transport abstraction for sending backup operations to remote nodes.

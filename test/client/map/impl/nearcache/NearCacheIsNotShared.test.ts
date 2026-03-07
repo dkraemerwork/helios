@@ -8,12 +8,12 @@
  * this test verifies isolation through the NearCacheManager level rather than
  * constructing proxies with synchronous backing stores.
  */
-import { describe, test, expect } from 'bun:test';
-import { DefaultNearCacheManager } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { DefaultNearCacheManager } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager';
 import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { describe, expect, test } from 'bun:test';
 
 function makeSerialization(): SerializationService {
     return {

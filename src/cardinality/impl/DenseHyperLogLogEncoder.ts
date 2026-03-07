@@ -1,6 +1,6 @@
-import { HyperLogLogEncoding } from './HyperLogLogEncoding';
-import { HyperLogLogEncoder } from './HyperLogLogEncoder';
 import { BIAS_DATA, RAW_ESTIMATE_DATA, THRESHOLD } from './DenseHyperLogLogConstants';
+import { HyperLogLogEncoder } from './HyperLogLogEncoder';
+import { HyperLogLogEncoding } from './HyperLogLogEncoding';
 import type { SparseHyperLogLogEncoder } from './SparseHyperLogLogEncoder';
 
 // Counts trailing zero bits in a 32-bit integer.

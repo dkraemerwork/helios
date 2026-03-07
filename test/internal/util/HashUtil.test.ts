@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { HashUtil } from '@zenystx/helios-core/internal/util/HashUtil';
+import { describe, expect, it } from 'bun:test';
 
 describe('HashUtilTest', () => {
   it('hashToIndex_whenHashPositive', () => {

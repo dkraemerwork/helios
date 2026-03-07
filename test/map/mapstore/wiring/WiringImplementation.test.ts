@@ -2,9 +2,9 @@
  * Wiring proof: direct `implementation` — MapStoreConfig.setImplementation(store)
  * Label: mapstore-mongodb-wiring-implementation
  */
-import { describe, it, expect } from 'bun:test';
 import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapStoreContext } from '@zenystx/helios-core/map/impl/mapstore/MapStoreContext';
+import { describe, expect, it } from 'bun:test';
 import { TrackingMapStore } from './test-tracking-store.js';
 
 describe('Wiring: direct implementation', () => {

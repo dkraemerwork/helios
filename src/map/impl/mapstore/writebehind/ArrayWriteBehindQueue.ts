@@ -1,5 +1,5 @@
-import type { WriteBehindQueue } from './WriteBehindQueue.js';
 import type { DelayedEntry } from './DelayedEntry.js';
+import type { WriteBehindQueue } from './WriteBehindQueue.js';
 
 export class ArrayWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
   private readonly _queue: DelayedEntry<K, V>[] = [];

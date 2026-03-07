@@ -23,14 +23,14 @@
  * 19. Integration: HeliosInstanceImpl starts ClientProtocolServer
  * 20. E2E verification: raw socket auth → request → response → disconnect
  */
-import { describe, test, expect, afterEach } from "bun:test";
+import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
 import { ClientMessage, ClientMessageFrame } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
 import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
 import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
 import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
+import { afterEach, describe, expect, test } from "bun:test";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

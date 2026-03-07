@@ -11,19 +11,19 @@
  * - Executor container service resolved from member-local service wiring
  * - Instance shutdown awaits executor-aware service shutdown hooks
  */
-import { describe, test, expect } from 'bun:test';
-import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
-import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry';
-import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
+import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import { TargetNotMemberException } from '@zenystx/helios-core/spi/impl/operationservice/RetryableException';
-import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
+import { describe, expect, test } from 'bun:test';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 

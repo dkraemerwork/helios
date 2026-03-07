@@ -1,7 +1,7 @@
 import type { Predicate } from '../../Predicate';
 import type { IndexRegistry } from '../IndexRegistry';
-import type { Visitor } from './Visitor';
 import type { VisitablePredicate } from './VisitablePredicate';
+import type { Visitor } from './Visitor';
 
 /**
  * Utility for accepting a Visitor across an array of predicates.

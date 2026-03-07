@@ -4,10 +4,10 @@
  * Tests for HeliosBlitzModule, HeliosBlitzService, and @InjectBlitz() decorator.
  * BlitzService.connect() is mocked throughout — no real NATS server required.
  */
-import 'reflect-metadata';
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import { Injectable } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { Injectable, Inject } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import 'reflect-metadata';
 
 import { BlitzService } from '../src/BlitzService.ts';
 import { Pipeline } from '../src/Pipeline.ts';
@@ -15,7 +15,7 @@ import { BatchPipeline } from '../src/batch/BatchPipeline.ts';
 
 import { HeliosBlitzModule } from '../src/nestjs/HeliosBlitzModule.ts';
 import { HeliosBlitzService } from '../src/nestjs/HeliosBlitzService.ts';
-import { InjectBlitz, HELIOS_BLITZ_SERVICE_TOKEN } from '../src/nestjs/InjectBlitz.decorator.ts';
+import { HELIOS_BLITZ_SERVICE_TOKEN, InjectBlitz } from '../src/nestjs/InjectBlitz.decorator.ts';
 
 // ── Mock helpers ────────────────────────────────────────────────────────────
 

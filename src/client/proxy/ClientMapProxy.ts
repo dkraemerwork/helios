@@ -9,15 +9,15 @@
  * The proxy extends ClientProxy (which implements DistributedObject) and
  * provides the async map API that remote clients actually use.
  */
-import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
-import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
-import { MapGetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec";
-import { MapRemoveCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapRemoveCodec";
-import { MapSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSizeCodec";
-import { MapContainsKeyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapContainsKeyCodec";
 import { MapClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapClearCodec";
+import { MapContainsKeyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapContainsKeyCodec";
 import { MapDeleteCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapDeleteCodec";
+import { MapGetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec";
+import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
+import { MapRemoveCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapRemoveCodec";
 import { MapSetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSetCodec";
+import { MapSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSizeCodec";
+import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 
 export class ClientMapProxy<K = any, V = any> extends ClientProxy {
 

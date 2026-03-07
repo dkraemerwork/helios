@@ -9,9 +9,9 @@
  * via Bun's ESM resolution. In workspace/dev mode, we use absolute paths to
  * the package source to prove the same mechanism.
  */
-import { describe, it, expect } from 'bun:test';
-import { resolve } from 'node:path';
 import { MapStoreDynamicLoader } from '@zenystx/helios-core/map/impl/mapstore/MapStoreDynamicLoader';
+import { describe, expect, it } from 'bun:test';
+import { resolve } from 'node:path';
 
 const mongoPackageSrc = resolve(import.meta.dir, '../../../../packages/mongodb/src/index.ts');
 

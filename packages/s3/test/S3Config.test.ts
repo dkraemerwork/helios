@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
-import { S3MapStore } from '../src/S3MapStore.js';
+import { describe, expect, test } from 'bun:test';
 import type { S3Config } from '../src/S3Config.js';
+import { S3MapStore } from '../src/S3MapStore.js';
 
 describe('S3Config defaults', () => {
   test('default suffix is .json', () => {

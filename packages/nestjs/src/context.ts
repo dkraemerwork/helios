@@ -8,8 +8,7 @@
  */
 
 export {
-    NestAware,
-    isNestAware,
-    NEST_AWARE_METADATA_KEY,
+    NEST_AWARE_METADATA_KEY, NestAware,
+    isNestAware
 } from './context/NestAware';
 export { NestManagedContext } from './context/NestManagedContext';

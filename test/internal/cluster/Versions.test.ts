@@ -1,9 +1,9 @@
 /**
  * Port of com.hazelcast.internal.cluster.VersionsTest
  */
-import { describe, test, expect } from 'bun:test';
 import { Versions } from '@zenystx/helios-core/internal/cluster/Versions';
 import { Version } from '@zenystx/helios-core/version/Version';
+import { describe, expect, test } from 'bun:test';
 
 describe('VersionsTest', () => {
     test('version_4_0', () => {

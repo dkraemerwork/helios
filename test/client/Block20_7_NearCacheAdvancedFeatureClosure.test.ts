@@ -14,7 +14,7 @@
  * 10. Reliable-topic and executor client decision: NOT-RETAINED
  * 11. Verification — no hidden mini-runtimes, deferred throws, or fake parity
  */
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 // ── 1. NearCachedClientMapProxy wraps real ClientMapProxy ────────────────────
 

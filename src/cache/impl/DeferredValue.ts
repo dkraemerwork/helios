@@ -4,8 +4,8 @@
  *
  * @param V the type of value
  */
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 
 function buffersEqual(a: Buffer | null, b: Buffer | null): boolean {
     if (a === b) return true;

@@ -1,9 +1,9 @@
 /**
  * Port of com.hazelcast.internal.cluster.impl.AddressCheckerImplTest
  */
-import { describe, test, expect } from 'bun:test';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { AddressCheckerImpl } from '@zenystx/helios-core/internal/cluster/impl/AddressCheckerImpl';
+import { describe, expect, test } from 'bun:test';
 
 function createAddress(ip: string): Address {
     return new Address(ip, 5701);

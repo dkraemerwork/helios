@@ -4,8 +4,8 @@
  */
 import { AbstractInternalPartition } from '@zenystx/helios-core/internal/partition/AbstractInternalPartition';
 import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
-import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 
 export class ReadonlyInternalPartition extends AbstractInternalPartition {
     private readonly _replicas: (PartitionReplica | null)[];

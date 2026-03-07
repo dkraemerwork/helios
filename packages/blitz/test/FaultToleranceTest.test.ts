@@ -4,16 +4,16 @@
  * Tests: AckPolicy, RetryPolicy, DeadLetterSink, CheckpointManager, FaultHandler.
  * All tests are pure unit tests — no NATS required.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { AckPolicy } from '../src/fault/AckPolicy.ts';
-import { RetryPolicy } from '../src/fault/RetryPolicy.ts';
-import { DeadLetterSink } from '../src/fault/DeadLetterSink.ts';
-import type { DLPublisher } from '../src/fault/DeadLetterSink.ts';
-import { CheckpointManager } from '../src/fault/CheckpointManager.ts';
-import type { CheckpointStore } from '../src/fault/CheckpointManager.ts';
-import { FaultHandler } from '../src/fault/FaultHandler.ts';
-import type { FaultMessage } from '../src/fault/FaultHandler.ts';
+import { describe, expect, it } from 'bun:test';
 import { NakError } from '../src/errors/NakError.ts';
+import { AckPolicy } from '../src/fault/AckPolicy.ts';
+import type { CheckpointStore } from '../src/fault/CheckpointManager.ts';
+import { CheckpointManager } from '../src/fault/CheckpointManager.ts';
+import type { DLPublisher } from '../src/fault/DeadLetterSink.ts';
+import { DeadLetterSink } from '../src/fault/DeadLetterSink.ts';
+import type { FaultMessage } from '../src/fault/FaultHandler.ts';
+import { FaultHandler } from '../src/fault/FaultHandler.ts';
+import { RetryPolicy } from '../src/fault/RetryPolicy.ts';
 
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
 

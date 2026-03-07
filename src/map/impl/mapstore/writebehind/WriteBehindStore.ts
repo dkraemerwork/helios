@@ -1,10 +1,10 @@
 import type { MapDataStore } from '../MapDataStore.js';
 import type { MapStoreWrapper } from '../MapStoreWrapper.js';
-import type { WriteBehindQueue } from './WriteBehindQueue.js';
-import type { WriteBehindProcessor } from './WriteBehindProcessor.js';
-import { StoreWorker } from './StoreWorker.js';
-import { addedEntry, deletedEntry, DelayedEntryType } from './DelayedEntry.js';
 import type { DelayedEntry } from './DelayedEntry.js';
+import { addedEntry, DelayedEntryType, deletedEntry } from './DelayedEntry.js';
+import { StoreWorker } from './StoreWorker.js';
+import type { WriteBehindProcessor } from './WriteBehindProcessor.js';
+import type { WriteBehindQueue } from './WriteBehindQueue.js';
 
 const DEFAULT_CLEAR_BATCH_SIZE = 10_000;
 

@@ -8,10 +8,10 @@
  * Block 21.2: Performs external MapStore delete on the owner.
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
 import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
 import { RemoveBackupOperation } from '@zenystx/helios-core/map/impl/operation/RemoveBackupOperation';
+import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export class DeleteOperation extends MapOperation implements BackupAwareOperation {
     private readonly _key: Data;

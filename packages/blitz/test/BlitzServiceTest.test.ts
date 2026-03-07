@@ -1,7 +1,7 @@
 /**
  * BlitzService integration tests — uses embedded NATS server via BlitzService.start().
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { BlitzService } from '../src/BlitzService.ts';
 
 describe('BlitzService — NATS integration', () => {

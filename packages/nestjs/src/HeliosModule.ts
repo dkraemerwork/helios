@@ -24,6 +24,7 @@ import {
     DynamicModule,
     FactoryProvider,
     Global,
+    Inject,
     Injectable,
     Module,
     OnApplicationShutdown,
@@ -32,7 +33,6 @@ import {
     Provider,
     ValueProvider,
 } from '@nestjs/common';
-import { Inject } from '@nestjs/common';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 import { HELIOS_INSTANCE_TOKEN } from './HeliosInstanceDefinition';
 

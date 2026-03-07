@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.map.impl.record.SimpleRecordWithLFUEviction}.
  */
-import { SimpleRecord } from './SimpleRecord';
 import { RecordReaderWriter } from './RecordReaderWriter';
+import { SimpleRecord } from './SimpleRecord';
 
 export class SimpleRecordWithLFUEviction extends SimpleRecord {
     private _hits = 0;

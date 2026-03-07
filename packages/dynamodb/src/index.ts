@@ -1,2 +1,2 @@
+export type { DynamoDbConfig, DynamoDbMapStoreMetrics, EndpointStrategy, Serializer, TlsConfig } from './DynamoDbConfig.js';
 export { DynamoDbMapStore } from './DynamoDbMapStore.js';
-export type { DynamoDbConfig, DynamoDbMapStoreMetrics, Serializer, EndpointStrategy, TlsConfig } from './DynamoDbConfig.js';

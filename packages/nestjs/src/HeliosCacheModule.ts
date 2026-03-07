@@ -21,8 +21,8 @@
  *   })
  */
 
-import { DynamicModule, Module, type Provider } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
+import { DynamicModule, Module, type Provider } from '@nestjs/common';
 import { HeliosCache, type IHeliosCacheMap } from './HeliosCache';
 
 // ---------------------------------------------------------------------------

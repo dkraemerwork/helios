@@ -8,9 +8,9 @@
  *   bun run helios-server.ts --port 5701              # explicit port
  *   bun run helios-server.ts --help                   # show help
  */
-import { parseCli, helpText } from './src/server/cli';
-import { HeliosServer } from './src/server/HeliosServer';
 import { HeliosConfig } from './src/config/HeliosConfig';
+import { helpText, parseCli } from './src/server/cli';
+import { HeliosServer } from './src/server/HeliosServer';
 
 const args = parseCli(process.argv.slice(2));
 

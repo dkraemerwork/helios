@@ -4,22 +4,22 @@
  * 18 tests proving config, topology models, cluster messages,
  * coordinator service, re-registration sweep, and announce semantics.
  */
-import { describe, test, expect, beforeEach } from "bun:test";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { parseRawConfig } from "@zenystx/helios-core/config/ConfigLoader";
+import type {
+  BlitzNodeRegisterMsg,
+  BlitzNodeRemoveMsg,
+  BlitzTopologyAnnounceMsg,
+  BlitzTopologyRequestMsg,
+  BlitzTopologyResponseMsg,
+} from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
+import { parseRawConfig } from "@zenystx/helios-core/config/ConfigLoader";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import {
   BlitzClusterTopology,
   type BlitzNodeRegistration,
 } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
 import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
-import type {
-  BlitzNodeRegisterMsg,
-  BlitzTopologyRequestMsg,
-  BlitzTopologyResponseMsg,
-  BlitzTopologyAnnounceMsg,
-  BlitzNodeRemoveMsg,
-} from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tests

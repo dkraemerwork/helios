@@ -9,11 +9,11 @@
  * - Stop/cleanup lifecycle
  * - Cluster name filtering (different cluster names ignored)
  */
-import { describe, test, expect, afterEach } from 'bun:test';
-import { MulticastService } from '@zenystx/helios-core/cluster/multicast/MulticastService';
-import type { MulticastMessage, MulticastJoinMessage, MulticastListener } from '@zenystx/helios-core/cluster/multicast/MulticastService';
 import { MulticastJoiner } from '@zenystx/helios-core/cluster/multicast/MulticastJoiner';
+import type { MulticastJoinMessage, MulticastMessage } from '@zenystx/helios-core/cluster/multicast/MulticastService';
+import { MulticastService } from '@zenystx/helios-core/cluster/multicast/MulticastService';
 import { MulticastConfig } from '@zenystx/helios-core/config/MulticastConfig';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 let testPortCounter = 54500;
 function nextTestPort(): number {

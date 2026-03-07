@@ -9,8 +9,8 @@
  *   - Multiple simultaneous connections are independent
  *   - bytesRead / bytesWritten counters are accurate
  */
-import { describe, test, expect, afterEach } from 'bun:test';
 import { Eventloop, EventloopChannel, EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

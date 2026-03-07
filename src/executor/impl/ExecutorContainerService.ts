@@ -6,13 +6,13 @@
  */
 
 import type { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
-import type { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
 import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
 import type { LocalExecutorStats } from '@zenystx/helios-core/executor/IExecutorService.js';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData.js';
-import { Bits } from '@zenystx/helios-core/internal/nio/Bits.js';
 import type { ExecutionBackend } from '@zenystx/helios-core/executor/impl/ExecutionBackend.js';
 import { InlineExecutionBackend } from '@zenystx/helios-core/executor/impl/InlineExecutionBackend.js';
+import type { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits.js';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData.js';
 
 export const enum TaskState {
     QUEUED = 'QUEUED',

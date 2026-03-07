@@ -8,15 +8,15 @@
  * - HeliosInstance async shutdown with graceful drain hooks
  * - Binary operation payload round-trip over transport
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
 import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { Address } from '@zenystx/helios-core/cluster/Address';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
-import type { PartitionService } from '@zenystx/helios-core/spi/PartitionService';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
+import type { PartitionService } from '@zenystx/helios-core/spi/PartitionService';
+import { describe, expect, test } from 'bun:test';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 

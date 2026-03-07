@@ -11,7 +11,7 @@
  * Real-network behavior is covered separately in the client E2E suites that
  * connect over the binary client protocol.
  */
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 // ── Map acceptance ──────────────────────────────────────────────────────────
 

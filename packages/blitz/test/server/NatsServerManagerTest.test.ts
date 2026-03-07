@@ -1,9 +1,9 @@
-import { describe, expect, it, afterEach } from 'bun:test';
-import { NatsServerManager } from '../../src/server/NatsServerManager.js';
-import type { NatsServerNodeConfig } from '../../src/server/NatsServerConfig.js';
-import { NatsServerBinaryResolver } from '../../src/server/NatsServerBinaryResolver.js';
-import { connect } from '@nats-io/transport-node';
 import { jetstreamManager } from '@nats-io/jetstream';
+import { connect } from '@nats-io/transport-node';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { NatsServerBinaryResolver } from '../../src/server/NatsServerBinaryResolver.js';
+import type { NatsServerNodeConfig } from '../../src/server/NatsServerConfig.js';
+import { NatsServerManager } from '../../src/server/NatsServerManager.js';
 
 /** Helper to build a single-node in-memory config on a given port. */
 function singleNodeConfig(port: number, overrides?: Partial<NatsServerNodeConfig>): NatsServerNodeConfig[] {

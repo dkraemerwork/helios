@@ -1,6 +1,6 @@
-import { HyperLogLogEncoding } from './HyperLogLogEncoding';
-import { HyperLogLogEncoder } from './HyperLogLogEncoder';
 import { DenseHyperLogLogEncoder } from './DenseHyperLogLogEncoder';
+import { HyperLogLogEncoder } from './HyperLogLogEncoder';
+import { HyperLogLogEncoding } from './HyperLogLogEncoding';
 
 const P_PRIME = 25;
 const P_PRIME_MASK = 0x1ffffff;

@@ -7,12 +7,12 @@
  *   await Helios.newInstance('helios-config.json') // file-based JSON
  *   await Helios.newInstance('helios-config.yml')  // file-based YAML
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import path from 'path';
+import { afterEach, describe, expect, it } from 'bun:test';
 import fs from 'fs';
+import path from 'path';
 
 // Temp directory for fixture config files
 const FIXTURE_DIR = path.join(import.meta.dir, '__fixtures__');

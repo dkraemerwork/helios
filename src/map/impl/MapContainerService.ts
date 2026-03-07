@@ -17,25 +17,25 @@
  * {@code com.hazelcast.map.impl.MapServiceContextImpl} and migration-aware
  * behavior from {@code com.hazelcast.map.impl.MapMigrationAwareService}.
  */
-import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
-import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
-import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
-import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
-import { MapStoreContext } from '@zenystx/helios-core/map/impl/mapstore/MapStoreContext';
 import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
-import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
+import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
+import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
 import type { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
-import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
+import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
+import { MapStoreContext } from '@zenystx/helios-core/map/impl/mapstore/MapStoreContext';
 import { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
-import { MapReplicationStateHolder } from '@zenystx/helios-core/map/impl/operation/MapReplicationStateHolder';
-import { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/WriteBehindStateHolder';
 import { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation/MapNearCacheStateHolder';
 import { MapReplicationOperation } from '@zenystx/helios-core/map/impl/operation/MapReplicationOperation';
-import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
+import { MapReplicationStateHolder } from '@zenystx/helios-core/map/impl/operation/MapReplicationStateHolder';
+import { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/WriteBehindStateHolder';
+import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
+import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
 /**
  * Epoch-fenced promotion record for a partition. Tracks the ownership epoch,

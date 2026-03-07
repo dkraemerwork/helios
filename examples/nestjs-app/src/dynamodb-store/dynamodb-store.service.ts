@@ -12,10 +12,10 @@
  * Scylla/Alternator as durable persistence with write-behind for latency smoothing.
  */
 
-import 'reflect-metadata';
 import { Injectable } from '@nestjs/common';
-import { InjectMap } from '@zenystx/helios-nestjs';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import { InjectMap } from '@zenystx/helios-nestjs';
+import 'reflect-metadata';
 
 export interface TradingSignal {
     signalId: string;

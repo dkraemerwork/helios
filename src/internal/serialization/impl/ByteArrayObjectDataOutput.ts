@@ -6,7 +6,7 @@
 import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
-import { NULL_ARRAY_LENGTH, BIG_ENDIAN, type ByteOrder } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { BIG_ENDIAN, NULL_ARRAY_LENGTH, type ByteOrder } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 
 /** Maximum array size (mirrors OpenJDK SOFT_MAX_ARRAY_LENGTH). */
 export const MAX_ARRAY_SIZE = 2147483647 - 64; // Integer.MAX_VALUE - 64

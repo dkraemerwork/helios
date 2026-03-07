@@ -9,12 +9,12 @@ import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
-import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig";
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
+import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
+import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry";
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
-import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;

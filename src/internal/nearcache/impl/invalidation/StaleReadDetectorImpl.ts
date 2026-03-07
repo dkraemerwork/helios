@@ -4,10 +4,10 @@
  * Default implementation of StaleReadDetector.
  */
 import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import type { StaleReadDetector } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/StaleReadDetector';
 import type { MetaDataContainer } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataContainer';
-import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
+import type { StaleReadDetector } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/StaleReadDetector';
 
 export class StaleReadDetectorImpl implements StaleReadDetector {
     private readonly _repairingHandler: RepairingHandler;

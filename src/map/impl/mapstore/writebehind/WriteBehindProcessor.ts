@@ -1,6 +1,6 @@
 import type { MapStoreWrapper } from '../MapStoreWrapper.js';
-import { DelayedEntryType } from './DelayedEntry.js';
 import type { DelayedEntry } from './DelayedEntry.js';
+import { DelayedEntryType } from './DelayedEntry.js';
 
 export interface WriteBehindProcessResult<K, V> {
   totalEntries: number;

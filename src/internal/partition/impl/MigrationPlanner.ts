@@ -5,10 +5,10 @@
  * current to targeted ownership. Planned migrations never decrease the available
  * replica count of a partition.
  */
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
-import { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
 import { AbstractInternalPartition } from '@zenystx/helios-core/internal/partition/AbstractInternalPartition';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 
 export interface MigrationDecisionCallback {
     migrate(

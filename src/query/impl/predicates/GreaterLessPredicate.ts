@@ -1,7 +1,7 @@
 import type { Predicate } from '../../Predicate';
-import type { NegatablePredicate } from './NegatablePredicate';
-import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
 import { Comparables } from '../Comparables';
+import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
+import type { NegatablePredicate } from './NegatablePredicate';
 
 /**
  * Predicate for >, >=, <, <= comparisons.

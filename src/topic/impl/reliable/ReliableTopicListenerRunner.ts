@@ -9,10 +9,10 @@
  * the service calls notify() which immediately triggers a poll instead of
  * waiting for the next polling interval.
  */
+import type { ArrayRingbuffer } from "@zenystx/helios-core/ringbuffer/impl/ArrayRingbuffer";
 import { Message } from "@zenystx/helios-core/topic/Message";
 import type { MessageListener } from "@zenystx/helios-core/topic/MessageListener";
 import type { ReliableTopicMessageRecord } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicMessageRecord";
-import type { ArrayRingbuffer } from "@zenystx/helios-core/ringbuffer/impl/ArrayRingbuffer";
 
 export class ReliableTopicListenerRunner<T> {
   private _sequence: number;

@@ -9,14 +9,14 @@
  */
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
-import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
-import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
-import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
-import { MongoMapStore } from '../../packages/mongodb/src/MongoMapStore.js';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
 import { DynamoDbMapStore } from '../../packages/dynamodb/src/DynamoDbMapStore.js';
+import { MongoMapStore } from '../../packages/mongodb/src/MongoMapStore.js';
 
 // ═══════════════════════════════════════════════════════════
 //  Provenance-recording adapter

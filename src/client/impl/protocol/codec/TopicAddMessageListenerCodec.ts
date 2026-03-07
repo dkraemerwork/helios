@@ -1,7 +1,7 @@
 import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { DataCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec";
-import { StringCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec";
 import { FixedSizeTypesCodec, LONG_SIZE_IN_BYTES } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec";
+import { StringCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 
 export class TopicAddMessageListenerCodec {

@@ -4,9 +4,9 @@
  * Port of the lifecycle management from HazelcastClientInstanceImpl,
  * adapted for the Helios remote client.
  */
-import type { LifecycleService } from '@zenystx/helios-core/instance/lifecycle/LifecycleService';
-import type { LifecycleListener } from '@zenystx/helios-core/instance/lifecycle/LifecycleListener';
 import { LifecycleEvent, LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
+import type { LifecycleListener } from '@zenystx/helios-core/instance/lifecycle/LifecycleListener';
+import type { LifecycleService } from '@zenystx/helios-core/instance/lifecycle/LifecycleService';
 
 let _idCounter = 0;
 

@@ -12,8 +12,8 @@
  *   - Return same instance for same name
  *   - Shutdown cleanly
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { TestHeliosInstance } from '@zenystx/helios-core/test-support/TestHeliosInstance';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 describe('Helios Smoke Test', () => {
     let hz: TestHeliosInstance;

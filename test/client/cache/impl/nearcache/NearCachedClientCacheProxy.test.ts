@@ -5,15 +5,15 @@
  * (INVALIDATE and CACHE_ON_UPDATE local update policies).
  * The backing store is now async (AsyncCacheBackingStore).
  */
-import { describe, test, expect } from 'bun:test';
+import type { AsyncCacheBackingStore } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
 import { NearCachedClientCacheProxy } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
-import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
-import type { AsyncCacheBackingStore } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { describe, expect, test } from 'bun:test';
 
 // ── helper ────────────────────────────────────────────────────────────────────
 

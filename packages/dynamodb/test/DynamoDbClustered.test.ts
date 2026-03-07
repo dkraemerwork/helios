@@ -17,14 +17,14 @@
  *  - Both DynamoDbMapStores share one in-memory storage Map (simulating a
  *    shared external DynamoDB table)
  */
-import { describe, it, expect, afterEach } from 'bun:test';
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
-import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
-import type { MapStore } from '@zenystx/helios-core/map/MapStore';
-import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
 
 // ═══════════════════════════════════════════════════════════

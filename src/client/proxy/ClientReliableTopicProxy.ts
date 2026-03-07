@@ -4,8 +4,8 @@
  * Uses the same topic publish protocol but routes through the reliable topic
  * service name. Listeners wired through ClientListenerService.
  */
-import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
+import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 
 export class ClientReliableTopicProxy<E = any> extends ClientProxy {
     private _partitionId: number = -1;

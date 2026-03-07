@@ -6,19 +6,19 @@
  * import time before the HeliosInstance and BlitzService are created.
  */
 
-import 'reflect-metadata';
 import type { DynamicModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
+import type { BlitzService } from '@zenystx/helios-blitz';
+import { HELIOS_BLITZ_SERVICE_TOKEN, HeliosBlitzModule, HeliosBlitzService } from '@zenystx/helios-blitz/nestjs';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 import { HeliosModule } from '@zenystx/helios-nestjs';
-import { HeliosBlitzModule, HeliosBlitzService, HELIOS_BLITZ_SERVICE_TOKEN } from '@zenystx/helios-blitz/nestjs';
-import type { BlitzService } from '@zenystx/helios-blitz';
+import 'reflect-metadata';
 import { BinanceQuotesModule } from './binance-quotes/binance-quotes.module';
+import { DynamoDbStoreModule } from './dynamodb-store/dynamodb-store.module';
 import { MongoDbStoreModule } from './mongodb-store/mongodb-store.module';
 import { NearCacheModule } from './near-cache/near-cache.module';
 import { PredicatesModule } from './predicates/predicates.module';
 import { S3StoreModule } from './s3-store/s3-store.module';
-import { DynamoDbStoreModule } from './dynamodb-store/dynamodb-store.module';
 import { TursoStoreModule } from './turso-store/turso-store.module';
 
 @Module({})

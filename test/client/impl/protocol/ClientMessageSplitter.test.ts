@@ -2,9 +2,9 @@
  * Port of com.hazelcast.client.impl.protocol.util.ClientMessageSplitterTest
  * and ClientMessageSplitAndBuildTest
  */
-import { describe, it, expect } from 'bun:test';
 import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { ClientMessageSplitter } from '@zenystx/helios-core/client/impl/protocol/util/ClientMessageSplitter';
+import { describe, expect, it } from 'bun:test';
 
 const SIZE = 6; // SIZE_OF_FRAME_LENGTH_AND_FLAGS
 

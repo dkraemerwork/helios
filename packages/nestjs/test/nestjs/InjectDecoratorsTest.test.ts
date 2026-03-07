@@ -7,41 +7,41 @@
  * using named-object auto-registration.
  */
 
-import { describe, it, expect, afterEach } from "bun:test";
-import { Test, TestingModule } from "@nestjs/testing";
 import { Injectable } from "@nestjs/common";
-import { HeliosModule } from "@zenystx/helios-nestjs/HeliosModule";
-import { HeliosObjectExtractionModule } from "@zenystx/helios-nestjs/HeliosObjectExtractionModule";
-import { HELIOS_INSTANCE_TOKEN } from "@zenystx/helios-nestjs/HeliosInstanceDefinition";
-import {
-  InjectHelios,
-  InjectMap,
-  InjectQueue,
-  InjectTopic,
-  InjectList,
-  InjectSet,
-  InjectMultiMap,
-  getMapToken,
-  getQueueToken,
-  getTopicToken,
-  getListToken,
-  getSetToken,
-  getMultiMapToken,
-  getReplicatedMapToken,
-} from "@zenystx/helios-nestjs/decorators";
-import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
-import type { IMap } from "@zenystx/helios-core/map/IMap";
-import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import { Test, TestingModule } from "@nestjs/testing";
+import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import type { IList } from "@zenystx/helios-core/collection/IList";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { ISet } from "@zenystx/helios-core/collection/ISet";
-import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
+import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
+import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
+import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
 import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
-import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
-import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
-import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
-import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import { HELIOS_INSTANCE_TOKEN } from "@zenystx/helios-nestjs/HeliosInstanceDefinition";
+import { HeliosModule } from "@zenystx/helios-nestjs/HeliosModule";
+import { HeliosObjectExtractionModule } from "@zenystx/helios-nestjs/HeliosObjectExtractionModule";
+import {
+  InjectHelios,
+  InjectList,
+  InjectMap,
+  InjectMultiMap,
+  InjectQueue,
+  InjectSet,
+  InjectTopic,
+  getListToken,
+  getMapToken,
+  getMultiMapToken,
+  getQueueToken,
+  getReplicatedMapToken,
+  getSetToken,
+  getTopicToken,
+} from "@zenystx/helios-nestjs/decorators";
+import { afterEach, describe, expect, it } from "bun:test";
 
 // ---------------------------------------------------------------------------
 // Stub helpers

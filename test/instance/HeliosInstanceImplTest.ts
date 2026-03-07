@@ -8,13 +8,13 @@
  *  - Same-name returns same instance (idempotent)
  *  - Config-driven initialization (HeliosConfig with name and MapConfig)
  */
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
-import { MapService } from "@zenystx/helios-core/map/impl/MapService";
+import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import type { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
+import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import type { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 describe("HeliosInstanceImpl", () => {
   let hz: HeliosInstanceImpl;

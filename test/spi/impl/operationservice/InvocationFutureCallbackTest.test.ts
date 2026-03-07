@@ -4,8 +4,8 @@
  *
  * Tests for InvocationFuture callback registration (whenComplete, thenApply).
  */
-import { describe, it, expect } from 'bun:test';
 import { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
+import { describe, expect, it } from 'bun:test';
 
 describe('InvocationFuture.whenComplete()', () => {
     it('null callback throws', () => {

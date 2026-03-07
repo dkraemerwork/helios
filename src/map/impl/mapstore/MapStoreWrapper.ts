@@ -1,6 +1,6 @@
+import { MapKeyStream } from '../../MapKeyStream.js';
 import type { MapLoader } from '../../MapLoader.js';
 import type { MapStore } from '../../MapStore.js';
-import { MapKeyStream } from '../../MapKeyStream.js';
 
 type AnyStore<K, V> = MapStore<K, V> | MapLoader<K, V>;
 

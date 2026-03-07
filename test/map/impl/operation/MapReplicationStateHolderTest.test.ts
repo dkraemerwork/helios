@@ -3,11 +3,11 @@
  *
  * Block 16.F1 — record capture + apply during partition replication.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { MapReplicationStateHolder } from '@zenystx/helios-core/map/impl/operation/MapReplicationStateHolder';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { MapReplicationStateHolder } from '@zenystx/helios-core/map/impl/operation/MapReplicationStateHolder';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 /** Create a minimal Data stub with a unique payload derived from a string. */
 function data(s: string): Data {

@@ -13,15 +13,15 @@
  *   END_FRAME
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
-import { AddressCodec } from './AddressCodec';
-import { MemberVersionCodec } from './MemberVersionCodec';
-import { EndpointQualifierCodec } from './EndpointQualifierCodec';
-import { MapCodec } from '../builtin/MapCodec';
-import { CodecUtil } from '../builtin/CodecUtil';
-import { FixedSizeTypesCodec, UUID_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
-import { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
 import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
+import { CodecUtil } from '../builtin/CodecUtil';
+import { BOOLEAN_SIZE_IN_BYTES, FixedSizeTypesCodec, UUID_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
+import { MapCodec } from '../builtin/MapCodec';
+import { AddressCodec } from './AddressCodec';
+import { EndpointQualifierCodec } from './EndpointQualifierCodec';
+import { MemberVersionCodec } from './MemberVersionCodec';
 
 const UUID_OFFSET = 0;
 const LITE_MEMBER_OFFSET = UUID_OFFSET + UUID_SIZE_IN_BYTES; // 17

@@ -3,8 +3,8 @@
  *
  * Port of {@code com.hazelcast.client.impl.spi.impl.ClientInvocation}.
  */
-import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import type { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection";
+import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 
 let correlationCounter = 0;
 

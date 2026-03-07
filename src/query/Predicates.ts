@@ -1,17 +1,17 @@
 import type { Predicate } from './Predicate';
-import { TruePredicate } from './impl/predicates/TruePredicate';
-import { FalsePredicate } from './impl/predicates/FalsePredicate';
-import { EqualPredicate } from './impl/predicates/EqualPredicate';
-import { NotEqualPredicate } from './impl/predicates/NotEqualPredicate';
-import { GreaterLessPredicate } from './impl/predicates/GreaterLessPredicate';
+import { AndPredicate } from './impl/predicates/AndPredicate';
 import { BetweenPredicate } from './impl/predicates/BetweenPredicate';
+import { EqualPredicate } from './impl/predicates/EqualPredicate';
+import { FalsePredicate } from './impl/predicates/FalsePredicate';
+import { GreaterLessPredicate } from './impl/predicates/GreaterLessPredicate';
+import { ILikePredicate } from './impl/predicates/ILikePredicate';
 import { InPredicate } from './impl/predicates/InPredicate';
 import { LikePredicate } from './impl/predicates/LikePredicate';
-import { ILikePredicate } from './impl/predicates/ILikePredicate';
-import { RegexPredicate } from './impl/predicates/RegexPredicate';
-import { AndPredicate } from './impl/predicates/AndPredicate';
-import { OrPredicate } from './impl/predicates/OrPredicate';
+import { NotEqualPredicate } from './impl/predicates/NotEqualPredicate';
 import { NotPredicate } from './impl/predicates/NotPredicate';
+import { OrPredicate } from './impl/predicates/OrPredicate';
+import { RegexPredicate } from './impl/predicates/RegexPredicate';
+import { TruePredicate } from './impl/predicates/TruePredicate';
 
 /**
  * Factory class for creating predicates.

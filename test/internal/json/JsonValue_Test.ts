@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'bun:test';
 import { Json } from '@zenystx/helios-core/internal/json/Json';
 import { JsonObject } from '@zenystx/helios-core/internal/json/JsonObject';
 import { JsonValue } from '@zenystx/helios-core/internal/json/JsonValue';
-import { WriterConfig } from '@zenystx/helios-core/internal/json/WriterConfig';
-import { StringWriter } from '@zenystx/helios-core/internal/json/StringWriter';
 import type { JsonWriter } from '@zenystx/helios-core/internal/json/JsonWriter';
+import { StringWriter } from '@zenystx/helios-core/internal/json/StringWriter';
+import { WriterConfig } from '@zenystx/helios-core/internal/json/WriterConfig';
+import { describe, expect, it } from 'bun:test';
 
 class MockWriter extends StringWriter {
   closeMethodIsCalled = false;

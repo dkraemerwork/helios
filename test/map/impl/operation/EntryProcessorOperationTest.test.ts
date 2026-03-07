@@ -3,16 +3,16 @@
  * Validates entry processor execution, mutation, and deletion semantics.
  * Ported from com.hazelcast.map (EntryProcessorTest — single-node subset, Block 3.2b).
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
-import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { EntryProcessor, MapEntry } from '@zenystx/helios-core/map/EntryProcessor';
 import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import { EntryOperation } from '@zenystx/helios-core/map/impl/operation/EntryOperation';
 import { PartitionWideEntryOperation } from '@zenystx/helios-core/map/impl/operation/PartitionWideEntryOperation';
-import type { EntryProcessor, MapEntry } from '@zenystx/helios-core/map/EntryProcessor';
+import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 describe('Entry Processor Operations', () => {
     const MAP_NAME = 'testMap';

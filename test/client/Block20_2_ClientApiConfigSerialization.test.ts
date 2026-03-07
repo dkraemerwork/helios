@@ -11,7 +11,7 @@
  * 7. Fail-fast on unsupported config sections
  * 8. Verification: separate import surface
  */
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 // ── 1. HeliosClient runtime shell ────────────────────────────────────────────
 

@@ -17,35 +17,35 @@
  *
  * Port of com.hazelcast.map.impl.proxy.MapProxyImpl.
  */
-import type { IMap } from '@zenystx/helios-core/map/IMap';
-import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
-import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
-import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
+import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
+import type { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
-import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
-import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
-import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
-import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
-import type { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
-import { IndexRegistryImpl } from '@zenystx/helios-core/query/impl/IndexRegistryImpl';
-import type { SortedIndex } from '@zenystx/helios-core/query/impl/SortedIndex';
-import { IndexMatchHint } from '@zenystx/helios-core/query/impl/QueryContext';
-import { canonicalizeAttribute } from '@zenystx/helios-core/query/impl/IndexUtils';
+import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
-import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
-import { PutOperation } from '@zenystx/helios-core/map/impl/operation/PutOperation';
-import { GetOperation } from '@zenystx/helios-core/map/impl/operation/GetOperation';
-import { RemoveOperation } from '@zenystx/helios-core/map/impl/operation/RemoveOperation';
-import { DeleteOperation } from '@zenystx/helios-core/map/impl/operation/DeleteOperation';
-import { SetOperation } from '@zenystx/helios-core/map/impl/operation/SetOperation';
-import { PutIfAbsentOperation } from '@zenystx/helios-core/map/impl/operation/PutIfAbsentOperation';
+import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
+import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
 import { ClearOperation } from '@zenystx/helios-core/map/impl/operation/ClearOperation';
+import { DeleteOperation } from '@zenystx/helios-core/map/impl/operation/DeleteOperation';
+import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
+import { GetOperation } from '@zenystx/helios-core/map/impl/operation/GetOperation';
+import { PutIfAbsentOperation } from '@zenystx/helios-core/map/impl/operation/PutIfAbsentOperation';
+import { PutOperation } from '@zenystx/helios-core/map/impl/operation/PutOperation';
+import { RemoveOperation } from '@zenystx/helios-core/map/impl/operation/RemoveOperation';
+import { SetOperation } from '@zenystx/helios-core/map/impl/operation/SetOperation';
+import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import { IndexRegistryImpl } from '@zenystx/helios-core/query/impl/IndexRegistryImpl';
+import { canonicalizeAttribute } from '@zenystx/helios-core/query/impl/IndexUtils';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
+import { IndexMatchHint } from '@zenystx/helios-core/query/impl/QueryContext';
+import type { SortedIndex } from '@zenystx/helios-core/query/impl/SortedIndex';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
 /** Registration record stored per listenerId. */
 interface ListenerEntry<K, V> {

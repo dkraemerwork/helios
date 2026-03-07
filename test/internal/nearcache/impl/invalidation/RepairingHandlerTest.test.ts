@@ -2,11 +2,11 @@
  * Unit tests for RepairingHandler.
  * Port of core invalidation handling behavior.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 const PARTITION_COUNT = 10;
 

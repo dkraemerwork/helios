@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
 import { SparseHyperLogLogEncoder } from '@zenystx/helios-core/cardinality/impl/SparseHyperLogLogEncoder';
+import { describe, expect, test } from 'bun:test';
 
 // testEstimateErrorRateForBigCardinalities: runLength=40000 × histogram — skipped.
 

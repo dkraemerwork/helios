@@ -1,8 +1,8 @@
+import { NakError } from '../errors/NakError.js';
 import { Stage } from '../Stage.js';
 import type { StageContext } from '../StageContext.js';
 import type { WindowPolicy } from '../window/WindowPolicy.js';
 import type { WindowState } from '../window/WindowState.js';
-import { NakError } from '../errors/NakError.js';
 
 /** Tagged event from the left stream. */
 export type LeftEvent<L> = { readonly side: 'left'; readonly value: L };

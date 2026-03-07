@@ -5,12 +5,12 @@
  * Does not implement IQueue directly since IQueue defines some methods
  * as synchronous. Provides the async queue API for remote clients.
  */
-import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
+import { QueueClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueClearCodec";
 import { QueueOfferCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueOfferCodec";
+import { QueuePeekCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePeekCodec";
 import { QueuePollCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePollCodec";
 import { QueueSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueSizeCodec";
-import { QueuePeekCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePeekCodec";
-import { QueueClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueClearCodec";
+import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 
 export class ClientQueueProxy<E = any> extends ClientProxy {
     private _partitionId: number = -1;

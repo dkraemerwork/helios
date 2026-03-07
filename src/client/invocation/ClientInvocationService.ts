@@ -3,11 +3,11 @@
  *
  * Port of {@code com.hazelcast.client.impl.spi.impl.ClientInvocationServiceImpl}.
  */
-import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
+import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
 import type { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection";
 import type { ClientConnectionManager } from "@zenystx/helios-core/client/connection/ClientConnectionManager";
+import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientInvocation } from "@zenystx/helios-core/client/invocation/ClientInvocation";
-import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
 
 const DEFAULT_INVOCATION_TIMEOUT_MS = 120_000;
 const DEFAULT_RETRY_PAUSE_MS = 1_000;

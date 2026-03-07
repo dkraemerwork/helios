@@ -7,20 +7,20 @@
  * shutdownAsync() lifecycle, no child-process leaks, and distributed-default
  * acceptance across Helios + Blitz + NestJS bridge surfaces.
  */
-import { afterEach, describe, test, expect } from "bun:test";
+import { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
-import {
-  HeliosBlitzLifecycleManager,
-  BlitzReadinessState,
-} from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
-import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
+import { resolveAdvertiseHost } from "@zenystx/helios-core/instance/impl/blitz/AdvertiseHostResolver";
 import type {
   BlitzNodeRegistration,
 } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
 import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
-import { resolveAdvertiseHost } from "@zenystx/helios-core/instance/impl/blitz/AdvertiseHostResolver";
-import { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
+import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
+import {
+  BlitzReadinessState,
+  HeliosBlitzLifecycleManager,
+} from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
+import { afterEach, describe, expect, test } from "bun:test";
 
 function makeRegistration(
   memberId: string,

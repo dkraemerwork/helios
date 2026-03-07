@@ -1,5 +1,5 @@
-import type { WriteBehindQueue } from './WriteBehindQueue.js';
 import type { WriteBehindProcessor } from './WriteBehindProcessor.js';
+import type { WriteBehindQueue } from './WriteBehindQueue.js';
 
 export class StoreWorker<K, V> {
   private _timer: ReturnType<typeof setInterval> | null = null;

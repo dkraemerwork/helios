@@ -3,8 +3,8 @@
  * and internal eviction size calculation logic from
  * {@code com.hazelcast.cache.impl.maxsize.impl.EntryCountCacheEvictionChecker}.
  */
-import { describe, expect, test } from 'bun:test';
 import { EntryCountCacheEvictionChecker } from '@zenystx/helios-core/cache/impl/maxsize/impl/EntryCountCacheEvictionChecker';
+import { describe, expect, test } from 'bun:test';
 
 describe('EntryCountCacheEvictionCheckerTest', () => {
     test('calculateMaxPartitionSize_smallEntryCount', () => {

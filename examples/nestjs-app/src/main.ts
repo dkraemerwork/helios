@@ -48,10 +48,8 @@
  *     Periodic cluster metrics dashboard printed to console.
  */
 
-import "reflect-metadata";
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import { NestFactory } from "@nestjs/core";
+import { BlitzService } from "@zenystx/helios-blitz";
 import { Helios } from "@zenystx/helios-core/Helios";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
@@ -62,16 +60,18 @@ import { DynamoDbMapStore } from "@zenystx/helios-dynamodb";
 import { MongoMapStore } from "@zenystx/helios-mongodb";
 import { S3MapStore } from "@zenystx/helios-s3";
 import { TursoMapStore } from "@zenystx/helios-turso";
-import { BlitzService } from "@zenystx/helios-blitz";
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import "reflect-metadata";
 import { AppModule } from "./app.module";
+import { BinanceQuotesService } from "./binance-quotes/binance-quotes.service";
+import { BinanceTickStreamService } from "./binance-quotes/binance-tick-stream.service";
 import { DynamoDbStoreService } from "./dynamodb-store/dynamodb-store.service";
 import { MongoDbStoreService } from "./mongodb-store/mongodb-store.service";
 import { NearCacheService } from "./near-cache/near-cache.service";
 import { PredicatesService } from "./predicates/predicates.service";
 import { S3StoreService } from "./s3-store/s3-store.service";
 import { TursoStoreService } from "./turso-store/turso-store.service";
-import { BinanceQuotesService } from "./binance-quotes/binance-quotes.service";
-import { BinanceTickStreamService } from "./binance-quotes/binance-tick-stream.service";
 
 // ── Configure Helios ──────────────────────────────────────────────────────────
 

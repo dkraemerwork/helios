@@ -1,10 +1,10 @@
 import type { Predicate } from '../../Predicate';
 import type { IndexRegistry } from '../IndexRegistry';
-import type { NegatablePredicate } from './NegatablePredicate';
 import { AbstractVisitor } from './AbstractVisitor';
 import { AndPredicate } from './AndPredicate';
-import { OrPredicate } from './OrPredicate';
+import type { NegatablePredicate } from './NegatablePredicate';
 import { NotPredicate } from './NotPredicate';
+import { OrPredicate } from './OrPredicate';
 
 /**
  * Visitor that rewrites predicate trees by:

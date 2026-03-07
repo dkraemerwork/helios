@@ -1,6 +1,6 @@
 import { HyperLogLog } from '../HyperLogLog';
-import { HyperLogLogEncoding } from './HyperLogLogEncoding';
 import { HyperLogLogEncoder } from './HyperLogLogEncoder';
+import { HyperLogLogEncoding } from './HyperLogLogEncoding';
 import { SparseHyperLogLogEncoder } from './SparseHyperLogLogEncoder';
 
 const LOWER_P_BOUND = 4;

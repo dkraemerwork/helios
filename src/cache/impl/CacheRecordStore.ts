@@ -6,8 +6,8 @@ import type { ICacheRecordStore } from '@zenystx/helios-core/cache/impl/ICacheRe
 import { InMemoryFormat } from '@zenystx/helios-core/cache/impl/InMemoryFormat';
 import { CacheDataRecord } from '@zenystx/helios-core/cache/impl/record/CacheDataRecord';
 import { CacheObjectRecord } from '@zenystx/helios-core/cache/impl/record/CacheObjectRecord';
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 
 type AnyRecord = CacheDataRecord | CacheObjectRecord;
 

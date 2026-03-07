@@ -3,7 +3,6 @@
  *
  * Internal transaction interface representing the lifecycle of a distributed transaction.
  */
-import type { TransactionException } from '@zenystx/helios-core/transaction/TransactionException';
 import type { TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
 

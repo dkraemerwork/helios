@@ -5,16 +5,15 @@
  * AggregatingOperator, grouped aggregation (byKey), running aggregation without windowing,
  * and parallelism sharding determinism.
  */
-import { describe, it, expect } from 'bun:test';
-import { CountAggregator } from '../src/aggregate/CountAggregator.ts';
-import { SumAggregator } from '../src/aggregate/SumAggregator.ts';
-import { MinAggregator } from '../src/aggregate/MinAggregator.ts';
-import { MaxAggregator } from '../src/aggregate/MaxAggregator.ts';
+import { describe, expect, it } from 'bun:test';
+import { AggregatingOperator, RunningAggregateOperator } from '../src/aggregate/AggregatingOperator.ts';
 import { AvgAggregator } from '../src/aggregate/AvgAggregator.ts';
+import { CountAggregator } from '../src/aggregate/CountAggregator.ts';
 import { DistinctAggregator } from '../src/aggregate/DistinctAggregator.ts';
-import { AggregatingOperator } from '../src/aggregate/AggregatingOperator.ts';
-import { RunningAggregateOperator } from '../src/aggregate/AggregatingOperator.ts';
 import { hashKey } from '../src/aggregate/hashKey.ts';
+import { MaxAggregator } from '../src/aggregate/MaxAggregator.ts';
+import { MinAggregator } from '../src/aggregate/MinAggregator.ts';
+import { SumAggregator } from '../src/aggregate/SumAggregator.ts';
 import type { StageContext } from '../src/StageContext.ts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

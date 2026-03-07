@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
 import { InPredicate } from '@zenystx/helios-core/query/impl/predicates/InPredicate';
+import { describe, expect, test } from 'bun:test';
 import { entry } from './PredicateTestUtils';
 
 describe('InPredicate', () => {

@@ -1,11 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import type { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
+import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { SerializationConfig } from "@zenystx/helios-core/internal/serialization/impl/SerializationConfig";
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
-import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
-import type { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { describe, expect, it } from "bun:test";
 
 class FakeTransport {
   readonly sends: Array<{ peerId: string; message: unknown }> = [];

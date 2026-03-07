@@ -1,6 +1,6 @@
-import { describe, it } from 'bun:test';
 import { MapPermission } from '@zenystx/helios-core/security/permission/MapPermission';
-import { CheckPermission, runMapPermissionTests } from './permissionTestSupport';
+import { describe, it } from 'bun:test';
+import { CheckPermission } from './permissionTestSupport';
 
 const ALL_ACTIONS = ['put', 'read', 'remove', 'listen', 'lock', 'index', 'intercept', 'create', 'destroy'];
 const factory = (name: string, ...actions: string[]) => new MapPermission(name, ...actions);

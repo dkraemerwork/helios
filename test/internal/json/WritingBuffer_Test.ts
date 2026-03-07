@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { WritingBuffer } from '@zenystx/helios-core/internal/json/WritingBuffer';
 import { StringWriter } from '@zenystx/helios-core/internal/json/StringWriter';
+import { WritingBuffer } from '@zenystx/helios-core/internal/json/WritingBuffer';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 const BUFFER_SIZE = 16;
 

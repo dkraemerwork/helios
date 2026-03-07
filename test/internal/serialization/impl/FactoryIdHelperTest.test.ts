@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.internal.serialization.impl.FactoryIdHelperTest}.
  */
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { FactoryIdHelper } from '@zenystx/helios-core/internal/serialization/impl/FactoryIdHelper';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 const TEST_KEY = 'hazelcast.test.prop';
 

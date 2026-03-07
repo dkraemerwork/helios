@@ -4,12 +4,12 @@
  * Tests for InvocationFuture.join(), which wraps non-cancellation exceptions
  * in CompletionException (matching Java CompletableFuture.join() semantics).
  */
-import { describe, it, expect } from 'bun:test';
 import {
-    InvocationFuture,
     CancellationException,
     CompletionException,
+    InvocationFuture,
 } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
+import { describe, expect, it } from 'bun:test';
 
 describe('InvocationFuture.join()', () => {
     it('join() returns the value on normal completion', async () => {

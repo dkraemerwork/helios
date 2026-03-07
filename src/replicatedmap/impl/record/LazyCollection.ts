@@ -1,4 +1,3 @@
-import type { ReplicatedRecord } from './ReplicatedRecord';
 import type { InternalReplicatedMapStorage } from './InternalReplicatedMapStorage';
 import type { IteratorFactory, LazyIterator } from './LazySet';
 

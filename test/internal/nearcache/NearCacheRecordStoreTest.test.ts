@@ -4,17 +4,17 @@
  * Parameterized over InMemoryFormat.BINARY and InMemoryFormat.OBJECT.
  * TTL/idle tests use shorter durations to avoid long test runs.
  */
-import { describe, it, expect } from 'bun:test';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
 import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
-import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { NearCacheRecordStore } from '@zenystx/helios-core/internal/nearcache/NearCacheRecordStore';
 import { NearCacheDataRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/NearCacheDataRecordStore';
 import { NearCacheObjectRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/NearCacheObjectRecordStore';
-import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
 import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { describe, expect, it } from 'bun:test';
 
 const DEFAULT_RECORD_COUNT = 100;
 const DEFAULT_NEAR_CACHE_NAME = 'TestNearCache';

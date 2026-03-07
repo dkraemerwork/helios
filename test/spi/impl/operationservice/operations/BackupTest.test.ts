@@ -4,12 +4,12 @@
  * Tests cover: ownership validation, version staleness check, backup op
  * execution, BackupAck sending (sync vs async), and migration edge cases (H-11).
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { Backup, type BackupAckSender, type BackupReplicaVersionManager } from '@zenystx/helios-core/spi/impl/operationservice/operations/Backup';
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { Backup, type BackupAckSender, type BackupReplicaVersionManager } from '@zenystx/helios-core/spi/impl/operationservice/operations/Backup';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

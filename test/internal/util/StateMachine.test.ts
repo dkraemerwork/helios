@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { StateMachine } from '@zenystx/helios-core/internal/util/StateMachine';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 const enum State { A = 'A', B = 'B', C = 'C' }
 

@@ -1,5 +1,5 @@
-import type { Source } from '../source/Source.js';
 import type { Sink } from '../sink/Sink.js';
+import type { Source } from '../source/Source.js';
 import type { BatchResult } from './BatchResult.js';
 
 // ─── Internal operator chain types ───────────────────────────────────────────

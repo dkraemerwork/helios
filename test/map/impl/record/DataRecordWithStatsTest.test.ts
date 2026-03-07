@@ -1,11 +1,11 @@
 /**
  * Port of {@code com.hazelcast.map.impl.record.DataRecordWithStatsTest}.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import { DataRecordWithStats } from '@zenystx/helios-core/map/impl/record/DataRecordWithStats';
 import { ObjectRecordWithStats } from '@zenystx/helios-core/map/impl/record/ObjectRecordWithStats';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 /** Create a minimal Data stub with a unique non-empty payload. */
 function mockData(id: number): Data {

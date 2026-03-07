@@ -19,12 +19,12 @@
  */
 
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
-import { InjectHelios, InjectMap } from '@zenystx/helios-nestjs';
-import { InjectBlitz } from '@zenystx/helios-blitz/nestjs';
+import { JsonCodec, NatsSource } from '@zenystx/helios-blitz';
 import type { HeliosBlitzService } from '@zenystx/helios-blitz/nestjs';
-import { NatsSource, JsonCodec } from '@zenystx/helios-blitz';
+import { InjectBlitz } from '@zenystx/helios-blitz/nestjs';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import { InjectHelios, InjectMap } from '@zenystx/helios-nestjs';
 import { BinanceWebSocketSource, toQuote, type Quote } from './binance-ws.source';
 
 // ── Metrics ───────────────────────────────────────────────────────────────────

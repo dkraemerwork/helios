@@ -6,15 +6,15 @@
  *
  * Total: 25 tests
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { HashJoinOperator } from '../src/join/HashJoinOperator.ts';
 import {
     WindowedJoinOperator,
     type JoinEvent,
 } from '../src/join/WindowedJoinOperator.ts';
+import type { StageContext } from '../src/StageContext.ts';
 import { TumblingWindowPolicy } from '../src/window/TumblingWindowPolicy.ts';
 import { InMemoryWindowState } from '../src/window/WindowState.ts';
-import type { StageContext } from '../src/StageContext.ts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

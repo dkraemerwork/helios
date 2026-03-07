@@ -6,11 +6,11 @@
  * Enough for tests that need real round-trip serialization without a full
  * production SerializationServiceImpl.
  */
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
-import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 
 export class TestSerializationService implements SerializationService {
     toData(obj: unknown): Data | null {

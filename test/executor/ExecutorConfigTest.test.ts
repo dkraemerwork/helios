@@ -4,9 +4,9 @@
  * Tests bounded defaults, fluent builder, validation, named config lookup,
  * default fallback, and unsupported split-brain rejection.
  */
-import { describe, test, expect } from 'bun:test';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { describe, expect, test } from 'bun:test';
 
 describe('ExecutorConfig', () => {
 

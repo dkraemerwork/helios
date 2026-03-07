@@ -4,12 +4,12 @@
  * Verifies that MapProxy routes all core async map operations through
  * OperationService.invokeOnPartition() instead of calling RecordStore directly.
  */
-import { describe, test, expect, spyOn } from 'bun:test';
-import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
-import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
 import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
-import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
+import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { describe, expect, spyOn, test } from 'bun:test';
 
 function makeFixture() {
     const ne = new TestNodeEngine();

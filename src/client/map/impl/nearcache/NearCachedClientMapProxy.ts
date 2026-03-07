@@ -11,12 +11,12 @@
  * Write path:
  *   Put / remove / set / delete / clear — write through ClientMapProxy, then invalidate near cache.
  */
+import type { ClientInvocationService } from '@zenystx/helios-core/client/invocation/ClientInvocationService';
+import { ClientMapProxy } from '@zenystx/helios-core/client/proxy/ClientMapProxy';
+import type { ClientPartitionService } from '@zenystx/helios-core/client/spi/ClientPartitionService';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import { ClientMapProxy } from '@zenystx/helios-core/client/proxy/ClientMapProxy';
-import type { ClientInvocationService } from '@zenystx/helios-core/client/invocation/ClientInvocationService';
-import type { ClientPartitionService } from '@zenystx/helios-core/client/spi/ClientPartitionService';
 import type { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 
 export class NearCachedClientMapProxy<K = any, V = any> extends ClientMapProxy<K, V> {

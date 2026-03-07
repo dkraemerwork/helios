@@ -1,10 +1,10 @@
 /**
  * Port of com.hazelcast.internal.cluster.impl.MembersViewTest
  */
-import { describe, test, expect } from 'bun:test';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { describe, expect, test } from 'bun:test';
 import { newMember, newMembers } from './MemberMap.test';
 
 describe('MembersViewTest', () => {

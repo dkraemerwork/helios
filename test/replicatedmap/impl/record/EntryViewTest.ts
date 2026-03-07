@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { ReplicatedMapEntryView } from '@zenystx/helios-core/replicatedmap/impl/record/ReplicatedMapEntryView';
+import { describe, expect, it } from 'bun:test';
 
 describe('EntryViewTest', () => {
   function createEntryView(): ReplicatedMapEntryView<string, string> {

@@ -5,17 +5,17 @@
  * MigrationPlanner invocation, pauseMigration/resumeMigration.
  * Block 16.B3b: remote execution (MigrationRequestOperation, commit, finalize).
  */
-import type { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
-import type { MigrationQueue } from '@zenystx/helios-core/internal/partition/impl/MigrationQueue';
-import { MigrationPlanner, type MigrationDecisionCallback } from '@zenystx/helios-core/internal/partition/impl/MigrationPlanner';
-import { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
-import { MigrationRequestOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationRequestOperation';
-import { MigrationCommitOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationCommitOperation';
-import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
-import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
-import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
-import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { MigrationCommitOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationCommitOperation';
+import { MigrationPlanner, type MigrationDecisionCallback } from '@zenystx/helios-core/internal/partition/impl/MigrationPlanner';
+import type { MigrationQueue } from '@zenystx/helios-core/internal/partition/impl/MigrationQueue';
+import { MigrationRequestOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationRequestOperation';
+import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
+import type { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
+import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
+import { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
 
 export interface MigrationManagerOptions {
     maxParallelMigrations?: number;

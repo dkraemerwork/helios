@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { ReplicatedRecord } from '@zenystx/helios-core/replicatedmap/impl/record/ReplicatedRecord';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('ReplicatedRecordTest', () => {
   let replicatedRecord: ReplicatedRecord<string, string>;

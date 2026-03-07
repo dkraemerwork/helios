@@ -11,18 +11,18 @@
  * factory will create {@link NearCachedClientMapProxy} instances for maps
  * whose names match a registered {@link NearCacheConfig} pattern.
  */
+import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
+import type { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
 import type { ClientInvocationService } from "@zenystx/helios-core/client/invocation/ClientInvocationService";
-import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
-import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
-import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
-import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
+import { NearCachedClientMapProxy } from "@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy";
 import { ClientMapProxy } from "@zenystx/helios-core/client/proxy/ClientMapProxy";
+import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 import { ClientQueueProxy } from "@zenystx/helios-core/client/proxy/ClientQueueProxy";
 import { ClientTopicProxy } from "@zenystx/helios-core/client/proxy/ClientTopicProxy";
-import { NearCachedClientMapProxy } from "@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy";
-import type { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
-import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
 import { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
+import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
+import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
 
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";

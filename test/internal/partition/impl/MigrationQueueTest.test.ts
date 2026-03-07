@@ -1,9 +1,9 @@
 /**
  * Port of com.hazelcast.internal.partition.impl.MigrationQueueTest
  */
-import { describe, it, expect } from 'bun:test';
 import { MigrationQueue } from '@zenystx/helios-core/internal/partition/impl/MigrationQueue';
 import type { MigrationRunnable } from '@zenystx/helios-core/internal/partition/impl/MigrationRunnable';
+import { describe, expect, it } from 'bun:test';
 
 function mockRunnable(): MigrationRunnable {
     return { run: () => {} };

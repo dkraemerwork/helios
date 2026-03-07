@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('PartitionIdSetTest', () => {
   let set: PartitionIdSet;

@@ -3,14 +3,14 @@
  * Covers triggerControlTask, ControlTask, RedoPartitioningTask,
  * MigrationPlanner invocation, pauseMigration/resumeMigration.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { MigrationManager } from '@zenystx/helios-core/internal/partition/impl/MigrationManager';
-import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
-import { MigrationQueue } from '@zenystx/helios-core/internal/partition/impl/MigrationQueue';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { MigrationManager } from '@zenystx/helios-core/internal/partition/impl/MigrationManager';
+import { MigrationQueue } from '@zenystx/helios-core/internal/partition/impl/MigrationQueue';
+import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 function makeMember(host: string, port: number, uuid?: string, lite = false): Member {
     return new MemberImpl.Builder(new Address(host, port))

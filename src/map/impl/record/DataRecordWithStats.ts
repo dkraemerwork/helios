@@ -3,9 +3,9 @@
  *
  * A record that stores binary-serialized ({@link Data}) values with full statistics.
  */
-import { AbstractRecord } from './AbstractRecord';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { JVMUtil } from '@zenystx/helios-core/internal/util/JVMUtil';
+import { AbstractRecord } from './AbstractRecord';
 
 export class DataRecordWithStats extends AbstractRecord<Data | null> {
     protected _value: Data | null = null;

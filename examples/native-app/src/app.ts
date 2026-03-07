@@ -16,19 +16,19 @@
  *
  * This is intended for local multi-node playgrounds and Docker Compose demos.
  */
-import { Helios } from "@zenystx/helios-core/Helios";
-import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
-import { NearCacheConfig } from "@zenystx/helios-core/config/NearCacheConfig";
-import { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
-import type { Message } from "@zenystx/helios-core/topic/Message";
 import {
   BlitzService,
   clusterNode,
   type ClusterNodeNatsConfig,
 } from "@zenystx/helios-blitz";
 import type { NatsServerManager } from "@zenystx/helios-blitz/server/NatsServerManager";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { NearCacheConfig } from "@zenystx/helios-core/config/NearCacheConfig";
+import { Helios } from "@zenystx/helios-core/Helios";
+import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
+import type { Message } from "@zenystx/helios-core/topic/Message";
 import {
   renderManagementCenterPage,
   type ManagementCenterPayload,

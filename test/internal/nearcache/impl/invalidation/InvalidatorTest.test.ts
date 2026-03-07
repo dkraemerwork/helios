@@ -4,13 +4,12 @@
  * Tests null-check behavior of Invalidator implementations.
  * Uses stub NodeEngine to avoid needing a full cluster.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { BatchInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
-import { NonStopInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/NonStopInvalidator';
-import type { Invalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
 import type { BatchInvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
-import type { InvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import { BatchInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
+import type { Invalidator, InvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import { NonStopInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/NonStopInvalidator';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 // Minimal stub for BatchInvalidatorNodeEngine (no real cluster needed)
 function makeBatchNodeEngine(): BatchInvalidatorNodeEngine {

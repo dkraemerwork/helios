@@ -6,14 +6,14 @@
  *
  * NATS KV integration tests use the embedded NATS server via BlitzService.start().
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { BlitzService } from '../src/BlitzService.ts';
-import { TumblingWindowPolicy } from '../src/window/TumblingWindowPolicy.ts';
-import { SlidingWindowPolicy } from '../src/window/SlidingWindowPolicy.ts';
-import { SessionWindowPolicy } from '../src/window/SessionWindowPolicy.ts';
-import { InMemoryWindowState, NatsKvWindowState } from '../src/window/WindowState.ts';
-import { WindowOperator } from '../src/window/WindowOperator.ts';
 import type { StageContext } from '../src/StageContext.ts';
+import { SessionWindowPolicy } from '../src/window/SessionWindowPolicy.ts';
+import { SlidingWindowPolicy } from '../src/window/SlidingWindowPolicy.ts';
+import { TumblingWindowPolicy } from '../src/window/TumblingWindowPolicy.ts';
+import { WindowOperator } from '../src/window/WindowOperator.ts';
+import { InMemoryWindowState, NatsKvWindowState } from '../src/window/WindowState.ts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

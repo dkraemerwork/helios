@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
-import { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation/MapNearCacheStateHolder';
 import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation/MapNearCacheStateHolder';
+import { describe, expect, it } from 'bun:test';
 
 describe('MapNearCacheStateHolder', () => {
     it('prepare() captures partitionUuid from MetaDataGenerator', () => {

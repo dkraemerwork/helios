@@ -7,13 +7,13 @@
  * - fetchMemberResponse returns empty response when disconnected
  * - init and fetchMetadata work with empty member lists
  */
-import { describe, it, expect } from 'bun:test';
-import { ClientCacheInvalidationMetaDataFetcher } from '@zenystx/helios-core/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
 import type { ClientCacheClusterService, ClientCacheDataMember } from '@zenystx/helios-core/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
-import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
+import { ClientCacheInvalidationMetaDataFetcher } from '@zenystx/helios-core/client/cache/impl/nearcache/invalidation/ClientCacheInvalidationMetaDataFetcher';
 import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { describe, expect, it } from 'bun:test';
 
 const PARTITION_COUNT = 271;
 

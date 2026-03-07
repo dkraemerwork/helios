@@ -2,9 +2,9 @@
  * Port of {@code com.hazelcast.internal.partition.PartitionStampUtil}.
  * Calculates a 64-bit stamp for the partition table using MurmurHash3.
  */
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
 import { HashUtil } from '@zenystx/helios-core/internal/util/HashUtil';
-import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 
 export class PartitionStampUtil {
     private constructor() {}

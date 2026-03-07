@@ -8,10 +8,10 @@
  * Bounded parallelism: the request acquires a sync permit from the PartitionReplicaManager
  * before executing.
  */
-import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export interface SyncRequestResult {
     partitionId: number;

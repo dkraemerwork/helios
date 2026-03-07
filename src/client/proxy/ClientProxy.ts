@@ -3,14 +3,14 @@
  *
  * Port of {@code com.hazelcast.client.impl.spi.ClientProxy}.
  */
-import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
-import type { ClientInvocationService } from "@zenystx/helios-core/client/invocation/ClientInvocationService";
-import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
-import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
-import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientInvocation } from "@zenystx/helios-core/client/invocation/ClientInvocation";
-import type { ClientListenerService, ListenerMessageCodec, ClientEventHandler } from "@zenystx/helios-core/client/spi/ClientListenerService";
+import type { ClientInvocationService } from "@zenystx/helios-core/client/invocation/ClientInvocationService";
+import type { ClientEventHandler, ClientListenerService, ListenerMessageCodec } from "@zenystx/helios-core/client/spi/ClientListenerService";
+import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
 
 export abstract class ClientProxy implements DistributedObject {
     private readonly _name: string;

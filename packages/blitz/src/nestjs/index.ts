@@ -7,8 +7,8 @@
  * import { HeliosBlitzModule } from '@zenystx/helios-blitz/nestjs';
  * ```
  */
+export { FenceAwareBlitzProvider } from './FenceAwareBlitzProvider.js';
 export { HeliosBlitzModule } from './HeliosBlitzModule.js';
 export type { HeliosBlitzModuleAsyncOptions } from './HeliosBlitzModule.js';
 export { HeliosBlitzService } from './HeliosBlitzService.js';
-export { InjectBlitz, HELIOS_BLITZ_SERVICE_TOKEN } from './InjectBlitz.decorator.js';
-export { FenceAwareBlitzProvider } from './FenceAwareBlitzProvider.js';
+export { HELIOS_BLITZ_SERVICE_TOKEN, InjectBlitz } from './InjectBlitz.decorator.js';

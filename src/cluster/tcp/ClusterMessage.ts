@@ -6,6 +6,7 @@
  * All messages carry a `type` discriminant so the receiver can switch on them.
  */
 
+import type { EncodedData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import type { BlitzNodeRegistration } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
 
 // ── Existing message types ────────────────────────────────────────────
@@ -388,4 +389,3 @@ export type ClusterMessage =
   | BlitzTopologyRequestMsg
   | BlitzTopologyResponseMsg
   | BlitzTopologyAnnounceMsg;
-import type { EncodedData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";

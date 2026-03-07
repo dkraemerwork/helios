@@ -5,9 +5,9 @@
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { StringCodec } from '../builtin/StringCodec';
 import { CodecUtil } from '../builtin/CodecUtil';
 import { INT_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
+import { StringCodec } from '../builtin/StringCodec';
 
 const INITIAL_FRAME_SIZE = INT_SIZE_IN_BYTES; // port (4 bytes)
 const PORT_OFFSET = 0;

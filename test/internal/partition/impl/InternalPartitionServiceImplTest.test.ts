@@ -3,14 +3,14 @@
  * Covers partition table lifecycle, membership-triggered rebalancing,
  * applyPartitionRuntimeState, and partition query methods.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { InternalPartitionServiceImpl, PartitionRuntimeState } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
-import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
+import { InternalPartitionServiceImpl, PartitionRuntimeState } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 function makeMember(host: string, port: number, uuid?: string, lite = false): Member {
     return new MemberImpl.Builder(new Address(host, port))

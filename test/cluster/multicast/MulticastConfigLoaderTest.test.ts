@@ -9,8 +9,8 @@
  * - TCP-IP config alongside multicast
  * - Both camelCase and kebab-case property names
  */
-import { describe, test, expect } from 'bun:test';
 import { parseRawConfig } from '@zenystx/helios-core/config/ConfigLoader';
+import { describe, expect, test } from 'bun:test';
 
 describe('ConfigLoader — multicast config', () => {
 

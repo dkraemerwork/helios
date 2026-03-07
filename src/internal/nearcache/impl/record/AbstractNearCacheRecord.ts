@@ -5,8 +5,8 @@
  * Uses TimeStripUtil to compress timestamps into 32-bit seconds offsets.
  */
 import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import { TIME_NOT_SET, READ_PERMITTED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/helios-core/internal/util/TimeStripUtil';
+import { READ_PERMITTED, TIME_NOT_SET } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { recomputeWithBaseTime, stripBaseTime } from '@zenystx/helios-core/internal/util/TimeStripUtil';
 
 // Byte-cost constants matching AbstractNearCacheRecord.java
 export const NUMBER_OF_LONG_FIELD_TYPES = 2;   // reservationId, invalidationSequence

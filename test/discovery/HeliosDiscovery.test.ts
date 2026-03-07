@@ -1,17 +1,14 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
 import {
-  HeliosDiscoveryResolver,
-  DiscoveryProvider,
-  DiscoveryConfig,
-  JoinConfig,
-  MemberAddress,
-  createDiscoveryResolver,
   AwsDiscoveryProvider,
   AzureDiscoveryProvider,
+  DiscoveryConfig,
   GcpDiscoveryProvider,
+  JoinConfig,
   K8sDiscoveryProvider,
   StaticDiscoveryProvider,
+  createDiscoveryResolver
 } from '@zenystx/helios-core/discovery/HeliosDiscovery';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Helpers

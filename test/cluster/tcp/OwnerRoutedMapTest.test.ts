@@ -10,10 +10,10 @@
  *  - OperationService in clustered mode uses localMode=false with remoteSend
  *  - The NetworkedMapProxy broadcast path is removed
  */
-import { describe, it, expect, afterEach } from 'bun:test';
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 const BASE_PORT = 16900;
 let portCounter = 0;

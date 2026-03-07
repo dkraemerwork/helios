@@ -8,17 +8,16 @@
  * → getMap() returns a NearCachedClientMapProxy and the near-cache manager has a
  * near-cache instance for that map name.
  */
-import { describe, test, expect } from 'bun:test';
-import { NearCachedClientMapProxy } from '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy';
-import { ClientMapProxy } from '@zenystx/helios-core/client/proxy/ClientMapProxy';
-import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
-import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
 import { HeliosClient } from '@zenystx/helios-core/client';
 import { ClientConfig } from '@zenystx/helios-core/client/config/ClientConfig';
+import { NearCachedClientMapProxy } from '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy';
+import { ClientMapProxy } from '@zenystx/helios-core/client/proxy/ClientMapProxy';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
+import { describe, expect, test } from 'bun:test';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

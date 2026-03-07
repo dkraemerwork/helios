@@ -20,10 +20,10 @@
  * This proxy is deferred — the full JCache client surface is not yet wired.
  * This class provides the near-cache pattern for when it is enabled.
  */
+import { LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import { LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
 
 /**
  * Async backing store interface for cache protocol operations.

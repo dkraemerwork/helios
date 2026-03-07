@@ -9,13 +9,12 @@
  *  5. Shutdown is idempotent when no instance is present (no crash)
  */
 
-import { describe, it, expect, spyOn, mock, afterEach } from 'bun:test';
-import { Injectable, Module, DynamicModule } from '@nestjs/common';
+import { Inject, Injectable, Module } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Inject } from '@nestjs/common';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
 import { HeliosModule } from '../../src/HeliosModule';
-import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 
 // ---------------------------------------------------------------------------
 // Helpers

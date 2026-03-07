@@ -4,10 +4,10 @@
  * Tests for NodeEngineImpl service lookup, serialization delegation, and
  * logger management. Uses a TestSerializationService (no real cluster needed).
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
 import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
 import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
-import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
+import { describe, expect, it } from 'bun:test';
 
 const MY_SERVICE = 'my.service';
 

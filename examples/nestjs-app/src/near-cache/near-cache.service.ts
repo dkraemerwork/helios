@@ -15,12 +15,11 @@
  *   HeliosCacheModule wires a Helios IMap as the CACHE_MANAGER backing store.
  */
 
-import { Injectable, Inject } from "@nestjs/common";
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { Cache } from "@nestjs/cache-manager";
-import { InjectMap } from "@zenystx/helios-nestjs";
-import { Cacheable, CacheEvict } from "@zenystx/helios-nestjs";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Inject, Injectable } from "@nestjs/common";
 import type { IMap } from "@zenystx/helios-core/map/IMap";
+import { Cacheable, CacheEvict, InjectMap } from "@zenystx/helios-nestjs";
 
 export interface Product {
   id: string;

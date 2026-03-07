@@ -10,11 +10,11 @@
  *
  * Block 16.A0 — Multi-Node Test Infrastructure
  */
-import { TestClusterNode, type TestClusterNodeConfig } from '@zenystx/helios-core/test-support/TestClusterNode';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { TestClusterNode, type TestClusterNodeConfig } from '@zenystx/helios-core/test-support/TestClusterNode';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 
 export interface TestClusterConfig {
     readonly clusterName: string;

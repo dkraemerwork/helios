@@ -5,9 +5,9 @@
  * under @InjectMap('products').
  */
 
-import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { HeliosObjectExtractionModule } from '@zenystx/helios-nestjs';
+import 'reflect-metadata';
 import { PredicatesService } from './predicates.service';
 
 @Module({

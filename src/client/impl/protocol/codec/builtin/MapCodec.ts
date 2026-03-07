@@ -4,7 +4,6 @@
  * Encodes/decodes a Map<string, string>.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ListMultiFrameCodec } from './ListMultiFrameCodec';
 import { StringCodec } from './StringCodec';
 
 export class MapCodec {

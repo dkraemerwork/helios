@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.internal.cluster.impl.MemberMap}.
  * Immutable member map allowing lookup by Address or UUID.
  */
-import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
 
 class UnmodifiableSet<T> implements Iterable<T> {

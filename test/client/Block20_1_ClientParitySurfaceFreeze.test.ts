@@ -9,8 +9,8 @@
  * 5. No ownerless client files
  * 6. HeliosInstance method parity matrix is complete
  */
-import { describe, it, expect } from "bun:test";
-import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
+import { describe, expect, it } from "bun:test";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = join(import.meta.dir, "../..");

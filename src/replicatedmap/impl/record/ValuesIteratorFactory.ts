@@ -1,6 +1,6 @@
+import type { IteratorFactory, LazyIterator } from './LazySet';
 import type { ReplicatedRecord } from './ReplicatedRecord';
 import type { ReplicatedRecordStore } from './ReplicatedRecordStore';
-import type { IteratorFactory, LazyIterator } from './LazySet';
 
 /**
  * Iterator factory that produces value iterators for LazyCollection.

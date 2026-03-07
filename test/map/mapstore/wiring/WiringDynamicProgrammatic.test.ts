@@ -5,10 +5,10 @@
  * className='./test-tracking-store.js#TrackingMapStoreFactory' resolves
  * via MapStoreDynamicLoader when no registry match exists.
  */
-import { describe, it, expect } from 'bun:test';
-import { resolve } from 'node:path';
 import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapStoreContext } from '@zenystx/helios-core/map/impl/mapstore/MapStoreContext';
+import { describe, expect, it } from 'bun:test';
+import { resolve } from 'node:path';
 
 const thisDir = import.meta.dir;
 

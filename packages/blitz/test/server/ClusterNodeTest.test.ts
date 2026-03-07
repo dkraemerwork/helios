@@ -1,16 +1,16 @@
-import { describe, test, expect, afterEach } from 'bun:test';
+import { jetstreamManager } from '@nats-io/jetstream';
+import { connect } from '@nats-io/transport-node';
+import { afterEach, describe, expect, test } from 'bun:test';
 import {
-    resolveClusterNodeConfig,
-    normalizeRoutes,
-    validateClusterNodeConfig,
-    toNodeConfig,
     clusterNode,
     DEFAULT_REPLICAS,
+    normalizeRoutes,
+    resolveClusterNodeConfig,
+    toNodeConfig,
+    validateClusterNodeConfig,
 } from '../../src/server/ClusterNodeConfig.ts';
-import { NatsServerManager } from '../../src/server/NatsServerManager.ts';
 import type { NatsServerNodeConfig } from '../../src/server/NatsServerConfig.ts';
-import { connect } from '@nats-io/transport-node';
-import { jetstreamManager } from '@nats-io/jetstream';
+import { NatsServerManager } from '../../src/server/NatsServerManager.ts';
 
 describe('ClusterNodeNatsConfig types and resolution', () => {
     test('resolveClusterNodeConfig applies all defaults', () => {

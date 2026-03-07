@@ -11,16 +11,16 @@
  * - Pool recycling after worker crash or task timeout
  * - End-to-end verification that distributed work never runs on main event loop
  */
-import { describe, test, expect } from 'bun:test';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
-import { ExecutorContainerService, type TaskRequest } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
+import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
 import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/helios-core/executor/impl/ExecuteCallableOperation.js';
+import { ExecutorContainerService, type TaskRequest } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
+import { InlineExecutionBackend } from '@zenystx/helios-core/executor/impl/InlineExecutionBackend.js';
 import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation.js';
 import { ScatterExecutionBackend } from '@zenystx/helios-core/executor/impl/ScatterExecutionBackend.js';
-import { InlineExecutionBackend } from '@zenystx/helios-core/executor/impl/InlineExecutionBackend.js';
-import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
+import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
 import type { Operation, ResponseHandler } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
+import { describe, expect, test } from 'bun:test';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

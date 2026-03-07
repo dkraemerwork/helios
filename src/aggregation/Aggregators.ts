@@ -1,23 +1,23 @@
 import type { Aggregator } from './Aggregator';
+import { BigDecimalAverageAggregator } from './impl/BigDecimalAverageAggregator';
+import { BigDecimalSumAggregator } from './impl/BigDecimalSumAggregator';
+import { BigIntegerAverageAggregator } from './impl/BigIntegerAverageAggregator';
+import { BigIntegerSumAggregator } from './impl/BigIntegerSumAggregator';
 import { CountAggregator } from './impl/CountAggregator';
 import { DistinctValuesAggregator } from './impl/DistinctValuesAggregator';
-import { MinAggregator } from './impl/MinAggregator';
-import { MaxAggregator } from './impl/MaxAggregator';
-import { MinByAggregator } from './impl/MinByAggregator';
-import { MaxByAggregator } from './impl/MaxByAggregator';
+import { DoubleAverageAggregator } from './impl/DoubleAverageAggregator';
 import { DoubleSumAggregator } from './impl/DoubleSumAggregator';
-import { LongSumAggregator } from './impl/LongSumAggregator';
-import { IntegerSumAggregator } from './impl/IntegerSumAggregator';
-import { BigDecimalSumAggregator } from './impl/BigDecimalSumAggregator';
-import { BigIntegerSumAggregator } from './impl/BigIntegerSumAggregator';
 import { FixedSumAggregator } from './impl/FixedSumAggregator';
 import { FloatingPointSumAggregator } from './impl/FloatingPointSumAggregator';
-import { DoubleAverageAggregator } from './impl/DoubleAverageAggregator';
-import { LongAverageAggregator } from './impl/LongAverageAggregator';
 import { IntegerAverageAggregator } from './impl/IntegerAverageAggregator';
+import { IntegerSumAggregator } from './impl/IntegerSumAggregator';
+import { LongAverageAggregator } from './impl/LongAverageAggregator';
+import { LongSumAggregator } from './impl/LongSumAggregator';
+import { MaxAggregator } from './impl/MaxAggregator';
+import { MaxByAggregator } from './impl/MaxByAggregator';
+import { MinAggregator } from './impl/MinAggregator';
+import { MinByAggregator } from './impl/MinByAggregator';
 import { NumberAverageAggregator } from './impl/NumberAverageAggregator';
-import { BigDecimalAverageAggregator } from './impl/BigDecimalAverageAggregator';
-import { BigIntegerAverageAggregator } from './impl/BigIntegerAverageAggregator';
 
 /**
  * Port of com.hazelcast.aggregation.Aggregators.

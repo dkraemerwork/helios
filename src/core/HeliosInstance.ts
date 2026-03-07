@@ -1,10 +1,10 @@
-import type { IMap } from "@zenystx/helios-core/map/IMap";
-import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
-import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
-import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
-import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
+import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 
 /**
  * Primary interface for a Helios cluster member or client.

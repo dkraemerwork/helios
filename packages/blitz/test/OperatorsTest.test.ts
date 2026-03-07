@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { MapOperator } from '../src/operator/MapOperator.ts';
+import { describe, expect, it } from 'bun:test';
+import { NakError } from '../src/errors/NakError.ts';
+import { BranchOperator } from '../src/operator/BranchOperator.ts';
 import { FilterOperator } from '../src/operator/FilterOperator.ts';
 import { FlatMapOperator } from '../src/operator/FlatMapOperator.ts';
+import { MapOperator } from '../src/operator/MapOperator.ts';
 import { MergeOperator } from '../src/operator/MergeOperator.ts';
-import { BranchOperator } from '../src/operator/BranchOperator.ts';
 import { PeekOperator } from '../src/operator/PeekOperator.ts';
-import { NakError } from '../src/errors/NakError.ts';
 import type { StageContext } from '../src/StageContext.ts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

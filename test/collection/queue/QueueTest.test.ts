@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { QueueImpl } from '@zenystx/helios-core/collection/impl/QueueImpl';
+import { describe, expect, it } from 'bun:test';
 
 /** Mirror of Java VersionedObject<T> used in Hazelcast queue tests */
 class VersionedObject<T> {

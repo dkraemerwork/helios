@@ -1,8 +1,8 @@
 import type { ITopic } from "../ITopic";
-import type { MessageListener } from "../MessageListener";
 import type { LocalTopicStats } from "../LocalTopicStats";
 import { LocalTopicStatsImpl } from "../LocalTopicStats";
 import { Message } from "../Message";
+import type { MessageListener } from "../MessageListener";
 
 /**
  * In-memory single-node ITopic implementation.

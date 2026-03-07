@@ -2,18 +2,18 @@
  * Port of com.hazelcast.client.impl.protocol.ClientMessageEncoderDecoderTest
  * and related codec round-trip tests.
  */
-import { describe, it, expect } from 'bun:test';
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/ClientMessageReader';
 import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
-import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
-import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
 import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec';
 import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
-import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
 import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { describe, expect, it } from 'bun:test';
 
 function roundTrip(msg: ClientMessage): ClientMessage {
     const bufSize = msg.getFrameLength() + 64;

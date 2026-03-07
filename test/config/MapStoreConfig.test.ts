@@ -1,12 +1,10 @@
-import { describe, test, expect } from 'bun:test';
-import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import type { MapStoreFactory } from '@zenystx/helios-core/map/MapStoreFactory';
+import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import type { MapStoreFactory } from '@zenystx/helios-core/map/MapStoreFactory';
+import { describe, expect, test } from 'bun:test';
 
 // Compile-time smoke test — verify root-barrel exports
-import type { MapLoader } from '@zenystx/helios-core/map/MapLoader';
-import type { MapLoaderLifecycleSupport } from '@zenystx/helios-core/map/MapLoaderLifecycleSupport';
 import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 // (if these lines compile, the exports are wired)
 

@@ -8,15 +8,14 @@
  * are dropped with accounting.
  */
 
-import { describe, test, expect } from 'bun:test';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
 import { CancellationOperation } from '@zenystx/helios-core/executor/impl/CancellationOperation.js';
-import { ShutdownOperation } from '@zenystx/helios-core/executor/impl/ShutdownOperation.js';
 import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
 import { ExecutorServiceProxy } from '@zenystx/helios-core/executor/impl/ExecutorServiceProxy.js';
+import { ShutdownOperation } from '@zenystx/helios-core/executor/impl/ShutdownOperation.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
-import { ExecutorTaskLostException } from '@zenystx/helios-core/executor/ExecutorExceptions.js';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
+import { describe, expect, test } from 'bun:test';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { TursoMapStore } from '../src/TursoMapStore.js';
 
 async function collectKeys<K>(stream: AsyncIterable<K>): Promise<K[]> {

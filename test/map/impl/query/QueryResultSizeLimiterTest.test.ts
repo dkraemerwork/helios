@@ -3,14 +3,14 @@
  *
  * Uses plain TypeScript stub objects instead of Mockito mocks.
  */
-import { describe, it, expect } from 'bun:test';
-import { QueryResultSizeLimiter } from '@zenystx/helios-core/map/impl/query/QueryResultSizeLimiter';
-import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
 import { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
 import type { MapServiceContext } from '@zenystx/helios-core/map/impl/MapServiceContext';
+import { QueryResultSizeLimiter } from '@zenystx/helios-core/map/impl/query/QueryResultSizeLimiter';
+import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
-import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 import { ClusterProperty } from '@zenystx/helios-core/spi/properties/ClusterProperty';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { describe, expect, it } from 'bun:test';
 
 const ANY_MAP_NAME = 'foobar';
 const PARTITION_COUNT = parseInt(ClusterProperty.PARTITION_COUNT.defaultValue, 10); // 271

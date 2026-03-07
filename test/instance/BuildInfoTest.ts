@@ -1,6 +1,6 @@
-import { describe, test, expect, afterEach } from 'bun:test';
 import { BuildInfo } from '@zenystx/helios-core/instance/BuildInfo';
 import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 describe('BuildInfo.calculateVersion', () => {
   test('invalid versions return -1', () => {

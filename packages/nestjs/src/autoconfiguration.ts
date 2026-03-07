@@ -9,11 +9,8 @@
 
 export {
     HeliosAutoConfigurationModule,
-    type HeliosAutoConfigurationAsyncOptions,
+    type HeliosAutoConfigurationAsyncOptions
 } from './autoconfiguration/HeliosAutoConfigurationModule';
 export {
-    HeliosBoot4ObjectExtractionModule,
-    type HeliosObjectType,
-    type HeliosObjectDescriptor,
-    type HeliosBoot4ObjectExtractionOptions,
+    HeliosBoot4ObjectExtractionModule, type HeliosBoot4ObjectExtractionOptions, type HeliosObjectDescriptor, type HeliosObjectType
 } from './autoconfiguration/HeliosBoot4ObjectExtractionModule';

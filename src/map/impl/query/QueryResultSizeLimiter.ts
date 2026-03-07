@@ -5,9 +5,9 @@
  * Provides a hard-coded minimum limit and a pre-check for local partitions.
  */
 import type { MapServiceContext } from '@zenystx/helios-core/map/impl/MapServiceContext';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
-import { ClusterProperty } from '@zenystx/helios-core/spi/properties/ClusterProperty';
 import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
+import { ClusterProperty } from '@zenystx/helios-core/spi/properties/ClusterProperty';
+import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
 
 export class QueryResultSizeLimiter {
     /**

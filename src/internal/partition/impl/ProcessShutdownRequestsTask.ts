@@ -9,8 +9,8 @@
  * Block 16.B5 — Graceful Shutdown Protocol
  */
 import type { Address } from '@zenystx/helios-core/cluster/Address';
-import type { ShutdownRequestHandler } from '@zenystx/helios-core/internal/partition/impl/ShutdownRequestHandler';
 import type { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import type { ShutdownRequestHandler } from '@zenystx/helios-core/internal/partition/impl/ShutdownRequestHandler';
 
 export class ProcessShutdownRequestsTask {
     private readonly _handler: ShutdownRequestHandler;

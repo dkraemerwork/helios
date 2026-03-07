@@ -1,8 +1,8 @@
 import type { ObjectNamespace } from '@zenystx/helios-core/internal/services/ObjectNamespace';
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import { RingbufferContainer } from '@zenystx/helios-core/ringbuffer/impl/RingbufferContainer';
 import { RingbufferService } from '@zenystx/helios-core/ringbuffer/impl/RingbufferService';
 import { RingbufferWaitNotifyKey } from '@zenystx/helios-core/ringbuffer/impl/RingbufferWaitNotifyKey';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.operations.AbstractRingBufferOperation}.

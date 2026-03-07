@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { ArrayIntQuickSorter } from '@zenystx/helios-core/internal/util/sort/QuickSorter';
+import { describe, expect, it } from 'bun:test';
 
 describe('QuickSorterTest', () => {
   it('testQuickSortInt', () => {

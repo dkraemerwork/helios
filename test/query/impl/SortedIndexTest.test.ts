@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
-import { SortedIndex } from '@zenystx/helios-core/query/impl/SortedIndex';
 import { IndexType } from '@zenystx/helios-core/query/impl/Index';
+import { SortedIndex } from '@zenystx/helios-core/query/impl/SortedIndex';
+import { describe, expect, test } from 'bun:test';
 
 describe('SortedIndex', () => {
 

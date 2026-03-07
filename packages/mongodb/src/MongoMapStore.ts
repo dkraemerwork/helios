@@ -1,6 +1,6 @@
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 import { MongoClient } from 'mongodb';
 import type { MongoConfig, Serializer } from './MongoConfig.js';
-import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 
 const defaultSerializer: Serializer<unknown> = {
   serialize: (v) => JSON.stringify(v),

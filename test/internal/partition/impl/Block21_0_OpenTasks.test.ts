@@ -10,26 +10,26 @@
  * - Multi-node crash/rejoin/promotion/refill proof
  * - Verification: no stubs, no fake fallbacks
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
-import { PartitionReplicaManager, REQUIRES_SYNC } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
-import { AntiEntropyTask } from '@zenystx/helios-core/internal/partition/impl/AntiEntropyTask';
-import { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
-import { PartitionReplicaSyncRequest, collectNamespaceStates } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest';
-import { PartitionReplicaSyncResponse } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
-import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { AntiEntropyTask } from '@zenystx/helios-core/internal/partition/impl/AntiEntropyTask';
 import type { MapPartitionLostEvent } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
+import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
+import { collectNamespaceStates } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest';
+import { PartitionReplicaSyncResponse } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
-import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import { NodeEngineImpl } from '@zenystx/helios-core/spi/impl/NodeEngineImpl';
-import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
-import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 function makeMember(host: string, port: number, uuid?: string): Member {
     return new MemberImpl.Builder(new Address(host, port))

@@ -1,7 +1,7 @@
-import { describe, test, expect } from 'bun:test';
 import { HeliosLifecycleService } from '@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService';
 import { LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
 import type { LifecycleListener } from '@zenystx/helios-core/instance/lifecycle/LifecycleListener';
+import { describe, expect, test } from 'bun:test';
 
 describe('HeliosLifecycleService', () => {
   test('isRunning starts true, false after shutdown', () => {

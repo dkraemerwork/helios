@@ -1104,8 +1104,6 @@ Depends on: Block 22.15 (stats).
 - [ ] Create `src/job/metrics/BlitzJobMetrics.ts`: `BlitzJobMetrics`, `VertexMetrics`, `SnapshotMetrics` interfaces
 - [ ] Tests: config resolver defaults, config validation, status enum values, descriptor serialization round-trip, edge type coverage
 - [ ] Verification: `bun test test/blitz/job/` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.0 — foundation types + JobConfig + JobStatus + PipelineDescriptor — N tests green"`
 
 ---
 
@@ -1120,8 +1118,6 @@ Depends on: Block 23.0 (types).
 - [ ] Create `src/job/metrics/LatencyTracker.ts`: circular buffer latency tracker with `record()`, `getP50()`, `getP99()`, `getMax()`, `reset()` — lock-free single-threaded design
 - [ ] Tests: send/receive ordering, backpressure blocks sender when full, receiver blocks when empty, close unblocks waiters, async iterator works, capacity limits enforced, p50/p99/max computation accuracy, buffer rotation
 - [ ] Verification: `bun test test/blitz/job/engine/AsyncChannelTest.test.ts test/blitz/job/metrics/LatencyTrackerTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.1 — AsyncChannel + LatencyTracker engine primitives — N tests green"`
 
 ---
 
@@ -1135,8 +1131,6 @@ Depends on: Block 23.0 (types).
 - [ ] Create `src/job/snapshot/SnapshotStore.ts`: NATS KV bucket `__blitz.snapshots.{jobId}`, with `saveProcessorState()`, `loadProcessorState()`, `commitSnapshot()`, `getLatestSnapshotId()`, `pruneSnapshots()`, `destroy()` — keyed by `{snapshotId}.{vertexName}.{processorIndex}`
 - [ ] Tests: save/load round-trip, commit marks snapshot, latest returns most recent committed, prune keeps last N, destroy removes bucket
 - [ ] Verification: `bun test test/blitz/job/snapshot/SnapshotStoreTest.test.ts` green (embedded NATS)
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.2 — SnapshotStore + NATS KV snapshot persistence — N tests green"`
 
 ---
 
@@ -1152,8 +1146,6 @@ Depends on: Block 23.1 (AsyncChannel), Block 23.2 (SnapshotStore).
 - [ ] Create `src/job/engine/OperatorProcessor.ts`: wraps vertex fn (map/filter/flatMap), reads inbox → applies fn → writes outbox, handles barriers passthrough and state save
 - [ ] Tests: source emits items to outbox, source handles EOS, source pauses on barrier injection, sink drains inbox and writes, sink flushes on EOS, operator map/filter transform correctness, operator barrier passthrough, all processors respect abort signal
 - [ ] Verification: `bun test test/blitz/job/engine/` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.3 — SourceProcessor + SinkProcessor + OperatorProcessor — N tests green"`
 
 ---
 
@@ -1170,8 +1162,6 @@ Depends on: Block 23.3 (processors).
 - [ ] `restoreSnapshot(snapshotId, store)`: restore tasklet state from SnapshotStore
 - [ ] Tests: single-input barrier passthrough, multi-input barrier alignment (buffer until all inputs have barrier), exactly-once vs at-least-once behavior difference, snapshot save/restore round-trip, metrics tracking accuracy, abort signal stops loop
 - [ ] Verification: `bun test test/blitz/job/engine/ProcessorTaskletTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.4 — ProcessorTasklet with Chandy-Lamport barrier alignment — N tests green"`
 
 ---
 
@@ -1186,8 +1176,6 @@ Depends on: Block 23.1 (AsyncChannel), Block 23.0 (types).
 - [ ] Create `src/job/engine/DistributedEdgeReceiver.ts`: subscribes to NATS subjects, deserializes items, pushes to local inbox, recognizes barrier messages from headers, uses JetStream for durable edges (AT_LEAST_ONCE/EXACTLY_ONCE) and core NATS for fire-and-forget (NONE)
 - [ ] Tests: sender/receiver round-trip for each edge type (unicast, partitioned, broadcast, allToOne), barrier passthrough via NATS headers, JetStream vs core NATS selection by processing guarantee, backpressure from inbox propagates to receiver
 - [ ] Verification: `bun test test/blitz/job/engine/DistributedEdgeTest.test.ts` green (embedded NATS)
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.5 — DistributedEdgeSender + DistributedEdgeReceiver — N tests green"`
 
 ---
 
@@ -1203,8 +1191,6 @@ Depends on: Block 23.4 (tasklets), Block 23.5 (distributed edges).
 - [ ] Create `src/job/BlitzJobExecutor.ts`: manages multiple JobExecutions per member, handles START_EXECUTION/STOP_EXECUTION commands, collects local metrics, injects snapshot barriers
 - [ ] Tests: execution plan computation for various topologies, single DAG execution (source → map → filter → sink), distributed edge wiring, multi-job concurrent execution, metrics collection, abort/stop cleanup
 - [ ] Verification: `bun test test/blitz/job/engine/JobExecutionTest.test.ts test/blitz/job/BlitzJobExecutorTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.6 — ExecutionPlan + JobExecution + BlitzJobExecutor — N tests green"`
 
 ---
 
@@ -1220,8 +1206,6 @@ Depends on: Block 23.0 (PipelineDescriptor).
 - [ ] Modify `src/Pipeline.ts`: add `toDescriptor()` method that serializes DAG to `PipelineDescriptor`, store Source/Sink references on vertices during `readFrom()`/`writeTo()`, thread edge type through GeneralStage fluent API
 - [ ] Tests: toDescriptor round-trip, edge type defaults, fluent edge type API, source/sink reference preservation
 - [ ] Verification: `bun test test/blitz/PipelineDescriptorTest.test.ts` green, existing Pipeline tests still pass
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.7 — Pipeline serialization + edge type API — N tests green"`
 
 ---
 
@@ -1238,8 +1222,6 @@ Depends on: Block 23.0 (JobStatus, JobConfig).
 - [ ] Implement `join()` as a Promise that resolves on terminal status (COMPLETED, FAILED, CANCELLED)
 - [ ] Tests: status transitions fire listeners, join resolves on completion, join resolves on failure, join resolves on cancel, getStatus returns current state, addStatusListener returns unsubscribe function
 - [ ] Verification: `bun test test/blitz/job/BlitzJobTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.8 — BlitzJob handle + JobRecord + status listeners — N tests green"`
 
 ---
 
@@ -1256,8 +1238,6 @@ Depends on: Block 23.2 (SnapshotStore), Block 23.4 (barrier alignment), Block 23
 - [ ] Track snapshot metrics: count, duration, size
 - [ ] Tests: periodic snapshot timer fires, barrier injection reaches all members, snapshot completes when all members report, partial member failure handled, on-demand snapshot works, metrics tracked
 - [ ] Verification: `bun test test/blitz/job/snapshot/SnapshotCoordinatorTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.9 — SnapshotCoordinator + periodic snapshot orchestration — N tests green"`
 
 ---
 
@@ -1283,8 +1263,6 @@ Depends on: Block 23.6 (executor), Block 23.8 (BlitzJob, JobRecord), Block 23.9 
 - [ ] Implement light job path: skip coordinator, run locally, no IMap storage
 - [ ] Tests: full submit lifecycle, cancel/suspend/resume/restart transitions, member loss failover, member join auto-scale with debounce, job lookup by id and name, demotion/promotion handoff, split-brain protection, light job no-coordination path
 - [ ] Verification: `bun test test/blitz/job/BlitzJobCoordinatorTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.10 — BlitzJobCoordinator + full job lifecycle management — N tests green"`
 
 ---
 
@@ -1299,8 +1277,6 @@ Depends on: Block 23.6 (executor metrics), Block 23.10 (coordinator).
 - [ ] Wire COLLECT_METRICS / METRICS_RESPONSE flow through ITopic: BlitzJob.getMetrics() → coordinator sends COLLECT_METRICS → each member responds with local metrics → coordinator aggregates with timeout
 - [ ] Tests: single-member aggregation, multi-member aggregation, partial response handling (timeout), latency distribution merging, snapshot metrics aggregation
 - [ ] Verification: `bun test test/blitz/job/metrics/MetricsCollectorTest.test.ts` green
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.11 — MetricsCollector + cross-member metrics aggregation — N tests green"`
 
 ---
 
@@ -1319,8 +1295,6 @@ Depends on: Block 23.10 (coordinator), Block 23.7 (pipeline serialization).
 - [ ] Cluster mode (with coordinator): newJob() delegates to BlitzJobCoordinator, distributed execution, failover, snapshots
 - [ ] Tests: standalone newJob creates and runs job, cluster newJob distributes, getJob/getJobs work, BlitzEvent fires on lifecycle transitions, NestJS proxy delegates correctly, deprecated submit() still works
 - [ ] Verification: `bun test packages/blitz/` green, existing tests still pass
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.12 — BlitzService integration + BlitzEvent + exports + NestJS bridge — N tests green"`
 
 ---
 
@@ -1349,8 +1323,6 @@ Depends on: Block 23.12 (full integration).
 - [ ] E2E: distributed edges (partitioned, broadcast, unicast) route data correctly across members
 - [ ] Full regression: `bun test` at root — 0 fail, 0 error
 - [ ] Verification: `bun test` at root green, `bun run typecheck` clean
-- [ ] GREEN
-- [ ] `git commit -m "feat(blitz): Block 23.INT — end-to-end Blitz Job Supervision acceptance — N tests green"`
 
 ## End-to-End Completion Requirements
 

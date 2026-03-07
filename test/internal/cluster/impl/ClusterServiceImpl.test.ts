@@ -9,16 +9,16 @@
  * - Finding 1: FinalizeJoinOp preJoinOp runs before updateMembers
  * - Finding 13: Cluster state change rejected during active migration / stamp mismatch
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
+import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
 import { ClusterStateManager } from '@zenystx/helios-core/internal/cluster/impl/ClusterStateManager';
-import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
-import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
-import { Address } from '@zenystx/helios-core/cluster/Address';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 

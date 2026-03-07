@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
-import { JoinConfig, InvalidConfigurationException } from '@zenystx/helios-core/config/JoinConfig';
 import { DiscoveryStrategyConfig } from '@zenystx/helios-core/config/DiscoveryStrategyConfig';
+import { InvalidConfigurationException, JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
+import { describe, expect, it } from 'bun:test';
 
 describe('JoinConfigTest', () => {
 

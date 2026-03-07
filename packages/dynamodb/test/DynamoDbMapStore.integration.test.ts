@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { Serializer } from '../src/DynamoDbConfig.js';
+import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
 
 const ENDPOINT = process.env.DYNAMODB_ENDPOINT;
 

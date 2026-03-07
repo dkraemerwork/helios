@@ -4,9 +4,9 @@
  * A DataRecord that supports caching the deserialized value (lazy deserialization).
  * Single-threaded: uses simple compare-and-set without CAS atomics.
  */
-import { DataRecordWithStats } from './DataRecordWithStats';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { JVMUtil } from '@zenystx/helios-core/internal/util/JVMUtil';
+import { DataRecordWithStats } from './DataRecordWithStats';
 
 export class CachedDataRecordWithStats extends DataRecordWithStats {
     private _cachedValue: unknown = null;

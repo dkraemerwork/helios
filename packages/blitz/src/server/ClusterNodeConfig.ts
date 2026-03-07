@@ -6,11 +6,11 @@
  * (Phase 18.2+) builds on top of this to manage topology and lifecycle.
  */
 
-import { NatsServerBinaryResolver } from './NatsServerBinaryResolver.js';
-import { NatsServerManager } from './NatsServerManager.js';
-import type { NatsServerNodeConfig } from './NatsServerConfig.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { NatsServerBinaryResolver } from './NatsServerBinaryResolver.js';
+import type { NatsServerNodeConfig } from './NatsServerConfig.js';
+import { NatsServerManager } from './NatsServerManager.js';
 
 /**
  * Default replication factor for JetStream streams created by Blitz.

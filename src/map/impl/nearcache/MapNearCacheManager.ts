@@ -11,21 +11,18 @@
  * - Propagate lifecycle events (reset/shutdown) to invalidator and repairing task
  */
 import { DefaultNearCacheManager } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager';
-import { NonStopInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/NonStopInvalidator';
-import { BatchInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
-import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
-import { MemberMinimalPartitionService } from '@zenystx/helios-core/map/impl/nearcache/MemberMinimalPartitionService';
-import { MemberMapInvalidationMetaDataFetcher } from '@zenystx/helios-core/map/impl/nearcache/invalidation/MemberMapInvalidationMetaDataFetcher';
-import type { Invalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
-import type { EventService, EventRegistration, EventFilter, LoggerLike } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
 import type { BatchInvalidatorNodeEngine } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
-import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { BatchInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/BatchInvalidator';
+import type { EventFilter, EventRegistration, EventService, Invalidator, LoggerLike } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/Invalidator';
+import { NonStopInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/NonStopInvalidator';
+import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
+import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
 import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
-import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
-import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
-import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { MemberMapInvalidationMetaDataFetcher } from '@zenystx/helios-core/map/impl/nearcache/invalidation/MemberMapInvalidationMetaDataFetcher';
+import { MemberMinimalPartitionService } from '@zenystx/helios-core/map/impl/nearcache/MemberMinimalPartitionService';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 
 /** Cluster property keys for batch invalidation configuration */
 const BATCH_ENABLED_KEY = 'hazelcast.map.invalidation.batch.enabled';

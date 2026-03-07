@@ -1,7 +1,7 @@
-import { describe, test, expect } from 'bun:test';
-import { MapStoreProviderRegistry } from '@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { MapStoreProviderRegistry } from '@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry';
 import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import { describe, expect, test } from 'bun:test';
 
 describe('MapStoreProviderRegistry', () => {
   test('registerMapStoreProvider() and getMapStoreProvider() round-trip', () => {

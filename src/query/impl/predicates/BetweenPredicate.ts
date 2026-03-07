@@ -1,9 +1,9 @@
 import type { Predicate } from '../../Predicate';
-import type { IndexRegistry } from '../IndexRegistry';
-import type { Visitor } from './Visitor';
-import type { VisitablePredicate } from './VisitablePredicate';
-import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
 import { Comparables } from '../Comparables';
+import type { IndexRegistry } from '../IndexRegistry';
+import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
+import type { VisitablePredicate } from './VisitablePredicate';
+import type { Visitor } from './Visitor';
 
 /**
  * Predicate testing attribute value is between two bounds (inclusive on both ends).

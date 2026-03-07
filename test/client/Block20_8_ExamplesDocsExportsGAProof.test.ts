@@ -21,7 +21,7 @@
  * 17. Reconnect example demonstrates real ConnectionRetryConfig usage
  * 18. Final GA verification: production readiness checklist
  */
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 

@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapClearCodec}.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { StringCodec } from './builtin/StringCodec';
 import { INT_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { StringCodec } from './builtin/StringCodec';
 
 export class MapClearCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x010600;

@@ -5,15 +5,15 @@
  * PartitionInvocation, TargetInvocation, migration guards, retry, and
  * backward-compatible localMode for existing tests.
  */
-import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
-import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
 import type { Address } from '@zenystx/helios-core/cluster/Address';
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 import { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
 import { InvocationRegistry } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
 import { PartitionInvocation } from '@zenystx/helios-core/spi/impl/operationservice/PartitionInvocation';
-import { TargetInvocation } from '@zenystx/helios-core/spi/impl/operationservice/TargetInvocation';
 import { PartitionMigratingException, RetryableException, TargetNotMemberException } from '@zenystx/helios-core/spi/impl/operationservice/RetryableException';
+import { TargetInvocation } from '@zenystx/helios-core/spi/impl/operationservice/TargetInvocation';
 
 export interface OperationServiceImplOptions {
     localMode?: boolean;

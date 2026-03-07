@@ -7,8 +7,8 @@
  * @see ShutdownOperation
  */
 
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
 import type { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
 
 export class CancellationOperation extends Operation {
     readonly executorName: string;

@@ -11,16 +11,16 @@
  *   2. NestJS DI integration — inject CACHE_MANAGER into service; DI store wins
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { Injectable, Inject } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
-import { Cacheable } from '@zenystx/helios-nestjs/decorators/cacheable.decorator';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject, Injectable } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import { CacheEvict } from '@zenystx/helios-nestjs/decorators/cache-evict.decorator';
 import { CachePut } from '@zenystx/helios-nestjs/decorators/cache-put.decorator';
 import { CacheableRegistry, type ICacheStore } from '@zenystx/helios-nestjs/decorators/cache-registry';
+import { Cacheable } from '@zenystx/helios-nestjs/decorators/cacheable.decorator';
 import { HeliosCacheModule } from '@zenystx/helios-nestjs/HeliosCacheModule';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Shared in-memory cache store used across unit tests

@@ -4,12 +4,12 @@
  * Composes MapReplicationStateHolder, WriteBehindStateHolder, and
  * MapNearCacheStateHolder to perform full partition replication for maps.
  */
-import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import type { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import type { WriteBehindStore } from '@zenystx/helios-core/map/impl/mapstore/writebehind/WriteBehindStore';
+import type { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation/MapNearCacheStateHolder';
 import type { MapReplicationStateHolder } from '@zenystx/helios-core/map/impl/operation/MapReplicationStateHolder';
 import type { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/WriteBehindStateHolder';
-import type { MapNearCacheStateHolder } from '@zenystx/helios-core/map/impl/operation/MapNearCacheStateHolder';
 
 export class MapReplicationOperation {
     readonly partitionId: number;

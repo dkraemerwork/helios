@@ -9,12 +9,12 @@
  * - Near-cache hit/miss/invalidation lifecycle works end-to-end
  * - Shutdown destroys near-caches
  */
-import { describe, it, expect, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { NearCachedIMapWrapper } from '@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 describe('NearCacheWiringTest', () => {
     let instance: HeliosInstanceImpl;

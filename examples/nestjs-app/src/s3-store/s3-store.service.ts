@@ -14,10 +14,10 @@
  * Works with AWS S3, MinIO, or LocalStack.
  */
 
-import 'reflect-metadata';
 import { Injectable } from '@nestjs/common';
-import { InjectMap } from '@zenystx/helios-nestjs';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import { InjectMap } from '@zenystx/helios-nestjs';
+import 'reflect-metadata';
 
 export interface DocumentMeta {
     docId: string;

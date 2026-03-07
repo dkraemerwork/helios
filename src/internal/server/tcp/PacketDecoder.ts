@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.server.tcp.PacketDecoder}.
  * InboundHandler that reads Packet instances from a ByteBuffer.
  */
-import { InboundHandlerWithCounters } from '@zenystx/helios-core/internal/networking/InboundHandlerWithCounters';
+import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HandlerStatus } from '@zenystx/helios-core/internal/networking/HandlerStatus';
+import { InboundHandlerWithCounters } from '@zenystx/helios-core/internal/networking/InboundHandlerWithCounters';
 import { Packet } from '@zenystx/helios-core/internal/nio/Packet';
 import { PacketIOHelper } from '@zenystx/helios-core/internal/nio/PacketIOHelper';
-import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 
 const { CLEAN } = HandlerStatus;
 

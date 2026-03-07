@@ -3,8 +3,8 @@
  *
  * Block 7.7: CLI entrypoint + standalone server mode
  */
-import { describe, it, expect } from 'bun:test';
 import { parseCli } from '@zenystx/helios-core/server/cli';
+import { describe, expect, it } from 'bun:test';
 
 describe('parseCli — defaults', () => {
     it('should return empty object for no args', () => {

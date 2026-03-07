@@ -5,10 +5,10 @@
  * Provides the async topic API for remote clients.
  */
 import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
 import { TopicRemoveMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicRemoveMessageListenerCodec";
+import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 import { Message } from "@zenystx/helios-core/topic/Message";
 
 export class ClientTopicProxy<E = any> extends ClientProxy {

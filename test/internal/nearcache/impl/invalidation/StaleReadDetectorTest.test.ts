@@ -7,11 +7,11 @@
  * Java original uses a full HazelcastInstance and NearCachedMapProxyImpl to drive the flow.
  * TypeScript port exercises the same contract at the unit level via RepairingTask/MapNearCacheManager.
  */
-import { describe, it, expect } from 'bun:test';
-import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { MapNearCacheNodeEngine } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { describe, expect, it } from 'bun:test';
 
 const MAP_NAME = 'test';
 

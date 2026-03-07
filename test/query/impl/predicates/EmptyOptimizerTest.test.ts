@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import { EmptyOptimizer } from '@zenystx/helios-core/query/impl/predicates/EmptyOptimizer';
+import { describe, expect, test } from 'bun:test';
 
 function mockPredicate(): Predicate {
   return { apply: () => false };

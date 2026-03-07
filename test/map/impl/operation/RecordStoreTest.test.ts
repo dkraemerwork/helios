@@ -2,10 +2,10 @@
  * Unit tests for DefaultRecordStore — the in-memory per-partition map store.
  * Ported from com.hazelcast.map.impl.recordstore (operation unit tests, Block 3.2b).
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
 import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 describe('DefaultRecordStore', () => {
     let store: DefaultRecordStore;

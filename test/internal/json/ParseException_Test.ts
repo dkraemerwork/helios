@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { Location } from '@zenystx/helios-core/internal/json/Location';
 import { ParseException } from '@zenystx/helios-core/internal/json/ParseException';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('ParseException_Test', () => {
   let location: Location;

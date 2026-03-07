@@ -1,5 +1,5 @@
-import type { QueryContext } from '../QueryContext';
 import type { Index } from '../Index';
+import type { QueryContext } from '../QueryContext';
 import { IndexMatchHint } from '../QueryContext';
 import { AbstractPredicate } from './AbstractPredicate';
 

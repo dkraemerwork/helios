@@ -14,12 +14,12 @@
  *
  * Block 12.A3: Updated to async signatures matching IMap interface.
  */
+import type { TcpClusterTransport } from '@zenystx/helios-core/cluster/tcp/TcpClusterTransport';
+import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
+import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
 import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
-import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
-import type { TcpClusterTransport } from '@zenystx/helios-core/cluster/tcp/TcpClusterTransport';
-import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 
 export class NetworkedMapProxy<K, V> extends MapProxy<K, V> {
     private readonly _transport: TcpClusterTransport;

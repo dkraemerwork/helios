@@ -11,13 +11,13 @@
  * - Live runtime wiring for reconciliation and bridge
  * - Integrated verification of no duplicate runtimes
  */
-import { describe, test, expect, afterEach } from "bun:test";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
-import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { resolveAdvertiseHost } from "@zenystx/helios-core/instance/impl/blitz/AdvertiseHostResolver";
+import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
 import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
+import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { afterEach, describe, expect, test } from "bun:test";
 
 // ─── 1. Env-helper: HELIOS_BLITZ_MODE=distributed-auto ─────────────────────
 

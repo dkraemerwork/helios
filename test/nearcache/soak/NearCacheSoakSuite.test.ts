@@ -13,21 +13,21 @@
  *  5. Memory drift: eviction enforces maxSize under insertion pressure
  *  6. Invalidation counter accuracy across many puts
  */
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig, LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
-import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import type { AsyncCacheBackingStore } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
 import { NearCachedClientCacheProxy } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { LocalUpdatePolicy, NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
+import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
 import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
-import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
-import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
-import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
-import type { AsyncCacheBackingStore } from '@zenystx/helios-core/client/cache/impl/nearcache/NearCachedClientCacheProxy';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 

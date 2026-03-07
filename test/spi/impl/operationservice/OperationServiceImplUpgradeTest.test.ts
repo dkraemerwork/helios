@@ -4,19 +4,17 @@
  * Verifies partition routing, migration guards, retry, remote invocation stub,
  * backpressure, backward compatibility (localMode), and response correlation.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { Address } from '@zenystx/helios-core/cluster/Address';
 import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
 import { InvocationRegistry } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { Address } from '@zenystx/helios-core/cluster/Address';
 import {
-    RetryableException,
-    WrongTargetException,
     PartitionMigratingException,
-    TargetNotMemberException,
-    MemberLeftException,
+    RetryableException,
+    WrongTargetException
 } from '@zenystx/helios-core/spi/impl/operationservice/RetryableException';
 import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { describe, expect, it } from 'bun:test';
 
 // ── test helpers ───────────────────────────────────────────────────────────
 

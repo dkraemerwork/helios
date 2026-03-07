@@ -5,10 +5,10 @@
  * factoryClassName='my-factory' resolves through MapStoreProviderRegistry
  * before falling back to dynamic loading.
  */
-import { describe, it, expect } from 'bun:test';
 import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapStoreContext } from '@zenystx/helios-core/map/impl/mapstore/MapStoreContext';
 import { MapStoreProviderRegistry } from '@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry';
+import { describe, expect, it } from 'bun:test';
 import { TrackingMapStoreFactory } from './test-tracking-store.js';
 
 describe('Wiring: registry-backed config', () => {

@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
 import { DenseHyperLogLogEncoder } from '@zenystx/helios-core/cardinality/impl/DenseHyperLogLogEncoder';
+import { describe, expect, test } from 'bun:test';
 
 // testAdd_assertRegisterLength, testAlpha_withGivenZeroAsInvalidMemoryFootprint,
 // testAlpha_withInvalidMemoryFootprint: @RequireAssertEnabled — Java assert semantics, skipped.

@@ -2,13 +2,13 @@
  * Tests for HeliosHealthIndicator — @nestjs/terminus integration.
  * Block 9.5.
  */
-import { describe, it, expect } from 'bun:test';
-import { Test } from '@nestjs/testing';
 import { HealthIndicatorService } from '@nestjs/terminus';
-import { HeliosModule } from '../../src/HeliosModule';
+import { Test } from '@nestjs/testing';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import { describe, expect, it } from 'bun:test';
 import { HeliosHealthIndicator } from '../../src/health/HeliosHealthIndicator';
 import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
-import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import { HeliosModule } from '../../src/HeliosModule';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

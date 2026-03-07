@@ -1,13 +1,13 @@
 import type { Predicate } from '../../Predicate';
 import type { IndexRegistry } from '../IndexRegistry';
 import type { QueryableEntry } from '../QueryableEntry';
-import type { Visitor } from './Visitor';
-import type { VisitablePredicate } from './VisitablePredicate';
-import type { NegatablePredicate } from './NegatablePredicate';
 import type { CompoundPredicate } from './CompoundPredicate';
-import { acceptVisitor } from './VisitorUtils';
+import type { NegatablePredicate } from './NegatablePredicate';
 import { NotPredicate } from './NotPredicate';
 import { OrPredicate } from './OrPredicate';
+import type { VisitablePredicate } from './VisitablePredicate';
+import type { Visitor } from './Visitor';
+import { acceptVisitor } from './VisitorUtils';
 
 /**
  * Logical AND of multiple predicates.

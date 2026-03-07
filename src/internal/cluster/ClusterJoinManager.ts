@@ -1,13 +1,13 @@
 import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
 import {
-    MemberAddress,
-    DiscoveryConfig,
-    DiscoveryProvider,
-    HeliosDiscoveryResolver,
     AwsDiscoveryProvider,
     AzureDiscoveryProvider,
+    DiscoveryConfig,
+    DiscoveryProvider,
     GcpDiscoveryProvider,
+    HeliosDiscoveryResolver,
     K8sDiscoveryProvider,
+    MemberAddress,
     StaticDiscoveryProvider,
     createDiscoveryResolver,
 } from '@zenystx/helios-core/discovery/HeliosDiscovery';

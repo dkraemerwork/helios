@@ -4,12 +4,12 @@
  * Proves the DynamoDB adapter works through the Helios runtime, not just
  * directly. Uses an in-memory mock DynamoDB client — no real endpoint needed.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
+import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
 
 // ── In-memory DynamoDB mock ─────────────────────────────────────────────────
 

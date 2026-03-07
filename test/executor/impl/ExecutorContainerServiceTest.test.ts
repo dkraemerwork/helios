@@ -4,10 +4,10 @@
  * Tests: lazy pool creation, queue bounds, idle eviction, pool cap, cancel (queued + running),
  * timeout, degraded pool detection, handle cleanup, result deserialization.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
 import { ExecutorContainerService, TaskState } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
-import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 function makeConfig(overrides?: {
     poolSize?: number;

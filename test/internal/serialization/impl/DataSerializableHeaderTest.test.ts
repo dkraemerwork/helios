@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.internal.serialization.impl.DataSerializableHeaderTest}.
  */
-import { describe, test, expect } from 'bun:test';
 import { DataSerializableHeader } from '@zenystx/helios-core/internal/serialization/impl/DataSerializableHeader';
+import { describe, expect, test } from 'bun:test';
 
 describe('DataSerializableHeaderTest', () => {
     test('identified', () => {

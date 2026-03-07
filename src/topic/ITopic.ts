@@ -1,6 +1,6 @@
-import type { MessageListener } from "./MessageListener";
-import type { LocalTopicStats } from "./LocalTopicStats";
 import type { MaybePromise } from "@zenystx/helios-core/util/MaybePromise";
+import type { LocalTopicStats } from "./LocalTopicStats";
+import type { MessageListener } from "./MessageListener";
 
 /**
  * Distributed topic interface.

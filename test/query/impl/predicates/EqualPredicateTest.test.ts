@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import { EqualPredicate } from '@zenystx/helios-core/query/impl/predicates/EqualPredicate';
 import { NotEqualPredicate } from '@zenystx/helios-core/query/impl/predicates/NotEqualPredicate';
+import { describe, expect, test } from 'bun:test';
 import { entry } from './PredicateTestUtils';
 
 describe('EqualPredicate', () => {

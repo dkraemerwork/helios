@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { InstancePermission } from '@zenystx/helios-core/security/permission/InstancePermission';
+import { describe, expect, it } from 'bun:test';
 
 /** Concrete subclass for testing — mirrors Java InstantiatableInstancePermission */
 class TestInstancePermission extends InstancePermission {

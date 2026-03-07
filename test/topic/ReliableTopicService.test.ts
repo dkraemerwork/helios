@@ -13,17 +13,15 @@
  * - Plain MessageListener adaptation for reliable topic
  * - No throw stubs remaining anywhere
  */
-import { describe, it, expect, beforeEach } from "bun:test";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
-import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
-import { ReliableTopicConfig, TopicOverloadPolicy } from "@zenystx/helios-core/config/ReliableTopicConfig";
 import { parseRawConfig } from "@zenystx/helios-core/config/ConfigLoader";
-import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
-import type { Message } from "@zenystx/helios-core/topic/Message";
-import type { MessageListener } from "@zenystx/helios-core/topic/MessageListener";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { ReliableTopicConfig, TopicOverloadPolicy } from "@zenystx/helios-core/config/ReliableTopicConfig";
+import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
+import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { TestHeliosInstance } from "@zenystx/helios-core/test-support/TestHeliosInstance";
+import type { Message } from "@zenystx/helios-core/topic/Message";
+import { describe, expect, it } from "bun:test";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // A. Classic Topic Hardening

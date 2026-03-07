@@ -10,9 +10,9 @@
  * maxSingleSyncSizeBytes (default 50MB), a warning is logged but sync proceeds
  * (the alternative is OOM, which is worse).
  */
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
+import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 /** State for a single namespace within a partition sync response. */
 export interface ReplicationNamespaceState {

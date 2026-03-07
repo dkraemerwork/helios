@@ -5,9 +5,9 @@
  * Fetches partition sequences and UUIDs from each data member via
  * binary client protocol invocations (not in-process operations).
  */
-import { AbstractInvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import type { InvalidationMetaDataResponse } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
 import type { ClientInvocationService } from '@zenystx/helios-core/client/invocation/ClientInvocationService';
+import type { InvalidationMetaDataResponse } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
+import { AbstractInvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
 
 /** Represents one cluster data member as seen by the client map metadata fetcher. */
 export interface ClientMapDataMember {

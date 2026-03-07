@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.partition.impl.PartitionStateManagerImpl}.
  * Owns the partition table: assignment, repartition, stamp calculation.
  */
+import type { Member } from '@zenystx/helios-core/cluster/Member';
 import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
 import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { PartitionStampUtil } from '@zenystx/helios-core/internal/partition/PartitionStampUtil';
 import { PartitionTableView } from '@zenystx/helios-core/internal/partition/PartitionTableView';
-import type { Member } from '@zenystx/helios-core/cluster/Member';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class PartitionStateManager {

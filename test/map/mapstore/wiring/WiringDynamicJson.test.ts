@@ -5,10 +5,10 @@
  * A JSON config file with map-store.factoryClassName resolves via
  * ConfigLoader → MapStoreContext pipeline.
  */
-import { describe, it, expect } from 'bun:test';
-import { resolve } from 'node:path';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { loadConfig } from '@zenystx/helios-core/config/ConfigLoader';
+import { describe, expect, it } from 'bun:test';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const fixtureDir = resolve(import.meta.dir, '__fixtures__');
 

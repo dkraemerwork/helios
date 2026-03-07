@@ -8,14 +8,14 @@
  *  - putAll/getAll route through owner for MapStore bulk paths
  *  - MapStoreContext shared lifecycle with partition-scoped runtime state
  */
-import { describe, it, expect, afterEach } from 'bun:test';
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
-import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
-import type { MapStore } from '@zenystx/helios-core/map/MapStore';
-import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 const BASE_PORT = 17200;
 let portCounter = 0;

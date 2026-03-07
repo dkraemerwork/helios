@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeAll } from "bun:test";
 import { Bits } from "@zenystx/helios-core/internal/nio/Bits";
+import { beforeAll, describe, expect, test } from "bun:test";
 
 // Fixed 8-byte buffer — matches BitsTest random buffer initialisation
 // Using distinct bytes so big-endian vs little-endian reads differ.

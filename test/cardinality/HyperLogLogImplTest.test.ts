@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
 import { HyperLogLogImpl } from '@zenystx/helios-core/cardinality/impl/HyperLogLogImpl';
+import { describe, expect, test } from 'bun:test';
 
 // testEstimateErrorRateForBigCardinalities: @SlowTest — 10M iterations × 6 precisions, skipped
 

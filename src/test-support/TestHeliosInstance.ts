@@ -7,24 +7,24 @@
  * This class is intentionally thin — it is a test harness, not a production
  * HeliosInstance implementation (that comes in Block 3.10).
  */
-import { TestNodeEngine } from "@zenystx/helios-core/test-support/TestNodeEngine";
-import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
-import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
-import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
-import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
-import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
-import { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
-import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
-import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
-import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
-import type { IMap } from "@zenystx/helios-core/map/IMap";
-import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { IList } from "@zenystx/helios-core/collection/IList";
+import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
+import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
+import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { ISet } from "@zenystx/helios-core/collection/ISet";
-import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
+import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
+import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
+import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
+import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import { TestNodeEngine } from "@zenystx/helios-core/test-support/TestNodeEngine";
+import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
+import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
+import { TopicImpl } from "@zenystx/helios-core/topic/impl/TopicImpl";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 
 /** @deprecated Use MapProxy directly. Kept for backwards compatibility. */
 export { MapProxy as SimpleMapProxy } from "@zenystx/helios-core/map/impl/MapProxy";

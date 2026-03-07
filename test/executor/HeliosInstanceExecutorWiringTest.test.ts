@@ -5,11 +5,10 @@
  * executor registered in node engine, shutdown drains executor, named executors
  * coexist, scheduled executor stub is deterministic.
  */
-import { describe, test, expect, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
-import type { IExecutorService } from '@zenystx/helios-core/executor/IExecutorService';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 describe('HeliosInstance executor wiring (Block 17.8)', () => {
     const instances: HeliosInstanceImpl[] = [];

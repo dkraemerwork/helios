@@ -6,7 +6,7 @@
  * to remain decoupled and independently testable.
  */
 
-import type { TransportMetrics, ObjectInventory, MemberPartitionInfo, BlitzMetrics, ThreadPoolMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
+import type { BlitzMetrics, MemberPartitionInfo, ObjectInventory, ThreadPoolMetrics, TransportMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
 
 export interface MonitorStateProvider {
     /** Instance name. */

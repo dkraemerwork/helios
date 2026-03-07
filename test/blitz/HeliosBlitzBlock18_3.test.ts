@@ -5,11 +5,11 @@
  * startup, join, readiness gates, bootstrap-local → clustered cutover,
  * deterministic cleanup on leave/shutdown, and rejoin behavior.
  */
-import { describe, test, expect, afterEach } from "bun:test";
-import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { HeliosBlitzLifecycleManager, BlitzReadinessState } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
+import { BlitzReadinessState, HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
+import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { afterEach, describe, expect, test } from "bun:test";
 
 // ─── 1. Blitz lifecycle field wiring ────────────────────────────────────────
 

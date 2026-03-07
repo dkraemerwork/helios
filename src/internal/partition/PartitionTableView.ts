@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.internal.partition.PartitionTableView}.
  * Immutable view of the partition table.
  */
-import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { AbstractInternalPartition } from '@zenystx/helios-core/internal/partition/AbstractInternalPartition';
-import { PartitionStampUtil } from '@zenystx/helios-core/internal/partition/PartitionStampUtil';
+import type { InternalPartition } from '@zenystx/helios-core/internal/partition/InternalPartition';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { PartitionStampUtil } from '@zenystx/helios-core/internal/partition/PartitionStampUtil';
 
 export class PartitionTableView {
     private readonly _partitions: (InternalPartition | null)[];

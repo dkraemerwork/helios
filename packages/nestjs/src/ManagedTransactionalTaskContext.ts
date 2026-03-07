@@ -10,8 +10,8 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { HeliosTransactionManager } from './HeliosTransactionManager';
 import type { TransactionalMap } from '@zenystx/helios-core/transaction/TransactionContext';
+import { HeliosTransactionManager } from './HeliosTransactionManager';
 
 @Injectable()
 export class ManagedTransactionalTaskContext {

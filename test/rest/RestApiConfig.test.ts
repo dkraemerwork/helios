@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'bun:test';
-import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
-import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
 import { parseRawConfig } from '@zenystx/helios-core/config/ConfigLoader';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { describe, expect, it } from 'bun:test';
 
 // ─── RestEndpointGroup ────────────────────────────────────────────────────────
 

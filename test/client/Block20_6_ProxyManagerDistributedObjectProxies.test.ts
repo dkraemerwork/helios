@@ -16,7 +16,7 @@
  * - Client shutdown destroys all cached proxies
  * - A separate Bun app can use every shipped proxy over real sockets
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // ── 1. ClientProxy base class ──────────────────────────────────────────────────
 

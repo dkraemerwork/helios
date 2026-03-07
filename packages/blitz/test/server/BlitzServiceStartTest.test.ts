@@ -10,12 +10,12 @@
  * - shutdown() releases ports immediately (no EADDRINUSE)
  * - shutdown() after connect() (no embedded) → no process killed
  */
-import { describe, it, expect, afterEach, setDefaultTimeout } from 'bun:test';
-import { BlitzService } from '../../src/BlitzService.ts';
+import { connect } from '@nats-io/transport-node';
+import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { connect } from '@nats-io/transport-node';
+import { BlitzService } from '../../src/BlitzService.ts';
 
 setDefaultTimeout(30_000);
 

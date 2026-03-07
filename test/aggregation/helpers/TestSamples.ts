@@ -1,15 +1,15 @@
+import { Person } from './Person';
 import {
   ValueContainer,
   ValueType,
-  makeIntContainer,
-  makeLongContainer,
-  makeDoubleContainer,
   makeBigDecimalContainer,
   makeBigIntegerContainer,
+  makeDoubleContainer,
+  makeIntContainer,
+  makeLongContainer,
   makeNumberContainer,
   makeStringContainer,
 } from './ValueContainer';
-import { Person } from './Person';
 
 /** Port of com.hazelcast.aggregation.TestSamples */
 

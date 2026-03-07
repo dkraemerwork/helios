@@ -2,9 +2,9 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.EntryListUUIDListIntegerCodec}.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ListIntegerCodec } from './ListIntegerCodec';
 import { ListMultiFrameCodec } from './ListMultiFrameCodec';
 import { ListUUIDCodec } from './ListUUIDCodec';
-import { ListIntegerCodec } from './ListIntegerCodec';
 
 export class EntryListUUIDListIntegerCodec {
     private constructor() {}

@@ -1,8 +1,3 @@
-import {
-  encodeData,
-  decodeData,
-  type EncodedData,
-} from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import type {
   ClusterMessage,
   QueueEventMsg,
@@ -11,18 +6,22 @@ import type {
   QueueStateItemMsg,
   QueueStateSyncMsg,
 } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import {
+  decodeData,
+  encodeData
+} from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
+import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { ItemEvent } from "@zenystx/helios-core/collection/ItemEvent";
 import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 import {
   LocalQueueStatsImpl,
   type LocalQueueStats,
 } from "@zenystx/helios-core/collection/LocalQueueStats";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
-import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 
 interface QueueStateItem {
   itemId: number;

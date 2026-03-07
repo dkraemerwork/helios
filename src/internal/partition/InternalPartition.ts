@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.internal.partition.InternalPartition}.
  */
 import type { Address } from '@zenystx/helios-core/cluster/Address';
-import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { MAX_BACKUP_COUNT } from '@zenystx/helios-core/internal/partition/IPartition';
+import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 
 export const MAX_REPLICA_COUNT = MAX_BACKUP_COUNT + 1; // 7
 

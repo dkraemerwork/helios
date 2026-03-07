@@ -1,23 +1,23 @@
-import { describe, it, expect } from 'bun:test';
 import { ActionConstants } from '@zenystx/helios-core/security/permission/ActionConstants';
-import { MapPermission } from '@zenystx/helios-core/security/permission/MapPermission';
-import { CachePermission } from '@zenystx/helios-core/security/permission/CachePermission';
-import { MultiMapPermission } from '@zenystx/helios-core/security/permission/MultiMapPermission';
-import { ListPermission } from '@zenystx/helios-core/security/permission/ListPermission';
-import { SetPermission } from '@zenystx/helios-core/security/permission/SetPermission';
 import { AtomicLongPermission } from '@zenystx/helios-core/security/permission/AtomicLongPermission';
-import { SemaphorePermission } from '@zenystx/helios-core/security/permission/SemaphorePermission';
-import { TopicPermission } from '@zenystx/helios-core/security/permission/TopicPermission';
-import { LockPermission } from '@zenystx/helios-core/security/permission/LockPermission';
+import { AtomicReferencePermission } from '@zenystx/helios-core/security/permission/AtomicReferencePermission';
+import { CachePermission } from '@zenystx/helios-core/security/permission/CachePermission';
+import { CountDownLatchPermission } from '@zenystx/helios-core/security/permission/CountDownLatchPermission';
+import { CPMapPermission } from '@zenystx/helios-core/security/permission/CPMapPermission';
 import { ExecutorServicePermission } from '@zenystx/helios-core/security/permission/ExecutorServicePermission';
 import { FlakeIdGeneratorPermission } from '@zenystx/helios-core/security/permission/FlakeIdGeneratorPermission';
-import { ReplicatedMapPermission } from '@zenystx/helios-core/security/permission/ReplicatedMapPermission';
-import { AtomicReferencePermission } from '@zenystx/helios-core/security/permission/AtomicReferencePermission';
-import { CountDownLatchPermission } from '@zenystx/helios-core/security/permission/CountDownLatchPermission';
+import { ListPermission } from '@zenystx/helios-core/security/permission/ListPermission';
+import { LockPermission } from '@zenystx/helios-core/security/permission/LockPermission';
+import { MapPermission } from '@zenystx/helios-core/security/permission/MapPermission';
+import { MultiMapPermission } from '@zenystx/helios-core/security/permission/MultiMapPermission';
 import { QueuePermission } from '@zenystx/helios-core/security/permission/QueuePermission';
-import { CPMapPermission } from '@zenystx/helios-core/security/permission/CPMapPermission';
+import { ReplicatedMapPermission } from '@zenystx/helios-core/security/permission/ReplicatedMapPermission';
+import { SemaphorePermission } from '@zenystx/helios-core/security/permission/SemaphorePermission';
+import { SetPermission } from '@zenystx/helios-core/security/permission/SetPermission';
+import { TopicPermission } from '@zenystx/helios-core/security/permission/TopicPermission';
 import { UserCodeNamespacePermission } from '@zenystx/helios-core/security/permission/UserCodeNamespacePermission';
 import { VectorCollectionPermission } from '@zenystx/helios-core/security/permission/VectorCollectionPermission';
+import { describe, expect, it } from 'bun:test';
 
 describe('ActionConstantsTest', () => {
     it('getPermission_whenNonExistingService', () => {

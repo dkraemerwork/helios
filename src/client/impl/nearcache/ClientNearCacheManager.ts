@@ -9,10 +9,10 @@
  * - Destroy/shutdown cleanup
  */
 import { DefaultNearCacheManager } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager';
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
-import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
-import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 import type { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
+import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 
 export class ClientNearCacheManager extends DefaultNearCacheManager {
     private _repairingTask: RepairingTask | null = null;

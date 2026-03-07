@@ -3,12 +3,12 @@
  *
  * Represents a result of a query execution as an iterable collection of rows.
  */
-import type { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
-import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import type { LocalMapStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
+import type { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
 import { IterationType } from '@zenystx/helios-core/internal/util/IterationType';
 import { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
 import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 
 export class QueryResult implements Iterable<QueryResultRow> {
     private _rows: QueryResultRow[] = [];

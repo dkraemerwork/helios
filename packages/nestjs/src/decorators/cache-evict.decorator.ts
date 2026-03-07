@@ -23,8 +23,8 @@
  * ```
  */
 
-import { CacheableRegistry, findCacheOnInstance, resolveKey } from './cache-registry';
 import type { ICacheStore } from './cache-registry';
+import { CacheableRegistry, findCacheOnInstance, resolveKey } from './cache-registry';
 
 // ---------------------------------------------------------------------------
 // Options

@@ -6,7 +6,7 @@
  * is correctly configured for distribution.
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 // ── 1. Barrel imports ───────────────────────────────────────────────────────
 //

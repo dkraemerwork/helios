@@ -10,9 +10,9 @@
  * - Raw factory closures are rejected — use submitLocal/executeLocal for those
  * - Unhealthy backend fails closed (rejects tasks) rather than falling back to inline
  */
-import { scatter } from '@zenystx/scatterjs';
-import type { ThreadPool } from '@zenystx/scatterjs';
 import type { ExecutionBackend } from '@zenystx/helios-core/executor/impl/ExecutionBackend.js';
+import type { ThreadPool } from '@zenystx/scatterjs';
+import { scatter } from '@zenystx/scatterjs';
 
 export interface ScatterExecutionBackendOptions {
     /** Number of workers in the pool (defaults to hardware concurrency). */

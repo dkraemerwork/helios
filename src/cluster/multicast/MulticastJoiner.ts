@@ -12,7 +12,7 @@
  *
  * This bridges multicast discovery with the existing TCP cluster transport.
  */
-import type { MulticastService, MulticastJoinMessage, MulticastJoinRequest, MulticastMessage, MulticastListener } from '@zenystx/helios-core/cluster/multicast/MulticastService';
+import type { MulticastJoinMessage, MulticastJoinRequest, MulticastListener, MulticastMessage, MulticastService } from '@zenystx/helios-core/cluster/multicast/MulticastService';
 import type { MulticastConfig } from '@zenystx/helios-core/config/MulticastConfig';
 
 // ── Constants ─────────────────────────────────────────────────────────────

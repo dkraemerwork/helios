@@ -8,15 +8,15 @@
  *  3. package.json files/exports structure is publish-ready.
  */
 
-import { describe, it, expect } from 'bun:test';
-import * as MainExports from '@zenystx/helios-nestjs/index';
-import * as CacheExports from '@zenystx/helios-nestjs/cache';
-import * as TransactionExports from '@zenystx/helios-nestjs/transaction';
-import * as HealthExports from '@zenystx/helios-nestjs/health';
-import * as EventsExports from '@zenystx/helios-nestjs/events';
-import * as DecoratorsExports from '@zenystx/helios-nestjs/decorators';
 import * as AutoconfigExports from '@zenystx/helios-nestjs/autoconfiguration';
+import * as CacheExports from '@zenystx/helios-nestjs/cache';
 import * as ContextExports from '@zenystx/helios-nestjs/context';
+import * as DecoratorsExports from '@zenystx/helios-nestjs/decorators';
+import * as EventsExports from '@zenystx/helios-nestjs/events';
+import * as HealthExports from '@zenystx/helios-nestjs/health';
+import * as MainExports from '@zenystx/helios-nestjs/index';
+import * as TransactionExports from '@zenystx/helios-nestjs/transaction';
+import { describe, expect, it } from 'bun:test';
 
 // ─── 1. Main barrel ──────────────────────────────────────────────────────────
 

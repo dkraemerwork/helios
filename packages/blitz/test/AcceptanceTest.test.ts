@@ -10,26 +10,26 @@
  *
  * ~20 tests total.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 // Pipeline
-import { Pipeline } from '../src/Pipeline.ts';
 import { BatchPipeline } from '../src/batch/BatchPipeline.ts';
 import type { BatchResult } from '../src/batch/BatchResult.ts';
+import { Pipeline } from '../src/Pipeline.ts';
 
 // Sources / sinks
-import type { Source, SourceMessage } from '../src/source/Source.ts';
+import { HeliosMapSink } from '../src/sink/HeliosMapSink.ts';
 import type { Sink } from '../src/sink/Sink.ts';
 import { FileSource } from '../src/source/FileSource.ts';
-import { HeliosMapSink } from '../src/sink/HeliosMapSink.ts';
+import type { Source, SourceMessage } from '../src/source/Source.ts';
 
 // Windowing
-import { WindowOperator } from '../src/window/WindowOperator.ts';
 import { AggregatingOperator } from '../src/aggregate/AggregatingOperator.ts';
-import { InMemoryWindowState } from '../src/window/WindowState.ts';
-import { TumblingWindowPolicy } from '../src/window/TumblingWindowPolicy.ts';
-import { SlidingWindowPolicy } from '../src/window/SlidingWindowPolicy.ts';
 import { SessionWindowPolicy } from '../src/window/SessionWindowPolicy.ts';
+import { SlidingWindowPolicy } from '../src/window/SlidingWindowPolicy.ts';
+import { TumblingWindowPolicy } from '../src/window/TumblingWindowPolicy.ts';
+import { WindowOperator } from '../src/window/WindowOperator.ts';
+import { InMemoryWindowState } from '../src/window/WindowState.ts';
 
 // Aggregations
 import { CountAggregator } from '../src/aggregate/CountAggregator.ts';
@@ -37,18 +37,18 @@ import { SumAggregator } from '../src/aggregate/SumAggregator.ts';
 
 // Joins
 import { HashJoinOperator } from '../src/join/HashJoinOperator.ts';
-import { WindowedJoinOperator } from '../src/join/WindowedJoinOperator.ts';
 import type { JoinEvent } from '../src/join/WindowedJoinOperator.ts';
+import { WindowedJoinOperator } from '../src/join/WindowedJoinOperator.ts';
 
 // Fault tolerance
 import { AckPolicy } from '../src/fault/AckPolicy.ts';
-import { RetryPolicy } from '../src/fault/RetryPolicy.ts';
-import { DeadLetterSink } from '../src/fault/DeadLetterSink.ts';
-import type { DLPublisher } from '../src/fault/DeadLetterSink.ts';
-import { CheckpointManager } from '../src/fault/CheckpointManager.ts';
 import type { CheckpointStore } from '../src/fault/CheckpointManager.ts';
-import { FaultHandler } from '../src/fault/FaultHandler.ts';
+import { CheckpointManager } from '../src/fault/CheckpointManager.ts';
+import type { DLPublisher } from '../src/fault/DeadLetterSink.ts';
+import { DeadLetterSink } from '../src/fault/DeadLetterSink.ts';
 import type { FaultMessage } from '../src/fault/FaultHandler.ts';
+import { FaultHandler } from '../src/fault/FaultHandler.ts';
+import { RetryPolicy } from '../src/fault/RetryPolicy.ts';
 import type { StageContext } from '../src/StageContext.ts';
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────

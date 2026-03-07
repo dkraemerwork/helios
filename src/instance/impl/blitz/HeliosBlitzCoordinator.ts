@@ -6,15 +6,15 @@
  * computes topology snapshots, manages re-registration sweeps after
  * master changes, and generates announce messages.
  */
-import { BlitzClusterTopology } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
-import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
 import type {
   BlitzNodeRegisterMsg,
   BlitzNodeRemoveMsg,
+  BlitzTopologyAnnounceMsg,
   BlitzTopologyRequestMsg,
   BlitzTopologyResponseMsg,
-  BlitzTopologyAnnounceMsg,
 } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { BlitzClusterTopology } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
+import { BlitzReplicaReconciler } from "@zenystx/helios-core/instance/impl/blitz/BlitzReplicaReconciler";
 
 const DEFAULT_RETRY_AFTER_MS = 1000;
 

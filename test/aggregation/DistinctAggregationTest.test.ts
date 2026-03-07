@@ -1,11 +1,11 @@
-import { describe, test, expect } from 'bun:test';
 import { Aggregators } from '@zenystx/helios-core/aggregation/Aggregators';
+import { describe, expect, test } from 'bun:test';
+import { Person } from './helpers/Person';
 import {
   createEntryWithValue,
   createExtractableEntryWithValue,
   sampleStrings,
 } from './helpers/TestSamples';
-import { Person } from './helpers/Person';
 
 function repeatTimes<T>(times: number, values: T[]): T[] {
   const result: T[] = [];

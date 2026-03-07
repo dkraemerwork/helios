@@ -5,17 +5,17 @@
  * inline validation, PartitionAware routing, error classes, and
  * multi-member operation signatures.
  */
-import { describe, test, expect } from 'bun:test';
-import type { IExecutorService } from '@zenystx/helios-core/executor/IExecutorService';
-import type { TaskCallable, InlineTaskCallable } from '@zenystx/helios-core/executor/TaskCallable';
-import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult';
 import {
-    UnknownTaskTypeException,
-    TaskRegistrationMismatchException,
     ExecutorRejectedExecutionException,
     ExecutorTaskLostException,
     ExecutorTaskTimeoutException,
+    TaskRegistrationMismatchException,
+    UnknownTaskTypeException,
 } from '@zenystx/helios-core/executor/ExecutorExceptions';
+import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult';
+import type { IExecutorService } from '@zenystx/helios-core/executor/IExecutorService';
+import type { InlineTaskCallable, TaskCallable } from '@zenystx/helios-core/executor/TaskCallable';
+import { describe, expect, test } from 'bun:test';
 
 describe('IExecutorService + TaskCallable contracts', () => {
 

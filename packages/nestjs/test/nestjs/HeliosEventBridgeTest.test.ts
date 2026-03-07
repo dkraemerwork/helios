@@ -2,20 +2,19 @@
  * Tests for HeliosEventBridge — @nestjs/event-emitter integration.
  * Block 9.7.
  */
-import { describe, it, expect, mock } from 'bun:test';
-import { Test } from '@nestjs/testing';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
-import { HeliosModule } from '../../src/HeliosModule';
-import { HELIOS_INSTANCE_TOKEN } from '../../src/HeliosInstanceDefinition';
-import { HeliosEventBridge } from '../../src/events/helios-event-bridge';
-import { HeliosEventBridgeModule } from '../../src/events/helios-event-bridge.module';
+import { Test } from '@nestjs/testing';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
-import type { EntryListener, EntryEvent } from '@zenystx/helios-core/map/EntryListener';
-import type { MessageListener } from '@zenystx/helios-core/topic/MessageListener';
+import { LifecycleEvent, LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
 import type { LifecycleListener } from '@zenystx/helios-core/instance/lifecycle/LifecycleListener';
+import type { EntryEvent, EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
 import { Message } from '@zenystx/helios-core/topic/Message';
-import { LifecycleEvent, LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
+import type { MessageListener } from '@zenystx/helios-core/topic/MessageListener';
+import { describe, expect, it } from 'bun:test';
+import { HeliosModule } from '../../src/HeliosModule';
+import { HeliosEventBridge } from '../../src/events/helios-event-bridge';
+import { HeliosEventBridgeModule } from '../../src/events/helios-event-bridge.module';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

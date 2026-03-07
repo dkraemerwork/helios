@@ -7,13 +7,13 @@
  * replication closure, stale-rejoin fencing, config/observability, and
  * end-to-end crash/rejoin proof.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
-import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 function makeMember(host: string, port: number, uuid?: string): Member {
     return new MemberImpl.Builder(new Address(host, port))

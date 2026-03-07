@@ -10,11 +10,11 @@
  * process management is done by the clusterNode primitive via
  * NatsServerManager, orchestrated by HeliosInstanceImpl.
  */
-import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 import type {
   BlitzNodeRegisterMsg,
   BlitzNodeRemoveMsg,
 } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 
 /**
  * Readiness states for the Blitz lifecycle within Helios.

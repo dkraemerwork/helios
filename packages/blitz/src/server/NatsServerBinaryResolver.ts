@@ -1,5 +1,5 @@
-import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 
 // N16 FIX: use createRequire for ESM-safe require.resolve
 const _require = createRequire(import.meta.url);

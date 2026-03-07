@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import { BetweenPredicate } from '@zenystx/helios-core/query/impl/predicates/BetweenPredicate';
 import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
+import { describe, expect, test } from 'bun:test';
 import { entry } from './PredicateTestUtils';
 
 describe('BetweenPredicate', () => {

@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.internal.serialization.impl.HeapDataTest}.
  */
-import { describe, test, expect } from 'bun:test';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { describe, expect, test } from 'bun:test';
 
 describe('HeapDataTest', () => {
     test('totalSize_whenNonEmpty', () => {

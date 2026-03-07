@@ -3,8 +3,8 @@
  *
  * Internal bridge interface between the dispatch table and individual serializers.
  */
-import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import type { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
+import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 
 export interface SerializerAdapter {
     getTypeId(): number;

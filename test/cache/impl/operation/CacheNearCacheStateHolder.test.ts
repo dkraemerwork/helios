@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
 import { CacheNearCacheStateHolder } from '@zenystx/helios-core/cache/impl/operation/CacheNearCacheStateHolder';
 import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import { describe, expect, it } from 'bun:test';
 
 describe('CacheNearCacheStateHolder', () => {
     it('prepare() captures partitionUuid from MetaDataGenerator', () => {

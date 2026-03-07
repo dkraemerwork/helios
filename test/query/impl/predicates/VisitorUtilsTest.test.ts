@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import { acceptVisitor } from '@zenystx/helios-core/query/impl/predicates/VisitorUtils';
+import { describe, expect, test } from 'bun:test';
 import { createMockVisitablePredicate, createPassthroughVisitor } from './PredicateTestUtils';
 
 function mockPredicate(): Predicate {

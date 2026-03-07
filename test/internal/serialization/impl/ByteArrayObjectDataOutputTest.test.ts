@@ -1,14 +1,14 @@
 /**
  * Port of {@code com.hazelcast.internal.serialization.impl.ByteArrayObjectDataOutputTest}.
  */
-import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
+import { BIG_ENDIAN, LITTLE_ENDIAN } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import {
     ByteArrayObjectDataOutput,
     MAX_ARRAY_SIZE,
 } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { BIG_ENDIAN, LITTLE_ENDIAN } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
-import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
 import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 const TEST_DATA = Buffer.from([1, 2, 3]);
 

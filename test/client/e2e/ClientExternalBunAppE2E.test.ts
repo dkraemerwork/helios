@@ -2,9 +2,9 @@
  * P20-EXTERNAL-BUN-APP — Proves a separate Bun process can run the shipped
  * public example file against a real cluster over the wire.
  */
-import { describe, test, expect, afterEach } from "bun:test";
-import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 

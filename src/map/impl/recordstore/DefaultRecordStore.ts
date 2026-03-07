@@ -8,8 +8,8 @@
  * Thread safety: Bun is single-threaded; no locking required.
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
 import type { EntryProcessor, MapEntry } from '@zenystx/helios-core/map/EntryProcessor';
+import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
 
 interface Entry {
     key: Data;

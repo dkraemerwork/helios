@@ -8,8 +8,8 @@
  *
  * Ref: PublishCompletedMigrationsOperation.java:42-96
  */
-import { Operation, GENERIC_PARTITION_ID } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import { GENERIC_PARTITION_ID, Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export class PublishCompletedMigrationsOp extends Operation {
     private readonly _completedMigrations: readonly MigrationInfo[];

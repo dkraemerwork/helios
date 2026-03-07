@@ -13,8 +13,8 @@
  *
  * The JSON payload is a {@link MulticastMessage} discriminated union.
  */
-import dgram from 'node:dgram';
 import type { MulticastConfig } from '@zenystx/helios-core/config/MulticastConfig';
+import dgram from 'node:dgram';
 
 // ── Wire constants ────────────────────────────────────────────────────────
 

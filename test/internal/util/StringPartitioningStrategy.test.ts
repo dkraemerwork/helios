@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { StringPartitioningStrategy } from '@zenystx/helios-core/internal/util/StringPartitioningStrategy';
+import { describe, expect, it } from 'bun:test';
 
 describe('StringPartitioningStrategyTest', () => {
   it('testGetBaseName', () => {

@@ -2,7 +2,7 @@
  * P20-PROXY-LIFECYCLE — Create/list/destroy/re-create semantics and
  * cache cleanup through ProxyManager.
  */
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { startE2E, teardownE2E, type E2EContext } from "./e2e-helper";
 
 let ctx: E2EContext | null = null;

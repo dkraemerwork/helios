@@ -2,13 +2,13 @@
  * Tests for Block 16.B6 — MigrationAwareService interface,
  * PartitionMigrationEvent, ServiceNamespace, and registration on InternalPartitionServiceImpl.
  */
-import { describe, test, expect } from 'bun:test';
-import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
-import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
+import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { describe, expect, test } from 'bun:test';
 
 // ── helpers ──
 

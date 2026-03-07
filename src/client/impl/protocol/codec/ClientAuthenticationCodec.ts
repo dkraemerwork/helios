@@ -2,16 +2,16 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.ClientAuthenticationCodec}.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { StringCodec } from './builtin/StringCodec';
-import { CodecUtil } from './builtin/CodecUtil';
-import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
+import type { Address } from '@zenystx/helios-core/cluster/Address';
+import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { ByteArrayCodec } from './builtin/ByteArrayCodec';
-import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { CodecUtil } from './builtin/CodecUtil';
+import { EntryListUUIDListIntegerCodec } from './builtin/EntryListUUIDListIntegerCodec';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
+import { StringCodec } from './builtin/StringCodec';
 import { AddressCodec } from './custom/AddressCodec';
 import { MemberInfoCodec } from './custom/MemberInfoCodec';
-import { EntryListUUIDListIntegerCodec } from './builtin/EntryListUUIDListIntegerCodec';
-import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
-import type { Address } from '@zenystx/helios-core/cluster/Address';
 
 export class ClientAuthenticationCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x000100; // 256

@@ -9,9 +9,9 @@
  * @see InlineTaskCallable
  */
 
-import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
 import type { Member } from '@zenystx/helios-core/cluster/Member.js';
-import type { TaskCallable, InlineTaskCallable } from './TaskCallable.js';
+import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
+import type { InlineTaskCallable, TaskCallable } from './TaskCallable.js';
 
 /** Snapshot of local executor statistics. */
 export interface LocalExecutorStats {

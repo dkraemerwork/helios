@@ -1,11 +1,11 @@
 /**
  * Port of com.hazelcast.internal.partition.impl.MigrationPlannerTest
  */
-import { describe, it, expect } from 'bun:test';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import { MigrationPlanner } from '@zenystx/helios-core/internal/partition/impl/MigrationPlanner';
+import { describe, expect, it } from 'bun:test';
 
 type MigrateCall = [
     source: PartitionReplica | null,

@@ -14,25 +14,25 @@
  * All infrastructure-only tests (ArchUnit, NOTICE file) are dropped.
  */
 
-import { describe, it, expect, afterEach } from "bun:test";
-import { Test, TestingModule } from "@nestjs/testing";
 import { Inject, Injectable } from "@nestjs/common";
+import { Test, TestingModule } from "@nestjs/testing";
+import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
+import type { IList } from "@zenystx/helios-core/collection/IList";
+import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
+import type { ISet } from "@zenystx/helios-core/collection/ISet";
+import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
+import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
+import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
+import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
+import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
+import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
+import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 import { HeliosAutoConfigurationModule } from "@zenystx/helios-nestjs/autoconfiguration/HeliosAutoConfigurationModule";
 import { HeliosBoot4ObjectExtractionModule } from "@zenystx/helios-nestjs/autoconfiguration/HeliosBoot4ObjectExtractionModule";
 import { HELIOS_INSTANCE_TOKEN } from "@zenystx/helios-nestjs/HeliosInstanceDefinition";
-import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
-import type { IMap } from "@zenystx/helios-core/map/IMap";
-import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
-import type { IList } from "@zenystx/helios-core/collection/IList";
-import type { ISet } from "@zenystx/helios-core/collection/ISet";
-import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
-import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
-import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
-import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
-import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
-import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
-import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
+import { afterEach, describe, expect, it } from "bun:test";
 
 // ---------------------------------------------------------------------------
 // Stub HeliosInstance with named map/ringbuffer support

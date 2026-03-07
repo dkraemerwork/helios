@@ -2,11 +2,11 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapRemoveCodec}.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { DataCodec } from './builtin/DataCodec';
-import { StringCodec } from './builtin/StringCodec';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
+import { DataCodec } from './builtin/DataCodec';
+import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { StringCodec } from './builtin/StringCodec';
 
 export class MapRemoveCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x010300;

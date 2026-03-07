@@ -4,8 +4,8 @@
  * Tests prove the client runtime actually connects, routes requests, and recovers
  * listeners through one real runtime path with no in-process fake backing stores.
  */
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 // ── ClientConnection tests ─────────────────────────────────────────────────
 

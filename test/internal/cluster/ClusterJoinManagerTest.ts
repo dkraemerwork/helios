@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { ClusterJoinManager } from '@zenystx/helios-core/internal/cluster/ClusterJoinManager';
 import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
+import { ClusterJoinManager } from '@zenystx/helios-core/internal/cluster/ClusterJoinManager';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
 describe('ClusterJoinManagerTest', () => {
 

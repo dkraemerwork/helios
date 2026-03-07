@@ -4,9 +4,9 @@
  * Covers: member registration/unregistration, partition round-robin assignment,
  * partition owner lookup, and registry reset.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { TestClusterRegistry, PARTITION_COUNT } from '@zenystx/helios-core/test-support/TestClusterRegistry';
+import { PARTITION_COUNT, TestClusterRegistry } from '@zenystx/helios-core/test-support/TestClusterRegistry';
 import { TestHeliosInstance } from '@zenystx/helios-core/test-support/TestHeliosInstance';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('TestClusterRegistry', () => {
     let registry: TestClusterRegistry;

@@ -3,13 +3,13 @@
  *
  * Tests file-based locking semantics adapted for TypeScript (O_CREAT|O_EXCL instead of NIO tryLock).
  */
-import { describe, it, expect, afterEach } from 'bun:test';
-import { mkdirSync, existsSync, unlinkSync, rmdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { NearCachePreloaderLock } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
-import type { ILogger } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
 import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
+import type { ILogger } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
+import { NearCachePreloaderLock } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const noopLogger: ILogger = {
     warning: () => {},

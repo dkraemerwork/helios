@@ -3,9 +3,9 @@
  * Corresponds to hazelcast-spring SpringManagedContext (Block 6.1).
  */
 
-import { describe, it, expect, mock } from 'bun:test';
-import { NestManagedContext } from '@zenystx/helios-nestjs/context/NestManagedContext';
 import { NestAware } from '@zenystx/helios-nestjs/context/NestAware';
+import { NestManagedContext } from '@zenystx/helios-nestjs/context/NestManagedContext';
+import { describe, expect, it, mock } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Helpers

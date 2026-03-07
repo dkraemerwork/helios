@@ -1,7 +1,7 @@
-import { describe, test, expect } from 'bun:test';
+import { MAX_BACKUP_COUNT } from '@zenystx/helios-core/internal/partition/IPartition';
 import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { MAX_BACKUP_COUNT } from '@zenystx/helios-core/internal/partition/IPartition';
+import { describe, expect, test } from 'bun:test';
 
 /**
  * Tests for BackupAwareOperation interface (Block 16.D1).

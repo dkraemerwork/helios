@@ -10,10 +10,10 @@
  * - Multiple listeners receiving the same message
  * - Config-based creation (enabled/disabled)
  */
-import { describe, test, expect, afterEach } from 'bun:test';
+import type { MulticastJoinMessage, MulticastListener, MulticastMessage } from '@zenystx/helios-core/cluster/multicast/MulticastService';
 import { MulticastService } from '@zenystx/helios-core/cluster/multicast/MulticastService';
-import type { MulticastMessage, MulticastListener, MulticastJoinMessage } from '@zenystx/helios-core/cluster/multicast/MulticastService';
 import { MulticastConfig } from '@zenystx/helios-core/config/MulticastConfig';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 // Use a high port to avoid conflicts with other tests
 let testPortCounter = 54400;

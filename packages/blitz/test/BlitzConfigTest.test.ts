@@ -3,8 +3,8 @@
  *
  * Tests default value application and config validation.
  */
-import { describe, it, expect } from 'bun:test';
-import { resolveBlitzConfig, type BlitzConfig } from '../src/BlitzConfig.ts';
+import { describe, expect, it } from 'bun:test';
+import { resolveBlitzConfig } from '../src/BlitzConfig.ts';
 
 describe('BlitzConfig', () => {
     describe('resolveBlitzConfig', () => {

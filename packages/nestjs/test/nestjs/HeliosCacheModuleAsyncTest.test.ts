@@ -4,16 +4,16 @@
  * Verifies async registration patterns: useFactory, inject, useClass, useExisting.
  */
 
-import { describe, it, expect, afterEach } from 'bun:test';
-import { Test, TestingModule } from '@nestjs/testing';
-import { Injectable, Module } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Injectable, Module } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import {
     HeliosCacheModule,
     type HeliosCacheModuleOptions,
     type HeliosCacheModuleOptionsFactory,
 } from '@zenystx/helios-nestjs/HeliosCacheModule';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 describe('HeliosCacheModule.registerAsync', () => {
     let module: TestingModule;

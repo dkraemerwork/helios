@@ -8,19 +8,19 @@
  *
  * Block 21.0: This is the single production partition-service authority.
  */
-import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
-import type { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
-import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
-import type { PartitionTableView } from '@zenystx/helios-core/internal/partition/PartitionTableView';
 import type { Address } from '@zenystx/helios-core/cluster/Address';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { AntiEntropyTask } from '@zenystx/helios-core/internal/partition/impl/AntiEntropyTask';
+import type { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
+import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
+import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
-import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
-import { AntiEntropyTask } from '@zenystx/helios-core/internal/partition/impl/AntiEntropyTask';
-import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import type { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
+import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
+import type { PartitionTableView } from '@zenystx/helios-core/internal/partition/PartitionTableView';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 /**
  * Represents the partition runtime state received from the master.

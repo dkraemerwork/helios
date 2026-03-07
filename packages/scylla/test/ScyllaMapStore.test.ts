@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { ScyllaMapStore } from '../src/ScyllaMapStore.js';
 
 async function collectKeys<K>(stream: AsyncIterable<K>): Promise<K[]> {

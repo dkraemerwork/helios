@@ -5,12 +5,12 @@
  * HeliosCacheModule wraps @nestjs/cache-manager CacheModule with a Helios store.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { Test, TestingModule } from '@nestjs/testing';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from '@nestjs/cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Test, TestingModule } from '@nestjs/testing';
 import { HeliosCache } from '@zenystx/helios-nestjs/HeliosCache';
 import { HeliosCacheModule } from '@zenystx/helios-nestjs/HeliosCacheModule';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Minimal IMap stub for testing (synchronous Map-based)

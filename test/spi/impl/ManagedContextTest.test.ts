@@ -3,8 +3,8 @@
  *
  * ManagedContext is a simple functional interface for initializing deserialized objects.
  */
-import { describe, it, expect } from 'bun:test';
 import type { ManagedContext } from '@zenystx/helios-core/spi/impl/ManagedContext';
+import { describe, expect, it } from 'bun:test';
 
 describe('ManagedContext', () => {
     it('pass-through implementation returns the same object', () => {

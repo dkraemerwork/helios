@@ -1,7 +1,7 @@
 /**
  * BlitzEvent unit tests — no NATS server required.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { BlitzEvent } from '../src/BlitzEvent.ts';
 
 describe('BlitzEvent', () => {

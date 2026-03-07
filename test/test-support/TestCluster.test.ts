@@ -4,8 +4,8 @@
  * Tests for TestClusterNode and TestCluster — the harness used by all
  * subsequent Phase 16 integration tests.
  */
-import { describe, test, expect, afterEach } from 'bun:test';
 import { TestCluster } from '@zenystx/helios-core/test-support/TestCluster';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 describe('TestCluster', () => {
     let cluster: TestCluster;

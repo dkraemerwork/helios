@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
-import { NearCachePreloaderConfig } from '@zenystx/helios-core/config/NearCachePreloaderConfig';
 import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
 import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
 import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { NearCachePreloaderConfig } from '@zenystx/helios-core/config/NearCachePreloaderConfig';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('NearCacheConfigTest', () => {
     let config: NearCacheConfig;

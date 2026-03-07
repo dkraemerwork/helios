@@ -13,9 +13,9 @@ import {
   type WriteRequest,
 } from '@aws-sdk/client-dynamodb';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
-import { Agent as HttpsAgent } from 'node:https';
-import type { EndpointStrategy, DynamoDbConfig, DynamoDbMapStoreMetrics, Serializer, TlsConfig } from './DynamoDbConfig.js';
 import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import { Agent as HttpsAgent } from 'node:https';
+import type { DynamoDbConfig, DynamoDbMapStoreMetrics, EndpointStrategy, Serializer, TlsConfig } from './DynamoDbConfig.js';
 
 const DEFAULT_REGION = 'us-east-1';
 const DEFAULT_TABLE_NAME = 'helios_mapstore';

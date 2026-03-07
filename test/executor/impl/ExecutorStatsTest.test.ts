@@ -5,11 +5,11 @@
  * latency accumulators, and pool health snapshots correctly.
  */
 
-import { describe, test, expect } from 'bun:test';
-import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
-import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
 import type { LocalExecutorStats } from '@zenystx/helios-core/executor/IExecutorService.js';
+import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
+import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
+import { describe, expect, test } from 'bun:test';
 
 function makeRegistry(): TaskTypeRegistry {
     const reg = new TaskTypeRegistry();

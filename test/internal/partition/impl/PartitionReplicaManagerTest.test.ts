@@ -4,9 +4,9 @@
  * Port of {@code com.hazelcast.internal.partition.impl.PartitionReplicaManager} behavior.
  * Simplified to per-partition version tracking (not per-namespace) per Finding 21.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { PartitionReplicaManager, REQUIRES_SYNC } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 describe('PartitionReplicaManager', () => {
     const PARTITION_COUNT = 271;

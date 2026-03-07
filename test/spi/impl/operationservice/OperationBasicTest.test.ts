@@ -4,8 +4,8 @@
  * Basic Operation behavior: null-safe sendResponse, replicaIndex validation,
  * GENERIC_PARTITION_ID constant, and default field values.
  */
-import { describe, it, expect } from 'bun:test';
-import { Operation, GENERIC_PARTITION_ID } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { GENERIC_PARTITION_ID, Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { describe, expect, it } from 'bun:test';
 
 class TestOp extends Operation {
     async run(): Promise<void> { /* no-op */ }

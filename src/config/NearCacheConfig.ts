@@ -1,5 +1,5 @@
-import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
 import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
 import { NearCachePreloaderConfig } from '@zenystx/helios-core/config/NearCachePreloaderConfig';
 
 export enum LocalUpdatePolicy {

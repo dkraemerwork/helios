@@ -1,6 +1,6 @@
 import type { IMap } from '@zenystx/helios-core/map/IMap';
-import type { Sink } from './Sink.js';
 import type { MapEntry } from '../source/HeliosMapSource.js';
+import type { Sink } from './Sink.js';
 
 class HeliosMapSinkImpl<K, V> implements Sink<MapEntry<K, V>> {
   readonly name: string;

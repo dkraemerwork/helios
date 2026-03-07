@@ -11,17 +11,14 @@
  * - No global side-effects from HeliosTransactionManager.setCurrent()
  */
 
-import { describe, it, expect, afterEach } from 'bun:test';
-import { Test, TestingModule } from '@nestjs/testing';
 import { Injectable } from '@nestjs/common';
-import { HeliosTransactionManager } from '@zenystx/helios-nestjs/HeliosTransactionManager';
-import { Transactional, Propagation } from '@zenystx/helios-nestjs/Transactional';
-import { HeliosTransactionModule } from '@zenystx/helios-nestjs/HeliosTransactionModule';
-import {
-    TransactionSuspensionNotSupportedException,
-} from '@zenystx/helios-nestjs/TransactionExceptions';
+import { Test, TestingModule } from '@nestjs/testing';
 import type { TransactionContext, TransactionalMap } from '@zenystx/helios-core/transaction/TransactionContext';
 import type { TransactionContextFactory } from '@zenystx/helios-nestjs/HeliosTransactionManager';
+import { HeliosTransactionManager } from '@zenystx/helios-nestjs/HeliosTransactionManager';
+import { HeliosTransactionModule } from '@zenystx/helios-nestjs/HeliosTransactionModule';
+import { Propagation, Transactional } from '@zenystx/helios-nestjs/Transactional';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Mock infrastructure

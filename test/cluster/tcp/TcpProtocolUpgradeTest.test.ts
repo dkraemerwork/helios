@@ -5,13 +5,13 @@
  * Heartbeat, FetchMembersView, Operation, Backup) and the SerializationStrategy
  * interface (JSON default, swappable).
  */
-import { describe, it, expect, afterEach } from "bun:test";
 import type { ClusterMessage } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
 import {
   type SerializationStrategy,
   JsonSerializationStrategy,
 } from "@zenystx/helios-core/cluster/tcp/SerializationStrategy";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { afterEach, describe, expect, it } from "bun:test";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 

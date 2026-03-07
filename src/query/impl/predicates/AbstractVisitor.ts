@@ -1,13 +1,13 @@
 import type { Predicate } from '../../Predicate';
 import type { IndexRegistry } from '../IndexRegistry';
-import type { Visitor } from './Visitor';
 import type { AndPredicate } from './AndPredicate';
-import type { OrPredicate } from './OrPredicate';
-import type { NotPredicate } from './NotPredicate';
-import type { EqualPredicate } from './EqualPredicate';
-import type { NotEqualPredicate } from './NotEqualPredicate';
-import type { InPredicate } from './InPredicate';
 import type { BetweenPredicate } from './BetweenPredicate';
+import type { EqualPredicate } from './EqualPredicate';
+import type { InPredicate } from './InPredicate';
+import type { NotEqualPredicate } from './NotEqualPredicate';
+import type { NotPredicate } from './NotPredicate';
+import type { OrPredicate } from './OrPredicate';
+import type { Visitor } from './Visitor';
 
 /**
  * Base visitor that returns every predicate unchanged.

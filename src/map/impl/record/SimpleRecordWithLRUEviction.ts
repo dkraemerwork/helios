@@ -1,9 +1,9 @@
 /**
  * Port of {@code com.hazelcast.map.impl.record.SimpleRecordWithLRUEviction}.
  */
-import { SimpleRecord } from './SimpleRecord';
+import { recomputeWithBaseTime, stripBaseTime } from '@zenystx/helios-core/internal/util/TimeStripUtil';
 import { RecordReaderWriter } from './RecordReaderWriter';
-import { stripBaseTime, recomputeWithBaseTime } from '@zenystx/helios-core/internal/util/TimeStripUtil';
+import { SimpleRecord } from './SimpleRecord';
 
 export class SimpleRecordWithLRUEviction extends SimpleRecord {
     private _lastAccessTime = -1;

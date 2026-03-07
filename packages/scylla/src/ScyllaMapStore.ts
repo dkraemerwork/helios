@@ -12,8 +12,8 @@ import {
   type DynamoDBClientConfig,
   type WriteRequest,
 } from '@aws-sdk/client-dynamodb';
-import type { EndpointStrategy, ScyllaConfig, Serializer } from './ScyllaConfig.js';
 import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import type { EndpointStrategy, ScyllaConfig, Serializer } from './ScyllaConfig.js';
 
 const DEFAULT_REGION = 'us-east-1';
 const DEFAULT_TABLE_NAME = 'helios_mapstore';

@@ -1,9 +1,9 @@
 import type { Predicate } from '../../Predicate';
 import type { IndexRegistry } from '../IndexRegistry';
 import type { QueryableEntry } from '../QueryableEntry';
-import type { Visitor } from './Visitor';
-import type { VisitablePredicate } from './VisitablePredicate';
 import type { NegatablePredicate } from './NegatablePredicate';
+import type { VisitablePredicate } from './VisitablePredicate';
+import type { Visitor } from './Visitor';
 
 /**
  * Logical NOT wrapper around a single predicate.

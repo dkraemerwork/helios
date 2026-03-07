@@ -7,9 +7,9 @@
  *
  * Ref: MigrationManagerImpl.java:413-482
  */
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
 import { MigrationStatus } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export class MigrationCommitOperation extends Operation {
     private readonly _migrationInfo: MigrationInfo;

@@ -12,22 +12,22 @@
  * 8. Config-driven index bootstrap
  * 9. NearCachedIMapWrapper addIndex delegation
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { IndexRegistryImpl } from '@zenystx/helios-core/query/impl/IndexRegistryImpl';
-import { IndexType } from '@zenystx/helios-core/query/impl/Index';
 import { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import type { IMap } from '@zenystx/helios-core/map/IMap';
+import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { MapProxy } from '@zenystx/helios-core/map/impl/MapProxy';
 import { DefaultRecordStore } from '@zenystx/helios-core/map/impl/recordstore/DefaultRecordStore';
-import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
-import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { IndexType } from '@zenystx/helios-core/query/impl/Index';
+import { IndexRegistryImpl } from '@zenystx/helios-core/query/impl/IndexRegistryImpl';
+import { BetweenPredicate } from '@zenystx/helios-core/query/impl/predicates/BetweenPredicate';
 import { EqualPredicate } from '@zenystx/helios-core/query/impl/predicates/EqualPredicate';
 import { GreaterLessPredicate } from '@zenystx/helios-core/query/impl/predicates/GreaterLessPredicate';
-import { BetweenPredicate } from '@zenystx/helios-core/query/impl/predicates/BetweenPredicate';
-import { LikePredicate } from '@zenystx/helios-core/query/impl/predicates/LikePredicate';
 import { InPredicate } from '@zenystx/helios-core/query/impl/predicates/InPredicate';
+import { LikePredicate } from '@zenystx/helios-core/query/impl/predicates/LikePredicate';
 import { IndexMatchHint } from '@zenystx/helios-core/query/impl/QueryContext';
-import type { IMap } from '@zenystx/helios-core/map/IMap';
+import { TestNodeEngine } from '@zenystx/helios-core/test-support/TestNodeEngine';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 // ── IndexRegistryImpl Tests ──────────────────────────────────────────────────
 

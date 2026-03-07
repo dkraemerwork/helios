@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { SystemClock, ManualClock, fixedClock } from '@zenystx/helios-core/internal/util/time/Clock';
+import { ManualClock, SystemClock, fixedClock } from '@zenystx/helios-core/internal/util/time/Clock';
 import type { TimeSource } from '@zenystx/helios-core/internal/util/time/TimeSource';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('TimeSource contract', () => {
   it('SystemClock is a TimeSource', () => {

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { QuickMath } from '@zenystx/helios-core/internal/util/QuickMath';
+import { describe, expect, it } from 'bun:test';
 
 describe('QuickMathTest', () => {
   it('testIsPowerOfTwo', () => {

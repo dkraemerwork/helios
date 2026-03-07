@@ -4,9 +4,9 @@
  * Port of {@code com.hazelcast.client.impl.connection.tcp.TcpClientConnection}.
  * Wraps an EventloopChannel with member/cluster metadata and event handler tracking.
  */
-import type { EventloopChannel } from "@zenystx/helios-core/internal/eventloop/Eventloop";
 import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
+import type { EventloopChannel } from "@zenystx/helios-core/internal/eventloop/Eventloop";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 
 export type EventHandler = (msg: ClientMessage) => void;

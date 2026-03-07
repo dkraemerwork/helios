@@ -1,5 +1,5 @@
-import type { WriteBehindQueue } from './WriteBehindQueue.js';
 import type { DelayedEntry } from './DelayedEntry.js';
+import type { WriteBehindQueue } from './WriteBehindQueue.js';
 
 export class CoalescedWriteBehindQueue<K, V> implements WriteBehindQueue<K, V> {
   // key = JSON.stringify(entry.key), value = DelayedEntry (with original storeTime preserved)

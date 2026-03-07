@@ -4,21 +4,21 @@
  * Port of {@code com.hazelcast.client.impl.connection.tcp.TcpClientConnectionManager}.
  * Owns all active connections, bootstrap/auth flow, heartbeat, and reconnect.
  */
+import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
+import { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection";
+import { WaitStrategy } from "@zenystx/helios-core/client/connection/WaitStrategy";
+import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
+import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
+import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
+import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
+import type { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
+import type { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
+import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
 import {
     Eventloop,
     type EventloopChannel,
 } from "@zenystx/helios-core/internal/eventloop/Eventloop";
-import { ClientConnection, type EventHandler } from "@zenystx/helios-core/client/connection/ClientConnection";
-import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
-import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
-import { WaitStrategy } from "@zenystx/helios-core/client/connection/WaitStrategy";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
-import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
-import type { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
-import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
-import type { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
 import type { Credentials } from "@zenystx/helios-core/security/Credentials";
 
 export enum ClientState {

@@ -4,8 +4,8 @@
  */
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
-import type { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import type { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
+import type { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 
 export class MemberImpl implements Member {
     static readonly NA_MEMBER_LIST_JOIN_VERSION = -1;

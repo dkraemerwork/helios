@@ -4,18 +4,18 @@
  * Base implementation for on-heap Near Cache record stores.
  * Handles reservation/publication, eviction, expiration, and invalidation.
  */
-import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
+import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
 import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { UpdateSemantic } from '@zenystx/helios-core/internal/nearcache/NearCache';
+import type { NearCacheRecord } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import { NOT_RESERVED, READ_PERMITTED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
 import type { EvictionChecker } from '@zenystx/helios-core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
+import { EntryCountNearCacheEvictionChecker } from '@zenystx/helios-core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
 import { AbstractNearCacheRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/AbstractNearCacheRecordStore';
 import { HeapNearCacheRecordMap } from '@zenystx/helios-core/internal/nearcache/impl/store/HeapNearCacheRecordMap';
-import { EntryCountNearCacheEvictionChecker } from '@zenystx/helios-core/internal/nearcache/impl/maxsize/EntryCountNearCacheEvictionChecker';
-import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
-import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
-import { NOT_RESERVED, READ_PERMITTED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 import { HeliosProperties, MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 
 const SAMPLE_COUNT = 15;

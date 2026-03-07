@@ -5,12 +5,12 @@
  * instance name, network settings, connection strategy, security,
  * near-cache configs, and serialization config.
  */
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
-import { ClientNetworkConfig } from '@zenystx/helios-core/client/config/ClientNetworkConfig';
 import { ClientConnectionStrategyConfig } from '@zenystx/helios-core/client/config/ClientConnectionStrategyConfig';
+import { ClientNetworkConfig } from '@zenystx/helios-core/client/config/ClientNetworkConfig';
 import { ClientSecurityConfig } from '@zenystx/helios-core/client/config/ClientSecurityConfig';
-import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { InstanceConfig } from '@zenystx/helios-core/core/InstanceConfig';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
 
 /**
  * Port of {@code com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher}.

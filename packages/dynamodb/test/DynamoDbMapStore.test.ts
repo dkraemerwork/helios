@@ -1,6 +1,6 @@
-import { describe, test, expect, mock } from 'bun:test';
-import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
+import { describe, expect, mock, test } from 'bun:test';
 import type { DynamoDbMapStoreMetrics } from '../src/DynamoDbConfig.js';
+import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
 
 async function collectKeys<K>(stream: AsyncIterable<K>): Promise<K[]> {
   const keys: K[] = [];

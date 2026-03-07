@@ -1,5 +1,5 @@
-import { InstancePermission } from './InstancePermission';
 import { ActionConstants } from './ActionConstants';
+import { InstancePermission } from './InstancePermission';
 
 /** Port of com.hazelcast.security.permission.CountDownLatchPermission */
 export class CountDownLatchPermission extends InstancePermission {

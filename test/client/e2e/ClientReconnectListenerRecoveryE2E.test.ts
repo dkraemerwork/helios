@@ -2,11 +2,11 @@
  * P20-RECONNECT-LISTENER — Reconnect, listener re-registration, and
  * post-reconnect event delivery.
  */
-import { afterEach, describe, expect, test } from "bun:test";
 import { HeliosClient } from "@zenystx/helios-core/client";
 import { ClientConfig } from "@zenystx/helios-core/client/config";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { afterEach, describe, expect, test } from "bun:test";
 
 let instance: HeliosInstanceImpl | null = null;
 let replacementInstance: HeliosInstanceImpl | null = null;

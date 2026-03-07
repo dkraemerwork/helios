@@ -2,8 +2,8 @@
  * Unit tests for MetaDataContainer — port of the metadata container contract from
  * com.hazelcast.internal.nearcache.impl.invalidation.MetaDataContainer.
  */
-import { describe, it, expect } from 'bun:test';
 import { MetaDataContainer } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataContainer';
+import { describe, expect, it } from 'bun:test';
 
 describe('MetaDataContainerTest', () => {
     it('initialStateIsZero', () => {

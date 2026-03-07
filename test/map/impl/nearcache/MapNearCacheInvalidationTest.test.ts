@@ -4,16 +4,14 @@
  * Tests that the MapNearCacheManager's invalidator properly removes
  * near cache entries when data structure mutations occur.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
-import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
-import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
-import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
-import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { MapNearCacheNodeEngine } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { MapNearCacheManager } from '@zenystx/helios-core/map/impl/nearcache/MapNearCacheManager';
+import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 function makeNodeEngine(): MapNearCacheNodeEngine {
     const partitionService = {

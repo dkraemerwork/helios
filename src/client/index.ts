@@ -1,1 +1,1 @@
-export { HeliosClient, DEFERRED_CLIENT_FEATURES } from "./HeliosClient";
+export { DEFERRED_CLIENT_FEATURES, HeliosClient } from "./HeliosClient";

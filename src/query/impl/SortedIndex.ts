@@ -1,6 +1,6 @@
-import { IndexType } from './Index';
-import type { Index, IndexConfig } from './Index';
 import { Comparables } from './Comparables';
+import type { Index, IndexConfig } from './Index';
+import { IndexType } from './Index';
 
 /**
  * Sorted (B-tree-like) index backed by a sorted array of [attributeValue, entryKey] pairs.

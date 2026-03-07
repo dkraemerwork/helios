@@ -1,15 +1,15 @@
 import type { MapStoreConfig } from '../../../config/MapStoreConfig.js';
 import { InitialLoadMode } from '../../../config/MapStoreConfig.js';
-import type { MapDataStore } from './MapDataStore.js';
-import { MapStoreWrapper } from './MapStoreWrapper.js';
 import { LoadOnlyMapDataStore } from './LoadOnlyMapDataStore.js';
-import { WriteThroughStore } from './writethrough/WriteThroughStore.js';
-import { CoalescedWriteBehindQueue } from './writebehind/CoalescedWriteBehindQueue.js';
+import type { MapDataStore } from './MapDataStore.js';
+import { MapStoreDynamicLoader } from './MapStoreDynamicLoader.js';
+import type { MapStoreProviderRegistry } from './MapStoreProviderRegistry.js';
+import { MapStoreWrapper } from './MapStoreWrapper.js';
 import { ArrayWriteBehindQueue } from './writebehind/ArrayWriteBehindQueue.js';
+import { CoalescedWriteBehindQueue } from './writebehind/CoalescedWriteBehindQueue.js';
 import { WriteBehindProcessor } from './writebehind/WriteBehindProcessor.js';
 import { WriteBehindStore } from './writebehind/WriteBehindStore.js';
-import type { MapStoreProviderRegistry } from './MapStoreProviderRegistry.js';
-import { MapStoreDynamicLoader } from './MapStoreDynamicLoader.js';
+import { WriteThroughStore } from './writethrough/WriteThroughStore.js';
 
 export interface MapStoreContextOptions {
   registry?: MapStoreProviderRegistry;

@@ -10,8 +10,8 @@
  *   - tryLock throws EEXIST  → treated same as above
  *   - release()              → deletes the lock file
  */
-import { openSync, closeSync, unlinkSync, existsSync } from 'node:fs';
 import { HeliosException } from '@zenystx/helios-core/core/exception/HeliosException';
+import { closeSync, existsSync, openSync, unlinkSync } from 'node:fs';
 
 export interface ILogger {
     warning(msg: string): void;

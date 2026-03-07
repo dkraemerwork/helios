@@ -11,19 +11,19 @@
  * and DI-based transaction management without a running Hazelcast cluster.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { Test, TestingModule } from '@nestjs/testing';
 import { Injectable } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import type { TransactionContext, TransactionalMap } from '@zenystx/helios-core/transaction/TransactionContext';
+import type { TransactionContextFactory } from '@zenystx/helios-nestjs/HeliosTransactionManager';
 import { HeliosTransactionManager } from '@zenystx/helios-nestjs/HeliosTransactionManager';
-import { ManagedTransactionalTaskContext } from '@zenystx/helios-nestjs/ManagedTransactionalTaskContext';
-import { Transactional, Propagation } from '@zenystx/helios-nestjs/Transactional';
 import { HeliosTransactionModule } from '@zenystx/helios-nestjs/HeliosTransactionModule';
+import { ManagedTransactionalTaskContext } from '@zenystx/helios-nestjs/ManagedTransactionalTaskContext';
+import { Propagation, Transactional } from '@zenystx/helios-nestjs/Transactional';
 import {
     NoTransactionException,
     TransactionSuspensionNotSupportedException,
 } from '@zenystx/helios-nestjs/TransactionExceptions';
-import type { TransactionContext, TransactionalMap } from '@zenystx/helios-core/transaction/TransactionContext';
-import type { TransactionContextFactory } from '@zenystx/helios-nestjs/HeliosTransactionManager';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Mock infrastructure

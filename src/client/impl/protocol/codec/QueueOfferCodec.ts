@@ -2,10 +2,10 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.QueueOfferCodec}.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { DataCodec } from './builtin/DataCodec';
-import { StringCodec } from './builtin/StringCodec';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { DataCodec } from './builtin/DataCodec';
+import { BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { StringCodec } from './builtin/StringCodec';
 
 export class QueueOfferCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x030100;

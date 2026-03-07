@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { S3MapStore } from '../src/S3MapStore.js';
 
 describe('S3MapStore.factory()', () => {

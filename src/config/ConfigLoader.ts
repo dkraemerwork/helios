@@ -17,11 +17,11 @@
 import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
+import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { ReliableTopicConfig, TopicOverloadPolicy } from '@zenystx/helios-core/config/ReliableTopicConfig';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
+import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
 import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
-import { MapStoreConfig, InitialLoadMode } from '@zenystx/helios-core/config/MapStoreConfig';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.

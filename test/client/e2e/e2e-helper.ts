@@ -2,10 +2,10 @@
  * E2E test helper — starts a HeliosInstanceImpl with client protocol enabled
  * and creates a connected HeliosClient.
  */
-import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
-import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { HeliosClient } from "@zenystx/helios-core/client";
 import { ClientConfig } from "@zenystx/helios-core/client/config";
+import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 
 let instanceCounter = 0;
 

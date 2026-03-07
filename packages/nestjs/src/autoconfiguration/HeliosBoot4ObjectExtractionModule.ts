@@ -21,8 +21,8 @@
  */
 
 import { DynamicModule, Module, Provider } from '@nestjs/common';
-import { HELIOS_INSTANCE_TOKEN } from '../HeliosInstanceDefinition';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import { HELIOS_INSTANCE_TOKEN } from '../HeliosInstanceDefinition';
 
 /**
  * Supported distributed-object types for type-based include/exclude filtering.

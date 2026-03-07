@@ -1,14 +1,14 @@
-import { describe, test, expect } from 'bun:test';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import { Predicates } from '@zenystx/helios-core/query/Predicates';
 import { AndPredicate } from '@zenystx/helios-core/query/impl/predicates/AndPredicate';
-import { OrPredicate } from '@zenystx/helios-core/query/impl/predicates/OrPredicate';
 import { NotPredicate } from '@zenystx/helios-core/query/impl/predicates/NotPredicate';
+import { OrPredicate } from '@zenystx/helios-core/query/impl/predicates/OrPredicate';
+import { describe, expect, test } from 'bun:test';
 import {
+  createDelegatingVisitor,
   createMockNegatablePredicate,
   createMockVisitablePredicate,
   createPassthroughVisitor,
-  createDelegatingVisitor,
 } from './PredicateTestUtils';
 
 /** Minimal stub implementing Predicate<unknown,unknown>. */

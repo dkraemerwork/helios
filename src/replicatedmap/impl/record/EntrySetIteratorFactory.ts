@@ -1,6 +1,6 @@
+import type { IteratorFactory, LazyIterator } from './LazySet';
 import type { ReplicatedRecord } from './ReplicatedRecord';
 import type { ReplicatedRecordStore } from './ReplicatedRecordStore';
-import type { IteratorFactory, LazyIterator } from './LazySet';
 
 export type MapEntry<K, V> = [K, V];
 

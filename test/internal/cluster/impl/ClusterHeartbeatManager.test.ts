@@ -10,16 +10,16 @@
  * - Cooperative yielding tests
  * - SplitBrainDetector quorum logic
  */
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { ClusterHeartbeatManager } from '@zenystx/helios-core/internal/cluster/impl/ClusterHeartbeatManager';
-import { SplitBrainDetector } from '@zenystx/helios-core/internal/cluster/impl/SplitBrainDetector';
-import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
-import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
-import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { BuildInfoProvider } from '@zenystx/helios-core/instance/BuildInfoProvider';
+import { ClusterHeartbeatManager } from '@zenystx/helios-core/internal/cluster/impl/ClusterHeartbeatManager';
+import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
 import { DeadlineClusterFailureDetector } from '@zenystx/helios-core/internal/cluster/impl/DeadlineClusterFailureDetector';
+import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
+import { SplitBrainDetector } from '@zenystx/helios-core/internal/cluster/impl/SplitBrainDetector';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 const VERSION = MemberVersion.of(BuildInfoProvider.getBuildInfo().getVersion());
 

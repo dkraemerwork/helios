@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { JsonEscape } from '@zenystx/helios-core/internal/json/JsonEscape';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 function string(...chars: (string | number)[]): string {
   return chars.map(c => typeof c === 'number' ? String.fromCharCode(c) : c).join('');

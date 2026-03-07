@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { LazySet } from '@zenystx/helios-core/replicatedmap/impl/record/LazySet';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('LazySetTest', () => {
   let set: LazySet<object, object, object>;

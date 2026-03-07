@@ -1,10 +1,10 @@
 /**
  * Blitz error hierarchy unit tests — no NATS server required.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { BlitzError } from '../src/errors/BlitzError.ts';
-import { NakError } from '../src/errors/NakError.ts';
 import { DeadLetterError } from '../src/errors/DeadLetterError.ts';
+import { NakError } from '../src/errors/NakError.ts';
 import { PipelineError } from '../src/errors/PipelineError.ts';
 
 describe('BlitzError', () => {

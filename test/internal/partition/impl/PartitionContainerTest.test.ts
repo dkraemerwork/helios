@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
-import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 describe('PartitionContainer', () => {
     let container: PartitionContainer;

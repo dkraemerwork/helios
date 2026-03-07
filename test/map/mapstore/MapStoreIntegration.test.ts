@@ -4,15 +4,15 @@
  * Tests the end-to-end flow: HeliosInstance configured with a MapStore,
  * IMap async methods triggering store operations.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
-import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 import type { MapLoader } from '@zenystx/helios-core/map/MapLoader';
 import type { MapLoaderLifecycleSupport } from '@zenystx/helios-core/map/MapLoaderLifecycleSupport';
-import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 // ── Mock store implementations ─────────────────────────────────────────────
 

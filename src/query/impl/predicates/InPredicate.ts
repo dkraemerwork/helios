@@ -1,9 +1,9 @@
 import type { Predicate } from '../../Predicate';
 import type { IndexRegistry } from '../IndexRegistry';
-import type { Visitor } from './Visitor';
-import type { VisitablePredicate } from './VisitablePredicate';
 import { AbstractIndexAwarePredicate } from './AbstractIndexAwarePredicate';
 import { isNull } from './PredicateUtils';
+import type { VisitablePredicate } from './VisitablePredicate';
+import type { Visitor } from './Visitor';
 
 /**
  * Predicate that checks if attribute value is one of a set of values.

@@ -30,7 +30,7 @@
  *   - Does NOT add `async` to containing functions — do that manually if tsc reports errors.
  */
 
-import { readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { join, relative } from 'path';
 
 // ── Configuration ────────────────────────────────────────────────────────────

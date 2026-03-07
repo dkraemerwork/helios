@@ -1,5 +1,5 @@
-import type { ReplicatedRecord } from './ReplicatedRecord';
 import type { InternalReplicatedMapStorage } from './InternalReplicatedMapStorage';
+import type { ReplicatedRecord } from './ReplicatedRecord';
 
 /**
  * Interface for iterator factories used by LazySet.

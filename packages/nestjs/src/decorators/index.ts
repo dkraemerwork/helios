@@ -2,26 +2,13 @@
  * Barrel export for @zenystx/helios-nestjs convenience decorators.
  */
 
-export { InjectHelios } from './inject-helios.decorator';
 export {
-    InjectMap,
-    InjectQueue,
-    InjectTopic,
-    InjectList,
-    InjectSet,
-    InjectMultiMap,
-    InjectReplicatedMap,
-    getMapToken,
-    getQueueToken,
-    getTopicToken,
-    getListToken,
-    getSetToken,
-    getMultiMapToken,
-    getReplicatedMapToken,
+    InjectList, InjectMap, InjectMultiMap, InjectQueue, InjectReplicatedMap, InjectSet, InjectTopic, getListToken, getMapToken, getMultiMapToken, getQueueToken, getReplicatedMapToken, getSetToken, getTopicToken
 } from './inject-distributed-object.decorator';
+export { InjectHelios } from './inject-helios.decorator';
 
 // ── Spring Cache-style method decorators ──────────────────────────────────
-export { Cacheable, type CacheableOptions } from './cacheable.decorator';
 export { CacheEvict, type CacheEvictOptions } from './cache-evict.decorator';
 export { CachePut, type CachePutOptions } from './cache-put.decorator';
 export { CacheableRegistry, type ICacheStore } from './cache-registry';
+export { Cacheable, type CacheableOptions } from './cacheable.decorator';

@@ -4,10 +4,10 @@
  * An invocation targeting a specific partition. On each retry, re-reads the
  * partition table to find the current owner.
  */
+import { Address } from '@zenystx/helios-core/cluster/Address';
 import { Invocation, type InvocationOptions } from '@zenystx/helios-core/spi/impl/operationservice/Invocation';
 import { InvocationRegistry } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { Address } from '@zenystx/helios-core/cluster/Address';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
 export class PartitionInvocation extends Invocation {

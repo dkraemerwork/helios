@@ -11,18 +11,18 @@
  *  - getDistributedObject() dispatches by service name
  *  - NestJS injection works with the expanded HeliosInstance interface
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { Inject, Injectable } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import type { Cluster } from '@zenystx/helios-core/cluster/Cluster';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import type { LifecycleService } from '@zenystx/helios-core/instance/lifecycle/LifecycleService';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
 import type { ReplicatedMap } from '@zenystx/helios-core/replicatedmap/ReplicatedMap';
-import type { LifecycleService } from '@zenystx/helios-core/instance/lifecycle/LifecycleService';
-import type { Cluster } from '@zenystx/helios-core/cluster/Cluster';
-import { Test } from '@nestjs/testing';
-import { HeliosModule } from '@zenystx/helios-nestjs/HeliosModule';
 import { HELIOS_INSTANCE_TOKEN } from '@zenystx/helios-nestjs/HeliosInstanceDefinition';
-import { Inject, Injectable } from '@nestjs/common';
+import { HeliosModule } from '@zenystx/helios-nestjs/HeliosModule';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 type HeliosInstanceWithReplicatedMap = HeliosInstance & {
     getReplicatedMap<K, V>(name: string): ReplicatedMap<K, V>;

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
 import { BackoffIdleStrategy } from '@zenystx/helios-core/internal/util/concurrent/BackoffIdleStrategy';
+import { describe, expect, it } from 'bun:test';
 
 describe('BackoffIdleStrategyTest', () => {
   it('test_createBackoffIdleStrategy', () => {

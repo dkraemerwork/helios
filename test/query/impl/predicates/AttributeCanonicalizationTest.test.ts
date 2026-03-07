@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import { canonicalizeAttribute } from '@zenystx/helios-core/query/impl/IndexUtils';
 import { AbstractPredicate } from '@zenystx/helios-core/query/impl/predicates/AbstractPredicate';
+import { describe, expect, test } from 'bun:test';
 
 /** Minimal concrete predicate for testing AbstractPredicate canonicalization. */
 class TestPredicate extends AbstractPredicate {

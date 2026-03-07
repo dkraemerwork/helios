@@ -14,9 +14,9 @@
  *  7. DATA — POST + GET IMap entry via REST (round-trip)
  *  8. REST server stops on instance.shutdown()
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 describe('REST API e2e acceptance', () => {
     let instance: HeliosInstanceImpl;

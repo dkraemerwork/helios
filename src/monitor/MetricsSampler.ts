@@ -13,9 +13,9 @@
  */
 
 import type { MonitorConfig } from '@zenystx/helios-core/config/MonitorConfig';
-import type { MetricsSample, EventLoopMetrics, MemoryMetrics, CpuMetrics, GcMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
-import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 import type { MetricsRegistry } from '@zenystx/helios-core/monitor/MetricsRegistry';
+import type { CpuMetrics, EventLoopMetrics, GcMetrics, MemoryMetrics, MetricsSample } from '@zenystx/helios-core/monitor/MetricsSample';
+import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 
 /**
  * Event loop delay histogram — Bun exposes `performance.eventLoopUtilization()`

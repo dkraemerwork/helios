@@ -1,8 +1,8 @@
 import { Stage } from '../Stage.js';
 import type { StageContext } from '../StageContext.js';
+import { SessionWindowPolicy } from './SessionWindowPolicy.js';
 import type { WindowPolicy } from './WindowPolicy.js';
 import type { WindowState } from './WindowState.js';
-import { SessionWindowPolicy } from './SessionWindowPolicy.js';
 
 /**
  * Configuration for WindowOperator.

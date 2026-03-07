@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import { HashIndex } from '@zenystx/helios-core/query/impl/HashIndex';
 import { IndexType } from '@zenystx/helios-core/query/impl/Index';
+import { describe, expect, test } from 'bun:test';
 
 describe('HashIndex', () => {
 

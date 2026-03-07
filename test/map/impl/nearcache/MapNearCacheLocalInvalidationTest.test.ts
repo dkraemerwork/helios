@@ -5,16 +5,16 @@
  * its near cache entry should be invalidated so the next read fetches
  * the fresh value from the backing store.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
-import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
-import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
 import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
 import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
-import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { DefaultNearCache } from '@zenystx/helios-core/internal/nearcache/impl/DefaultNearCache';
 import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import { NearCachedMapProxyImpl } from '@zenystx/helios-core/map/impl/nearcache/NearCachedMapProxyImpl';
 import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { TestSerializationService } from '@zenystx/helios-core/test-support/TestSerializationService';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 const MAP_NAME = 'localInvalidationTestMap';
 

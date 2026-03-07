@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
+import { TaskRegistrationMismatchException } from '@zenystx/helios-core/executor/ExecutorExceptions.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
-import { UnknownTaskTypeException, TaskRegistrationMismatchException } from '@zenystx/helios-core/executor/ExecutorExceptions.js';
+import { describe, expect, test } from 'bun:test';
 
 describe('TaskRegistrationHardening (Block 17.9C)', () => {
     // ── Worker materialization metadata ──────────────────────────────────

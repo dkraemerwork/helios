@@ -21,17 +21,17 @@
  */
 
 import { DynamicModule, Module, Provider } from '@nestjs/common';
+import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 import { HELIOS_INSTANCE_TOKEN } from './HeliosInstanceDefinition';
 import {
-    getMapToken,
-    getQueueToken,
-    getTopicToken,
     getListToken,
-    getSetToken,
+    getMapToken,
     getMultiMapToken,
+    getQueueToken,
     getReplicatedMapToken,
+    getSetToken,
+    getTopicToken,
 } from './decorators/inject-distributed-object.decorator';
-import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 
 type MemberOnlyCollections = {
     getList(name: string): unknown;

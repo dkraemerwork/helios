@@ -3,8 +3,8 @@
  *
  * Contract to manage all existing NearCache instances.
  */
-import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 
 export interface NearCacheManager {
     getNearCache<K, V>(name: string): NearCache<K, V> | null;

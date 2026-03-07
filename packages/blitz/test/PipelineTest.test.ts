@@ -4,16 +4,16 @@
  * Tests the fluent pipeline builder, Vertex/Edge structure, DAG validation,
  * Stage / StageContext types, and BlitzService.submit/cancel lifecycle.
  */
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { Pipeline } from '../src/Pipeline.ts';
-import { Vertex } from '../src/Vertex.ts';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { BlitzService } from '../src/BlitzService.ts';
 import { Edge } from '../src/Edge.ts';
+import { Pipeline } from '../src/Pipeline.ts';
 import { Stage } from '../src/Stage.ts';
 import type { StageContext } from '../src/StageContext.ts';
-import type { Source } from '../src/source/Source.ts';
-import type { Sink } from '../src/sink/Sink.ts';
+import { Vertex } from '../src/Vertex.ts';
 import { PipelineError } from '../src/errors/PipelineError.ts';
-import { BlitzService } from '../src/BlitzService.ts';
+import type { Sink } from '../src/sink/Sink.ts';
+import type { Source } from '../src/source/Source.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers — minimal stub source / sink for structural tests (no NATS needed)

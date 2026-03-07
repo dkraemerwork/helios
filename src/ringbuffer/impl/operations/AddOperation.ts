@@ -1,9 +1,9 @@
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
 import { AbstractRingBufferOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AbstractRingBufferOperation';
 import { AddBackupOperation } from '@zenystx/helios-core/ringbuffer/impl/operations/AddBackupOperation';
 import { OverflowPolicy } from '@zenystx/helios-core/ringbuffer/OverflowPolicy';
+import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.operations.AddOperation}.

@@ -4,11 +4,11 @@
  * Used when {@code MapConfig.isPerEntryStatsEnabled()} is {@code false}.
  * No time-based stats tracked; minimal memory footprint.
  */
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { JVMUtil } from '@zenystx/helios-core/internal/util/JVMUtil';
 import type { Record } from './Record';
 import { Record as RecordNS } from './Record';
 import { RecordReaderWriter } from './RecordReaderWriter';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import { JVMUtil } from '@zenystx/helios-core/internal/util/JVMUtil';
 
 export class SimpleRecord<V = unknown> implements Record<V> {
     protected _value: V = null as unknown as V;

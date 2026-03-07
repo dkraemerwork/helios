@@ -6,24 +6,23 @@
  * applyCompletedMigrations with version gap rejection, rollback protocol,
  * and version +1 extra delta on failure.
  */
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { FinalizeMigrationOperation } from '@zenystx/helios-core/internal/partition/impl/FinalizeMigrationOperation';
+import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
+import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
+import { MigrationCommitOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationCommitOperation';
 import { MigrationManager } from '@zenystx/helios-core/internal/partition/impl/MigrationManager';
 import { MigrationRequestOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationRequestOperation';
-import { MigrationCommitOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationCommitOperation';
-import { FinalizeMigrationOperation } from '@zenystx/helios-core/internal/partition/impl/FinalizeMigrationOperation';
-import { PublishCompletedMigrationsOp } from '@zenystx/helios-core/internal/partition/impl/PublishCompletedMigrationsOp';
-import { MigrationInfo, MigrationStatus } from '@zenystx/helios-core/internal/partition/MigrationInfo';
-import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
-import { InternalPartitionImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionImpl';
-import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
-import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
-import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
-import { Address } from '@zenystx/helios-core/cluster/Address';
+import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
+import { PublishCompletedMigrationsOp } from '@zenystx/helios-core/internal/partition/impl/PublishCompletedMigrationsOp';
+import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
+import { MigrationInfo, MigrationStatus } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 

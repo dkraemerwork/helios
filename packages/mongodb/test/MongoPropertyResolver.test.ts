@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
-import { MongoPropertyResolver, type ResolvedMongoProperties } from '../src/MongoPropertyResolver.js';
+import { describe, expect, test } from 'bun:test';
+import { MongoPropertyResolver } from '../src/MongoPropertyResolver.js';
 
 describe('MongoPropertyResolver', () => {
   test('resolves defaults when no properties are set', () => {

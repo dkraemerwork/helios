@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
 import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { Version } from '@zenystx/helios-core/version/Version';
+import { describe, expect, test } from 'bun:test';
 
 describe('MemberVersionTest', () => {
   const version = MemberVersion.of(3, 8, 0);

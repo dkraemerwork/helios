@@ -1,5 +1,5 @@
-import { IndexType } from './Index';
 import type { Index, IndexConfig } from './Index';
+import { IndexType } from './Index';
 
 /**
  * Hash-based index for O(1) equality lookups.

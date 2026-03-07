@@ -15,7 +15,7 @@
  * Transport-boundary fault injection (crash/drop/delay) is exercised via
  * TcpFaultProxy and process kill.
  */
-import { describe, it, expect, afterEach, setDefaultTimeout } from 'bun:test';
+import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { MultiProcessCluster } from '../../../src/test-support/MultiProcessCluster.js';
 import { TcpFaultProxy } from '../../../src/test-support/TcpFaultProxy.js';
 

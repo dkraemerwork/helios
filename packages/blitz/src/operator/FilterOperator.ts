@@ -1,5 +1,5 @@
-import { Stage } from '../Stage.js';
 import { NakError } from '../errors/NakError.js';
+import { Stage } from '../Stage.js';
 import type { StageContext } from '../StageContext.js';
 
 /**

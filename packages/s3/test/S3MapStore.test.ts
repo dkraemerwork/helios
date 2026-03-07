@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { S3MapStore } from '../src/S3MapStore.js';
 
 async function collectKeys<K>(stream: AsyncIterable<K>): Promise<K[]> {

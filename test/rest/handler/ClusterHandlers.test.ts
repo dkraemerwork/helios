@@ -16,12 +16,12 @@
  *   - CLUSTER_WRITE disabled → 403
  */
 
-import { describe, it, expect, afterEach, mock } from 'bun:test';
 import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
-import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 import { HeliosRestServer } from '@zenystx/helios-core/rest/HeliosRestServer';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 import { ClusterReadHandler } from '@zenystx/helios-core/rest/handler/ClusterReadHandler';
 import { ClusterWriteHandler } from '@zenystx/helios-core/rest/handler/ClusterWriteHandler';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

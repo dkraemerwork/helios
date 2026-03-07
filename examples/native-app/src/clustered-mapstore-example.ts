@@ -29,10 +29,10 @@
 
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
-import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import type { MapStore } from '@zenystx/helios-core/map/MapStore';
+import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
+import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 
 // ── In-memory counting adapter (for demonstration) ─────────────────────────
 

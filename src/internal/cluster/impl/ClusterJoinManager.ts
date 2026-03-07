@@ -10,11 +10,11 @@
  * The original ClusterJoinManager (discovery bridge) remains at
  * {@code @zenystx/helios-core/internal/cluster/ClusterJoinManager} for address resolution.
  */
-import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { Address } from '@zenystx/helios-core/cluster/Address';
+import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { ClusterServiceImpl } from '@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl';
-import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
 import { ConfigCheck } from '@zenystx/helios-core/internal/cluster/impl/ConfigCheck';
+import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
 
 /**
  * Transport abstraction for sending join protocol messages.

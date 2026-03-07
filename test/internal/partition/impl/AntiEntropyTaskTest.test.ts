@@ -7,11 +7,11 @@
  * - Version match → no action
  * - Version mismatch → triggers replica sync
  */
-import { describe, test, expect } from 'bun:test';
 import { AntiEntropyTask } from '@zenystx/helios-core/internal/partition/impl/AntiEntropyTask';
-import { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
 import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
+import { describe, expect, test } from 'bun:test';
 
 describe('PartitionBackupReplicaAntiEntropyOp', () => {
     const PARTITION_COUNT = 4;

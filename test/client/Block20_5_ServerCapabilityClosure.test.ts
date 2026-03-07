@@ -9,7 +9,7 @@
  * - Every retained HeliosInstance method has a named owner, runtime path, and acceptance owner
  * - The parity matrix is current and reflects the audit
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // ── Contract narrowing: HeliosInstance no longer includes local-only methods ──
 

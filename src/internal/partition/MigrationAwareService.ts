@@ -3,9 +3,9 @@
  * Interface for services that participate in partition migration by providing
  * replication operations for their state.
  */
-import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
 import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
 export interface MigrationAwareService {
     /**

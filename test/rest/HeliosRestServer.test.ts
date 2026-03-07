@@ -6,13 +6,13 @@
  *  - RestApiFilter group routing + 403/404 responses
  *  - HeliosInstanceImpl REST wiring (starts/stops with instance)
  */
-import { describe, it, expect, afterEach } from 'bun:test';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
-import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { HeliosRestServer } from '@zenystx/helios-core/rest/HeliosRestServer';
 import { RestApiFilter } from '@zenystx/helios-core/rest/RestApiFilter';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
-import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 // ─── RestApiFilter — group routing ────────────────────────────────────────────
 

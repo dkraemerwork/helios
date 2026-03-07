@@ -4,18 +4,18 @@
  * Verifies async registration patterns: useFactory, inject, useClass.
  */
 
-import { describe, it, expect, afterEach } from 'bun:test';
-import { Test, TestingModule } from '@nestjs/testing';
 import { Injectable, Module } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import type { TransactionContext } from '@zenystx/helios-core/transaction/TransactionContext';
+import type { TransactionContextFactory } from '@zenystx/helios-nestjs/HeliosTransactionManager';
+import { HeliosTransactionManager } from '@zenystx/helios-nestjs/HeliosTransactionManager';
 import {
     HeliosTransactionModule,
     type HeliosTransactionModuleOptions,
     type HeliosTransactionModuleOptionsFactory,
 } from '@zenystx/helios-nestjs/HeliosTransactionModule';
-import { HeliosTransactionManager } from '@zenystx/helios-nestjs/HeliosTransactionManager';
 import { ManagedTransactionalTaskContext } from '@zenystx/helios-nestjs/ManagedTransactionalTaskContext';
-import type { TransactionContext } from '@zenystx/helios-core/transaction/TransactionContext';
-import type { TransactionContextFactory } from '@zenystx/helios-nestjs/HeliosTransactionManager';
+import { afterEach, describe, expect, it } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Minimal mock factory

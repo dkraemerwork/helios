@@ -6,13 +6,13 @@
  * In Phase 3 (single-node), all partitions are local: the engine scans all
  * RecordStores owned by MapContainerService and applies the predicate.
  */
-import type { Predicate } from '@zenystx/helios-core/query/Predicate';
-import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { IterationType } from '@zenystx/helios-core/internal/util/IterationType';
+import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { QueryResult } from '@zenystx/helios-core/map/impl/query/QueryResult';
 import { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 
 /** Minimal interface — expanded in later blocks. */
 export interface QueryEngine {

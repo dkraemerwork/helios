@@ -3,13 +3,13 @@
  *
  * Tests config validation for RepairingTask.
  */
-import { describe, it, expect } from 'bun:test';
-import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
-import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
-import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
 import type { InvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/InvalidationMetaDataFetcher';
+import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
+import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
 import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { describe, expect, it } from 'bun:test';
 
 const NANOS_PER_SECOND = 1_000_000_000;
 

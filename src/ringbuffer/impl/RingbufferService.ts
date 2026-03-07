@@ -1,8 +1,8 @@
-import type { ObjectNamespace } from '@zenystx/helios-core/internal/services/ObjectNamespace';
-import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
-import { DistributedObjectNamespace } from '@zenystx/helios-core/internal/services/DistributedObjectNamespace';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
+import { DistributedObjectNamespace } from '@zenystx/helios-core/internal/services/DistributedObjectNamespace';
+import type { ObjectNamespace } from '@zenystx/helios-core/internal/services/ObjectNamespace';
 import { RingbufferContainer } from '@zenystx/helios-core/ringbuffer/impl/RingbufferContainer';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
 /**
  * Port of {@code com.hazelcast.ringbuffer.impl.RingbufferService}.

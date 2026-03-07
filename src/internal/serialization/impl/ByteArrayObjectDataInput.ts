@@ -5,8 +5,8 @@
  * Supports both big-endian and little-endian byte orders.
  */
 import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
 
 export const NULL_ARRAY_LENGTH = -1;

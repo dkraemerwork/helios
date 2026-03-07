@@ -1,6 +1,6 @@
-import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
-import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
 import { HazelcastSerializationError } from '@zenystx/helios-core/internal/serialization/impl/HazelcastSerializationError';
+import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
+import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
 
 export const JavaScriptJsonSerializer: SerializerAdapter = {
     getTypeId: () => SerializationConstants.JAVASCRIPT_JSON_SERIALIZATION_TYPE,

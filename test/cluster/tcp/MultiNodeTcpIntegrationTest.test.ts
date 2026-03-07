@@ -10,12 +10,12 @@
  *  - Instance A puts a map entry that Instance B can read
  *  - Near-cache INVALIDATE messages propagate between nodes
  */
-import { describe, it, expect, afterEach } from "bun:test";
 import { Helios } from "@zenystx/helios-core/Helios";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { afterEach, describe, expect, it } from "bun:test";
 
 // Ports in the 15780+ range — unlikely to conflict with other tests.
 const BASE_PORT = 15780;

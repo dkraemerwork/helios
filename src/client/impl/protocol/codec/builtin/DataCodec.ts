@@ -2,8 +2,8 @@
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.DataCodec}.
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 
 export class DataCodec {
     private constructor() {}

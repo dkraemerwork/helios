@@ -5,12 +5,12 @@
  * Covers: full lifecycle, burst throughput, bounded backpressure, cancellation (queued + running),
  * graceful shutdown with timeout, fingerprint mismatch, task timeout + pool recycling.
  */
-import { describe, test, expect, afterEach } from 'bun:test';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig.js';
+import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
 import { ExecutorContainerService, TaskState } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js';
-import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 describe('Executor E2E Acceptance (Block 17.INT)', () => {
 
