@@ -17,6 +17,7 @@ import { ClientQueueProxy } from "@zenystx/helios-core/client/proxy/ClientQueueP
 import { ClientTopicProxy } from "@zenystx/helios-core/client/proxy/ClientTopicProxy";
 import { ClientReliableTopicProxy } from "@zenystx/helios-core/client/proxy/ClientReliableTopicProxy";
 import { ClientExecutorProxy } from "@zenystx/helios-core/client/proxy/ClientExecutorProxy";
+import type { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
 
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
@@ -32,6 +33,7 @@ export class ProxyManager {
     private readonly _invocationService: ClientInvocationService | null;
     private readonly _proxies = new Map<string, ClientProxy>();
     private readonly _factories = new Map<string, ProxyFactory>();
+    private _nearCacheManager: ClientNearCacheManager | null = null;
 
     constructor(
         serializationService: SerializationServiceImpl,
@@ -43,6 +45,14 @@ export class ProxyManager {
         this._invocationService = invocationService;
 
         this._registerDefaults();
+    }
+
+    getNearCacheManager(): ClientNearCacheManager | null {
+        return this._nearCacheManager;
+    }
+
+    setNearCacheManager(manager: ClientNearCacheManager): void {
+        this._nearCacheManager = manager;
     }
 
     getOrCreateProxy(serviceName: string, name: string): ClientProxy {
@@ -68,6 +78,10 @@ export class ProxyManager {
         if (proxy) {
             this._proxies.delete(key);
             await proxy.destroy();
+        }
+        // Clean up near-cache if present
+        if (this._nearCacheManager) {
+            this._nearCacheManager.destroyNearCache(name);
         }
     }
 

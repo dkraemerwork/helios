@@ -23,12 +23,29 @@ import { createClientSerializationService } from "@zenystx/helios-core/client/im
 import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
 import { ProxyManager } from "@zenystx/helios-core/client/proxy/ProxyManager";
 import { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
+import { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
 
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
 const TOPIC_SERVICE = "hz:impl:topicService";
 const RELIABLE_TOPIC_SERVICE = "hz:impl:reliableTopicService";
 const EXECUTOR_SERVICE = "hz:impl:executorService";
+
+/**
+ * Advanced client features that are explicitly deferred.
+ * These are not hidden stubs — they are honestly not wired in the current runtime.
+ */
+export const DEFERRED_CLIENT_FEATURES: readonly string[] = Object.freeze([
+    'cache',
+    'query-cache',
+    'transactions',
+    'sql',
+    'reliable-topic-client',
+    'pn-counter',
+    'flake-id-generator',
+    'scheduled-executor',
+    'cardinality-estimator',
+]);
 
 // ── Named-client registry (static) ──────────────────────────────────────────
 
@@ -41,128 +58,135 @@ const CLIENTS = new Map<string, HeliosClient>();
  * contract for both embedded members and remote clients.
  */
 export class HeliosClient implements HeliosInstance {
-  private readonly _config: ClientConfig;
-  private readonly _name: string;
-  private readonly _lifecycleService: ClientLifecycleService;
-  private readonly _serializationService: SerializationServiceImpl;
-  private readonly _partitionService: ClientPartitionService;
-  private readonly _proxyManager: ProxyManager;
+    private readonly _config: ClientConfig;
+    private readonly _name: string;
+    private readonly _lifecycleService: ClientLifecycleService;
+    private readonly _serializationService: SerializationServiceImpl;
+    private readonly _partitionService: ClientPartitionService;
+    private readonly _proxyManager: ProxyManager;
+    private readonly _nearCacheManager: ClientNearCacheManager;
 
-  constructor(config?: ClientConfig) {
-    this._config = config ?? new ClientConfig();
-    this._name = this._config.getName();
-    this._lifecycleService = new ClientLifecycleService();
-    this._serializationService = createClientSerializationService(this._config);
-    this._partitionService = new ClientPartitionService();
-    this._proxyManager = new ProxyManager(
-      this._serializationService,
-      this._partitionService,
-      null, // invocation service — set after connect()
-    );
-  }
-
-  // ── Static factory / registry ────────────────────────────────────────────
-
-  static newHeliosClient(config?: ClientConfig): HeliosClient {
-    const cfg = config ?? new ClientConfig();
-    const name = cfg.getName();
-    if (CLIENTS.has(name)) {
-      throw new Error(`HeliosClient with name "${name}" already exists in the registry`);
+    constructor(config?: ClientConfig) {
+        this._config = config ?? new ClientConfig();
+        this._name = this._config.getName();
+        this._lifecycleService = new ClientLifecycleService();
+        this._serializationService = createClientSerializationService(this._config);
+        this._partitionService = new ClientPartitionService();
+        this._nearCacheManager = new ClientNearCacheManager(this._serializationService);
+        this._proxyManager = new ProxyManager(
+            this._serializationService,
+            this._partitionService,
+            null, // invocation service — set after connect()
+        );
     }
-    const client = new HeliosClient(cfg);
-    CLIENTS.set(name, client);
-    return client;
-  }
 
-  static getHeliosClientByName(name: string): HeliosClient | null {
-    return CLIENTS.get(name) ?? null;
-  }
+    // ── Static factory / registry ────────────────────────────────────────────
 
-  static shutdownAll(): void {
-    for (const client of CLIENTS.values()) {
-      client._doShutdown(false);
+    static newHeliosClient(config?: ClientConfig): HeliosClient {
+        const cfg = config ?? new ClientConfig();
+        const name = cfg.getName();
+        if (CLIENTS.has(name)) {
+            throw new Error(`HeliosClient with name "${name}" already exists in the registry`);
+        }
+        const client = new HeliosClient(cfg);
+        CLIENTS.set(name, client);
+        return client;
     }
-    CLIENTS.clear();
-  }
 
-  static getAllHeliosClients(): readonly HeliosClient[] {
-    return [...CLIENTS.values()];
-  }
-
-  // ── HeliosInstance contract ──────────────────────────────────────────────
-
-  getName(): string {
-    return this._name;
-  }
-
-  getConfig(): ClientConfig {
-    return this._config;
-  }
-
-  getLifecycleService(): LifecycleService {
-    return this._lifecycleService;
-  }
-
-  getSerializationService(): SerializationServiceImpl {
-    return this._serializationService;
-  }
-
-  shutdown(): void {
-    this._doShutdown(true);
-  }
-
-  // ── Proxy methods — routed through ProxyManager ──
-
-  getMap<K, V>(name: string): IMap<K, V> {
-    this._ensureActive();
-    return this._proxyManager.getOrCreateProxy(MAP_SERVICE, name) as unknown as IMap<K, V>;
-  }
-
-  getQueue<E>(name: string): IQueue<E> {
-    this._ensureActive();
-    return this._proxyManager.getOrCreateProxy(QUEUE_SERVICE, name) as unknown as IQueue<E>;
-  }
-
-  getTopic<E>(name: string): ITopic<E> {
-    this._ensureActive();
-    return this._proxyManager.getOrCreateProxy(TOPIC_SERVICE, name) as unknown as ITopic<E>;
-  }
-
-  getReliableTopic<E>(name: string): ITopic<E> {
-    this._ensureActive();
-    return this._proxyManager.getOrCreateProxy(RELIABLE_TOPIC_SERVICE, name) as unknown as ITopic<E>;
-  }
-
-  getDistributedObject(serviceName: string, name: string): DistributedObject {
-    this._ensureActive();
-    return this._proxyManager.getOrCreateProxy(serviceName, name);
-  }
-
-  getCluster(): Cluster {
-    this._ensureActive();
-    throw new Error("HeliosClient.getCluster() is not yet implemented — awaiting Block 20.7 cluster service wiring");
-  }
-
-  getExecutorService(name: string): IExecutorService {
-    this._ensureActive();
-    return this._proxyManager.getOrCreateProxy(EXECUTOR_SERVICE, name) as unknown as IExecutorService;
-  }
-
-  // ── Internal ────────────────────────────────────────────────────────────
-
-  private _ensureActive(): void {
-    if (!this._lifecycleService.isRunning()) {
-      throw new Error("HeliosClient is not active");
+    static getHeliosClientByName(name: string): HeliosClient | null {
+        return CLIENTS.get(name) ?? null;
     }
-  }
 
-  private _doShutdown(removeFromRegistry: boolean): void {
-    if (!this._lifecycleService.isRunning()) return;
-    this._proxyManager.destroyAll();
-    this._lifecycleService.shutdown();
-    this._serializationService.destroy();
-    if (removeFromRegistry) {
-      CLIENTS.delete(this._name);
+    static shutdownAll(): void {
+        for (const client of CLIENTS.values()) {
+            client._doShutdown(false);
+        }
+        CLIENTS.clear();
     }
-  }
+
+    static getAllHeliosClients(): readonly HeliosClient[] {
+        return [...CLIENTS.values()];
+    }
+
+    // ── HeliosInstance contract ──────────────────────────────────────────────
+
+    getName(): string {
+        return this._name;
+    }
+
+    getConfig(): ClientConfig {
+        return this._config;
+    }
+
+    getLifecycleService(): LifecycleService {
+        return this._lifecycleService;
+    }
+
+    getSerializationService(): SerializationServiceImpl {
+        return this._serializationService;
+    }
+
+    getNearCacheManager(): ClientNearCacheManager {
+        return this._nearCacheManager;
+    }
+
+    shutdown(): void {
+        this._doShutdown(true);
+    }
+
+    // ── Proxy methods — routed through ProxyManager ──
+
+    getMap<K, V>(name: string): IMap<K, V> {
+        this._ensureActive();
+        return this._proxyManager.getOrCreateProxy(MAP_SERVICE, name) as unknown as IMap<K, V>;
+    }
+
+    getQueue<E>(name: string): IQueue<E> {
+        this._ensureActive();
+        return this._proxyManager.getOrCreateProxy(QUEUE_SERVICE, name) as unknown as IQueue<E>;
+    }
+
+    getTopic<E>(name: string): ITopic<E> {
+        this._ensureActive();
+        return this._proxyManager.getOrCreateProxy(TOPIC_SERVICE, name) as unknown as ITopic<E>;
+    }
+
+    getReliableTopic<E>(name: string): ITopic<E> {
+        this._ensureActive();
+        return this._proxyManager.getOrCreateProxy(RELIABLE_TOPIC_SERVICE, name) as unknown as ITopic<E>;
+    }
+
+    getDistributedObject(serviceName: string, name: string): DistributedObject {
+        this._ensureActive();
+        return this._proxyManager.getOrCreateProxy(serviceName, name);
+    }
+
+    getCluster(): Cluster {
+        this._ensureActive();
+        throw new Error("HeliosClient.getCluster() is not yet implemented — awaiting cluster service wiring");
+    }
+
+    getExecutorService(name: string): IExecutorService {
+        this._ensureActive();
+        return this._proxyManager.getOrCreateProxy(EXECUTOR_SERVICE, name) as unknown as IExecutorService;
+    }
+
+    // ── Internal ────────────────────────────────────────────────────────────
+
+    private _ensureActive(): void {
+        if (!this._lifecycleService.isRunning()) {
+            throw new Error("HeliosClient is not active");
+        }
+    }
+
+    private _doShutdown(removeFromRegistry: boolean): void {
+        if (!this._lifecycleService.isRunning()) return;
+        this._proxyManager.destroyAll();
+        this._nearCacheManager.destroyAllNearCaches();
+        this._lifecycleService.shutdown();
+        this._serializationService.destroy();
+        if (removeFromRegistry) {
+            CLIENTS.delete(this._name);
+        }
+    }
 }

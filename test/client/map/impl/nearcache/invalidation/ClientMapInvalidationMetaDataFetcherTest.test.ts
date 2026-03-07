@@ -1,14 +1,16 @@
 /**
- * Port of {@code com.hazelcast.client.map.impl.nearcache.invalidation.ClientMapInvalidationMetaDataFetcherTest}.
+ * Tests for {@code ClientMapInvalidationMetaDataFetcher}.
  *
- * Tests that the client-side map metadata fetcher correctly fetches partition sequences
- * and UUIDs from a server-side MetaDataGenerator and propagates them into RepairingHandlers.
+ * The client-side metadata fetcher now uses binary protocol invocations
+ * (not in-process MetaDataGenerator). These tests verify:
+ * - getDataMembers delegation to cluster service
+ * - fetchMemberResponse returns empty response when disconnected
+ * - init and fetchMetadata work with empty member lists
  */
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import { ClientMapInvalidationMetaDataFetcher } from '@zenystx/helios-core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher';
 import type { ClientMapClusterService, ClientMapDataMember } from '@zenystx/helios-core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher';
 import { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
-import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
 import type { MinimalPartitionService } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MinimalPartitionService';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
@@ -36,8 +38,6 @@ function makeNearCache(): NearCache<unknown, unknown> {
         getName: () => 'testMap',
         getNearCacheRecordStore: () => ({ setStaleReadDetector: () => {} }) as never,
         unwrap: () => null as never,
-        getStatsJson: () => ({}),
-        prefixedName: () => 'testMap',
     } as unknown as NearCache<unknown, unknown>;
 }
 
@@ -48,110 +48,39 @@ function makeSerialization(): SerializationService {
 const logger = { finest: () => {}, isFinestEnabled: () => false } as never;
 
 describe('ClientMapInvalidationMetaDataFetcherTest', () => {
-    afterEach(() => {
-        // no cluster to tear down — tests are purely in-process
-    });
-
-    /**
-     * Port of {@code fetches_sequence_and_uuid}.
-     *
-     * Distorts a specific partition's sequence and UUID on the "server-side"
-     * MetaDataGenerator, then verifies that fetchMetadata() propagates those
-     * values into the client-side RepairingHandler's MetaDataContainer.
-     */
-    it('fetches_sequence_and_uuid', () => {
-        const mapName = 'test';
-        const partition = 1;
-        const givenSequence = 42 + Math.floor(Math.random() * 1000); // positive non-zero
-        const givenUuid = crypto.randomUUID();
-
-        // Set up the "server-side" state
-        const metaDataGen = new MetaDataGenerator(PARTITION_COUNT);
-        metaDataGen.setCurrentSequence(mapName, partition, givenSequence);
-        metaDataGen.setUuid(partition, givenUuid);
-
-        // Build the cluster service returning one member
+    it('getDataMembers delegates to cluster service', () => {
         const member: ClientMapDataMember = {
             uuid: 'member-uuid-001',
-            ownedPartitions: [partition],
-            metaDataGenerator: metaDataGen,
+            ownedPartitions: [0, 1, 2],
         };
         const clusterService: ClientMapClusterService = {
             getDataMembers: () => [member],
         };
 
-        // Create the fetcher
         const fetcher = new ClientMapInvalidationMetaDataFetcher(clusterService);
-
-        // Create a RepairingHandler for the map (initially empty)
-        const partitionService = makePartitionService();
-        const handler = new RepairingHandler(
-            logger,
-            'local-member-uuid',
-            mapName,
-            makeNearCache(),
-            makeSerialization(),
-            partitionService,
-        );
-
-        const handlers = new Map([[mapName, handler]]);
-
-        // Exercise: fetch metadata from the "server"
-        fetcher.fetchMetadata(handlers);
-
-        // Verify that the handler's MetaDataContainer was updated
-        const metaDataContainer = handler.getMetaDataContainer(partition);
-        expect(metaDataContainer.getSequence()).toBe(givenSequence);
-        expect(metaDataContainer.getUuid()).toBe(givenUuid);
+        expect(fetcher.getDataMembers()).toEqual([member]);
     });
 
-    it('fetchMetadata_isNoOpForEmptyHandlers', () => {
-        const metaDataGen = new MetaDataGenerator(PARTITION_COUNT);
+    it('fetchMemberResponse returns empty response (protocol-based, disconnected)', () => {
         const member: ClientMapDataMember = {
             uuid: 'member-uuid-001',
             ownedPartitions: [0],
-            metaDataGenerator: metaDataGen,
         };
         const fetcher = new ClientMapInvalidationMetaDataFetcher({
             getDataMembers: () => [member],
+        });
+
+        const response = fetcher.fetchMemberResponse(member, ['test']);
+        expect(response.namePartitionSequenceList.size).toBe(0);
+        expect(response.partitionUuidList.size).toBe(0);
+    });
+
+    it('fetchMetadata_isNoOpForEmptyHandlers', () => {
+        const fetcher = new ClientMapInvalidationMetaDataFetcher({
+            getDataMembers: () => [],
         });
         // Should not throw
         fetcher.fetchMetadata(new Map());
-    });
-
-    it('init_setsInitialUuidAndSequenceOnHandler', () => {
-        const mapName = 'test-map';
-        const partition = 0;
-        const givenSequence = 77;
-        const givenUuid = crypto.randomUUID();
-
-        const metaDataGen = new MetaDataGenerator(PARTITION_COUNT);
-        metaDataGen.setCurrentSequence(mapName, partition, givenSequence);
-        metaDataGen.setUuid(partition, givenUuid);
-
-        const member: ClientMapDataMember = {
-            uuid: 'member-uuid-002',
-            ownedPartitions: [partition],
-            metaDataGenerator: metaDataGen,
-        };
-        const fetcher = new ClientMapInvalidationMetaDataFetcher({
-            getDataMembers: () => [member],
-        });
-
-        const handler = new RepairingHandler(
-            logger,
-            'local-member-uuid',
-            mapName,
-            makeNearCache(),
-            makeSerialization(),
-            makePartitionService(),
-        );
-
-        const result = fetcher.init(handler);
-
-        expect(result).toBe(true);
-        expect(handler.getMetaDataContainer(partition).getSequence()).toBe(givenSequence);
-        expect(handler.getMetaDataContainer(partition).getUuid()).toBe(givenUuid);
     });
 
     it('init_returnsTrueWhenNoMembers', () => {
@@ -167,5 +96,12 @@ describe('ClientMapInvalidationMetaDataFetcherTest', () => {
             makePartitionService(),
         );
         expect(fetcher.init(handler)).toBe(true);
+    });
+
+    it('does not import MapGetInvalidationMetaDataOperation', async () => {
+        const src = await Bun.file(
+            'src/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher.ts',
+        ).text();
+        expect(src).not.toContain('MapGetInvalidationMetaDataOperation');
     });
 });

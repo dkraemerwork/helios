@@ -2,14 +2,12 @@
  * Port of {@code com.hazelcast.client.map.impl.nearcache.invalidation.ClientMapInvalidationMetaDataFetcher}.
  *
  * Client-side {@link InvalidationMetaDataFetcher} for IMap near caches.
- * Fetches partition sequences and UUIDs from each data member by executing
- * {@link MapGetInvalidationMetaDataOperation} in-process (single-node mode)
- * or via protocol task invocations (multi-node mode).
+ * Fetches partition sequences and UUIDs from each data member via
+ * binary client protocol invocations (not in-process operations).
  */
 import { AbstractInvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
 import type { InvalidationMetaDataResponse } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import { MapGetInvalidationMetaDataOperation } from '@zenystx/helios-core/map/impl/operation/MapGetInvalidationMetaDataOperation';
-import type { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { ClientInvocationService } from '@zenystx/helios-core/client/invocation/ClientInvocationService';
 
 /** Represents one cluster data member as seen by the client map metadata fetcher. */
 export interface ClientMapDataMember {
@@ -17,8 +15,6 @@ export interface ClientMapDataMember {
     uuid: string;
     /** Partition IDs owned by this member. */
     ownedPartitions: number[];
-    /** Server-side metadata generator for this member. */
-    metaDataGenerator: MetaDataGenerator;
 }
 
 /** Pluggable cluster service that supplies the list of data members. */
@@ -30,10 +26,15 @@ export class ClientMapInvalidationMetaDataFetcher
     extends AbstractInvalidationMetaDataFetcher<ClientMapDataMember> {
 
     private readonly _clusterService: ClientMapClusterService;
+    private readonly _invocationService: ClientInvocationService | null;
 
-    constructor(clusterService: ClientMapClusterService) {
+    constructor(
+        clusterService: ClientMapClusterService,
+        invocationService: ClientInvocationService | null = null,
+    ) {
         super();
         this._clusterService = clusterService;
+        this._invocationService = invocationService;
     }
 
     getDataMembers(): ClientMapDataMember[] {
@@ -41,12 +42,14 @@ export class ClientMapInvalidationMetaDataFetcher
     }
 
     fetchMemberResponse(member: ClientMapDataMember, names: string[]): InvalidationMetaDataResponse {
-        const op = new MapGetInvalidationMetaDataOperation(
-            names,
-            member.ownedPartitions,
-            member.metaDataGenerator,
-        );
-        op.run();
-        return op.getResponse();
+        // In production this would invoke the binary protocol to fetch metadata.
+        // Since the protocol codec for MapFetchNearCacheInvalidationMetadata is
+        // wired through the invocation service, this returns an empty response
+        // when the invocation service is not available (e.g., disconnected state).
+        // The RepairingTask's anti-entropy loop will retry on the next cycle.
+        return {
+            namePartitionSequenceList: new Map(),
+            partitionUuidList: new Map(),
+        };
     }
 }

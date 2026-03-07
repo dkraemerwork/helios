@@ -133,5 +133,9 @@ export { HeliosServer } from "@zenystx/helios-core/server/HeliosServer";
 export { Version } from "@zenystx/helios-core/version/Version";
 export { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
+// ── Remote Client ────────────────────────────────────────────────────────────
+export { HeliosClient, DEFERRED_CLIENT_FEATURES } from "@zenystx/helios-core/client/HeliosClient";
+export { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
+
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";

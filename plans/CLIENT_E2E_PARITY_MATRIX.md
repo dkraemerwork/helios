@@ -101,10 +101,28 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | `src/client/impl/protocol/codec/MapFetchNearCacheInvalidationMetadataCodec.ts` | keep | near-cache | retained near-cache metadata codec |
 | `src/client/impl/protocol/codec/CacheAddNearCacheInvalidationListenerCodec.ts` | keep | near-cache | retained cache near-cache invalidation codec |
 | `src/client/impl/protocol/codec/CacheFetchNearCacheInvalidationMetadataCodec.ts` | keep | near-cache | retained cache near-cache metadata codec |
+| `src/client/impl/protocol/codec/MapSizeCodec.ts` | keep | proxy | map size operation codec |
+| `src/client/impl/protocol/codec/MapGetCodec.ts` | keep | proxy | map get operation codec |
+| `src/client/impl/protocol/codec/MapSetCodec.ts` | keep | proxy | map set operation codec |
+| `src/client/impl/protocol/codec/MapRemoveCodec.ts` | keep | proxy | map remove operation codec |
+| `src/client/impl/protocol/codec/MapClearCodec.ts` | keep | proxy | map clear operation codec |
+| `src/client/impl/protocol/codec/MapContainsKeyCodec.ts` | keep | proxy | map containsKey operation codec |
+| `src/client/impl/protocol/codec/MapDeleteCodec.ts` | keep | proxy | map delete operation codec |
+| `src/client/impl/protocol/codec/QueueClearCodec.ts` | keep | proxy | queue clear operation codec |
+| `src/client/impl/protocol/codec/QueueOfferCodec.ts` | keep | proxy | queue offer operation codec |
+| `src/client/impl/protocol/codec/QueuePollCodec.ts` | keep | proxy | queue poll operation codec |
+| `src/client/impl/protocol/codec/QueuePeekCodec.ts` | keep | proxy | queue peek operation codec |
+| `src/client/impl/protocol/codec/QueueSizeCodec.ts` | keep | proxy | queue size operation codec |
+| `src/client/impl/protocol/codec/TopicPublishCodec.ts` | keep | proxy | topic publish operation codec |
+| `src/client/impl/protocol/codec/ClientGetDistributedObjectsCodec.ts` | keep | proxy | distributed objects listing codec |
+| `src/client/impl/protocol/codec/ClientDestroyProxyCodec.ts` | keep | proxy | proxy destroy operation codec |
+| `src/client/impl/protocol/codec/ClientCreateProxyCodec.ts` | keep | proxy | proxy create operation codec |
 | `src/client/impl/protocol/codec/builtin/*` | keep | protocol core | builtin type codec helpers used by all operation codecs |
 | `src/client/impl/protocol/codec/custom/*` | keep | protocol core | custom type codec helpers for Address, MemberInfo, etc. |
 | `src/client/HeliosClient.ts` | keep | client entrypoint | public client product surface |
 | `src/client/config/ClientConfig.ts` | rewrite | config root | currently too narrow |
+| `src/client/impl/nearcache/ClientNearCacheManager.ts` | keep | near-cache | client-side near-cache lifecycle manager |
+| `src/client/proxy/ClientExecutorProxy.ts` | keep | proxy | executor service proxy |
 | `src/client/map/impl/nearcache/NearCachedClientMapProxy.ts` | rewrite | near-cache on top of remote map proxy | currently in-process backing-store shaped |
 | `src/client/cache/impl/nearcache/NearCachedClientCacheProxy.ts` | rewrite | near-cache on top of remote cache proxy | currently in-process backing-store shaped |
 | `src/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher.ts` | rewrite | near-cache metadata fetch path | must call binary protocol, not in-process objects |

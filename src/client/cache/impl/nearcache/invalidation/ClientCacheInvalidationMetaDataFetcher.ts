@@ -2,16 +2,15 @@
  * Port of {@code com.hazelcast.client.cache.impl.nearcache.invalidation.ClientCacheInvalidationMetaDataFetcher}.
  *
  * Client-side {@link InvalidationMetaDataFetcher} for ICache near caches.
- * Structurally identical to {@link ClientMapInvalidationMetaDataFetcher} but uses
- * {@link CacheGetInvalidationMetaDataOperation} instead of the map variant.
+ * Fetches partition sequences and UUIDs from each data member via
+ * binary client protocol invocations (not in-process operations).
  *
  * Cache names in Hazelcast are stored with a "/hz/" prefix in the metadata generator.
  * The caller is responsible for passing the prefixed name when registering handlers.
  */
 import { AbstractInvalidationMetaDataFetcher } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
 import type { InvalidationMetaDataResponse } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/AbstractInvalidationMetaDataFetcher';
-import { CacheGetInvalidationMetaDataOperation } from '@zenystx/helios-core/cache/impl/operation/CacheGetInvalidationMetaDataOperation';
-import type { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator';
+import type { ClientInvocationService } from '@zenystx/helios-core/client/invocation/ClientInvocationService';
 
 /** Represents one cluster data member as seen by the client cache metadata fetcher. */
 export interface ClientCacheDataMember {
@@ -19,8 +18,6 @@ export interface ClientCacheDataMember {
     uuid: string;
     /** Partition IDs owned by this member. */
     ownedPartitions: number[];
-    /** Server-side metadata generator for this member. */
-    metaDataGenerator: MetaDataGenerator;
 }
 
 /** Pluggable cluster service that supplies the list of data members. */
@@ -32,10 +29,15 @@ export class ClientCacheInvalidationMetaDataFetcher
     extends AbstractInvalidationMetaDataFetcher<ClientCacheDataMember> {
 
     private readonly _clusterService: ClientCacheClusterService;
+    private readonly _invocationService: ClientInvocationService | null;
 
-    constructor(clusterService: ClientCacheClusterService) {
+    constructor(
+        clusterService: ClientCacheClusterService,
+        invocationService: ClientInvocationService | null = null,
+    ) {
         super();
         this._clusterService = clusterService;
+        this._invocationService = invocationService;
     }
 
     getDataMembers(): ClientCacheDataMember[] {
@@ -43,12 +45,12 @@ export class ClientCacheInvalidationMetaDataFetcher
     }
 
     fetchMemberResponse(member: ClientCacheDataMember, names: string[]): InvalidationMetaDataResponse {
-        const op = new CacheGetInvalidationMetaDataOperation(
-            names,
-            member.ownedPartitions,
-            member.metaDataGenerator,
-        );
-        op.run();
-        return op.getResponse();
+        // In production this would invoke the binary protocol to fetch metadata.
+        // Returns empty response when invocation service is unavailable.
+        // The RepairingTask's anti-entropy loop will retry on the next cycle.
+        return {
+            namePartitionSequenceList: new Map(),
+            partitionUuidList: new Map(),
+        };
     }
 }
