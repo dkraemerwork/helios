@@ -37,7 +37,7 @@ export class ClientDestroyProxyCodec {
 
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
+        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(ClientDestroyProxyCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

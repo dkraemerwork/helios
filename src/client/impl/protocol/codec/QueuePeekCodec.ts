@@ -29,6 +29,13 @@ export class QueuePeekCodec {
         return msg;
     }
 
+    static decodeRequest(msg: ClientMessage): { name: string } {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // skip initial
+        const name = StringCodec.decode(iter);
+        return { name };
+    }
+
     static encodeResponse(response: import('@zenystx/helios-core/internal/serialization/Data').Data | null): ClientMessage {
         const msg = ClientMessage.createForEncode();
         const initialFrame = Buffer.allocUnsafe(QueuePeekCodec.RESPONSE_HEADER_SIZE);

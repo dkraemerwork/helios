@@ -80,6 +80,19 @@ import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/C
 import { HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
+import { MapGetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec";
+import { MapRemoveCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapRemoveCodec";
+import { MapSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSizeCodec";
+import { MapContainsKeyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapContainsKeyCodec";
+import { MapClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapClearCodec";
+import { MapDeleteCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapDeleteCodec";
+import { MapSetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSetCodec";
+import { QueueOfferCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueOfferCodec";
+import { QueuePollCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePollCodec";
+import { QueueSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueSizeCodec";
+import { QueuePeekCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePeekCodec";
+import { QueueClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueClearCodec";
+import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 
 /** Service name constant for the distributed map service. */
@@ -567,24 +580,150 @@ export class HeliosInstanceImpl implements HeliosInstance {
       partitionCount: this.getPartitionCount(),
     });
 
-    // Register MapPut handler that writes through to the member's map service
-    this._clientProtocolServer.registerHandler(
-      MapPutCodec.REQUEST_MESSAGE_TYPE,
-      async (msg, _session) => {
-        const req = MapPutCodec.decodeRequest(msg);
-        const partitionId = this._nodeEngine
-          .getPartitionService()
-          .getPartitionId(req.key);
-        const store = this._mapService.getOrCreateRecordStore(
-          req.name,
-          partitionId,
-        );
-        const prev = store.put(req.key, req.value, Number(req.ttl), -1);
-        return MapPutCodec.encodeResponse(prev);
-      },
-    );
-
+    this._registerClientProtocolHandlers();
     this._clientProtocolServer.start().catch(() => {});
+  }
+
+  private _registerClientProtocolHandlers(): void {
+    const srv = this._clientProtocolServer!;
+    const ps = this._nodeEngine.getPartitionService();
+
+    // ── Map handlers ──────────────────────────────────────────────────────
+    srv.registerHandler(MapPutCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapPutCodec.decodeRequest(msg);
+      const pid = ps.getPartitionId(req.key);
+      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
+      const prev = store.put(req.key, req.value, Number(req.ttl), -1);
+      return MapPutCodec.encodeResponse(prev);
+    });
+
+    srv.registerHandler(MapGetCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapGetCodec.decodeRequest(msg);
+      const pid = ps.getPartitionId(req.key);
+      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
+      const val = store.get(req.key);
+      return MapGetCodec.encodeResponse(val);
+    });
+
+    srv.registerHandler(MapRemoveCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapRemoveCodec.decodeRequest(msg);
+      const pid = ps.getPartitionId(req.key);
+      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
+      const prev = store.remove(req.key);
+      return MapRemoveCodec.encodeResponse(prev);
+    });
+
+    srv.registerHandler(MapSizeCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapSizeCodec.decodeRequest(msg);
+      let total = 0;
+      const partitionCount = this.getPartitionCount();
+      for (let i = 0; i < partitionCount; i++) {
+        const store = this._mapService.getRecordStore(req.name, i);
+        if (store) total += store.size();
+      }
+      return MapSizeCodec.encodeResponse(total);
+    });
+
+    srv.registerHandler(MapContainsKeyCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapContainsKeyCodec.decodeRequest(msg);
+      const pid = ps.getPartitionId(req.key);
+      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
+      return MapContainsKeyCodec.encodeResponse(store.containsKey(req.key));
+    });
+
+    srv.registerHandler(MapClearCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapClearCodec.decodeRequest(msg);
+      const partitionCount = this.getPartitionCount();
+      for (let i = 0; i < partitionCount; i++) {
+        const store = this._mapService.getRecordStore(req.name, i);
+        if (store) store.clear();
+      }
+      return MapClearCodec.encodeResponse();
+    });
+
+    srv.registerHandler(MapDeleteCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapDeleteCodec.decodeRequest(msg);
+      const pid = ps.getPartitionId(req.key);
+      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
+      store.remove(req.key);
+      return MapDeleteCodec.encodeResponse();
+    });
+
+    srv.registerHandler(MapSetCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = MapSetCodec.decodeRequest(msg);
+      const pid = ps.getPartitionId(req.key);
+      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
+      store.put(req.key, req.value, Number(req.ttl), -1);
+      return MapSetCodec.encodeResponse();
+    });
+
+    // ── Queue handlers ────────────────────────────────────────────────────
+    srv.registerHandler(QueueOfferCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = QueueOfferCodec.decodeRequest(msg);
+      this._ensureQueueService();
+      const result = await this._distributedQueueService!.offer(req.name, req.value, Number(req.timeoutMs));
+      return QueueOfferCodec.encodeResponse(result);
+    });
+
+    srv.registerHandler(QueuePollCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = QueuePollCodec.decodeRequest(msg);
+      this._ensureQueueService();
+      const result = await this._distributedQueueService!.poll(req.name, Number(req.timeoutMs));
+      return QueuePollCodec.encodeResponse(result);
+    });
+
+    srv.registerHandler(QueuePeekCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = QueuePeekCodec.decodeRequest(msg);
+      this._ensureQueueService();
+      const result = await this._distributedQueueService!.peek(req.name);
+      return QueuePeekCodec.encodeResponse(result);
+    });
+
+    srv.registerHandler(QueueSizeCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = QueueSizeCodec.decodeRequest(msg);
+      this._ensureQueueService();
+      const result = await this._distributedQueueService!.size(req.name);
+      return QueueSizeCodec.encodeResponse(result);
+    });
+
+    srv.registerHandler(QueueClearCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = QueueClearCodec.decodeRequest(msg);
+      this._ensureQueueService();
+      await this._distributedQueueService!.clear(req.name);
+      return QueueClearCodec.encodeResponse();
+    });
+
+    // ── Topic handler ─────────────────────────────────────────────────────
+    srv.registerHandler(TopicPublishCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
+      const req = TopicPublishCodec.decodeRequest(msg);
+      this._ensureTopicService();
+      await this._distributedTopicService!.publish(req.name, req.message);
+      return TopicPublishCodec.encodeResponse();
+    });
+  }
+
+  private _ensureQueueService(): void {
+    if (this._distributedQueueService === null) {
+      this._distributedQueueService = new DistributedQueueService(
+        this._name,
+        this._config,
+        this._ss,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
+
+  private _ensureTopicService(): void {
+    if (this._distributedTopicService === null) {
+      this._distributedTopicService = new DistributedTopicService(
+        this._name,
+        this._config,
+        this._ss,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
   }
 
   /**

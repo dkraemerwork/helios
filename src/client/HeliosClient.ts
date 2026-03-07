@@ -24,6 +24,8 @@ import { ProxyManager } from "@zenystx/helios-core/client/proxy/ProxyManager";
 import { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
 import { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
 import { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
+import { ClientConnectionManager } from "@zenystx/helios-core/client/connection/ClientConnectionManager";
+import { ClientInvocationService } from "@zenystx/helios-core/client/invocation/ClientInvocationService";
 import type { Member } from "@zenystx/helios-core/cluster/Member";
 
 const MAP_SERVICE = "hz:impl:mapService";
@@ -66,6 +68,8 @@ export class HeliosClient implements HeliosInstance {
     private readonly _proxyManager: ProxyManager;
     private readonly _nearCacheManager: ClientNearCacheManager;
     private readonly _clusterService: ClientClusterService;
+    private _connectionManager: ClientConnectionManager | null = null;
+    private _invocationService: ClientInvocationService | null = null;
 
     constructor(config?: ClientConfig) {
         this._config = config ?? new ClientConfig();
@@ -136,6 +140,26 @@ export class HeliosClient implements HeliosInstance {
         this._doShutdown(true);
     }
 
+    /**
+     * Connect to the cluster using the binary client protocol.
+     * Establishes a TCP connection, authenticates, and wires the invocation
+     * service so proxy operations route through real network calls.
+     */
+    async connect(): Promise<void> {
+        const connMgr = new ClientConnectionManager(this._config);
+        connMgr.setClusterService(this._clusterService);
+        connMgr.setPartitionService(this._partitionService);
+        await connMgr.start();
+        await connMgr.connectToCluster();
+        this._connectionManager = connMgr;
+
+        const invSvc = new ClientInvocationService(connMgr, this._config);
+        invSvc.start();
+        this._invocationService = invSvc;
+
+        this._proxyManager.setInvocationService(invSvc);
+    }
+
     // ── Proxy methods — routed through ProxyManager ──
 
     getMap<K, V>(name: string): IMap<K, V> {
@@ -188,6 +212,9 @@ export class HeliosClient implements HeliosInstance {
         if (!this._lifecycleService.isRunning()) return;
         this._proxyManager.destroyAll();
         this._nearCacheManager.destroyAllNearCaches();
+        this._connectionManager?.shutdown().catch(() => {});
+        this._connectionManager = null;
+        this._invocationService = null;
         this._lifecycleService.shutdown();
         this._serializationService.destroy();
         if (removeFromRegistry) {

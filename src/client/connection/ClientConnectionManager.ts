@@ -249,6 +249,18 @@ export class ClientConnectionManager {
             );
         }
 
+        // Initialize partition service with partition count from auth response
+        if (this._partitionService && authResp.partitionCount > 0) {
+            const memberUuid = authResp.memberUuid ?? "";
+            const partitions = new Map<string, number[]>();
+            const ids: number[] = [];
+            for (let i = 0; i < authResp.partitionCount; i++) ids.push(i);
+            partitions.set(memberUuid, ids);
+            this._partitionService.handlePartitionsViewEvent(
+                partitions, 1, authResp.partitionCount,
+            );
+        }
+
         return conn;
     }
 

@@ -27,7 +27,7 @@ type ProxyFactory = (name: string) => ClientProxy;
 export class ProxyManager {
     private readonly _serializationService: SerializationServiceImpl;
     private readonly _partitionService: ClientPartitionService;
-    private readonly _invocationService: ClientInvocationService | null;
+    private _invocationService: ClientInvocationService | null;
     private readonly _proxies = new Map<string, ClientProxy>();
     private readonly _factories = new Map<string, ProxyFactory>();
     private _nearCacheManager: ClientNearCacheManager | null = null;
@@ -52,6 +52,10 @@ export class ProxyManager {
 
     setNearCacheManager(manager: ClientNearCacheManager): void {
         this._nearCacheManager = manager;
+    }
+
+    setInvocationService(svc: ClientInvocationService): void {
+        this._invocationService = svc;
     }
 
     getOrCreateProxy(serviceName: string, name: string): ClientProxy {

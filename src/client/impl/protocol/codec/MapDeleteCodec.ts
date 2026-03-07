@@ -31,9 +31,18 @@ export class MapDeleteCodec {
         return msg;
     }
 
+    static decodeRequest(msg: ClientMessage): { name: string; key: Data; threadId: bigint } {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const threadId = initialFrame.content.readBigInt64LE(MapDeleteCodec.REQUEST_THREAD_ID_OFFSET);
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        return { name, key, threadId };
+    }
+
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
+        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(MapDeleteCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

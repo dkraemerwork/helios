@@ -3,15 +3,15 @@
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { StringCodec } from './builtin/StringCodec';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { INT_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 
 export class QueueSizeCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x030300;
     static readonly RESPONSE_MESSAGE_TYPE: number = 0x030301;
 
     static readonly REQUEST_INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
-    private static readonly RESPONSE_SIZE_OFFSET = INT_SIZE_IN_BYTES;
+    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
+    private static readonly RESPONSE_SIZE_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET;
 
     private constructor() {}
 
@@ -26,6 +26,13 @@ export class QueueSizeCodec {
         StringCodec.encode(msg, name);
         msg.setFinal();
         return msg;
+    }
+
+    static decodeRequest(msg: ClientMessage): { name: string } {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // skip initial
+        const name = StringCodec.decode(iter);
+        return { name };
     }
 
     static encodeResponse(size: number): ClientMessage {

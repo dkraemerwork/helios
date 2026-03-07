@@ -26,9 +26,16 @@ export class QueueClearCodec {
         return msg;
     }
 
+    static decodeRequest(msg: ClientMessage): { name: string } {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // skip initial
+        const name = StringCodec.decode(iter);
+        return { name };
+    }
+
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
+        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(QueueClearCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

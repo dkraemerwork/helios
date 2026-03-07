@@ -13,8 +13,8 @@ export class MapContainsKeyCodec {
 
     private static readonly REQUEST_THREAD_ID_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     static readonly REQUEST_INITIAL_FRAME_SIZE = MapContainsKeyCodec.REQUEST_THREAD_ID_OFFSET + LONG_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
-    private static readonly RESPONSE_RESULT_OFFSET = INT_SIZE_IN_BYTES;
+    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + BOOLEAN_SIZE_IN_BYTES;
+    private static readonly RESPONSE_RESULT_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET;
 
     private constructor() {}
 
@@ -31,6 +31,15 @@ export class MapContainsKeyCodec {
         DataCodec.encode(msg, key);
         msg.setFinal();
         return msg;
+    }
+
+    static decodeRequest(msg: ClientMessage): { name: string; key: Data; threadId: bigint } {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const threadId = initialFrame.content.readBigInt64LE(MapContainsKeyCodec.REQUEST_THREAD_ID_OFFSET);
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        return { name, key, threadId };
     }
 
     static encodeResponse(result: boolean): ClientMessage {

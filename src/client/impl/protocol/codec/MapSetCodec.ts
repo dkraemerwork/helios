@@ -34,9 +34,20 @@ export class MapSetCodec {
         return msg;
     }
 
+    static decodeRequest(msg: ClientMessage): { name: string; key: Data; value: Data; threadId: bigint; ttl: bigint } {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const threadId = initialFrame.content.readBigInt64LE(MapSetCodec.REQUEST_THREAD_ID_OFFSET);
+        const ttl = initialFrame.content.readBigInt64LE(MapSetCodec.REQUEST_TTL_OFFSET);
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const value = DataCodec.decode(iter);
+        return { name, key, value, threadId, ttl };
+    }
+
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
+        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(MapSetCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

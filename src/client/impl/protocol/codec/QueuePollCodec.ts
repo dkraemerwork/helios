@@ -31,6 +31,14 @@ export class QueuePollCodec {
         return msg;
     }
 
+    static decodeRequest(msg: ClientMessage): { name: string; timeoutMs: bigint } {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const timeoutMs = initialFrame.content.readBigInt64LE(QueuePollCodec.REQUEST_TIMEOUT_OFFSET);
+        const name = StringCodec.decode(iter);
+        return { name, timeoutMs };
+    }
+
     static encodeResponse(response: import('@zenystx/helios-core/internal/serialization/Data').Data | null): ClientMessage {
         const msg = ClientMessage.createForEncode();
         const initialFrame = Buffer.allocUnsafe(QueuePollCodec.RESPONSE_HEADER_SIZE);
