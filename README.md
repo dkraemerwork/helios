@@ -72,6 +72,39 @@ Run a second node on port 5702 pointing back at 5701 — they'll form a cluster,
 
 ---
 
+## Remote Client
+
+Connect to a running Helios cluster from a separate process using the binary client protocol.
+
+```typescript
+import { HeliosClient, ClientConfig } from "@zenystx/helios-core";
+
+const config = new ClientConfig();
+config.setClusterName("dev");
+config.getNetworkConfig().addAddress("127.0.0.1:5701");
+
+const client = HeliosClient.newHeliosClient(config);
+
+const map = client.getMap<string, number>("scores");
+await map.put("alice", 42);
+console.log(await map.get("alice")); // 42
+
+const queue = client.getQueue<string>("tasks");
+await queue.offer("build");
+
+const topic = client.getTopic<string>("events");
+topic.addMessageListener((msg) => console.log(msg.getMessageObject()));
+topic.publish("hello");
+
+client.shutdown();
+```
+
+The remote client supports Map, Queue, Topic, ReliableTopic, distributed object lifecycle, near-cache, authentication, and automatic reconnect with listener re-registration. See `examples/native-app/src/client-*.ts` for auth, reconnect, and near-cache examples.
+
+> **Note:** Some member-only data structures (IList, ISet, MultiMap, ReplicatedMap) are not available on the remote client. Use `HeliosInstanceImpl` directly for these. See `DEFERRED_CLIENT_FEATURES` for the full list of deferred capabilities.
+
+---
+
 ## Standalone Server
 
 Run Helios headless from the CLI, with a REST API included:

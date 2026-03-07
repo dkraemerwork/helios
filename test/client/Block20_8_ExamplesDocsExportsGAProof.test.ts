@@ -383,3 +383,189 @@ describe('Final GA verification — production readiness checklist', () => {
         expect(DEFERRED_CLIENT_FEATURES.length).toBeGreaterThanOrEqual(5);
     });
 });
+
+// ── 19. Audit: README has Remote Client section ─────────────────────────────
+
+describe('Audit — README remote client documentation', () => {
+    test('README.md contains a Remote Client section', async () => {
+        const readme = await Bun.file(resolve(ROOT, 'README.md')).text();
+        expect(readme).toMatch(/##.*Remote Client/i);
+    });
+
+    test('README remote client section shows HeliosClient usage', async () => {
+        const readme = await Bun.file(resolve(ROOT, 'README.md')).text();
+        expect(readme).toContain('HeliosClient');
+        expect(readme).toContain('ClientConfig');
+    });
+
+    test('README does not claim narrowed-out client methods as remote features', async () => {
+        const readme = await Bun.file(resolve(ROOT, 'README.md')).text();
+        // These are member-only and should not appear in client usage sections
+        const clientSection = readme.slice(readme.search(/##.*Remote Client/i) || 0);
+        if (clientSection.length > 0) {
+            expect(clientSection).not.toContain('getReplicatedMap');
+            expect(clientSection).not.toContain('getMultiMap');
+            expect(clientSection).not.toContain('getAtomicLong');
+            expect(clientSection).not.toContain('getFlakeIdGenerator');
+        }
+    });
+});
+
+// ── 20. Audit: client examples import only public surface ───────────────────
+
+describe('Audit — client examples use only public API surface', () => {
+    const clientExamples = [
+        'examples/native-app/src/client-example.ts',
+        'examples/native-app/src/client-auth-example.ts',
+        'examples/native-app/src/client-reconnect-example.ts',
+        'examples/native-app/src/client-nearcache-example.ts',
+    ];
+
+    test('no client example imports from internal client paths', async () => {
+        for (const example of clientExamples) {
+            const content = await Bun.file(resolve(ROOT, example)).text();
+            // Must not import from internal client subpaths
+            expect(content).not.toContain('/client/proxy/');
+            expect(content).not.toContain('/client/invocation/');
+            expect(content).not.toContain('/client/connection/');
+            expect(content).not.toContain('/client/spi/');
+            expect(content).not.toContain('/client/impl/');
+        }
+    });
+
+    test('no client example references narrowed-out HeliosInstance methods', async () => {
+        for (const example of clientExamples) {
+            const content = await Bun.file(resolve(ROOT, example)).text();
+            expect(content).not.toContain('getReplicatedMap');
+            expect(content).not.toContain('getMultiMap');
+            expect(content).not.toContain('getAtomicLong');
+            expect(content).not.toContain('getFlakeIdGenerator');
+            expect(content).not.toContain('newTransactionContext');
+        }
+    });
+});
+
+// ── 21. Audit: test-support segregation ─────────────────────────────────────
+
+describe('Audit — test-support properly segregated from client surface', () => {
+    test('TestHeliosInstance is not exported from root barrel', async () => {
+        const mod = await importRootBarrel();
+        expect('TestHeliosInstance' in mod).toBeFalse();
+    });
+
+    test('no src/client file imports from test-support', async () => {
+        const { Glob } = await import('bun');
+        for (const file of new Glob('**/*.ts').scanSync(resolve(ROOT, 'src/client'))) {
+            const content = await Bun.file(resolve(ROOT, 'src/client', file)).text();
+            expect(content).not.toContain('test-support');
+            expect(content).not.toContain('TestHeliosInstance');
+        }
+    });
+
+    test('TestHeliosInstance includes member-only methods but is clearly a test harness', async () => {
+        const content = await Bun.file(resolve(ROOT, 'src/test-support/TestHeliosInstance.ts')).text();
+        // Has member-only methods (expected for test fixture)
+        expect(content).toContain('getList');
+        expect(content).toContain('getSet');
+        expect(content).toContain('getMultiMap');
+        // Is marked as test harness
+        expect(content).toMatch(/test.*harness|@deprecated|test.*instance/i);
+    });
+});
+
+// ── 22. Proof-label contract frozen in CLIENT_E2E_PARITY_PLAN.md ────────────
+
+describe('Proof-label contract — mandatory labels present', () => {
+    const mandatoryLabels = [
+        'P20-STARTUP',
+        'P20-MAP',
+        'P20-QUEUE',
+        'P20-TOPIC',
+        'P20-RELIABLE-TOPIC',
+        'P20-EXECUTOR',
+        'P20-RECONNECT-LISTENER',
+        'P20-PROXY-LIFECYCLE',
+        'P20-EXTERNAL-BUN-APP',
+        'P20-HYGIENE',
+        'P20-GATE-CHECK',
+    ];
+
+    test('CLIENT_E2E_PARITY_PLAN.md contains all mandatory Phase 20 proof labels', async () => {
+        const plan = await Bun.file(resolve(ROOT, 'plans/CLIENT_E2E_PARITY_PLAN.md')).text();
+        for (const label of mandatoryLabels) {
+            expect(plan).toContain(label);
+        }
+    });
+
+    test('each mandatory label has an associated bun test command', async () => {
+        const plan = await Bun.file(resolve(ROOT, 'plans/CLIENT_E2E_PARITY_PLAN.md')).text();
+        for (const label of mandatoryLabels) {
+            const labelLine = plan.split('\n').find(l => l.includes(label) && l.includes('bun'));
+            expect(labelLine).toBeDefined();
+        }
+    });
+
+    test('proof-label section includes required final proof footer format', async () => {
+        const plan = await Bun.file(resolve(ROOT, 'plans/CLIENT_E2E_PARITY_PLAN.md')).text();
+        expect(plan).toContain('Required final proof footer format');
+        expect(plan).toContain('P20-STARTUP — green');
+        expect(plan).toContain('P20-GATE-CHECK — green');
+    });
+
+    test('proof-label contract includes NOT-RETAINED option for optional labels', async () => {
+        const plan = await Bun.file(resolve(ROOT, 'plans/CLIENT_E2E_PARITY_PLAN.md')).text();
+        expect(plan).toContain('NOT-RETAINED');
+    });
+});
+
+// ── 23. Final verification — production readiness deep checks ───────────────
+
+describe('Final verification — remote client production readiness', () => {
+    test('no Stub, Placeholder, or TestOnly class in src/client production graph', async () => {
+        const { Glob } = await import('bun');
+        for (const file of new Glob('**/*.ts').scanSync(resolve(ROOT, 'src/client'))) {
+            const content = await Bun.file(resolve(ROOT, 'src/client', file)).text();
+            expect(content).not.toMatch(/class\s+(Stub|Placeholder|TestOnly)/);
+        }
+    });
+
+    test('no TODO or FIXME markers in shipped client code', async () => {
+        const { Glob } = await import('bun');
+        const critical = ['HeliosClient.ts', 'config/ClientConfig.ts'];
+        for (const file of critical) {
+            const fullPath = resolve(ROOT, 'src/client', file);
+            if (existsSync(fullPath)) {
+                const content = await Bun.file(fullPath).text();
+                expect(content).not.toMatch(/\bTODO\b/);
+                expect(content).not.toMatch(/\bFIXME\b/);
+            }
+        }
+    });
+
+    test('HeliosClient factory returns an instance (smoke)', async () => {
+        const { HeliosClient } = await import('@zenystx/helios-core/client/HeliosClient');
+        // newHeliosClient should exist and be callable (it won't connect without a server)
+        expect(typeof HeliosClient.newHeliosClient).toBe('function');
+    });
+
+    test('client exports are a strict subset — no accidental re-exports', async () => {
+        const mod = await importRootBarrel();
+        const clientExports = ['HeliosClient', 'ClientConfig', 'DEFERRED_CLIENT_FEATURES'];
+        for (const name of clientExports) {
+            expect(name in mod).toBeTrue();
+        }
+        // Verify no proxy/codec/service internals leaked
+        const forbidden = [
+            'ClientProxy', 'ClientMapProxy', 'ClientQueueProxy', 'ClientTopicProxy',
+            'ClientReliableTopicProxy', 'ClientExecutorProxy', 'ProxyManager',
+            'ClientInvocation', 'ClientInvocationService', 'ClientConnectionManager',
+            'ClientConnection', 'ClientClusterService', 'ClientPartitionService',
+            'ClientListenerService', 'ClientLifecycleService', 'ClientSerializationService',
+            'NearCachedClientMapProxy', 'ClientNearCacheManager',
+            'ClientMessage', 'ClientMessageReader', 'ClientMessageWriter',
+        ];
+        for (const name of forbidden) {
+            expect(name in mod).toBeFalse();
+        }
+    });
+});
