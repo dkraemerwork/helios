@@ -16,7 +16,6 @@ import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
-import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
 import { ClientLifecycleService } from "@zenystx/helios-core/client/impl/lifecycle/ClientLifecycleService";
 import { createClientSerializationService } from "@zenystx/helios-core/client/impl/serialization/ClientSerializationService";
@@ -30,8 +29,6 @@ import type { Member } from "@zenystx/helios-core/cluster/Member";
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
 const TOPIC_SERVICE = "hz:impl:topicService";
-const RELIABLE_TOPIC_SERVICE = "hz:impl:reliableTopicService";
-const EXECUTOR_SERVICE = "hz:impl:executorService";
 
 /**
  * Advanced client features that are explicitly deferred.
@@ -43,6 +40,7 @@ export const DEFERRED_CLIENT_FEATURES: readonly string[] = Object.freeze([
     'transactions',
     'sql',
     'reliable-topic-client',
+    'executor',
     'pn-counter',
     'flake-id-generator',
     'scheduled-executor',
@@ -155,11 +153,6 @@ export class HeliosClient implements HeliosInstance {
         return this._proxyManager.getOrCreateProxy(TOPIC_SERVICE, name) as unknown as ITopic<E>;
     }
 
-    getReliableTopic<E>(name: string): ITopic<E> {
-        this._ensureActive();
-        return this._proxyManager.getOrCreateProxy(RELIABLE_TOPIC_SERVICE, name) as unknown as ITopic<E>;
-    }
-
     getDistributedObject(serviceName: string, name: string): DistributedObject {
         this._ensureActive();
         return this._proxyManager.getOrCreateProxy(serviceName, name);
@@ -181,11 +174,6 @@ export class HeliosClient implements HeliosInstance {
                 return members[0].toMember();
             },
         };
-    }
-
-    getExecutorService(name: string): IExecutorService {
-        this._ensureActive();
-        return this._proxyManager.getOrCreateProxy(EXECUTOR_SERVICE, name) as unknown as IExecutorService;
     }
 
     // ── Internal ────────────────────────────────────────────────────────────

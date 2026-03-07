@@ -338,25 +338,6 @@ describe("ClientTopicProxy", () => {
         expect(topic.removeMessageListener("nonexistent")).toBe(false);
         client.shutdown();
     });
-
-    test("ClientReliableTopicProxy.addMessageListener does not throw", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-        const client = new HeliosClient();
-        const rt = client.getReliableTopic("rt-listener-test") as any;
-        const regId = rt.addMessageListener(() => {});
-        expect(typeof regId).toBe("string");
-        client.shutdown();
-    });
-
-    test("ClientReliableTopicProxy.removeMessageListener does not throw", async () => {
-        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
-        const client = new HeliosClient();
-        const rt = client.getReliableTopic("rt-listener-remove-test") as any;
-        const regId = rt.addMessageListener(() => {});
-        expect(rt.removeMessageListener(regId)).toBe(true);
-        expect(rt.removeMessageListener("nonexistent")).toBe(false);
-        client.shutdown();
-    });
 });
 
 // ── 8. HeliosClient proxy integration ──────────────────────────────────────────
@@ -423,20 +404,17 @@ describe("HeliosClient proxy integration", () => {
 // ── 9. Additional proxies (executor, reliable-topic) ───────────────────────────
 
 describe("Additional remote proxies", () => {
-    test("HeliosClient.getReliableTopic() returns a proxy, not a throw-stub", async () => {
+    test("HeliosClient no longer has getReliableTopic() (narrowed out in Block 20.7)", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
         const client = new HeliosClient();
-        const rt = client.getReliableTopic("test-rt");
-        expect(rt).toBeDefined();
-        expect(typeof rt.publish).toBe("function");
+        expect("getReliableTopic" in client).toBe(false);
         client.shutdown();
     });
 
-    test("HeliosClient.getExecutorService() returns a proxy, not a throw-stub", async () => {
+    test("HeliosClient no longer has getExecutorService() (narrowed out in Block 20.7)", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
         const client = new HeliosClient();
-        const exec = client.getExecutorService("test-exec");
-        expect(exec).toBeDefined();
+        expect("getExecutorService" in client).toBe(false);
         client.shutdown();
     });
 });
@@ -465,11 +443,10 @@ describe("Verification: proxy lifecycle end-to-end", () => {
         const client = new HeliosClient();
 
         // Every proxy type is reachable from the public HeliosClient API
+        // (getReliableTopic and getExecutorService were narrowed out in Block 20.7)
         const map = client.getMap("verify-map") as any;
         const queue = client.getQueue("verify-queue") as any;
         const topic = client.getTopic("verify-topic") as any;
-        const reliableTopic = client.getReliableTopic("verify-rt") as any;
-        const exec = client.getExecutorService("verify-exec") as any;
 
         expect(map.getName()).toBe("verify-map");
         expect(map.getServiceName()).toBe("hz:impl:mapService");
@@ -477,10 +454,6 @@ describe("Verification: proxy lifecycle end-to-end", () => {
         expect(queue.getServiceName()).toBe("hz:impl:queueService");
         expect(topic.getName()).toBe("verify-topic");
         expect(topic.getServiceName()).toBe("hz:impl:topicService");
-        expect(reliableTopic.getName()).toBe("verify-rt");
-        expect(reliableTopic.getServiceName()).toBe("hz:impl:reliableTopicService");
-        expect(exec.getName()).toBe("verify-exec");
-        expect(exec.getServiceName()).toBe("hz:impl:executorService");
 
         client.shutdown();
     });
@@ -543,18 +516,15 @@ describe("Verification: proxy lifecycle end-to-end", () => {
         expect(objects[0].getName()).toBe("live-queue");
     });
 
-    test("no deferred listener throws on any topic proxy", async () => {
+    test("no deferred listener throws on topic proxy", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
         const client = new HeliosClient();
 
         const topic = client.getTopic("no-throw-verify") as any;
-        const rt = client.getReliableTopic("no-throw-verify") as any;
 
         // These must NOT throw "deferred to Block 20.7"
         expect(() => topic.addMessageListener(() => {})).not.toThrow();
         expect(() => topic.removeMessageListener("x")).not.toThrow();
-        expect(() => rt.addMessageListener(() => {})).not.toThrow();
-        expect(() => rt.removeMessageListener("x")).not.toThrow();
 
         client.shutdown();
     });
@@ -569,10 +539,6 @@ describe("Verification: proxy lifecycle end-to-end", () => {
         expect(client.getQueue("s")).toBe(client.getQueue("s"));
         // Topic
         expect(client.getTopic("s")).toBe(client.getTopic("s"));
-        // Reliable topic
-        expect(client.getReliableTopic("s")).toBe(client.getReliableTopic("s"));
-        // Executor
-        expect(client.getExecutorService("s")).toBe(client.getExecutorService("s"));
         // getDistributedObject
         expect(client.getDistributedObject("hz:impl:mapService", "s"))
             .toBe(client.getDistributedObject("hz:impl:mapService", "s"));

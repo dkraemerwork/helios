@@ -4,7 +4,6 @@ import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
-import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 
 /**
@@ -30,9 +29,6 @@ export interface HeliosInstance {
   /** Returns the distributed topic with the given name. */
   getTopic<E>(name: string): ITopic<E>;
 
-  /** Returns the reliable topic with the given name. */
-  getReliableTopic<E>(name: string): ITopic<E>;
-
   /**
    * Returns a distributed object by service name and object name.
    * @throws Error if the service name is not recognised.
@@ -47,9 +43,6 @@ export interface HeliosInstance {
 
   /** Returns the configuration for this instance. */
   getConfig(): InstanceConfig;
-
-  /** Returns the distributed executor service with the given name. */
-  getExecutorService(name: string): IExecutorService;
 
   /** Shuts down this instance. */
   shutdown(): void;

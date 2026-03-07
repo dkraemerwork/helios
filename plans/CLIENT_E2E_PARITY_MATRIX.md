@@ -27,18 +27,18 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | `getMap()` | `src/client/proxy/ClientMapProxy.ts` | `ClientMapProxy` | planned (Block 20.6) | member-side binary protocol map ops, listeners, destroy, metadata fetch | map e2e suite |
 | `getQueue()` | `src/client/proxy/ClientQueueProxy.ts` | `ClientQueueProxy` | planned (Block 20.6) | queue protocol ops, event/listener path, reconnect-safe semantics | queue e2e suite |
 | `getTopic()` | `src/client/proxy/ClientTopicProxy.ts` | `ClientTopicProxy` | planned (Block 20.6) | topic publish/listener protocol and reconnect re-registration | topic e2e suite |
-| `getReliableTopic()` | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | blocked-by-server | Phase 19T checkpoint must be green in `plans/TYPESCRIPT_PORT_PLAN.md`; landing the ringbuffer-backed runtime alone is not sufficient | reliable-topic e2e suite |
 | `getDistributedObject()` | `src/client/impl/spi/ProxyManager.ts` | `ProxyManager` | planned (Block 20.6) | distributed-object create/list/destroy tasks and stable service-name mapping | proxy-manager e2e suite |
 | `getLifecycleService()` | `src/client/impl/lifecycle/ClientLifecycleService.ts` | `LifecycleServiceImpl` | implemented | — | lifecycle e2e suite |
 | `getCluster()` | `src/client/impl/spi/ClientClusterService.ts` | `ClientClusterServiceImpl` | planned (Block 20.6) | member-list fetch, cluster-view refresh, listener delivery | cluster-view e2e suite |
 | `getConfig()` | `src/client/config/ClientConfig.ts` | `ClientConfig` | implemented | `InstanceConfig` shared contract resolves type mismatch | contract review suite |
-| `getExecutorService()` | `src/client/proxy/ClientExecutorServiceProxy.ts` | `ClientExecutorServiceProxy` | planned (Block 20.6) | server runtime exists, remote proxy needed | executor e2e suite |
 | `shutdown()` | `src/client/HeliosClient.ts` | `HazelcastClient.shutdown()` | implemented | — | shutdown e2e suite |
 
 ### Narrowed-out methods (member-only on `HeliosInstanceImpl`)
 
 | Method | Reason for narrowing | Member-side status |
 | --- | --- | --- |
+| `getReliableTopic()` | NOT-RETAINED — no server-side reliable-topic protocol handler; client proxy had fake listener codec | works on member, not part of shared contract |
+| `getExecutorService()` | NOT-RETAINED — no server-side executor protocol handler; client proxy was empty stub | works on member, not part of shared contract |
 | `getList()` | Local-only `ListImpl`, no distributed `ListService` | works on member, not part of shared contract |
 | `getSet()` | Local-only `SetImpl`, no distributed `SetService` | works on member, not part of shared contract |
 | `getMultiMap()` | Local-only `MultiMapImpl`, no distributed `MultiMapService` | works on member, not part of shared contract |
@@ -122,7 +122,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | `src/client/HeliosClient.ts` | keep | client entrypoint | public client product surface |
 | `src/client/config/ClientConfig.ts` | rewrite | config root | currently too narrow |
 | `src/client/impl/nearcache/ClientNearCacheManager.ts` | keep | near-cache | client-side near-cache lifecycle manager |
-| `src/client/proxy/ClientExecutorProxy.ts` | keep | proxy | executor service proxy |
+| `src/client/proxy/ClientExecutorProxy.ts` | NOT-RETAINED | — | No server-side executor protocol handler; proxy was empty stub; narrowed out of `HeliosInstance` shared contract in Block 20.7 |
 | `src/client/map/impl/nearcache/NearCachedClientMapProxy.ts` | rewrite | near-cache on top of remote map proxy | currently in-process backing-store shaped |
 | `src/client/cache/impl/nearcache/NearCachedClientCacheProxy.ts` | rewrite | near-cache on top of remote cache proxy | currently in-process backing-store shaped |
 | `src/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher.ts` | rewrite | near-cache metadata fetch path | must call binary protocol, not in-process objects |
@@ -152,7 +152,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | Transactions | `src/client/proxy/txn/**/*` | transaction proxies | blocked-by-server | cluster-safe transaction semantics |
 | JCache client | `src/client/cache/**/*` | client cache manager/proxy | blocked-by-server | server cache capability audit and protocol support |
 | SQL client | `src/client/sql/**/*` | `SqlClientService` | blocked-by-server | SQL runtime not releaseable today |
-| Reliable topic client | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | blocked-by-server | Phase 19T checkpoint must be green in `plans/TYPESCRIPT_PORT_PLAN.md`; code landing alone does not make the client surface ready |
+| Reliable topic client | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | NOT-RETAINED | No server-side reliable-topic protocol handler; client proxy had fake listener codec; narrowed out of `HeliosInstance` shared contract in Block 20.7 |
 | PN counter client | `src/client/proxy/ClientPNCounterProxy.ts` | `ClientPNCounterProxy` | blocked-by-server | server runtime absent |
 | Flake ID client | `src/client/proxy/ClientFlakeIdGeneratorProxy.ts` | `ClientFlakeIdGeneratorProxy` | blocked-by-server | server runtime absent |
 | Scheduled executor client | `src/client/proxy/ClientScheduledExecutorProxy.ts` | scheduled executor proxy | blocked-by-server | server runtime absent |
@@ -174,7 +174,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 ## 7. Block 20.5 Decisions And Remaining Red Flags
 
 - ~~`HeliosInstance.getConfig()` type mismatch~~ — resolved: `HeliosInstance.getConfig()` now returns `InstanceConfig`, a shared interface satisfied by both `HeliosConfig` and `ClientConfig`.
-- `getReliableTopic()` client readiness remains blocked until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`; landing the real ringbuffer-backed runtime does not clear the dependency by itself.
+- ~~`getReliableTopic()` client readiness remains blocked~~ — resolved: `getReliableTopic()` and `getExecutorService()` have been marked NOT-RETAINED on the client and narrowed out of the shared `HeliosInstance` contract in Block 20.7. They remain available as member-only methods on `HeliosInstanceImpl`.
 - ~~`getList()`, `getSet()`, `getMultiMap()`, `getReplicatedMap()` local-only~~ — resolved: these methods have been narrowed out of the shared `HeliosInstance` contract and remain member-only on `HeliosInstanceImpl`.
 - ~~`getDistributedObject()` partial coverage~~ — resolved: expanded to cover reliable topic and executor service names alongside map, queue, and topic.
 - `package.json` wildcard exports still make unfinished internal client code accidentally package-public today (to be resolved in Block 20.8).

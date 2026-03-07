@@ -158,11 +158,11 @@ describe('Client acceptance — Cluster', () => {
 // ── Executor acceptance ─────────────────────────────────────────────────────
 
 describe('Client acceptance — Executor', () => {
-    test('HeliosClient.getExecutorService is available', async () => {
+    test('HeliosClient.getExecutorService was narrowed out in Block 20.7', async () => {
         const { HeliosClient } = await import(
             '@zenystx/helios-core/client/HeliosClient'
         );
-        expect(typeof HeliosClient.prototype.getExecutorService).toBe('function');
+        expect("getExecutorService" in HeliosClient.prototype).toBe(false);
     });
 });
 

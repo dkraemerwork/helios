@@ -11,7 +11,8 @@
  * 7. Destroy/shutdown cleanup for near-cache resources
  * 8. Advanced client surfaces are explicitly deferred (not hidden stubs)
  * 9. Package exports align with actually wired features
- * 10. Verification: no hidden mini-runtimes or fake parity
+ * 10. Reliable-topic and executor client decision: NOT-RETAINED
+ * 11. Verification — no hidden mini-runtimes, deferred throws, or fake parity
  */
 import { describe, test, expect } from 'bun:test';
 
@@ -25,7 +26,6 @@ describe('NearCachedClientMapProxy — real remote proxy backing', () => {
         const { ClientMapProxy } = await import(
             '@zenystx/helios-core/client/proxy/ClientMapProxy'
         );
-        // NearCachedClientMapProxy must extend ClientMapProxy (not use a sync backing store)
         expect(NearCachedClientMapProxy.prototype instanceof ClientMapProxy).toBeTrue();
     });
 
@@ -33,10 +33,8 @@ describe('NearCachedClientMapProxy — real remote proxy backing', () => {
         const { NearCachedClientMapProxy } = await import(
             '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy'
         );
-        // get must be async — its return type must be Promise
         const proto = NearCachedClientMapProxy.prototype;
         expect(typeof proto.get).toBe('function');
-        // The class must not export ClientMapBackingStore anymore
         const mod = await import(
             '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy'
         );
@@ -47,17 +45,14 @@ describe('NearCachedClientMapProxy — real remote proxy backing', () => {
         const { NearCachedClientMapProxy } = await import(
             '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy'
         );
-        // Must have an invalidation-on-write path that calls super.put() then nearCache.invalidate()
-        const proto = NearCachedClientMapProxy.prototype;
-        expect(typeof proto.put).toBe('function');
+        expect(typeof NearCachedClientMapProxy.prototype.put).toBe('function');
     });
 
     test('remove() writes through ClientMapProxy then invalidates near cache', async () => {
         const { NearCachedClientMapProxy } = await import(
             '@zenystx/helios-core/client/map/impl/nearcache/NearCachedClientMapProxy'
         );
-        const proto = NearCachedClientMapProxy.prototype;
-        expect(typeof proto.remove).toBe('function');
+        expect(typeof NearCachedClientMapProxy.prototype.remove).toBe('function');
     });
 
     test('set/delete/clear operations also invalidate near cache', async () => {
@@ -103,7 +98,6 @@ describe('ClientMapInvalidationMetaDataFetcher — binary protocol', () => {
         const { ClientMapInvalidationMetaDataFetcher } = await import(
             '@zenystx/helios-core/client/map/impl/nearcache/invalidation/ClientMapInvalidationMetaDataFetcher'
         );
-        // The fetcher must accept an invocation service, not a MetaDataGenerator
         const proto = ClientMapInvalidationMetaDataFetcher.prototype;
         expect(typeof proto.fetchMemberResponse).toBe('function');
     });
@@ -132,8 +126,7 @@ describe('Near-cache reconnect re-registration', () => {
         const { ClientNearCacheManager } = await import(
             '@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager'
         );
-        const proto = ClientNearCacheManager.prototype;
-        expect(typeof proto.reregisterInvalidationListeners).toBe('function');
+        expect(typeof ClientNearCacheManager.prototype.reregisterInvalidationListeners).toBe('function');
     });
 
     test('ProxyManager wires near-cache manager for map proxies with near-cache config', async () => {
@@ -151,8 +144,7 @@ describe('Client near-cache stale-read detection', () => {
         const { ClientNearCacheManager } = await import(
             '@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager'
         );
-        const proto = ClientNearCacheManager.prototype;
-        expect(typeof proto.getRepairingTask).toBe('function');
+        expect(typeof ClientNearCacheManager.prototype.getRepairingTask).toBe('function');
     });
 });
 
@@ -177,9 +169,7 @@ describe('Near-cache destroy/shutdown cleanup', () => {
         const { HeliosClient } = await import(
             '@zenystx/helios-core/client/HeliosClient'
         );
-        // The HeliosClient must have near-cache manager cleanup on shutdown
         const client = new HeliosClient();
-        // Should not throw
         client.shutdown();
     });
 
@@ -229,21 +219,36 @@ describe('Advanced client surfaces — explicit deferral', () => {
         expect('getFlakeIdGenerator' in HeliosClient.prototype).toBeFalse();
     });
 
-    test('DEFERRED_CLIENT_FEATURES constant lists all deferred services', async () => {
+    test('DEFERRED_CLIENT_FEATURES lists all deferred services including executor and reliable-topic', async () => {
         const { DEFERRED_CLIENT_FEATURES } = await import(
             '@zenystx/helios-core/client/HeliosClient'
         );
         expect(Array.isArray(DEFERRED_CLIENT_FEATURES)).toBeTrue();
-        expect(DEFERRED_CLIENT_FEATURES.length).toBeGreaterThan(0);
         expect(DEFERRED_CLIENT_FEATURES).toContain('cache');
         expect(DEFERRED_CLIENT_FEATURES).toContain('transactions');
         expect(DEFERRED_CLIENT_FEATURES).toContain('sql');
+        expect(DEFERRED_CLIENT_FEATURES).toContain('reliable-topic-client');
+        expect(DEFERRED_CLIENT_FEATURES).toContain('executor');
+    });
+
+    test('HeliosClient does not expose getScheduledExecutorService (deferred)', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client/HeliosClient'
+        );
+        expect('getScheduledExecutorService' in HeliosClient.prototype).toBeFalse();
+    });
+
+    test('HeliosClient does not expose getCardinalityEstimator (deferred)', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client/HeliosClient'
+        );
+        expect('getCardinalityEstimator' in HeliosClient.prototype).toBeFalse();
     });
 });
 
-// ── 9. Package exports ──────────────────────────────────────────────────────
+// ── 9. Package exports — aligned with wired features ─────────────────────────
 
-describe('Package exports — client features', () => {
+describe('Package exports — client features aligned', () => {
     test('index.ts exports HeliosClient', async () => {
         const mod = await import('@zenystx/helios-core/index');
         expect('HeliosClient' in mod).toBeTrue();
@@ -256,16 +261,84 @@ describe('Package exports — client features', () => {
 
     test('index.ts does not export deferred features as if they were wired', async () => {
         const mod = await import('@zenystx/helios-core/index');
-        // These should NOT be exported since they're deferred
         expect('ClientCacheManager' in mod).toBeFalse();
         expect('ClientTransactionContext' in mod).toBeFalse();
         expect('ClientSqlService' in mod).toBeFalse();
     });
+
+    test('index.ts exports DEFERRED_CLIENT_FEATURES for transparency', async () => {
+        const mod = await import('@zenystx/helios-core/index');
+        expect('DEFERRED_CLIENT_FEATURES' in mod).toBeTrue();
+    });
+
+    test('index.ts does not export ClientReliableTopicProxy (NOT-RETAINED)', async () => {
+        const mod = await import('@zenystx/helios-core/index');
+        expect('ClientReliableTopicProxy' in mod).toBeFalse();
+    });
+
+    test('index.ts does not export ClientExecutorProxy (NOT-RETAINED)', async () => {
+        const mod = await import('@zenystx/helios-core/index');
+        expect('ClientExecutorProxy' in mod).toBeFalse();
+    });
 });
 
-// ── 10. Verification — no hidden mini-runtimes ──────────────────────────────
+// ── 10. Reliable-topic and executor client — NOT-RETAINED decision ──────────
 
-describe('Verification — no hidden mini-runtimes or fake parity', () => {
+describe('Reliable-topic client — NOT-RETAINED', () => {
+    test('HeliosClient does not expose getReliableTopic() (NOT-RETAINED)', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client/HeliosClient'
+        );
+        expect('getReliableTopic' in HeliosClient.prototype).toBeFalse();
+    });
+
+    test('HeliosInstance interface does not include getReliableTopic()', async () => {
+        const src = await Bun.file('src/core/HeliosInstance.ts').text();
+        expect(src).not.toContain('getReliableTopic');
+    });
+
+    test('ProxyManager does not register reliableTopicService factory', async () => {
+        const src = await Bun.file('src/client/proxy/ProxyManager.ts').text();
+        expect(src).not.toContain('reliableTopicService');
+    });
+
+    test('DEFERRED_CLIENT_FEATURES includes reliable-topic-client', async () => {
+        const { DEFERRED_CLIENT_FEATURES } = await import(
+            '@zenystx/helios-core/client/HeliosClient'
+        );
+        expect(DEFERRED_CLIENT_FEATURES).toContain('reliable-topic-client');
+    });
+});
+
+describe('Executor client — NOT-RETAINED', () => {
+    test('HeliosClient does not expose getExecutorService() (NOT-RETAINED)', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client/HeliosClient'
+        );
+        expect('getExecutorService' in HeliosClient.prototype).toBeFalse();
+    });
+
+    test('HeliosInstance interface does not include getExecutorService()', async () => {
+        const src = await Bun.file('src/core/HeliosInstance.ts').text();
+        expect(src).not.toContain('getExecutorService');
+    });
+
+    test('ProxyManager does not register executorService factory', async () => {
+        const src = await Bun.file('src/client/proxy/ProxyManager.ts').text();
+        expect(src).not.toContain('executorService');
+    });
+
+    test('DEFERRED_CLIENT_FEATURES includes executor', async () => {
+        const { DEFERRED_CLIENT_FEATURES } = await import(
+            '@zenystx/helios-core/client/HeliosClient'
+        );
+        expect(DEFERRED_CLIENT_FEATURES).toContain('executor');
+    });
+});
+
+// ── 11. Verification — no hidden mini-runtimes, deferred throws, or fake parity ────
+
+describe('Verification — no hidden mini-runtimes, deferred throws, or fake parity', () => {
     test('NearCachedClientMapProxy source has no synchronous ClientMapBackingStore', async () => {
         const src = await Bun.file(
             'src/client/map/impl/nearcache/NearCachedClientMapProxy.ts',
@@ -278,5 +351,30 @@ describe('Verification — no hidden mini-runtimes or fake parity', () => {
             'src/client/cache/impl/nearcache/NearCachedClientCacheProxy.ts',
         ).text();
         expect(src).not.toContain('ClientCacheBackingStore');
+    });
+
+    test('HeliosClient source has no deferred throw stubs on exported methods', async () => {
+        const src = await Bun.file('src/client/HeliosClient.ts').text();
+        expect(src).not.toMatch(/throw new Error\(.*(?:not supported|deferred|not implemented)/i);
+    });
+
+    test('client-example.ts does not reference reliable-topic or executor', async () => {
+        const src = await Bun.file('examples/native-app/src/client-example.ts').text();
+        expect(src).not.toContain('getReliableTopic');
+        expect(src).not.toContain('getExecutorService');
+    });
+
+    test('HeliosInstanceImpl still exposes getReliableTopic and getExecutorService as member-only', async () => {
+        const { HeliosInstanceImpl } = await import(
+            '@zenystx/helios-core/instance/impl/HeliosInstanceImpl'
+        );
+        expect(typeof HeliosInstanceImpl.prototype.getReliableTopic).toBe('function');
+        expect(typeof HeliosInstanceImpl.prototype.getExecutorService).toBe('function');
+    });
+
+    test('parity matrix marks reliable-topic and executor as NOT-RETAINED for client', async () => {
+        const src = await Bun.file('plans/CLIENT_E2E_PARITY_MATRIX.md').text();
+        expect(src).toMatch(/getReliableTopic.*NOT-RETAINED/i);
+        expect(src).toMatch(/getExecutorService.*NOT-RETAINED/i);
     });
 });

@@ -15,16 +15,12 @@ import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 import { ClientMapProxy } from "@zenystx/helios-core/client/proxy/ClientMapProxy";
 import { ClientQueueProxy } from "@zenystx/helios-core/client/proxy/ClientQueueProxy";
 import { ClientTopicProxy } from "@zenystx/helios-core/client/proxy/ClientTopicProxy";
-import { ClientReliableTopicProxy } from "@zenystx/helios-core/client/proxy/ClientReliableTopicProxy";
-import { ClientExecutorProxy } from "@zenystx/helios-core/client/proxy/ClientExecutorProxy";
 import type { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
 import { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
 
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
 const TOPIC_SERVICE = "hz:impl:topicService";
-const RELIABLE_TOPIC_SERVICE = "hz:impl:reliableTopicService";
-const EXECUTOR_SERVICE = "hz:impl:executorService";
 
 type ProxyFactory = (name: string) => ClientProxy;
 
@@ -110,10 +106,5 @@ export class ProxyManager {
         this._factories.set(TOPIC_SERVICE, (name) =>
             new ClientTopicProxy(name, TOPIC_SERVICE, this._serializationService, this._invocationService, this._partitionService));
 
-        this._factories.set(RELIABLE_TOPIC_SERVICE, (name) =>
-            new ClientReliableTopicProxy(name, RELIABLE_TOPIC_SERVICE, this._serializationService, this._invocationService, this._partitionService));
-
-        this._factories.set(EXECUTOR_SERVICE, (name) =>
-            new ClientExecutorProxy(name, EXECUTOR_SERVICE, this._serializationService, this._invocationService, this._partitionService));
     }
 }

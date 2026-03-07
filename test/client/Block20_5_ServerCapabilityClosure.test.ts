@@ -57,16 +57,16 @@ describe("HeliosInstance contract narrowing", () => {
         expect(typeof client.getTopic).toBe("function");
     });
 
-    test("HeliosInstance retains getReliableTopic()", async () => {
+    test("HeliosInstance does NOT include getReliableTopic()", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
         const client = new HeliosClient();
-        expect(typeof client.getReliableTopic).toBe("function");
+        expect("getReliableTopic" in client).toBe(false);
     });
 
-    test("HeliosInstance retains getExecutorService()", async () => {
+    test("HeliosInstance does NOT include getExecutorService()", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
         const client = new HeliosClient();
-        expect(typeof client.getExecutorService).toBe("function");
+        expect("getExecutorService" in client).toBe(false);
     });
 
     test("HeliosInstance retains getDistributedObject()", async () => {
@@ -132,11 +132,8 @@ describe("HeliosClient has no permanent throw-stubs for retained methods", () =>
             const topic = client.getTopic("test");
             expect(topic).toBeDefined();
 
-            const rt = client.getReliableTopic("test");
-            expect(rt).toBeDefined();
-
-            const exec = client.getExecutorService("test");
-            expect(exec).toBeDefined();
+            // getReliableTopic and getExecutorService are no longer on HeliosClient
+            // (they were narrowed out in Block 20.7)
 
             const obj = client.getDistributedObject("hz:impl:mapService", "test");
             expect(obj).toBeDefined();
@@ -190,17 +187,17 @@ describe("Verification: retained HeliosInstance methods have owners", () => {
         const client = new HeliosClient();
 
         const retainedMethods = [
-            "getName", "getMap", "getQueue", "getTopic", "getReliableTopic",
+            "getName", "getMap", "getQueue", "getTopic",
             "getDistributedObject", "getLifecycleService", "getCluster",
-            "getConfig", "getExecutorService", "shutdown",
+            "getConfig", "shutdown",
         ];
 
         for (const method of retainedMethods) {
             expect(typeof (client as any)[method]).toBe("function");
         }
 
-        // Narrowed methods must NOT exist
-        const narrowedMethods = ["getList", "getSet", "getMultiMap", "getReplicatedMap"];
+        // Narrowed methods must NOT exist (including getReliableTopic and getExecutorService removed in Block 20.7)
+        const narrowedMethods = ["getList", "getSet", "getMultiMap", "getReplicatedMap", "getReliableTopic", "getExecutorService"];
         for (const method of narrowedMethods) {
             expect((client as any)[method]).toBeUndefined();
         }
