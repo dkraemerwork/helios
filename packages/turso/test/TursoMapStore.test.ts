@@ -1,6 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { TursoMapStore } from '../src/TursoMapStore.js';
 
+async function collectKeys<K>(stream: AsyncIterable<K>): Promise<K[]> {
+  const keys: K[] = [];
+  for await (const k of stream) keys.push(k);
+  return keys;
+}
+
 // ---------------------------------------------------------------------------
 // Real :memory: SQLite tests — no mocks needed for most behavioral tests
 // ---------------------------------------------------------------------------
@@ -81,7 +87,7 @@ describe('TursoMapStore', () => {
       ['charlie', 3],
     ]);
     await store.storeAll(entries);
-    const keys = await store.loadAllKeys();
+    const keys = await collectKeys(await store.loadAllKeys());
     expect(keys.sort()).toEqual(['alice', 'bob', 'charlie']);
   });
 
@@ -91,7 +97,7 @@ describe('TursoMapStore', () => {
       entries.set(`key${i}`, i);
     }
     await store.storeAll(entries);
-    const keys = await store.loadAllKeys();
+    const keys = await collectKeys(await store.loadAllKeys());
     expect(keys.length).toBe(1001);
   });
 
@@ -104,7 +110,7 @@ describe('TursoMapStore', () => {
     await store.storeAll(entries);
     // Then delete all
     await store.deleteAll(Array.from(entries.keys()));
-    const keys = await store.loadAllKeys();
+    const keys = await collectKeys(await store.loadAllKeys());
     expect(keys.length).toBe(0);
   });
 

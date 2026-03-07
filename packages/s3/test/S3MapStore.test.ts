@@ -1,6 +1,12 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import { S3MapStore } from '../src/S3MapStore.js';
 
+async function collectKeys<K>(stream: AsyncIterable<K>): Promise<K[]> {
+  const keys: K[] = [];
+  for await (const k of stream) keys.push(k);
+  return keys;
+}
+
 // Minimal mock of the S3Client send() method
 function makeMockClient(responses: Record<string, unknown> = {}) {
   const calls: Array<{ command: string; input: unknown }> = [];
@@ -137,7 +143,7 @@ describe('S3MapStore', () => {
       };
     });
     const store = new S3MapStore({ bucket, prefix, suffix }, { send } as any);
-    const keys = await store.loadAllKeys();
+    const keys = await collectKeys(await store.loadAllKeys());
 
     expect(keys.sort()).toEqual(['alice', 'bob', 'charlie']);
   });

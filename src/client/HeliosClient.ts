@@ -24,6 +24,8 @@ import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/ser
 import { ProxyManager } from "@zenystx/helios-core/client/proxy/ProxyManager";
 import { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
 import { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
+import { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
+import type { Member } from "@zenystx/helios-core/cluster/Member";
 
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
@@ -65,6 +67,7 @@ export class HeliosClient implements HeliosInstance {
     private readonly _partitionService: ClientPartitionService;
     private readonly _proxyManager: ProxyManager;
     private readonly _nearCacheManager: ClientNearCacheManager;
+    private readonly _clusterService: ClientClusterService;
 
     constructor(config?: ClientConfig) {
         this._config = config ?? new ClientConfig();
@@ -73,6 +76,7 @@ export class HeliosClient implements HeliosInstance {
         this._serializationService = createClientSerializationService(this._config);
         this._partitionService = new ClientPartitionService();
         this._nearCacheManager = new ClientNearCacheManager(this._serializationService);
+        this._clusterService = new ClientClusterService();
         this._proxyManager = new ProxyManager(
             this._serializationService,
             this._partitionService,
@@ -163,7 +167,20 @@ export class HeliosClient implements HeliosInstance {
 
     getCluster(): Cluster {
         this._ensureActive();
-        throw new Error("HeliosClient.getCluster() is not yet implemented — awaiting cluster service wiring");
+        const svc = this._clusterService;
+        return {
+            getMembers(): Member[] {
+                return svc.getMemberList().map((mi) => mi.toMember());
+            },
+            getLocalMember(): Member {
+                const members = svc.getMemberList();
+                if (members.length === 0) {
+                    throw new Error("Client is not connected to any cluster member");
+                }
+                // Client has no true "local" member — return first member as convention
+                return members[0].toMember();
+            },
+        };
     }
 
     getExecutorService(name: string): IExecutorService {

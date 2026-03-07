@@ -141,8 +141,9 @@ describe("HeliosClient has no permanent throw-stubs for retained methods", () =>
             const obj = client.getDistributedObject("hz:impl:mapService", "test");
             expect(obj).toBeDefined();
 
-            // getCluster is still deferred — awaiting cluster service wiring
-            expect(() => client.getCluster()).toThrow("not yet implemented");
+            const cluster = client.getCluster();
+            expect(cluster).toBeDefined();
+            expect(cluster.getMembers()).toEqual([]);
         } finally {
             client.shutdown();
         }

@@ -124,6 +124,13 @@ export { SimpleTokenCredentials } from "@zenystx/helios-core/security/SimpleToke
 // ── Near-cache ────────────────────────────────────────────────────────────────
 export type { NearCacheStats } from "@zenystx/helios-core/nearcache/NearCacheStats";
 
+// ── Query / Predicates ───────────────────────────────────────────────────────
+export { Predicates } from "@zenystx/helios-core/query/Predicates";
+
+// ── REST API ─────────────────────────────────────────────────────────────────
+export { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
+export { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
+
 // ── Discovery ────────────────────────────────────────────────────────────────
 export { createDiscoveryResolver } from "@zenystx/helios-core/discovery/HeliosDiscovery";
 

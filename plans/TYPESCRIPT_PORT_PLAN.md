@@ -521,24 +521,104 @@ Tasks:
 - [x] Run a final verification task that proves clustered MapStore is production ready, end to end, and
   free of hidden broadcast-replay or duplicate-write behavior.
 
+### Block 21.5 — Final execution-contract audit + repo honesty gate
+
+Goal: force the loop to finish every remaining real implementation gap, reopen any falsely green
+work, and forbid any done claim until code, tests, docs, examples, test-support, exports, and plans
+all match the shipped TypeScript reality.
+
+Tasks:
+
+- [x] Audit Phases 17R-21 end to end across code, tests, docs, examples, test-support, exports,
+  config/bootstrap wiring, and authoritative plans; if any claimed behavior, proof, export, config
+  path, lifecycle path, or parity statement is missing, partial, stale, contradicted, or
+  implemented differently than claimed, immediately reopen every affected earlier block and phase
+  checkpoint in this file and in any linked authoritative detail plan before doing more closure work.
+- [x] Remove or fully implement every retained throw stub, placeholder, fake fallback, deferred
+  marker, temporary narrowing note, `TODO`/`FIXME`/`later`/`not yet` shipping path, and every
+  public or test-support surface that still depends on one of those markers for Phases 17R-21
+  claimed behavior.
+- [x] Forbid stale docs/examples/test-support/README/export/config claims: every retained claim for
+  executor, Blitz, Mongo MapStore, topic/reliable-topic, remote client, partition recovery, and
+  clustered MapStore must match the exact live runtime path and exact retained scope; blocked,
+  deferred, or unsupported surfaces must be removed, narrowed honestly, or completed rather than
+  left half-retained.
+- [x] Reject fake proof and fake closure: any proof that relies on shared-process clustering, direct
+  service calls, in-memory transport shims, mock ownership, fake remote execution, or final-state-only
+  assertions where this plan requires physical-call provenance or process-boundary proof is invalid
+  and must reopen the affected block/checkpoint until replaced with the required real proof.
+- [x] Resolve every contradictory status across this file,
+  `plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`, `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md`,
+  `plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`, `plans/CLIENT_E2E_PARITY_PLAN.md`,
+  `plans/CLIENT_E2E_EXECUTION_BACKLOG.md`, `plans/CLIENT_E2E_PARITY_MATRIX.md`,
+  `plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`, `plans/PARTITION_BACKUP_E2E_CLOSURE_PLAN.md`,
+  and `plans/CLUSTER_SAFE_MAPSTORE_PLAN.md`; no block, checkpoint, appendix, matrix, or backlog may
+  claim complete/retained/deferred status that conflicts with repo reality or with another canonical
+  plan.
+- [x] Rerun fresh same-branch proof after the last change to code, tests, docs, `README.md`,
+  examples, test-support, exports, `package.json`, config/bootstrap wiring, or authoritative plans
+  for the remaining phases. Final closure is invalid if it relies on historical proof, partial
+  reruns, or "covered by previous run" wording.
+- [x] Rerun and report at minimum these commands, all green, on the final tree:
+  `bun run typecheck`; `bun test`; `bun test packages/blitz/`;
+  `bun run test:mapstore:mongodb:unit`; `bun run test:mapstore:mongodb:core`;
+  `bun run test:mapstore:mongodb:offload`; `bun run test:mapstore:mongodb:cluster`;
+  `bun run test:mapstore:mongodb:e2e`;
+  `bun run test:mapstore:mongodb:wiring:implementation`;
+  `bun run test:mapstore:mongodb:wiring:factory-implementation`;
+  `bun run test:mapstore:mongodb:wiring:registry`;
+  `bun run test:mapstore:mongodb:wiring:dynamic-programmatic`;
+  `bun run test:mapstore:mongodb:wiring:dynamic-json`;
+  `bun run test:mapstore:mongodb:wiring:dynamic-yaml`;
+  `bun run test:mapstore:mongodb:wiring:config-origin-relative`;
+  `bun run test:mapstore:mongodb:wiring:dynamic-package`.
+- [x] Rerun and print every existing phase-specific proof-label contract verbatim, including the
+  exact `P20-*` label contract from `plans/CLIENT_E2E_PARITY_PLAN.md`; omitted labels,
+  paraphrased labels, or substitute labels do not count.
+- [x] Rerun and report these exact repo-wide honesty audits on the final tree, review every hit, and
+  classify each one as exactly one of `ALLOWED-RETAINED-LABEL`, `TEST-ONLY`, `DOC-HISTORICAL`, or
+  `FAIL`:
+  `rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!.git/**' --glob '!plans/**' "(not yet implemented|deferred|blocked-by-server)" .`
+  `rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!.git/**' --glob '!plans/**' "(stub|placeholder|TODO|FIXME|throw new Error\(|throw new UnsupportedOperation|NYI|not implemented)" src packages examples test README.md .`
+- [x] Verify package-export honesty and surface honesty together: `package.json` exports, root
+  barrels, public entrypoints, docs, examples, fixtures, and test-support must expose only
+  supported finished surfaces, and every intentionally unsupported or narrowed surface must be
+  labeled honestly everywhere it still survives.
+- [x] In the end, run an independent final verification with a fresh general-task agent that reviews
+  code, tests, docs, examples, test-support, exports, plans, and final proof outputs. If that
+  verification finds any gap, contradiction, stale claim, fake proof, or unresolved marker, reopen
+  the affected earlier block/checkpoint and continue the loop until the verifier returns clean.
+- [x] Emit the final closure footer exactly in this order, on separate lines, with no substitutions:
+  `PHASE-17R-FINAL: PASS`
+  `PHASE-18-FINAL: PASS`
+  `PHASE-19-FINAL: PASS`
+  `PHASE-19T-FINAL: PASS`
+  `PHASE-20-FINAL: PASS`
+  `PHASE-21-FINAL: PASS`
+  `REPO-HONESTY-SWEEP: PASS`
+  `INDEPENDENT-FINAL-VERIFICATION: PASS`
+  `TYPESCRIPT-PORT-DONE: PASS`
+
 ### Master Todo List
 
 > Canonical loop-selection source: only the `- [ ] **Block ...` lines in this file.
+> `Block 21.5` is mandatory and may reopen any earlier block or checkpoint if the final audit finds
+> plan-vs-code, plan-vs-proof, or plan-vs-docs mismatch.
 
 - [x] **Block 17R.1** — Executor Scatter production closure (`plans/EXECUTOR_SCATTER_PRODUCTION_PLAN.md`, real member-local executor registry/container ownership, no distributed direct-factory fallback, Scatter-backed off-main-thread execution, module-backed worker-materializable registration only, `scatter` as the only production backend with `inline` restricted to explicit test/dev bootstrap flows, deterministic cancel/shutdown/task-lost/member-loss semantics, fail-closed backend health, recycle-on-crash-or-timeout behavior, docs/examples/config/test-support honesty) — ~24 tests
-- [ ] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution, production validation rejects `inline` unless an explicit testing override is set, and a proof test shows production-mode startup with `inline` fails fast; 0 fail, 0 error
+- [x] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution, production validation rejects `inline` unless an explicit testing override is set, and a proof test shows production-mode startup with `inline` fails fast; 0 fail, 0 error
 - [x] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
 - [x] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, `(masterMemberId, memberListVersion, fenceToken)` authority fencing, explicit expected-registrant sweep rules after master change) — ~18 tests
 - [x] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, strict pre-cutover readiness fence, deterministic cleanup on member leave/shutdown, demotion-time authority cancellation) — ~18 tests
 - [x] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS, fence-aware reconciliation and bridge exposure) — ~16 tests
 - [x] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, pre-cutover fail-closed readiness, current-master handoff, stale old-master rejection, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
-- [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, pre-cutover readiness fence, demotion-time cancellation, authority-tuple validation, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error
+- [x] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, pre-cutover readiness fence, demotion-time cancellation, authority-tuple validation, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error
 - [x] **Block 19.1** — MongoDB MapStore parity/scope freeze + core runtime closure (`plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` binding, document-only scope freeze, `shutdownAsync()` flush await, realistic EAGER timing, `MapKeyStream<K>` closure, bulk/clear/loadAllKeys legality, query/index rebuild, JSON/YAML config-origin wiring) — ~18 tests
 - [x] **Block 19.2** — Mongo config/property resolution + document mapping + lifecycle hardening (`MapStoreConfig.properties` resolution, document-only mode, `id-column`, `columns`, `single-column-as-value`, `replace-strategy`, registry/provider bootstrap, dynamic loading, owned vs injected client lifecycle, read-only vs writable collection ownership) — ~20 tests
 - [x] **Block 19.3** — Bulk I/O + Helios integration + real MongoDB proof (`storeAll`/`deleteAll` batching, retry ownership, offload behavior, write-through/write-behind integration, restart/shutdown/eager/lazy/clear/bulk/loadAllKeys proof, exact Mongo harness/proof commands, per-path wiring proof matrix, supported docs/examples`) — ~22 tests
-- [ ] **Phase 19 checkpoint** — root and `packages/mongodb` typechecks green; Mongo package tests green; exact Mongo unit/core/offload/e2e proof commands for the single-member Phase 19 slice from `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` are green; direct `implementation`, direct `factoryImplementation`, registry-backed config wiring, dynamic programmatic loading, dynamic JSON loading, dynamic YAML loading, config-origin-relative resolution, and installed-package dynamic loading each have their own proof label/command and all pass independently; supported wiring paths, document-mode mapping, shutdown flush, restart persistence, eager/lazy load, clear, bulk, and `loadAllKeys()` streaming semantics are all exercised for single-member Helios runtime; clustered Mongo claims/docs/proof remain blocked until **Block 21.4** is green; 0 fail, 0 error
+- [x] **Phase 19 checkpoint** — root and `packages/mongodb` typechecks green; Mongo package tests green; exact Mongo unit/core/offload/e2e proof commands for the single-member Phase 19 slice from `plans/MONGODB_MAPSTORE_PRODUCTION_PLAN.md` are green; direct `implementation`, direct `factoryImplementation`, registry-backed config wiring, dynamic programmatic loading, dynamic JSON loading, dynamic YAML loading, config-origin-relative resolution, and installed-package dynamic loading each have their own proof label/command and all pass independently; supported wiring paths, document-mode mapping, shutdown flush, restart persistence, eager/lazy load, clear, bulk, and `loadAllKeys()` streaming semantics are all exercised for single-member Helios runtime; clustered Mongo claims/docs/proof remain blocked until **Block 21.4** is green; 0 fail, 0 error
 - [x] **Block 19T.1** — Classic topic hardening + ringbuffer-backed reliable topic closure (`plans/TOPIC_RELIABLE_TOPIC_UNIFIED_PLAN.md`, one service-backed classic-topic runtime path, Bun/TypeScript-native reliable-listener contract, real `getReliableTopic()` ringbuffer runtime, Hazelcast-parity overload semantics, frozen publish-completion contract with sync-backup acknowledgment, no throw stubs or hidden local-only alternate path, failover/destroy/shutdown cleanup, docs/examples/config/exports/test-support honesty) — ~26 tests
-- [ ] **Phase 19T checkpoint** — root typecheck green; topic and ringbuffer tests green; `getTopic()` and `getReliableTopic()` both work in single-node and multi-node flows; reliable-topic publish/listen/failover/destroy/shutdown and overload/retention semantics are fully exercised; reliable-topic success is proven to mean owner append plus at least one synchronous backup acknowledgment, zero-sync-backup configs are rejected, and docs/examples state the exact loss window honestly; no `getReliableTopic()` throw stubs or local-only alternate classic-topic path remain; 0 fail, 0 error
+- [x] **Phase 19T checkpoint** — root typecheck green; topic and ringbuffer tests green; `getTopic()` and `getReliableTopic()` both work in single-node and multi-node flows; reliable-topic publish/listen/failover/destroy/shutdown and overload/retention semantics are fully exercised; reliable-topic success is proven to mean owner append plus at least one synchronous backup acknowledgment, zero-sync-backup configs are rejected, and docs/examples state the exact loss window honestly; no `getReliableTopic()` throw stubs or local-only alternate classic-topic path remain; 0 fail, 0 error
 - [x] **Block 20.1** — Client parity matrix + surface freeze + packaging contract (`src/client` keep/rewrite/move/delete matrix, Hazelcast-to-Helios parity matrix, `HeliosClient implements HeliosInstance`, `getConfig()` contract decision, root export cleanup, wildcard export freeze) — ~12 tests/docs gates
 - [x] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
 - [x] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
@@ -547,17 +627,19 @@ Tasks:
 - [x] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — 36 tests
 - [x] **Block 20.7** — Near-cache completion + advanced feature closure (real remote near-cache wrapping, binary metadata fetch, reconnect repair/stale-read protection, advanced-feature keep/defer closure for cache/query-cache/transactions/SQL/secondary services) — 28 tests
 - [x] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, docs/examples/test-support/fixture audit after contract narrowing, exact proof-label contract, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — 58 tests
-- [ ] **Phase 20 checkpoint** — root typecheck green; exact proof-label contract in `plans/CLIENT_E2E_PARITY_PLAN.md` is satisfied and reported verbatim with `P20-STARTUP`, `P20-MAP`, `P20-QUEUE`, `P20-TOPIC`, `P20-RELIABLE-TOPIC` (or `NOT-RETAINED` with parity-matrix/doc citation), `P20-EXECUTOR` (or `NOT-RETAINED` with parity-matrix/doc citation), `P20-RECONNECT-LISTENER`, `P20-PROXY-LIFECYCLE`, `P20-EXTERNAL-BUN-APP`, `P20-HYGIENE`, and final `P20-GATE-CHECK`; separate Bun app can import `HeliosClient` from `@zenystx/helios-core`, connect over binary protocol, use every retained remote `HeliosInstance` capability honestly, survive reconnect, and shut down cleanly; 0 fail, 0 error
+- [x] **Phase 20 checkpoint** — root typecheck green; exact proof-label contract in `plans/CLIENT_E2E_PARITY_PLAN.md` is satisfied and reported verbatim with `P20-STARTUP`, `P20-MAP`, `P20-QUEUE`, `P20-TOPIC`, `P20-RELIABLE-TOPIC` (or `NOT-RETAINED` with parity-matrix/doc citation), `P20-EXECUTOR` (or `NOT-RETAINED` with parity-matrix/doc citation), `P20-RECONNECT-LISTENER`, `P20-PROXY-LIFECYCLE`, `P20-EXTERNAL-BUN-APP`, `P20-HYGIENE`, and final `P20-GATE-CHECK`; separate Bun app can import `HeliosClient` from `@zenystx/helios-core`, connect over binary protocol, use every retained remote `HeliosInstance` capability honestly, survive reconnect, and shut down cleanly; 0 fail, 0 error
 - [x] **Block 21.0** — Backup partition recovery parity foundation (`plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`, one partition-service authority, no clustered recovery shortcuts, member-removal bookkeeping, promotion-first repair, backup refill, partition-lost signaling plus map-scoped partition-lost parity, runtime anti-entropy, namespace-scoped payload repair proof, real remote replica sync, service-state replication closure, stale-rejoin fencing, observability/config/docs/test-support closure, crash/rejoin proof) — ~28 tests
 - [x] **Block 21.1** — Cluster execution substrate + owner-routed map path (real partition-owner routing, remote operation request/response/backup flow, no authoritative `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` replay path) — ~18 tests
 - [x] **Block 21.2** — Partition-scoped MapStore runtime + owner-only persistence (shared map-level lifecycle + partition-scoped stores, owner-side `store`/`delete`/`load`, backup no-external-write semantics, clustered `putAll`/`getAll` bulk paths, partition ID consistency fix) — 22 tests
 - [x] **Block 21.3** — Migration, failover, shutdown handoff, and coordinated eager/clear (`MigrationAwareService` participation, write-behind queue replication, staged promotion/finalize cutover with epoch fencing, clustered eager-load coordination and join continuity, clustered clear, deterministic shutdown handoff) — 24 tests
 - [x] **Block 21.4** — Real adapter proof + clustered MapStore production gate (provenance-recording counting-store proof, provenance-recording Mongo clustered proof after Phase 19, durability docs, supported clustered docs/examples only) — 18 tests
-- [ ] **Phase 21 checkpoint** — clustered partition recovery tests green; one partition-service authority is used in production clustered mode; owner crash promotes surviving backups before refill; anti-entropy and replica sync repair stale backups automatically; partition-lost is emitted when no replica survives; map-scoped partition-lost listener/event semantics for clustered maps are wired and tested before any full Hazelcast map/MapStore parity claim; anti-entropy/replica-sync proof includes per-service-namespace/version comparison, intentionally diverged payload-state repair for every supported partition-scoped service, and wrong-target/stale-response rejection; partition metadata parity, replica-slot occupancy, or version-only convergence are explicitly rejected as sufficient proof; service-state replication is closed for all supported partition-scoped services; stale rejoin state is fenced until authoritative sync completes; recovery metrics/events/docs/examples/test-support are aligned with the real runtime path; clustered operation-routing tests green; exactly one external write/delete per logical clustered mutation; backups never write externally while backups; lazy-load, eager-load, `getAll()` bulk, `putAll()` bulk, migration, promotion, clear, and shutdown handoff are fully exercised; one coordinated EAGER load epoch survives member join/rebalance without deadlock, without a second full `loadAllKeys()` sweep, and without duplicate external reads/writes; counting-store proof and Mongo clustered proof are green after Phase 19; clustered proof adapters capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external call; duplicate physical `store` / `storeAll` / `delete` / `deleteAll` calls are asserted absent for healthy-cluster logical mutations and for the migration/promotion/clear/eager-load scenarios that claim cluster safety; all recovery/counting-store/Mongo clustered proof runs use separate Helios member processes over real TCP and include transport-boundary crash/drop/delay fault injection rather than shared-process or direct-call fault simulation; 0 fail, 0 error
+- [x] **Block 21.5** — Final execution-contract audit + repo honesty gate (reopen earlier blocks/checkpoints on mismatch, no retained throw stubs/placeholders/deferred markers on claimed surfaces, no stale docs/examples/test-support/export claims, no fake/shared-process proof, exact final proof lines required for Phases 17R-21, final independent general-task-agent verification, final repo honesty sweep) — final closure gate
+- [x] **Phase 21 checkpoint** — clustered partition recovery tests green; one partition-service authority is used in production clustered mode; owner crash promotes surviving backups before refill; anti-entropy and replica sync repair stale backups automatically; partition-lost is emitted when no replica survives; map-scoped partition-lost listener/event semantics for clustered maps are wired and tested before any full Hazelcast map/MapStore parity claim; anti-entropy/replica-sync proof includes per-service-namespace/version comparison, intentionally diverged payload-state repair for every supported partition-scoped service, and wrong-target/stale-response rejection; partition metadata parity, replica-slot occupancy, or version-only convergence are explicitly rejected as sufficient proof; service-state replication is closed for all supported partition-scoped services; stale rejoin state is fenced until authoritative sync completes; recovery metrics/events/docs/examples/test-support are aligned with the real runtime path; clustered operation-routing tests green; exactly one external write/delete per logical clustered mutation; backups never write externally while backups; lazy-load, eager-load, `getAll()` bulk, `putAll()` bulk, migration, promotion, clear, and shutdown handoff are fully exercised; one coordinated EAGER load epoch survives member join/rebalance without deadlock, without a second full `loadAllKeys()` sweep, and without duplicate external reads/writes; counting-store proof and Mongo clustered proof are green after Phase 19; clustered proof adapters capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) for every physical external call; duplicate physical `store` / `storeAll` / `delete` / `deleteAll` calls are asserted absent for healthy-cluster logical mutations and for the migration/promotion/clear/eager-load scenarios that claim cluster safety; all recovery/counting-store/Mongo clustered proof runs use separate Helios member processes over real TCP and include transport-boundary crash/drop/delay fault injection rather than shared-process or direct-call fault simulation; 0 fail, 0 error
+- [x] **Final completion checkpoint** — every reopened block is reclosed honestly; Phases 17R, 18, 19, 19T, 20, and 21 checkpoints are green; the exact `P20-*` proof-label contract is printed verbatim and green; the final footer lines `PHASE-17R-FINAL: PASS`, `PHASE-18-FINAL: PASS`, `PHASE-19-FINAL: PASS`, `PHASE-19T-FINAL: PASS`, `PHASE-20-FINAL: PASS`, `PHASE-21-FINAL: PASS`, `REPO-HONESTY-SWEEP: PASS`, `INDEPENDENT-FINAL-VERIFICATION: PASS`, and `TYPESCRIPT-PORT-DONE: PASS` are all emitted verbatim; no contradictory plan status, stale claim, blocked retained surface, unresolved audit hit, placeholder, throw stub, deferred marker, or fake proof remains anywhere in the repo; 0 fail, 0 error
 
 ## End-to-End Completion Requirements
 
-Phases 17R-21 are not complete unless all of the following are true:
+Phases 17R-21 and `Block 21.5` are not complete unless all of the following are true:
 
 - distributed executor task bodies run off-main-thread through a real Scatter-backed execution path in production, with the main Bun event loop limited to transport, routing, backpressure, and response correlation
 - no distributed executor path falls back to direct factory invocation or silent inline execution on the main event loop
@@ -613,6 +695,11 @@ Phases 17R-21 are not complete unless all of the following are true:
 - clustered MapStore proof harnesses capture per-call provenance (`memberId`, `partitionId`, `replicaRole`, `partitionEpoch`, `operationKind`) and assert against duplicate physical external calls rather than relying on final-state-only checks
 - at least one real adapter proves the clustered MapStore vertical slice after single-node adapter
   readiness is already complete
+- a final repo-wide honesty sweep has been rerun on the final tree and every hit has been resolved or
+  explicitly classified as `ALLOWED-RETAINED-LABEL`, `TEST-ONLY`, or `DOC-HISTORICAL` with no
+  unresolved `FAIL`
+- an independent final verification general-task agent has re-reviewed the final tree and returned
+  clean with no reopened gaps
 
 ## Cross-File Wiring That Must Not Be Missed
 
@@ -741,6 +828,19 @@ When implementing Phase 21, verify all relevant surfaces, not just `src/map/impl
 - `examples/native-app/`
 - `src/test-support/`
 - `packages/mongodb/test/` once the clustered Mongo proof is in scope
+
+When implementing `Block 21.5`, verify all relevant surfaces, not just the master plan:
+
+- `plans/TYPESCRIPT_PORT_PLAN.md`
+- every authoritative linked plan referenced by Phases 17R-21
+- `package.json`
+- `README.md`
+- `src/`
+- `packages/`
+- `examples/`
+- `src/test-support/`
+- `test/`
+- every exact proof command/label contract already defined by Phases 17R-21 and linked plans
 
 ## Commit Convention
 
