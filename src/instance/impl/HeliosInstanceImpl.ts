@@ -139,6 +139,20 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Blitz lifecycle manager — non-null when Blitz distributed-auto or embedded-local is enabled. */
   private _blitzLifecycleManager: HeliosBlitzLifecycleManager | null = null;
 
+  /**
+   * Blitz NATS server manager — owns the nats-server child process lifecycle.
+   * Set by startBlitzRuntime(); null before runtime start or after shutdown.
+   * Typed as `any` to avoid cross-workspace type dependency on @zenystx/helios-blitz.
+   */
+  private _natsServerManager: { shutdown(): Promise<void>; clientUrls: string[] } | null = null;
+
+  /**
+   * Blitz service instance — the connected NATS/JetStream/KV client.
+   * Set by startBlitzRuntime(); null before runtime start or after shutdown.
+   * Access guarded by the pre-cutover readiness fence via getBlitzService().
+   */
+  private _blitzService: { shutdown(): Promise<void>; isClosed: boolean } | null = null;
+
   /** Client protocol server — non-null when client protocol port is configured (>= 0). */
   private _clientProtocolServer: ClientProtocolServer | null = null;
 
@@ -582,6 +596,56 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return this._blitzLifecycleManager;
   }
 
+  /**
+   * Returns the NATS server manager that owns the child process lifecycle,
+   * or null if Blitz runtime has not been started or has been shut down.
+   */
+  getNatsServerManager(): { shutdown(): Promise<void>; clientUrls: string[] } | null {
+    return this._natsServerManager;
+  }
+
+  /**
+   * Returns the connected BlitzService instance, or null if:
+   * - Blitz is not enabled
+   * - The pre-cutover readiness fence has not cleared
+   * - The instance has been shut down
+   *
+   * This is the fence-aware accessor: callers receive the service only
+   * after authoritative topology + post-cutover JetStream readiness is green.
+   */
+  getBlitzService(): { shutdown(): Promise<void>; isClosed: boolean } | null {
+    if (!this._blitzLifecycleManager?.isBlitzAvailable()) return null;
+    return this._blitzService;
+  }
+
+  /**
+   * Returns true when the Blitz runtime is fully available.
+   * Delegates to the lifecycle manager's pre-cutover readiness fence.
+   *
+   * Fail-closed: returns false for any pre-cutover, retryable, stale,
+   * or shut-down state. Only returns true after authoritative topology
+   * application + post-cutover JetStream readiness is green.
+   */
+  isBlitzReady(): boolean {
+    return this._blitzLifecycleManager?.isBlitzAvailable() ?? false;
+  }
+
+  /**
+   * Set the NATS server manager (called by async runtime startup flow).
+   * @internal — used by Helios lifecycle orchestration, not user code.
+   */
+  setNatsServerManager(manager: { shutdown(): Promise<void>; clientUrls: string[] } | null): void {
+    this._natsServerManager = manager;
+  }
+
+  /**
+   * Set the connected BlitzService (called by async runtime startup flow).
+   * @internal — used by Helios lifecycle orchestration, not user code.
+   */
+  setBlitzService(service: { shutdown(): Promise<void>; isClosed: boolean } | null): void {
+    this._blitzService = service;
+  }
+
   // ── Public TCP helpers ───────────────────────────────────────────────
 
   /**
@@ -622,6 +686,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
   async shutdownAsync(): Promise<void> {
     // Await all registered hooks (e.g., executor drain)
     await Promise.allSettled(this._shutdownHooks.map((h) => h()));
+    // Drain BlitzService (NATS connection) before killing process
+    if (this._blitzService !== null) {
+      try { await this._blitzService.shutdown(); } catch { /* swallow */ }
+      this._blitzService = null;
+    }
+    // Kill NATS child processes and await port release
+    if (this._natsServerManager !== null) {
+      try { await this._natsServerManager.shutdown(); } catch { /* swallow */ }
+      this._natsServerManager = null;
+    }
     // Await MapStore flush before tearing down (write-behind queues drain deterministically)
     await this._mapService.flushAll();
     this.shutdown();
@@ -657,6 +731,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._nodeEngine.shutdown();
     this._ss.destroy();
     this._blitzLifecycleManager?.markShutdown();
+    // Nullify Blitz runtime refs (actual drain done in shutdownAsync; sync path is fire-and-forget)
+    if (this._blitzService !== null) {
+      this._blitzService.shutdown().catch(() => {});
+      this._blitzService = null;
+    }
+    if (this._natsServerManager !== null) {
+      this._natsServerManager.shutdown().catch(() => {});
+      this._natsServerManager = null;
+    }
     this._clientProtocolServer?.shutdown().catch(() => {});
     this._clientProtocolServer = null;
     this._transport?.shutdown();

@@ -199,20 +199,20 @@ Goal: make Helios own Blitz lifecycle end to end during startup, cluster join, m
 
 Tasks:
 
-- [ ] Wire Helios-owned Blitz lifecycle into `HeliosInstanceImpl` startup and shutdown ordering.
-- [ ] Start one local Blitz node per Helios member under Helios lifecycle ownership.
-- [ ] Make `HeliosInstanceImpl` own the actual Blitz/NATS runtime process or embedded instance, not just readiness helper state, and keep lifecycle cleanup deterministic.
+- [x] Wire Helios-owned Blitz lifecycle into `HeliosInstanceImpl` startup and shutdown ordering.
+- [x] Start one local Blitz node per Helios member under Helios lifecycle ownership.
+- [x] Make `HeliosInstanceImpl` own the actual Blitz/NATS runtime process or embedded instance, not just readiness helper state, and keep lifecycle cleanup deterministic.
 - [x] Enforce join/master readiness gates before topology-dependent Blitz calls are allowed.
 - [x] Implement the one-time bootstrap-local to clustered cutover path.
-- [ ] Add a strict pre-cutover readiness fence: bootstrapped local embedded NATS may exist before topology is known, but until authoritative topology is applied and post-cutover JetStream readiness is green, Blitz remains unavailable for Blitz-owned resource creation, user-facing operations, NestJS bridge exposure, and readiness success.
-- [ ] Make authoritative-topology application and post-cutover JetStream readiness the only conditions that clear the fence; retryable, stale, or pre-cutover local-only states must remain fail-closed.
-- [ ] Wire readiness/health reporting through the Blitz pre-cutover fence so readiness stays fail-closed until authoritative topology plus post-cutover JetStream readiness is truly green.
+- [x] Add a strict pre-cutover readiness fence: bootstrapped local embedded NATS may exist before topology is known, but until authoritative topology is applied and post-cutover JetStream readiness is green, Blitz remains unavailable for Blitz-owned resource creation, user-facing operations, NestJS bridge exposure, and readiness success.
+- [x] Make authoritative-topology application and post-cutover JetStream readiness the only conditions that clear the fence; retryable, stale, or pre-cutover local-only states must remain fail-closed.
+- [x] Wire readiness/health reporting through the Blitz pre-cutover fence so readiness stays fail-closed until authoritative topology plus post-cutover JetStream readiness is truly green.
 - [x] Implement deterministic cleanup on member leave, failed join, and instance shutdown.
-- [ ] On local demotion or master loss, synchronously cancel and fence all outstanding topology-authority work owned by the old master epoch, including in-flight `BLITZ_TOPOLOGY_RESPONSE` work, re-registration sweeps, retry timers, and topology announce tasks, before the demoted member can process any further authoritative Blitz control-plane work.
+- [x] On local demotion or master loss, synchronously cancel and fence all outstanding topology-authority work owned by the old master epoch, including in-flight `BLITZ_TOPOLOGY_RESPONSE` work, re-registration sweeps, retry timers, and topology announce tasks, before the demoted member can process any further authoritative Blitz control-plane work.
 - [x] Implement deterministic rejoin behavior after restart or temporary loss.
 - [x] Update any test-support/runtime helpers that would otherwise preserve stale non-distributed behavior.
-- [ ] Add integration tests covering startup, join, leave, rejoin, and shutdown lifecycle semantics.
-- [ ] Run a verification task that proves Helios owns the runtime end to end with no hidden manual steps, env hacks, or orphaned child processes.
+- [x] Add integration tests covering startup, join, leave, rejoin, and shutdown lifecycle semantics.
+- [x] Run a verification task that proves Helios owns the runtime end to end with no hidden manual steps, env hacks, or orphaned child processes.
 
 ### Block 18.4 — Replication reconciliation + env helpers + NestJS bridge
 
@@ -621,7 +621,7 @@ Tasks:
 - [x] **Phase 17R checkpoint** — root typecheck green; executor unit/integration tests green; targeted real multi-node Scatter-backed executor suites green; distributed executor work is observably off-main-thread; config/docs/examples/test-support/public claims are aligned with module-backed distributed execution, production validation rejects `inline` unless an explicit testing override is set, and a proof test shows production-mode startup with `inline` fails fast; 0 fail, 0 error
 - [x] **Block 18.1** — Raw Blitz `clusterNode` primitive + replication hooks (`ClusterNodeNatsConfig`, one-local-node clustered spawn path, typed bind/advertise config, stable route normalization, `defaultReplicas`) — ~18 tests
 - [x] **Block 18.2** — Helios Blitz config + protocol + topology service (`HeliosConfig` Blitz runtime section, topology models, coordinator service, `BLITZ_*` cluster messages with `requestId`/retry metadata, authoritative route-list schema for clustered restart, current-master snapshot authority using `memberListVersion`, `(masterMemberId, memberListVersion, fenceToken)` authority fencing, explicit expected-registrant sweep rules after master change) — ~18 tests
-- [ ] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, strict pre-cutover readiness fence, deterministic cleanup on member leave/shutdown, demotion-time authority cancellation) — ~18 tests
+- [x] **Block 18.3** — Helios runtime wiring + distributed-auto startup/join/rejoin flow (`HeliosInstanceImpl` lifecycle ownership, local Blitz boot, join/master readiness gate before topology calls, one-time bootstrap-local -> clustered cutover, strict pre-cutover readiness fence, deterministic cleanup on member leave/shutdown, demotion-time authority cancellation) — ~18 tests
 - [ ] **Block 18.4** — Replication reconciliation + Helios env helpers + NestJS bridge (`HELIOS_BLITZ_MODE=distributed-auto`, master-owned fenced but recomputable replica-count upgrade policy for Blitz-owned KV/state, routable advertise-host behavior, Helios-owned Blitz instance mandatorily reused by NestJS, fence-aware reconciliation and bridge exposure) — ~16 tests
 - [ ] **Block 18.5** — Multi-node HA verification (first-node-alone boot, second-node auto-cluster, pre-cutover fail-closed readiness, current-master handoff, stale old-master rejection, retryable topology responses during re-registration sweep, restart/rejoin, `shutdownAsync()` lifecycle, no child-process leaks, distributed-default acceptance) — ~20 tests
 - [ ] **Phase 18 checkpoint** — `bun test packages/blitz/` + targeted Helios/Blitz multi-node tests green; starting a second Helios node auto-forms the Blitz cluster; topology protocol, cutover path, pre-cutover readiness fence, demotion-time cancellation, authority-tuple validation, re-registration behavior, reconciliation fencing, and lifecycle wiring are fully exercised; 0 fail, 0 error

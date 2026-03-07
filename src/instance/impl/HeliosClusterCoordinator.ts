@@ -140,6 +140,10 @@ export class HeliosClusterCoordinator {
     this._partitionService.registerMigrationAwareService(serviceName, service);
   }
 
+  getBlitzCoordinator(): HeliosBlitzCoordinator {
+    return this._blitzCoordinator;
+  }
+
   onMembershipChanged(listener: MembershipListener): void {
     this._membershipListeners.push(listener);
   }
