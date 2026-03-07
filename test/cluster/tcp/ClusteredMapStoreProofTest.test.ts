@@ -63,6 +63,9 @@ type OperationKind = 'store' | 'storeAll' | 'delete' | 'deleteAll' | 'load' | 'l
 
 interface ProvenanceRecord {
     memberId: string;
+    partitionId: number;
+    replicaRole: 'PRIMARY' | 'BACKUP' | 'UNKNOWN';
+    partitionEpoch: number;
     operationKind: OperationKind;
     keys: string[];
     ts: number;
@@ -78,13 +81,40 @@ class ProvenanceMapStore implements MapStore<string, string> {
     readonly records: ProvenanceRecord[] = [];
     private readonly _data = new Map<string, string>();
     private readonly _memberId: string;
+    private _instance: HeliosInstanceImpl | null = null;
 
     constructor(memberId: string) {
         this._memberId = memberId;
     }
 
+    setInstance(instance: HeliosInstanceImpl): void {
+        this._instance = instance;
+    }
+
     private _record(kind: OperationKind, keys: string[]): void {
-        this.records.push({ memberId: this._memberId, operationKind: kind, keys, ts: Date.now() });
+        let partitionId = -1;
+        let replicaRole: ProvenanceRecord['replicaRole'] = 'UNKNOWN';
+        let partitionEpoch = 0;
+
+        if (this._instance && keys.length > 0) {
+            partitionId = this._instance.getPartitionIdForName(keys[0]!);
+            const ownerId = this._instance.getPartitionOwnerId(partitionId);
+            replicaRole = ownerId === this._memberId ? 'PRIMARY' : 'BACKUP';
+            const mapSvc = (this._instance as any)._mapService;
+            if (mapSvc && typeof mapSvc.getPartitionEpoch === 'function') {
+                partitionEpoch = mapSvc.getPartitionEpoch(partitionId);
+            }
+        }
+
+        this.records.push({
+            memberId: this._memberId,
+            partitionId,
+            replicaRole,
+            partitionEpoch,
+            operationKind: kind,
+            keys,
+            ts: Date.now(),
+        });
     }
 
     async store(key: string, value: string): Promise<void> {
@@ -344,8 +374,10 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         const portB = nextPort();
         const a = await Helios.newInstance(cfgFn('proofA', portA, [], mapName, storeA));
         instances.push(a);
+        storeA.setInstance(a);
         const b = await Helios.newInstance(cfgFn('proofB', portB, [portA], mapName, storeB));
         instances.push(b);
+        storeB.setInstance(b);
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
         return [a, b];

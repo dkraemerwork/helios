@@ -53,6 +53,9 @@
     "test:mapstore:mongodb:wiring:dynamic-yaml": "bun test test/map/mapstore/wiring/WiringDynamicYaml.test.ts",
     "test:mapstore:mongodb:wiring:config-origin-relative": "bun test test/map/mapstore/wiring/WiringConfigOriginRelative.test.ts",
     "test:mapstore:mongodb:wiring:dynamic-package": "bun test test/map/mapstore/wiring/WiringDynamicPackage.test.ts",
+    "test:mapstore:clustered:proof": "bun test test/cluster/tcp/ClusteredMapStoreProofTest.test.ts --timeout 30000",
+    "test:mapstore:clustered:multiprocess": "bun test test/cluster/tcp/Block21_4_MultiProcessMapStoreProof.test.ts --timeout 60000",
+    "test:mapstore:clustered:mongodb": "bun test packages/mongodb/test/MongoClusteredMapStore.test.ts --timeout 30000",
     "convert": "bun run scripts/convert-java-tests.ts",
     "prepack": "bun run build",
     "prepublishOnly": "bun run build"

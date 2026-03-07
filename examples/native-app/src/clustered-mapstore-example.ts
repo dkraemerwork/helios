@@ -16,7 +16,9 @@
  *
  * Adapter Eligibility:
  * - An adapter is cluster-safe only after it passes the clustered proof suite
- * - Currently supported: CountingMapStore (test), MongoDB (after Phase 19 readiness)
+ * - Proven adapters: CountingMapStore (test), MongoDB (after Phase 19 readiness)
+ * - Clustered proof requires separate Helios member processes over real TCP
+ *   with transport-boundary crash/drop/delay injection (Block 21.4 proof gate)
  *
  * Prerequisites:
  *   - For MongoDB: HELIOS_MONGODB_TEST_URI=mongodb://127.0.0.1:27017

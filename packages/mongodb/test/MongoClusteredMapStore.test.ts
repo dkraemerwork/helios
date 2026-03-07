@@ -12,7 +12,8 @@
  *  - Write-through with real MongoDB produces no duplicate documents
  *  - Load-on-miss fetches from MongoDB through partition owner only
  *  - putAll/getAll route correctly through owners to MongoDB
- *  - Per-call provenance capture (memberId, operationKind) is verified
+ *  - Per-call provenance capture (memberId, partitionId, replicaRole, partitionEpoch,
+ *    operationKind) is verified for every physical external call
  *  - No duplicate physical store/delete calls for any single logical mutation
  */
 import { describe, it, expect, afterEach, beforeAll, afterAll } from 'bun:test';
@@ -56,22 +57,59 @@ async function waitForClusterSize(instance: any, count: number): Promise<void> {
     }
 }
 
-/**
- * Provenance-recording wrapper around MongoMapStore that captures
- * memberId and operationKind for every physical external call.
- */
+// ═══════════════════════════════════════════════════════════
+//  Provenance-recording wrapper with full provenance fields
+// ═══════════════════════════════════════════════════════════
+
+interface ProvenanceRecord {
+    memberId: string;
+    partitionId: number;
+    replicaRole: 'PRIMARY' | 'BACKUP' | 'UNKNOWN';
+    partitionEpoch: number;
+    operationKind: string;
+    keys: string[];
+    ts: number;
+}
+
 class ProvenanceMongoStore {
-    readonly records: { memberId: string; operationKind: string; keys: string[]; ts: number }[] = [];
+    readonly records: ProvenanceRecord[] = [];
     private readonly _inner: any;
     private readonly _memberId: string;
+    private _instance: any = null;
 
     constructor(memberId: string, opts: any) {
         this._memberId = memberId;
         this._inner = new MongoMapStore(opts);
     }
 
+    setInstance(instance: any): void {
+        this._instance = instance;
+    }
+
     private _record(kind: string, keys: string[]): void {
-        this.records.push({ memberId: this._memberId, operationKind: kind, keys, ts: Date.now() });
+        let partitionId = -1;
+        let replicaRole: ProvenanceRecord['replicaRole'] = 'UNKNOWN';
+        let partitionEpoch = 0;
+
+        if (this._instance && keys.length > 0) {
+            partitionId = this._instance.getPartitionIdForName(keys[0]!);
+            const ownerId = this._instance.getPartitionOwnerId(partitionId);
+            replicaRole = ownerId === this._memberId ? 'PRIMARY' : 'BACKUP';
+            const mapSvc = this._instance._mapService;
+            if (mapSvc && typeof mapSvc.getPartitionEpoch === 'function') {
+                partitionEpoch = mapSvc.getPartitionEpoch(partitionId);
+            }
+        }
+
+        this.records.push({
+            memberId: this._memberId,
+            partitionId,
+            replicaRole,
+            partitionEpoch,
+            operationKind: kind,
+            keys,
+            ts: Date.now(),
+        });
     }
 
     async store(key: string, value: string): Promise<void> {
@@ -133,7 +171,7 @@ class ProvenanceMongoStore {
             .reduce((n, r) => n + r.keys.length, 0);
     }
 
-    writeRecords(): typeof this.records {
+    writeRecords(): ProvenanceRecord[] {
         return this.records.filter(r =>
             r.operationKind === 'store' || r.operationKind === 'storeAll' ||
             r.operationKind === 'delete' || r.operationKind === 'deleteAll',
@@ -143,6 +181,52 @@ class ProvenanceMongoStore {
     reset(): void {
         this.records.length = 0;
     }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Provenance assertion helpers
+// ═══════════════════════════════════════════════════════════
+
+function assertProvenanceOwnerOnly(storeA: ProvenanceMongoStore, storeB: ProvenanceMongoStore, instance: any): void {
+    for (const r of storeA.writeRecords()) {
+        expect(r.replicaRole).toBe('PRIMARY');
+        for (const key of r.keys) {
+            const pid = instance.getPartitionIdForName(key);
+            expect(instance.getPartitionOwnerId(pid)).toBe(r.memberId);
+        }
+    }
+    for (const r of storeB.writeRecords()) {
+        expect(r.replicaRole).toBe('PRIMARY');
+        for (const key of r.keys) {
+            const pid = instance.getPartitionIdForName(key);
+            expect(instance.getPartitionOwnerId(pid)).toBe(r.memberId);
+        }
+    }
+}
+
+function assertNoDuplicateWrites(storeA: ProvenanceMongoStore, storeB: ProvenanceMongoStore): void {
+    const writtenByA = new Set<string>();
+    const writtenByB = new Set<string>();
+    for (const r of storeA.writeRecords()) r.keys.forEach(k => writtenByA.add(k));
+    for (const r of storeB.writeRecords()) r.keys.forEach(k => writtenByB.add(k));
+    for (const k of writtenByA) {
+        if (writtenByB.has(k)) {
+            throw new Error(`Duplicate physical write: key "${k}" written by both members`);
+        }
+    }
+}
+
+function assertPartitionIdsPresent(store: ProvenanceMongoStore): void {
+    for (const r of store.writeRecords()) {
+        expect(r.partitionId).toBeGreaterThanOrEqual(0);
+    }
+}
+
+function assertFullProvenance(storeA: ProvenanceMongoStore, storeB: ProvenanceMongoStore, instance: any): void {
+    assertProvenanceOwnerOnly(storeA, storeB, instance);
+    assertNoDuplicateWrites(storeA, storeB);
+    assertPartitionIdsPresent(storeA);
+    assertPartitionIdsPresent(storeB);
 }
 
 describe('Block 21.4 — MongoDB clustered MapStore proof', () => {
@@ -206,31 +290,23 @@ describe('Block 21.4 — MongoDB clustered MapStore proof', () => {
         throw new Error(`Could not find key owned by ${ownerName}`);
     }
 
-    function assertProvenanceOwnerOnly(storeA: ProvenanceMongoStore, storeB: ProvenanceMongoStore, instance: any): void {
-        for (const r of storeA.writeRecords()) {
-            for (const key of r.keys) {
-                const pid = instance.getPartitionIdForName(key);
-                expect(instance.getPartitionOwnerId(pid)).toBe(r.memberId);
-            }
-        }
-        for (const r of storeB.writeRecords()) {
-            for (const key of r.keys) {
-                const pid = instance.getPartitionIdForName(key);
-                expect(instance.getPartitionOwnerId(pid)).toBe(r.memberId);
-            }
-        }
-    }
-
-    it('MONGO-1: clustered put — writes to MongoDB exactly once via owner, provenance verified', async () => {
+    async function startTwoNode(name1: string, name2: string): Promise<[any, any, ProvenanceMongoStore, ProvenanceMongoStore]> {
         const portA = nextPort();
         const portB = nextPort();
-        const { cfg: cfgA, store: storeA } = makeConfig('mongoA', portA, []);
-        const { cfg: cfgB, store: storeB } = makeConfig('mongoB', portB, [portA]);
+        const { cfg: cfgA, store: storeA } = makeConfig(name1, portA, []);
+        const { cfg: cfgB, store: storeB } = makeConfig(name2, portB, [portA]);
         const a = await Helios.newInstance(cfgA);
         instances.push(a);
+        storeA.setInstance(a);
         const b = await Helios.newInstance(cfgB);
         instances.push(b);
+        storeB.setInstance(b);
         await waitForClusterSize(a, 2);
+        return [a, b, storeA, storeB];
+    }
+
+    it('MONGO-1: clustered put — writes to MongoDB exactly once via owner, full provenance', async () => {
+        const [a, b, storeA, storeB] = await startTwoNode('mongoA', 'mongoB');
 
         const key = findKeyOwnedBy(a, a.getName(), 'mput');
         await b.getMap('mongo-clustered').put(key, 'mongo-val');
@@ -241,48 +317,39 @@ describe('Block 21.4 — MongoDB clustered MapStore proof', () => {
         const count = await coll.countDocuments({ _id: key });
         expect(count).toBe(1);
 
-        // Provenance: exactly one store record on owner
         expect(storeA.totalStoreCount()).toBe(1);
         expect(storeB.totalStoreCount()).toBe(0);
-        assertProvenanceOwnerOnly(storeA, storeB, a);
-        expect(storeA.records[0]!.memberId).toBe('mongoA');
-        expect(storeA.records[0]!.operationKind).toBe('store');
+        assertFullProvenance(storeA, storeB, a);
+
+        const rec = storeA.records[0]!;
+        expect(rec.memberId).toBe('mongoA');
+        expect(rec.operationKind).toBe('store');
+        expect(rec.replicaRole).toBe('PRIMARY');
+        expect(rec.partitionId).toBeGreaterThanOrEqual(0);
+        expect(rec.partitionEpoch).toBeGreaterThanOrEqual(0);
     });
 
-    it('MONGO-2: clustered get — loads from MongoDB through owner on miss, provenance verified', async () => {
-        const portA = nextPort();
-        const portB = nextPort();
-
+    it('MONGO-2: clustered get — loads from MongoDB through owner on miss, full provenance', async () => {
         const coll = client.db(DB_NAME).collection(COLL_NAME);
         await coll.insertOne({ _id: 'preseeded', value: JSON.stringify('ext-value') });
 
-        const { cfg: cfgA, store: storeA } = makeConfig('mongoLA', portA, []);
-        const { cfg: cfgB, store: storeB } = makeConfig('mongoLB', portB, [portA]);
-        const a = await Helios.newInstance(cfgA);
-        instances.push(a);
-        const b = await Helios.newInstance(cfgB);
-        instances.push(b);
-        await waitForClusterSize(a, 2);
+        const [_a, b, storeA, storeB] = await startTwoNode('mongoLA', 'mongoLB');
 
         const val = await b.getMap('mongo-clustered').get('preseeded');
         expect(val).toBe('ext-value');
 
-        // Provenance: load went to exactly one member (the owner)
         const loadA = storeA.records.filter(r => r.operationKind === 'load');
         const loadB = storeB.records.filter(r => r.operationKind === 'load');
         expect(loadA.length + loadB.length).toBe(1);
+
+        // Load record should show PRIMARY role
+        const loadRec = loadA.length > 0 ? loadA[0]! : loadB[0]!;
+        expect(loadRec.replicaRole).toBe('PRIMARY');
+        expect(loadRec.partitionId).toBeGreaterThanOrEqual(0);
     });
 
-    it('MONGO-3: clustered remove — deletes from MongoDB exactly once, provenance verified', async () => {
-        const portA = nextPort();
-        const portB = nextPort();
-        const { cfg: cfgA, store: storeA } = makeConfig('mongoRA', portA, []);
-        const { cfg: cfgB, store: storeB } = makeConfig('mongoRB', portB, [portA]);
-        const a = await Helios.newInstance(cfgA);
-        instances.push(a);
-        const b = await Helios.newInstance(cfgB);
-        instances.push(b);
-        await waitForClusterSize(a, 2);
+    it('MONGO-3: clustered remove — deletes from MongoDB exactly once, full provenance', async () => {
+        const [a, b, storeA, storeB] = await startTwoNode('mongoRA', 'mongoRB');
 
         const key = findKeyOwnedBy(a, a.getName(), 'mrm');
         await a.getMap('mongo-clustered').put(key, 'to-remove');
@@ -294,22 +361,13 @@ describe('Block 21.4 — MongoDB clustered MapStore proof', () => {
         await b.getMap('mongo-clustered').remove(key);
         expect(await coll.countDocuments({ _id: key })).toBe(0);
 
-        // Provenance: exactly one delete on owner
         expect(storeA.totalDeleteCount()).toBe(1);
         expect(storeB.totalDeleteCount()).toBe(0);
-        assertProvenanceOwnerOnly(storeA, storeB, a);
+        assertFullProvenance(storeA, storeB, a);
     });
 
-    it('MONGO-4: clustered putAll — routes to owners, no duplicate Mongo writes', async () => {
-        const portA = nextPort();
-        const portB = nextPort();
-        const { cfg: cfgA, store: storeA } = makeConfig('mongoPaA', portA, []);
-        const { cfg: cfgB, store: storeB } = makeConfig('mongoPaB', portB, [portA]);
-        const a = await Helios.newInstance(cfgA);
-        instances.push(a);
-        const b = await Helios.newInstance(cfgB);
-        instances.push(b);
-        await waitForClusterSize(a, 2);
+    it('MONGO-4: clustered putAll — routes to owners, no duplicate Mongo writes, full provenance', async () => {
+        const [a, _b, storeA, storeB] = await startTwoNode('mongoPaA', 'mongoPaB');
 
         const entries: [string, string][] = [];
         for (let i = 0; i < 15; i++) entries.push([`mpa-${i}`, `mv-${i}`]);
@@ -321,6 +379,6 @@ describe('Block 21.4 — MongoDB clustered MapStore proof', () => {
 
         const total = storeA.totalStoreCount() + storeB.totalStoreCount();
         expect(total).toBe(15);
-        assertProvenanceOwnerOnly(storeA, storeB, a);
+        assertFullProvenance(storeA, storeB, a);
     });
 });
