@@ -794,7 +794,445 @@ describe("Block 18.5 — End-to-end HA flow integration", () => {
   });
 });
 
-// ─── 12. Final production-readiness verification ──────────────────────────
+// ─── 12. Fail-closed: no resource creation, no bridge exposure, no readiness ──
+
+describe("Block 18.5 — Fail-closed pre-cutover: HeliosInstanceImpl gating", () => {
+  test("getBlitzService() returns null at every pre-cutover state", () => {
+    const config = new HeliosConfig("fail-closed-svc");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const mgr = instance.getBlitzLifecycleManager()!;
+
+    // NOT_READY
+    expect(instance.getBlitzService()).toBeNull();
+    expect(instance.isBlitzReady()).toBe(false);
+
+    // LOCAL_STARTED
+    mgr.onLocalNodeStarted();
+    expect(instance.getBlitzService()).toBeNull();
+    expect(instance.isBlitzReady()).toBe(false);
+
+    // JOIN_READY
+    mgr.onJoinComplete("node-1", 1);
+    expect(instance.getBlitzService()).toBeNull();
+    expect(instance.isBlitzReady()).toBe(false);
+
+    // REGISTERED
+    mgr.onRegisteredWithMaster();
+    expect(instance.getBlitzService()).toBeNull();
+    expect(instance.isBlitzReady()).toBe(false);
+
+    instance.shutdown();
+  });
+
+  test("NestJS bridge fence-aware module blocks service access before cutover", () => {
+    const config = new HeliosConfig("nestjs-fence-blocked");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const fenceCheck = instance.createBlitzFenceCheck();
+
+    const { FenceAwareBlitzProvider } = require(
+      `${import.meta.dir}/../../packages/blitz/src/nestjs/FenceAwareBlitzProvider.ts`,
+    );
+    const provider = new FenceAwareBlitzProvider(fenceCheck, null);
+
+    // Before cutover: fence blocks, bridge is not exposed
+    expect(provider.isAvailable()).toBe(false);
+    expect(() => provider.getService()).toThrow();
+
+    // Simulate full lifecycle to READY
+    const mgr = instance.getBlitzLifecycleManager()!;
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("master-1", 2);
+    mgr.onRegisteredWithMaster();
+    mgr.onClusteredCutoverComplete();
+
+    // Now fence clears, but service is still null
+    expect(fenceCheck()).toBe(true);
+    expect(provider.isAvailable()).toBe(false); // service is null
+
+    instance.shutdown();
+  });
+
+  test("no user-facing Blitz operation succeeds before READY: isBlitzReady stays false", () => {
+    const config = new HeliosConfig("no-user-op");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const mgr = instance.getBlitzLifecycleManager()!;
+
+    // Walk through every pre-READY state
+    const states: BlitzReadinessState[] = [];
+    states.push(mgr.getReadinessState()); // NOT_READY
+    mgr.onLocalNodeStarted();
+    states.push(mgr.getReadinessState()); // LOCAL_STARTED
+    mgr.onJoinComplete("node-1", 1);
+    states.push(mgr.getReadinessState()); // JOIN_READY
+    mgr.onRegisteredWithMaster();
+    states.push(mgr.getReadinessState()); // REGISTERED
+
+    // All pre-READY states must be fail-closed
+    for (const state of states) {
+      expect(state).not.toBe(BlitzReadinessState.READY);
+    }
+    expect(instance.isBlitzReady()).toBe(false);
+
+    instance.shutdown();
+  });
+});
+
+// ─── 13. Stale old-master: announces, delayed responses, queued reconciliation ─
+
+describe("Block 18.5 — Stale old-master rejection: announces and queued reconciliation", () => {
+  test("stale announce from old master is rejected by receiving node", () => {
+    // Old master generates an announce before demotion
+    const oldMaster = new HeliosBlitzCoordinator();
+    oldMaster.setMasterMemberId("node-1");
+    oldMaster.setMemberListVersion(2);
+    oldMaster.setExpectedRegistrants(new Set(["node-1"]));
+    oldMaster.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+    const staleAnnounce = oldMaster.generateTopologyAnnounce()!;
+    expect(staleAnnounce).not.toBeNull();
+
+    // Receiving node has updated to new master (node-2, version 3)
+    const receiver = new HeliosBlitzCoordinator();
+    receiver.setMasterMemberId("node-2");
+    receiver.setMemberListVersion(3);
+
+    // Stale announce from old master/old version is rejected
+    const result = receiver.handleIncomingTopologyAnnounce(staleAnnounce);
+    expect(result.accepted).toBe(false);
+  });
+
+  test("stale delayed topology response from old master is rejected", () => {
+    const oldMaster = new HeliosBlitzCoordinator();
+    oldMaster.setMasterMemberId("node-1");
+    oldMaster.setMemberListVersion(2);
+    oldMaster.setExpectedRegistrants(new Set(["node-1"]));
+    oldMaster.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+    const staleResponse = oldMaster.handleTopologyRequest(
+      { type: "BLITZ_TOPOLOGY_REQUEST", requestId: "stale-req" },
+      true,
+    )!;
+    expect(staleResponse).not.toBeNull();
+
+    // Receiving node updated to new epoch
+    const receiver = new HeliosBlitzCoordinator();
+    receiver.setMasterMemberId("node-2");
+    receiver.setMemberListVersion(3);
+
+    const result = receiver.handleIncomingTopologyResponse(staleResponse);
+    expect(result.accepted).toBe(false);
+    expect(result.routes).toBeUndefined();
+  });
+
+  test("reconciliation jobs queued before demotion are all invalidated", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("node-1", 1, "fence-old");
+    reconciler.setIsMaster(true);
+
+    // Queue multiple jobs
+    reconciler.markUnderReplicated("kv-a", 1, 3);
+    reconciler.markUnderReplicated("kv-b", 1, 3);
+    reconciler.markUnderReplicated("kv-c", 1, 3);
+    const jobA = reconciler.scheduleReconciliationJob("kv-a")!;
+    const jobB = reconciler.scheduleReconciliationJob("kv-b")!;
+    const jobC = reconciler.scheduleReconciliationJob("kv-c")!;
+    expect(reconciler.getOutstandingJobs().length).toBe(3);
+
+    // Demotion invalidates all queued jobs
+    reconciler.onDemotion();
+    expect(reconciler.validateJobAuthority(jobA)).toBe(false);
+    expect(reconciler.validateJobAuthority(jobB)).toBe(false);
+    expect(reconciler.validateJobAuthority(jobC)).toBe(false);
+    expect(reconciler.getOutstandingJobs().length).toBe(0);
+    expect(reconciler.getPendingUpgrades().length).toBe(0);
+  });
+
+  test("stale announce cannot be generated after onDemotion", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(2);
+    coordinator.setExpectedRegistrants(new Set(["node-1", "node-2"]));
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-2", 17222, { memberListVersion: 2 }) },
+      true,
+    );
+
+    coordinator.onDemotion();
+
+    // No announce can be generated post-demotion
+    expect(coordinator.generateTopologyAnnounce()).toBeNull();
+    // No topology response can be generated post-demotion
+    expect(coordinator.handleTopologyRequest(
+      { type: "BLITZ_TOPOLOGY_REQUEST", requestId: "post-demotion" },
+      true, // even if isMaster=true is passed, topology is null
+    )).toBeNull();
+  });
+});
+
+// ─── 14. Distributed-default acceptance: Helios + Blitz + NestJS ──────────
+
+describe("Block 18.5 — Distributed-default acceptance: cross-surface coverage", () => {
+  test("HeliosConfig + env helper + HeliosInstanceImpl + lifecycle manager + coordinator integration", () => {
+    const envConfig = resolveHeliosBlitzConfigFromEnv({
+      HELIOS_BLITZ_ENABLED: "true",
+      HELIOS_BLITZ_MODE: "distributed-auto",
+      HELIOS_BLITZ_NATS_PORT: "6222",
+      HELIOS_BLITZ_NATS_CLUSTER_PORT: "8222",
+      HELIOS_BLITZ_CLUSTER_NAME: "acceptance-cluster",
+      HELIOS_BLITZ_DEFAULT_REPLICAS: "2",
+    });
+
+    const config = new HeliosConfig("dist-acceptance");
+    config.setBlitzConfig(envConfig);
+    const instance = new HeliosInstanceImpl(config);
+    const mgr = instance.getBlitzLifecycleManager()!;
+
+    // Config wiring
+    expect(mgr.getConfig().mode).toBe("distributed-auto");
+    expect(mgr.getConfig().localPort).toBe(6222);
+    expect(mgr.getConfig().localClusterPort).toBe(8222);
+    expect(mgr.getConfig().clusterName).toBe("acceptance-cluster");
+
+    // Coordinator wiring
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("acceptance-node");
+    coordinator.setMemberListVersion(1);
+    expect(coordinator.getFenceToken()).toBeTruthy();
+
+    // Reconciler wiring
+    const reconciler = coordinator.getReplicaReconciler();
+    expect(reconciler).toBeInstanceOf(BlitzReplicaReconciler);
+
+    // Fence check wiring
+    const fenceCheck = instance.createBlitzFenceCheck();
+    expect(fenceCheck()).toBe(false);
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("acceptance-node", 1);
+    mgr.onStandaloneReady();
+    expect(fenceCheck()).toBe(true);
+
+    instance.shutdown();
+  });
+
+  test("NestJS forHeliosInstanceFenced creates fence-aware module tied to HeliosInstanceImpl", () => {
+    const config = new HeliosConfig("nestjs-acceptance");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const fenceCheck = instance.createBlitzFenceCheck();
+
+    const { HeliosBlitzModule } = require(`${import.meta.dir}/../../packages/blitz/src/nestjs/HeliosBlitzModule.ts`);
+    const mod = HeliosBlitzModule.forHeliosInstanceFenced({
+      fenceCheck,
+      blitzServiceFactory: () => instance.getBlitzServiceForBridge(),
+    });
+
+    expect(mod.module).toBe(HeliosBlitzModule);
+    expect(mod.global).toBe(true);
+    expect(mod.providers).toBeDefined();
+    expect(mod.providers!.length).toBeGreaterThan(0);
+
+    instance.shutdown();
+  });
+
+  test("advertise host resolution integrates with lifecycle manager config", () => {
+    const mgr = new HeliosBlitzLifecycleManager({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+      advertiseHost: "10.0.5.10",
+      bindHost: "0.0.0.0",
+    }, "dist-node");
+
+    const resolved = resolveAdvertiseHost({
+      advertiseHost: mgr.getConfig().advertiseHost,
+      bindHost: mgr.getConfig().bindHost,
+    });
+    expect(resolved.advertiseHost).toBe("10.0.5.10");
+    expect(resolved.isRoutable).toBe(true);
+  });
+
+  test("default replicas config propagates through reconciler", () => {
+    const envConfig = resolveHeliosBlitzConfigFromEnv({
+      HELIOS_BLITZ_ENABLED: "true",
+      HELIOS_BLITZ_MODE: "distributed-auto",
+      HELIOS_BLITZ_DEFAULT_REPLICAS: "5",
+    });
+    expect(envConfig.defaultReplicas).toBe(5);
+
+    const reconciler = new BlitzReplicaReconciler(envConfig.defaultReplicas!, 1);
+    expect(reconciler.getDefaultReplicas()).toBe(5);
+    expect(reconciler.effectiveReplicas(3)).toBe(3); // min(5, 3)
+    expect(reconciler.effectiveReplicas(7)).toBe(5); // min(5, 7)
+  });
+});
+
+// ─── 15. HA verification against real Helios-owned Blitz lifecycle path ───
+
+describe("Block 18.5 — HA verification through HeliosInstanceImpl lifecycle", () => {
+  test("full HeliosInstanceImpl lifecycle: create → fence check → ready → shutdown", () => {
+    const config = new HeliosConfig("ha-instance-lifecycle");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const mgr = instance.getBlitzLifecycleManager()!;
+
+    // Instance-level fence check
+    expect(instance.isBlitzReady()).toBe(false);
+    expect(instance.getBlitzService()).toBeNull();
+
+    // Drive lifecycle through HeliosInstanceImpl's manager
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("ha-master", 1);
+    mgr.onStandaloneReady();
+
+    // Fence clears at instance level
+    expect(instance.isBlitzReady()).toBe(true);
+
+    // Shutdown through instance
+    instance.shutdown();
+    expect(instance.isBlitzReady()).toBe(false);
+    expect(mgr.isShutDown()).toBe(true);
+    expect(instance.isRunning()).toBe(false);
+  });
+
+  test("HeliosInstanceImpl shutdownAsync lifecycle with blitz manager", async () => {
+    const config = new HeliosConfig("ha-async-shutdown");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const mgr = instance.getBlitzLifecycleManager()!;
+
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("ha-master", 1);
+    mgr.onStandaloneReady();
+    expect(instance.isBlitzReady()).toBe(true);
+
+    await instance.shutdownAsync();
+    expect(mgr.isShutDown()).toBe(true);
+    expect(instance.isRunning()).toBe(false);
+    expect(instance.isBlitzReady()).toBe(false);
+  });
+
+  test("HeliosInstanceImpl with blitz: repeated create/shutdown produces clean state", () => {
+    for (let i = 0; i < 3; i++) {
+      const config = new HeliosConfig(`ha-cycle-${i}`);
+      config.setBlitzConfig({
+        enabled: true,
+        mode: "distributed-auto",
+        localPort: 14222 + i,
+        localClusterPort: 16222 + i,
+      });
+      const instance = new HeliosInstanceImpl(config);
+      const mgr = instance.getBlitzLifecycleManager()!;
+      expect(mgr).not.toBeNull();
+      expect(instance.isBlitzReady()).toBe(false);
+      mgr.onLocalNodeStarted();
+      mgr.onJoinComplete("master", 1);
+      mgr.onStandaloneReady();
+      expect(instance.isBlitzReady()).toBe(true);
+      instance.shutdown();
+      expect(mgr.isShutDown()).toBe(true);
+      expect(instance.isRunning()).toBe(false);
+    }
+  });
+
+  test("HeliosInstanceImpl fence check closure captures lifecycle manager state", () => {
+    const config = new HeliosConfig("fence-closure");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const fenceCheck = instance.createBlitzFenceCheck();
+    const mgr = instance.getBlitzLifecycleManager()!;
+
+    // Fence tracks lifecycle state changes
+    expect(fenceCheck()).toBe(false);
+    mgr.onLocalNodeStarted();
+    expect(fenceCheck()).toBe(false);
+    mgr.onJoinComplete("master", 1);
+    expect(fenceCheck()).toBe(false);
+    mgr.onRegisteredWithMaster();
+    expect(fenceCheck()).toBe(false);
+    mgr.onClusteredCutoverComplete();
+    expect(fenceCheck()).toBe(true);
+    mgr.markShutdown();
+    expect(fenceCheck()).toBe(false);
+
+    instance.shutdown();
+  });
+
+  test("getBlitzServiceForBridge is unfenced while getBlitzService is fenced", () => {
+    const config = new HeliosConfig("bridge-fencing");
+    config.setBlitzConfig({
+      enabled: true,
+      mode: "distributed-auto",
+      localPort: 14222,
+      localClusterPort: 16222,
+    });
+    const instance = new HeliosInstanceImpl(config);
+    const mockService = { shutdown: async () => {}, isClosed: false };
+    instance.setBlitzService(mockService);
+
+    // Bridge accessor is unfenced — returns service
+    expect(instance.getBlitzServiceForBridge()).toBe(mockService);
+    // Public accessor is fenced — returns null before cutover
+    expect(instance.getBlitzService()).toBeNull();
+
+    // After cutover fence clears
+    const mgr = instance.getBlitzLifecycleManager()!;
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("master", 1);
+    mgr.onClusteredCutoverComplete();
+    expect(instance.getBlitzService()).toBe(mockService);
+
+    instance.shutdown();
+  });
+});
+
+// ─── 16. Final production-readiness verification ──────────────────────────
 
 describe("Block 18.5 — Production-readiness verification", () => {
   test("complete HA lifecycle: fail-closed → ready → demotion → stale rejection → shutdown", () => {
