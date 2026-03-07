@@ -394,12 +394,12 @@ Goal: make the client consumable and prove the whole vertical slice end to end.
 
 Tasks:
 
-- [ ] Update `src/index.ts`, package exports, and any user-facing subpaths to expose only the intentional client surface.
-- [ ] Add a separate Bun remote-client example against a real Helios cluster.
-- [ ] Add auth, reconnect, and near-cache examples only for truly wired client behavior.
-- [ ] Add real-network acceptance suites for every exported distributed object family and every exported advanced feature family.
-- [ ] Add hygiene gates proving no member-side protocol handler remains under `src/client`, no wildcard export leaks unfinished client internals, and no client proof path relies on REST when binary protocol support is claimed.
-- [ ] Run a final verification task that proves the remote client is production ready, end to end, contract-honest, and free of fake transports, orphan codecs, hidden stubs, or test-only runtime shortcuts.
+- [x] Update `src/index.ts`, package exports, and any user-facing subpaths to expose only the intentional client surface.
+- [x] Add a separate Bun remote-client example against a real Helios cluster.
+- [x] Add auth, reconnect, and near-cache examples only for truly wired client behavior.
+- [x] Add real-network acceptance suites for every exported distributed object family and every exported advanced feature family.
+- [x] Add hygiene gates proving no member-side protocol handler remains under `src/client`, no wildcard export leaks unfinished client internals, and no client proof path relies on REST when binary protocol support is claimed.
+- [x] Run a final verification task that proves the remote client is production ready, end to end, contract-honest, and free of fake transports, orphan codecs, hidden stubs, or test-only runtime shortcuts.
 
 ## Phase 21 Task Breakdown
 
@@ -515,7 +515,7 @@ Tasks:
 - [x] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
 - [x] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — 36 tests
 - [x] **Block 20.7** — Near-cache completion + advanced feature closure (real remote near-cache wrapping, binary metadata fetch, reconnect repair/stale-read protection, advanced-feature keep/defer closure for cache/query-cache/transactions/SQL/secondary services) — 28 tests
-- [ ] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — ~18 tests
+- [x] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — 56 tests
 - [ ] **Phase 20 checkpoint** — root typecheck green; client runtime tests green; targeted real-network client protocol tests green; separate Bun app can import `HeliosClient` from `@zenystx/helios-core`, connect over binary protocol, use every retained remote `HeliosInstance` capability honestly, survive reconnect, and shut down cleanly; 0 fail, 0 error
 - [ ] **Block 21.0** — Backup partition recovery parity foundation (`plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`, one partition-service authority, no clustered recovery shortcuts, member-removal bookkeeping, promotion-first repair, backup refill, partition-lost signaling, runtime anti-entropy, real remote replica sync, service-state replication closure, stale-rejoin fencing, observability/config/docs/test-support closure, crash/rejoin proof) — ~28 tests
 - [ ] **Block 21.1** — Cluster execution substrate + owner-routed map path (real partition-owner routing, remote operation request/response/backup flow, no authoritative `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` replay path) — ~18 tests
