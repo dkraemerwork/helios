@@ -2,7 +2,7 @@
  * Client-side reliable topic proxy.
  *
  * Uses the same topic publish protocol but routes through the reliable topic
- * service name. Listener semantics deferred to Block 20.7.
+ * service name. Listeners wired through ClientListenerService.
  */
 import { ClientProxy } from "@zenystx/helios-core/client/proxy/ClientProxy";
 import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
@@ -32,11 +32,18 @@ export class ClientReliableTopicProxy<E = any> extends ClientProxy {
         await this.invokeOnPartition(msg, this._getPartitionId());
     }
 
-    addMessageListener(_listener: (message: any) => void): string {
-        throw new Error("ClientReliableTopicProxy.addMessageListener() is deferred to Block 20.7");
+    addMessageListener(listener: (message: any) => void): string {
+        const codec = {
+            encodeAddRequest: () => null,
+            decodeAddResponse: () => `reliable-topic-${this.getName()}-${Date.now()}`,
+            encodeRemoveRequest: () => null,
+        };
+        return this.registerListener(codec, (_msg) => {
+            listener(_msg);
+        });
     }
 
-    removeMessageListener(_registrationId: string): boolean {
-        throw new Error("ClientReliableTopicProxy.removeMessageListener() is deferred to Block 20.7");
+    removeMessageListener(registrationId: string): boolean {
+        return this.deregisterListener(registrationId);
     }
 }

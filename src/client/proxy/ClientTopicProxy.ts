@@ -32,11 +32,18 @@ export class ClientTopicProxy<E = any> extends ClientProxy {
         await this.invokeOnPartition(msg, this._getPartitionId());
     }
 
-    addMessageListener(_listener: (message: any) => void): string {
-        throw new Error("ClientTopicProxy.addMessageListener() is deferred to Block 20.7");
+    addMessageListener(listener: (message: any) => void): string {
+        const codec = {
+            encodeAddRequest: () => null,
+            decodeAddResponse: () => `topic-${this.getName()}-${Date.now()}`,
+            encodeRemoveRequest: () => null,
+        };
+        return this.registerListener(codec, (_msg) => {
+            listener(_msg);
+        });
     }
 
-    removeMessageListener(_registrationId: string): boolean {
-        throw new Error("ClientTopicProxy.removeMessageListener() is deferred to Block 20.7");
+    removeMessageListener(registrationId: string): boolean {
+        return this.deregisterListener(registrationId);
     }
 }

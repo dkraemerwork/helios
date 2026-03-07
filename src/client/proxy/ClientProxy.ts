@@ -10,6 +10,7 @@ import type { SerializationServiceImpl } from "@zenystx/helios-core/internal/ser
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import { ClientInvocation } from "@zenystx/helios-core/client/invocation/ClientInvocation";
+import type { ClientListenerService, ListenerMessageCodec, ClientEventHandler } from "@zenystx/helios-core/client/spi/ClientListenerService";
 
 export abstract class ClientProxy implements DistributedObject {
     private readonly _name: string;
@@ -17,6 +18,7 @@ export abstract class ClientProxy implements DistributedObject {
     protected readonly _serializationService: SerializationServiceImpl;
     protected readonly _invocationService: ClientInvocationService | null;
     protected readonly _partitionService: ClientPartitionService;
+    protected _listenerService: ClientListenerService | null = null;
     private _destroyed = false;
 
     constructor(
@@ -48,6 +50,24 @@ export abstract class ClientProxy implements DistributedObject {
 
     isDestroyed(): boolean {
         return this._destroyed;
+    }
+
+    setListenerService(svc: ClientListenerService): void {
+        this._listenerService = svc;
+    }
+
+    protected registerListener(codec: ListenerMessageCodec, handler: ClientEventHandler): string {
+        if (!this._listenerService) {
+            throw new Error("ClientListenerService is not available");
+        }
+        return this._listenerService.registerListener(codec, handler);
+    }
+
+    protected deregisterListener(registrationId: string): boolean {
+        if (!this._listenerService) {
+            return false;
+        }
+        return this._listenerService.deregisterListener(registrationId);
     }
 
     protected onInitialize(): void {}

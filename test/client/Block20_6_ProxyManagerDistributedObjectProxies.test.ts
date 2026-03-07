@@ -315,6 +315,48 @@ describe("ClientTopicProxy", () => {
         const { ClientProxy } = await import("@zenystx/helios-core/client/proxy/ClientProxy");
         expect(ClientTopicProxy.prototype instanceof ClientProxy).toBe(true);
     });
+
+    test("ClientTopicProxy.addMessageListener does not throw (wired through ClientListenerService)", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const client = new HeliosClient();
+        const topic = client.getTopic("listener-test") as any;
+        // Must not throw — should return a registration ID string
+        const regId = topic.addMessageListener(() => {});
+        expect(typeof regId).toBe("string");
+        expect(regId.length).toBeGreaterThan(0);
+        client.shutdown();
+    });
+
+    test("ClientTopicProxy.removeMessageListener does not throw", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const client = new HeliosClient();
+        const topic = client.getTopic("listener-remove-test") as any;
+        const regId = topic.addMessageListener(() => {});
+        const removed = topic.removeMessageListener(regId);
+        expect(removed).toBe(true);
+        // Removing non-existent returns false
+        expect(topic.removeMessageListener("nonexistent")).toBe(false);
+        client.shutdown();
+    });
+
+    test("ClientReliableTopicProxy.addMessageListener does not throw", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const client = new HeliosClient();
+        const rt = client.getReliableTopic("rt-listener-test") as any;
+        const regId = rt.addMessageListener(() => {});
+        expect(typeof regId).toBe("string");
+        client.shutdown();
+    });
+
+    test("ClientReliableTopicProxy.removeMessageListener does not throw", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const client = new HeliosClient();
+        const rt = client.getReliableTopic("rt-listener-remove-test") as any;
+        const regId = rt.addMessageListener(() => {});
+        expect(rt.removeMessageListener(regId)).toBe(true);
+        expect(rt.removeMessageListener("nonexistent")).toBe(false);
+        client.shutdown();
+    });
 });
 
 // ── 8. HeliosClient proxy integration ──────────────────────────────────────────
@@ -499,6 +541,22 @@ describe("Verification: proxy lifecycle end-to-end", () => {
         const objects = manager.getDistributedObjects();
         expect(objects.length).toBe(1);
         expect(objects[0].getName()).toBe("live-queue");
+    });
+
+    test("no deferred listener throws on any topic proxy", async () => {
+        const { HeliosClient } = await import("@zenystx/helios-core/client/HeliosClient");
+        const client = new HeliosClient();
+
+        const topic = client.getTopic("no-throw-verify") as any;
+        const rt = client.getReliableTopic("no-throw-verify") as any;
+
+        // These must NOT throw "deferred to Block 20.7"
+        expect(() => topic.addMessageListener(() => {})).not.toThrow();
+        expect(() => topic.removeMessageListener("x")).not.toThrow();
+        expect(() => rt.addMessageListener(() => {})).not.toThrow();
+        expect(() => rt.removeMessageListener("x")).not.toThrow();
+
+        client.shutdown();
     });
 
     test("stable proxy identity across all service types", async () => {

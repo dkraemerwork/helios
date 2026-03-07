@@ -18,6 +18,7 @@ import { ClientTopicProxy } from "@zenystx/helios-core/client/proxy/ClientTopicP
 import { ClientReliableTopicProxy } from "@zenystx/helios-core/client/proxy/ClientReliableTopicProxy";
 import { ClientExecutorProxy } from "@zenystx/helios-core/client/proxy/ClientExecutorProxy";
 import type { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
+import { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
 
 const MAP_SERVICE = "hz:impl:mapService";
 const QUEUE_SERVICE = "hz:impl:queueService";
@@ -34,6 +35,7 @@ export class ProxyManager {
     private readonly _proxies = new Map<string, ClientProxy>();
     private readonly _factories = new Map<string, ProxyFactory>();
     private _nearCacheManager: ClientNearCacheManager | null = null;
+    private readonly _listenerService: ClientListenerService;
 
     constructor(
         serializationService: SerializationServiceImpl,
@@ -43,6 +45,7 @@ export class ProxyManager {
         this._serializationService = serializationService;
         this._partitionService = partitionService;
         this._invocationService = invocationService;
+        this._listenerService = new ClientListenerService();
 
         this._registerDefaults();
     }
@@ -68,6 +71,7 @@ export class ProxyManager {
         }
 
         const proxy = factory(name);
+        proxy.setListenerService(this._listenerService);
         this._proxies.set(key, proxy);
         return proxy;
     }
