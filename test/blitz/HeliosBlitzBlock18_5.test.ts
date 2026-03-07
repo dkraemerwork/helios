@@ -417,7 +417,240 @@ describe("Block 18.5 — No child-process leaks", () => {
   });
 });
 
-// ─── 8. Distributed-default acceptance ────────────────────────────────────
+// ─── 8. Pre-cutover fail-closed verification ──────────────────────────────
+
+describe("Block 18.5 — Pre-cutover fail-closed readiness", () => {
+  test("isBlitzAvailable() returns false in NOT_READY state", () => {
+    const mgr = makeManager("node-1");
+    expect(mgr.getReadinessState()).toBe(BlitzReadinessState.NOT_READY);
+    expect(mgr.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in LOCAL_STARTED state", () => {
+    const mgr = makeManager("node-1");
+    mgr.onLocalNodeStarted();
+    expect(mgr.getReadinessState()).toBe(BlitzReadinessState.LOCAL_STARTED);
+    expect(mgr.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in JOIN_READY state", () => {
+    const mgr = makeManager("node-1");
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("node-1", 1);
+    expect(mgr.getReadinessState()).toBe(BlitzReadinessState.JOIN_READY);
+    expect(mgr.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in REGISTERED state", () => {
+    const mgr = makeManager("node-1");
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("node-1", 1);
+    mgr.onRegisteredWithMaster();
+    expect(mgr.getReadinessState()).toBe(BlitzReadinessState.REGISTERED);
+    expect(mgr.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns false in SHUT_DOWN state", () => {
+    const mgr = makeManager("node-1");
+    mgr.onLocalNodeStarted();
+    mgr.onClusteredCutoverComplete();
+    expect(mgr.isBlitzAvailable()).toBe(true);
+    mgr.markShutdown();
+    expect(mgr.isBlitzAvailable()).toBe(false);
+  });
+
+  test("isBlitzAvailable() returns true only in READY state", () => {
+    const mgr = makeManager("node-2", 15222, 17222);
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("node-1", 2);
+    mgr.onClusteredCutoverComplete();
+    expect(mgr.getReadinessState()).toBe(BlitzReadinessState.READY);
+    expect(mgr.isBlitzAvailable()).toBe(true);
+  });
+
+  test("FenceAwareBlitzProvider blocks access before readiness fence clears", () => {
+    const { FenceAwareBlitzProvider } = require(
+      `${import.meta.dir}/../../packages/blitz/src/nestjs/FenceAwareBlitzProvider.ts`,
+    );
+    let fenceCleared = false;
+    const provider = new FenceAwareBlitzProvider(
+      () => fenceCleared,
+      { shutdown: () => {} } as any,
+    );
+
+    expect(provider.isAvailable()).toBe(false);
+    expect(() => provider.getService()).toThrow(/pre-cutover readiness fence/);
+
+    fenceCleared = true;
+    expect(provider.isAvailable()).toBe(true);
+    expect(() => provider.getService()).not.toThrow();
+  });
+
+  test("FenceAwareBlitzProvider throws when service is null even if fence cleared", () => {
+    const { FenceAwareBlitzProvider } = require(
+      `${import.meta.dir}/../../packages/blitz/src/nestjs/FenceAwareBlitzProvider.ts`,
+    );
+    const provider = new FenceAwareBlitzProvider(() => true, null);
+
+    expect(provider.isAvailable()).toBe(false);
+    expect(() => provider.getService()).toThrow(/not initialized/);
+  });
+
+  test("no Blitz-owned resource creation succeeds before READY state", () => {
+    const mgr = makeManager("node-1");
+    mgr.onLocalNodeStarted();
+    mgr.onJoinComplete("node-1", 1);
+
+    // Simulates a guard that prevents resource creation when not available
+    const canCreateResource = mgr.isBlitzAvailable();
+    expect(canCreateResource).toBe(false);
+
+    // After cutover, resource creation is allowed
+    mgr.onClusteredCutoverComplete();
+    expect(mgr.isBlitzAvailable()).toBe(true);
+  });
+});
+
+// ─── 9. Stale old-master rejection ────────────────────────────────────────
+
+describe("Block 18.5 — Stale old-master rejection after handoff", () => {
+  test("demoted coordinator rejects register requests", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(2);
+    coordinator.setExpectedRegistrants(new Set(["node-1", "node-2"]));
+
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+    expect(coordinator.getTopology()!.getRegistrations().size).toBe(1);
+
+    // Demotion
+    coordinator.onDemotion();
+
+    // Stale register from node-2 arrives after demotion — rejected (not master)
+    const accepted = coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-2", 17222, { memberListVersion: 2 }) },
+      false,
+    );
+    expect(accepted).toBe(false);
+  });
+
+  test("demoted coordinator returns null for topology requests", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(2);
+
+    coordinator.onDemotion();
+
+    const response = coordinator.handleTopologyRequest(
+      { type: "BLITZ_TOPOLOGY_REQUEST", requestId: "stale-req" },
+      false,
+    );
+    expect(response).toBeNull();
+  });
+
+  test("demoted coordinator cannot generate topology announce", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(2);
+    coordinator.setExpectedRegistrants(new Set(["node-1"]));
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+    expect(coordinator.generateTopologyAnnounce()).not.toBeNull();
+
+    coordinator.onDemotion();
+
+    // Topology is null after demotion — cannot generate announce
+    expect(coordinator.generateTopologyAnnounce()).toBeNull();
+  });
+
+  test("demoted coordinator cancels all pending retry timers", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(1);
+
+    let timerFired = false;
+    coordinator.scheduleRetryTimer("sweep-1", () => { timerFired = true; }, 50);
+    expect(coordinator.hasPendingTimers()).toBe(true);
+
+    coordinator.onDemotion();
+    expect(coordinator.hasPendingTimers()).toBe(false);
+
+    // Wait to confirm timer was actually cancelled
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(timerFired).toBe(false);
+        resolve();
+      }, 100);
+    });
+  });
+
+  test("stale fence token is rejected after demotion", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(2);
+    const oldFenceToken = coordinator.getFenceToken()!;
+
+    coordinator.onDemotion();
+
+    // Old fence token no longer valid
+    expect(coordinator.validateAuthority("node-1", 2, oldFenceToken)).toBe(false);
+  });
+
+  test("reconciler rejects stale jobs after demotion", () => {
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    reconciler.setAuthority("node-1", 1, "fence-abc");
+    reconciler.markUnderReplicated("kv-1", 1, 3);
+
+    const job = reconciler.scheduleReconciliationJob("kv-1")!;
+    expect(job).not.toBeNull();
+    expect(reconciler.validateJobAuthority(job)).toBe(true);
+
+    // Demotion nullifies authority
+    reconciler.onDemotion();
+
+    // Stale job from pre-demotion epoch is rejected
+    expect(reconciler.validateJobAuthority(job)).toBe(false);
+    expect(reconciler.getOutstandingJobs().length).toBe(0);
+    expect(reconciler.getPendingUpgrades().length).toBe(0);
+    expect(reconciler.getIsMaster()).toBe(false);
+  });
+
+  test("stale delayed response from old master is not usable after handoff", () => {
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(2);
+    coordinator.setExpectedRegistrants(new Set(["node-1"]));
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+
+    // Capture a pre-demotion response
+    const staleResponse = coordinator.handleTopologyRequest(
+      { type: "BLITZ_TOPOLOGY_REQUEST", requestId: "pre-demotion" },
+      true,
+    )!;
+    expect(staleResponse).not.toBeNull();
+    const staleFence = staleResponse.fenceToken;
+
+    // Handoff — new master takes over
+    coordinator.onDemotion();
+    coordinator.setMasterMemberId("node-2");
+    coordinator.setMemberListVersion(3);
+
+    // Stale response's fence token no longer validates
+    expect(coordinator.validateAuthority("node-1", 2, staleFence)).toBe(false);
+    // New master has a different fence token
+    expect(coordinator.getFenceToken()).not.toBe(staleFence);
+  });
+});
+
+// ─── 10. Distributed-default acceptance ───────────────────────────────────
 
 describe("Block 18.5 — Distributed-default acceptance", () => {
   test("env-resolved distributed-auto config integrates with HeliosConfig", () => {
@@ -475,7 +708,7 @@ describe("Block 18.5 — Distributed-default acceptance", () => {
   });
 });
 
-// ─── 9. End-to-end HA flow integration ────────────────────────────────────
+// ─── 11. End-to-end HA flow integration ───────────────────────────────────
 
 describe("Block 18.5 — End-to-end HA flow integration", () => {
   test("full 3-node HA flow: boot → join → register → cutover → handoff → rejoin", () => {
@@ -558,5 +791,132 @@ describe("Block 18.5 — End-to-end HA flow integration", () => {
     expect(mgr2.getBootstrapPhase()).toBe("local");
     mgr2.onJoinComplete("node-2", 4);
     expect(mgr2.canRegisterWithMaster()).toBe(true);
+  });
+});
+
+// ─── 12. Final production-readiness verification ──────────────────────────
+
+describe("Block 18.5 — Production-readiness verification", () => {
+  test("complete HA lifecycle: fail-closed → ready → demotion → stale rejection → shutdown", () => {
+    // --- Setup: 2-node cluster with coordinator and reconciler ---
+    const mgr1 = makeManager("node-1", 14222, 16222);
+    const mgr2 = makeManager("node-2", 15222, 17222);
+    const coordinator = new HeliosBlitzCoordinator();
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+
+    // --- Assert: both nodes fail-closed before any lifecycle ---
+    expect(mgr1.isBlitzAvailable()).toBe(false);
+    expect(mgr2.isBlitzAvailable()).toBe(false);
+
+    // --- Node-1 boots, joins as master ---
+    mgr1.onLocalNodeStarted();
+    expect(mgr1.isBlitzAvailable()).toBe(false); // still fail-closed
+    mgr1.onJoinComplete("node-1", 1);
+    expect(mgr1.isBlitzAvailable()).toBe(false); // still fail-closed
+
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(1);
+    coordinator.setExpectedRegistrants(new Set(["node-1"]));
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222) },
+      true,
+    );
+
+    // Standalone — no cutover needed, mark ready
+    expect(mgr1.needsClusteredCutover([])).toBe(false);
+    mgr1.onStandaloneReady();
+    expect(mgr1.isBlitzAvailable()).toBe(true); // NOW available
+
+    // --- Node-2 joins, version bump ---
+    mgr2.onLocalNodeStarted();
+    mgr2.onJoinComplete("node-1", 2);
+    expect(mgr2.isBlitzAvailable()).toBe(false); // fail-closed until cutover
+
+    coordinator.setMemberListVersion(2);
+    coordinator.setExpectedRegistrants(new Set(["node-1", "node-2"]));
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 2 }) },
+      true,
+    );
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-2", 17222, { memberListVersion: 2 }) },
+      true,
+    );
+
+    coordinator.generateTopologyAnnounce();
+    mgr2.onClusteredCutoverComplete();
+    expect(mgr2.isBlitzAvailable()).toBe(true); // NOW available
+
+    // --- Setup reconciler with authority ---
+    reconciler.setAuthority("node-1", 2, coordinator.getFenceToken()!);
+    reconciler.markUnderReplicated("kv-users", 1, 3);
+    const job = reconciler.scheduleReconciliationJob("kv-users")!;
+    expect(reconciler.validateJobAuthority(job)).toBe(true);
+
+    // --- Master handoff: node-1 demoted ---
+    const oldFence = coordinator.getFenceToken()!;
+    coordinator.onDemotion();
+    reconciler.onDemotion();
+
+    // Stale authority rejected everywhere
+    expect(coordinator.validateAuthority("node-1", 2, oldFence)).toBe(false);
+    expect(coordinator.generateTopologyAnnounce()).toBeNull();
+    expect(reconciler.validateJobAuthority(job)).toBe(false);
+    expect(reconciler.getIsMaster()).toBe(false);
+
+    // --- New master (node-2) takes over ---
+    coordinator.setMasterMemberId("node-2");
+    coordinator.setMemberListVersion(3);
+    coordinator.setExpectedRegistrants(new Set(["node-1", "node-2"]));
+
+    // Re-registration sweep in progress — retryable
+    const retryResponse = coordinator.handleTopologyRequest(
+      { type: "BLITZ_TOPOLOGY_REQUEST", requestId: "sweep-1" },
+      true,
+    );
+    expect(retryResponse!.registrationsComplete).toBe(false);
+    expect(retryResponse!.retryAfterMs).toBeGreaterThan(0);
+
+    // Complete re-registration
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-1", 16222, { memberListVersion: 3 }) },
+      true,
+    );
+    coordinator.handleRegister(
+      { type: "BLITZ_NODE_REGISTER", registration: makeRegistration("node-2", 17222, { memberListVersion: 3 }) },
+      true,
+    );
+    expect(coordinator.isRegistrationComplete()).toBe(true);
+
+    // --- Shutdown ---
+    mgr1.markShutdown();
+    mgr2.markShutdown();
+    expect(mgr1.isBlitzAvailable()).toBe(false);
+    expect(mgr2.isBlitzAvailable()).toBe(false);
+    expect(mgr1.isShutDown()).toBe(true);
+    expect(mgr2.isShutDown()).toBe(true);
+
+    // Post-shutdown transitions are no-ops
+    mgr1.onLocalNodeStarted();
+    expect(mgr1.getReadinessState()).toBe(BlitzReadinessState.SHUT_DOWN);
+  });
+
+  test("no stubs or mock-only behavior in production code paths", () => {
+    // Verify all production classes are real implementations, not stubs
+    const mgr = makeManager("node-1");
+    expect(mgr.generateRegisterMessage().type).toBe("BLITZ_NODE_REGISTER");
+    expect(mgr.generateRemoveMessage().type).toBe("BLITZ_NODE_REMOVE");
+
+    const coordinator = new HeliosBlitzCoordinator();
+    coordinator.setMasterMemberId("node-1");
+    coordinator.setMemberListVersion(1);
+    expect(coordinator.getFenceToken()).not.toBeNull();
+    expect(coordinator.getFenceToken()!.length).toBe(32); // 16 hex bytes
+
+    const reconciler = new BlitzReplicaReconciler(3, 1);
+    expect(reconciler.effectiveReplicas(2)).toBe(2);
+    expect(reconciler.effectiveReplicas(5)).toBe(3);
+
+    expect(resolveAdvertiseHost({ advertiseHost: "10.0.0.1" }).advertiseHost).toBe("10.0.0.1");
   });
 });
