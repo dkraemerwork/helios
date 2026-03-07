@@ -109,8 +109,109 @@ meta_path.write_text(
 PY
 }
 
+validate_plan_state() {
+  python3 - "$PLAN" "$1" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+plan_path = Path(sys.argv[1])
+mode = sys.argv[2]
+lines = plan_path.read_text().splitlines()
+
+entry_re = re.compile(
+    r"^- \[(?P<state>[ x])\] \*\*(?P<label>(?:Block [^*]+|Phase [^*]+ checkpoint|Final completion checkpoint))\*\*(?P<tail>.*)$"
+)
+checkbox_re = re.compile(r"^\s*- \[(?P<state>[ x])\] (?P<text>.*)$")
+block_label_re = re.compile(r"^Block (?P<id>.+)$")
+
+
+def master_range(lines):
+    start = next((i for i, line in enumerate(lines) if line.startswith("## Master Todo List") or line.startswith("### Master Todo List")), None)
+    if start is None:
+        raise SystemExit("PLAN STATE ERROR: Missing 'Master Todo List' section")
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("## ") or lines[i].startswith("### "):
+            end = i
+            break
+    return start, end
+
+
+def parse_master(lines):
+    start, end = master_range(lines)
+    out = {}
+    for i in range(start + 1, end):
+        m = entry_re.match(lines[i])
+        if m:
+            out[m.group("label").strip()] = {"state": m.group("state"), "line": lines[i]}
+    return out
+
+
+def block_section(lines, block_id):
+    section_re = re.compile(rf"^### Block {re.escape(block_id)}\b")
+    start = next((i for i, line in enumerate(lines) if section_re.match(line)), None)
+    if start is None:
+        raise SystemExit(f"PLAN STATE ERROR: Missing detailed section for Block {block_id}")
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("### ") or lines[i].startswith("## "):
+            end = i
+            break
+    return lines[start:end]
+
+
+master = parse_master(lines)
+open_blocks = []
+open_checkpoints = []
+
+for label, data in master.items():
+    block_match = block_label_re.match(label)
+    if block_match:
+        block_id = block_match.group("id")
+        section = block_section(lines, block_id)
+        checkboxes = []
+        for line in section:
+            m = checkbox_re.match(line)
+            if m:
+                checkboxes.append((m.group("state"), m.group("text")))
+        if not checkboxes:
+            raise SystemExit(f"PLAN STATE ERROR: Detailed section for Block {block_id} has no checkbox tasks")
+        verification_tasks = [
+            (state, text)
+            for state, text in checkboxes
+            if "verification" in text.lower() or "verify" in text.lower()
+        ]
+        if not verification_tasks:
+            raise SystemExit(f"PLAN STATE ERROR: Block {block_id} has no verification task")
+
+        if data["state"] == "x":
+            open_tasks = [text for state, text in checkboxes if state != "x"]
+            if open_tasks:
+                raise SystemExit(
+                    f"PLAN STATE ERROR: Block {block_id} is marked complete but still has open tasks: "
+                    + "; ".join(open_tasks)
+                )
+            if any(state != "x" for state, _ in verification_tasks):
+                raise SystemExit(f"PLAN STATE ERROR: Block {block_id} is marked complete without a checked verification task")
+        else:
+            open_blocks.append(block_id)
+    else:
+        if data["state"] != "x":
+            open_checkpoints.append(label)
+
+if mode == "complete":
+    if open_blocks:
+        raise SystemExit("PLAN STATE ERROR: Open blocks remain: " + ", ".join(open_blocks))
+    if open_checkpoints:
+        raise SystemExit("PLAN STATE ERROR: Open checkpoints remain: " + ", ".join(open_checkpoints))
+elif mode != "consistency":
+    raise SystemExit(f"PLAN STATE ERROR: Unknown validation mode '{mode}'")
+PY
+}
+
 validate_plan_update() {
-  python3 - "$PLAN_BEFORE" "$PLAN" "$BLOCK_ID" <<'PY'
+  python3 - "$PLAN_BEFORE" "$PLAN" "$BLOCK_ID" "${1:-complete}" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -118,8 +219,11 @@ import sys
 before_path = Path(sys.argv[1])
 after_path = Path(sys.argv[2])
 target_block = sys.argv[3]
+mode = sys.argv[4]
 
-block_re = re.compile(r"^- \[(?P<state>[ x])\] \*\*Block (?P<id>[^*]+)\*\*(?P<tail>.*)$")
+entry_re = re.compile(
+    r"^- \[(?P<state>[ x])\] \*\*(?P<label>(?:Block [^*]+|Phase [^*]+ checkpoint|Final completion checkpoint))\*\*(?P<tail>.*)$"
+)
 checkbox_re = re.compile(r"^\s*- \[(?P<state>[ x])\] (?P<text>.*)$")
 
 
@@ -139,9 +243,9 @@ def parse_master(lines):
     start, end = master_range(lines)
     out = {}
     for i in range(start + 1, end):
-        m = block_re.match(lines[i])
+        m = entry_re.match(lines[i])
         if m:
-            out[m.group("id").strip()] = {"state": m.group("state"), "line": lines[i]}
+            out[m.group("label").strip()] = {"state": m.group("state"), "line": lines[i]}
     return out
 
 
@@ -162,23 +266,51 @@ before_lines = before_path.read_text().splitlines()
 after_lines = after_path.read_text().splitlines()
 before_master = parse_master(before_lines)
 after_master = parse_master(after_lines)
+target_label = f"Block {target_block}"
 
-if target_block not in before_master or target_block not in after_master:
+if target_label not in before_master or target_label not in after_master:
     raise SystemExit(f"VALIDATION ERROR: Missing target block {target_block} in master todo")
-if before_master[target_block]["state"] != " ":
+if before_master[target_label]["state"] != " ":
     raise SystemExit(f"VALIDATION ERROR: Target block {target_block} was not open before iteration")
-if after_master[target_block]["state"] != "x":
+
+if mode == "reopen":
+    if after_master[target_label]["state"] != " ":
+        raise SystemExit(f"VALIDATION ERROR: Target block {target_block} must remain open in reopen mode")
+    reopened = []
+    for label, before in before_master.items():
+        if label == target_label:
+            continue
+        after = after_master.get(label)
+        if after is None:
+            raise SystemExit(f"VALIDATION ERROR: Master todo entry {label} disappeared")
+        if before["state"] != after["state"]:
+            if before["state"] == "x" and after["state"] == " ":
+                reopened.append(label)
+            else:
+                raise SystemExit(
+                    f"VALIDATION ERROR: Reopen mode only allows x -> [ ] transitions outside Block {target_block}; found invalid change in {label}"
+                )
+    if not reopened:
+        raise SystemExit(f"VALIDATION ERROR: Reopen mode for Block {target_block} did not reopen any earlier block/checkpoint")
+    raise SystemExit(0)
+
+if mode != "complete":
+    raise SystemExit(f"VALIDATION ERROR: Unknown validation mode '{mode}'")
+
+if after_master[target_label]["state"] != "x":
     raise SystemExit(f"VALIDATION ERROR: Target block {target_block} was not marked complete")
 
-for block_id, before in before_master.items():
-    if block_id == target_block:
+for label, before in before_master.items():
+    if label == target_label:
         continue
-    after = after_master.get(block_id)
+    after = after_master.get(label)
     if after is None:
-        raise SystemExit(f"VALIDATION ERROR: Master todo block {block_id} disappeared")
+        raise SystemExit(f"VALIDATION ERROR: Master todo entry {label} disappeared")
     if before["state"] != after["state"]:
+        if target_block == "21.5" and not label.startswith("Block ") and before["state"] == " " and after["state"] == "x":
+            continue
         raise SystemExit(
-            f"VALIDATION ERROR: Only Block {target_block} may change in the Master Todo List; found additional change in Block {block_id}"
+            f"VALIDATION ERROR: Only Block {target_block} may change in the Master Todo List; found additional change in {label}"
         )
 
 checkboxes = []
@@ -256,7 +388,8 @@ PRIMARY GOAL
 ══════════════════════════════════════════════════════════
 The end goal is to finish the selected block end to end.
 Do not pick a different block.
-Do not edit any other Master Todo entry.
+Do not edit any other Master Todo entry, except for the special Block 21.5 reopen path and the
+phase/final-checkpoint updates explicitly allowed by the plan.
 All checkbox tasks inside the selected block section must be completed and checked, including the verification task, before the block may be marked complete.
 
 ══════════════════════════════════════════════════════════
@@ -355,11 +488,18 @@ STEP 8 — UPDATE THE PLAN
     a) Check every checkbox task in the selected block section only when actually completed
     b) Ensure at least one verification checkbox in the selected block is checked only after end-to-end verification
     c) In the Master Todo List: change `- [ ] **Block X.Y**` → `- [x] **Block X.Y**` only after all selected-block tasks are checked
-    d) Do NOT change any other Master Todo block line
+    d) Do NOT change any other Master Todo block line, except in the special Block 21.5 reopen path described below
     e) If you added new tasks to the selected block during execution, they must also be checked before
        the block can be marked complete
 
+  SPECIAL CASE FOR BLOCK 21.5:
+    If the final execution-contract audit finds any earlier mismatch, you must reopen every affected
+    earlier `**Block ...**`, `**Phase ... checkpoint**`, or `**Final completion checkpoint**` line,
+    leave `**Block 21.5**` open, commit the reopen sweep, and then stop so the loop can resume from
+    the first reopened item.
+
 STEP 9 — COMMIT AND STOP
+  Normal completion path:
     git -C %%ROOT%% add -A
     git -C %%ROOT%% commit -m "feat(<module>): <BlockName> — <N> tests green"
 
@@ -371,6 +511,15 @@ STEP 9 — COMMIT AND STOP
     VERIFY-CHECK: pass
     ✅  <BlockName>  —  <N> tests green
     GATE-CHECK: block=<BLOCK_ID> required=<N> passed=<N> labels=<label1,label2,...>
+
+  Reopen path (allowed only when `%%BLOCK_ID%%` is `21.5` and the audit finds earlier mismatches):
+    git -C %%ROOT%% add -A
+    git -C %%ROOT%% commit -m "fix(plan): reopen mismatched blocks from final audit"
+
+  Print exactly these lines in reopen path:
+    BLOCK-ID: <BLOCK_ID>
+    REOPEN-CHECK: pass
+    REOPENED: <comma-separated labels>
 
   Then STOP. Do not pick another block. The loop will restart for the next one.
 
@@ -415,10 +564,20 @@ ENDOFPROMPT
 }
 
 for ITERATION in $(seq 1 $MAX_ITERATIONS); do
+  if ! validate_plan_state consistency; then
+    echo ""
+    echo "  Plan integrity check failed before selecting the next block. Fix the plan state before rerunning the loop."
+    exit 1
+  fi
+
   if ! extract_next_block; then
     echo ""
-    echo "  No open block found or plan parsing failed. Stopping loop."
-    break
+    if validate_plan_state complete; then
+      echo "  No open block found and the full plan validates complete. Stopping loop."
+      break
+    fi
+    echo "  No open block found, but the plan is not fully closed or the plan parser failed."
+    exit 1
   fi
 
   # shellcheck disable=SC1090
@@ -448,6 +607,8 @@ for ITERATION in $(seq 1 $MAX_ITERATIONS); do
 
   GATE_LINE="$(grep '^GATE-CHECK:' "$RUN_LOG" | tail -n 1 || true)"
   BLOCK_LINE_OUT="$(grep '^BLOCK-ID:' "$RUN_LOG" | tail -n 1 || true)"
+  REOPEN_LINE="$(grep '^REOPEN-CHECK:' "$RUN_LOG" | tail -n 1 || true)"
+  REOPENED_LINE="$(grep '^REOPENED:' "$RUN_LOG" | tail -n 1 || true)"
   RED_LINE="$(grep '^RED-CHECK:' "$RUN_LOG" | tail -n 1 || true)"
   GREEN_LINE="$(grep '^GREEN-CHECK:' "$RUN_LOG" | tail -n 1 || true)"
   TSC_LINE="$(grep '^TSC-CHECK:' "$RUN_LOG" | tail -n 1 || true)"
@@ -460,6 +621,30 @@ for ITERATION in $(seq 1 $MAX_ITERATIONS); do
     continue
   fi
 
+  if [[ "$BLOCK_ID" == "21.5" && "$REOPEN_LINE" == "REOPEN-CHECK: pass" ]]; then
+    if [[ -z "$REOPENED_LINE" ]]; then
+      echo ""
+      echo "  Block $BLOCK_ID reported reopen mode without a REOPENED line. Retrying in 15s..."
+      sleep 15
+      continue
+    fi
+    if ! validate_plan_update reopen; then
+      echo ""
+      echo "  Block $BLOCK_ID failed reopen-mode plan validation. Retrying in 15s..."
+      sleep 15
+      continue
+    fi
+    if ! validate_plan_state consistency; then
+      echo ""
+      echo "  Block $BLOCK_ID produced an inconsistent plan state after reopening work. Stop and inspect before rerunning."
+      exit 1
+    fi
+    echo ""
+    echo "  Block $BLOCK_ID reopened earlier work: ${REOPENED_LINE#REOPENED: }"
+    sleep 2
+    continue
+  fi
+
   for REQUIRED_LINE in "$RED_LINE" "$GREEN_LINE" "$TSC_LINE" "$VERIFY_LINE"; do
     if [[ ! "$REQUIRED_LINE" =~ :[[:space:]]pass$ ]]; then
       echo ""
@@ -468,6 +653,26 @@ for ITERATION in $(seq 1 $MAX_ITERATIONS); do
       continue 2
     fi
   done
+
+  if [[ "$BLOCK_ID" == "21.5" ]]; then
+    for FINAL_LINE in \
+      "PHASE-17R-FINAL: PASS" \
+      "PHASE-18-FINAL: PASS" \
+      "PHASE-19-FINAL: PASS" \
+      "PHASE-19T-FINAL: PASS" \
+      "PHASE-20-FINAL: PASS" \
+      "PHASE-21-FINAL: PASS" \
+      "REPO-HONESTY-SWEEP: PASS" \
+      "INDEPENDENT-FINAL-VERIFICATION: PASS" \
+      "TYPESCRIPT-PORT-DONE: PASS"; do
+      if ! grep -qx "$FINAL_LINE" "$RUN_LOG"; then
+        echo ""
+        echo "  Block $BLOCK_ID missing required final proof line '$FINAL_LINE'. Retrying in 15s..."
+        sleep 15
+        continue 2
+      fi
+    done
+  fi
 
   if [[ -z "$GATE_LINE" ]]; then
     echo ""
@@ -497,6 +702,12 @@ for ITERATION in $(seq 1 $MAX_ITERATIONS); do
     echo "  Block $BLOCK_ID failed strict plan validation. Retrying in 15s..."
     sleep 15
     continue
+  fi
+
+  if ! validate_plan_state consistency; then
+    echo ""
+    echo "  Block $BLOCK_ID left the plan in an inconsistent state. Stop and inspect before rerunning."
+    exit 1
   fi
 
   echo ""

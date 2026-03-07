@@ -184,6 +184,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Validate reliable-topic configs: backing ringbuffer must have backupCount >= 1
     this._validateReliableTopicConfigs();
 
+    // Validate executor configs: reject inline backend in production unless testing override is set
+    this._validateExecutorConfigs();
+
     // Reliable topic service — always available (single-node ringbuffer-backed)
     this._reliableTopicService = new ReliableTopicService(this._name, this._config);
 
@@ -249,6 +252,18 @@ export class HeliosInstanceImpl implements HeliosInstance {
           `Reliable topic '${name}': backing ringbuffer '${rbName}' has backupCount=${rbConfig.getBackupCount()}, ` +
           `but the v1 publish completion contract requires backupCount >= 1. ` +
           `Set backupCount >= 1 on the backing ringbuffer config or remove the reliable-topic config.`,
+        );
+      }
+    }
+  }
+
+  private _validateExecutorConfigs(): void {
+    for (const [name, config] of this._config.getExecutorConfigs()) {
+      if (config.getExecutionBackend() === 'inline' && !config.getAllowInlineBackend()) {
+        throw new Error(
+          `Executor "${name}" is configured with inline backend but allowInlineBackend is not set. ` +
+          'The inline execution backend is not supported in production. ' +
+          'Use scatter (default) for production, or set allowInlineBackend(true) for test/dev bootstrap flows.',
         );
       }
     }

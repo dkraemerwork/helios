@@ -510,19 +510,26 @@ describe('Block 17R.1 — Executor Scatter Production Closure', () => {
 
     // ── Track D: Production-mode inline rejection ─────────────────────────────
 
-    test('24. Production-mode getExecutorService rejects inline backend without testing override', async () => {
+    test('24. Production-mode rejects inline backend without testing override at startup and getExecutorService', async () => {
         const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
         const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
 
+        // Pre-registered config: constructor rejects at startup
         const execCfg = new ExecutorConfig('my-exec');
         execCfg.setExecutionBackend('inline');
-
         const hcfg = new HeliosConfig('prod-inline-reject');
         hcfg.addExecutorConfig(execCfg);
+        expect(() => new HeliosInstanceImpl(hcfg)).toThrow(/inline.*production|production.*inline/i);
 
-        const instance = new HeliosInstanceImpl(hcfg);
+        // Lazy path: config not pre-registered, added at getExecutorService time via default fallback
+        const hcfg2 = new HeliosConfig('prod-inline-reject-lazy');
+        const instance = new HeliosInstanceImpl(hcfg2);
         try {
-            expect(() => instance.getExecutorService('my-exec')).toThrow(/inline.*production|production.*inline/i);
+            // Manually add an inline config after construction to test lazy path
+            const lazyCfg = new ExecutorConfig('lazy-exec');
+            lazyCfg.setExecutionBackend('inline');
+            hcfg2.addExecutorConfig(lazyCfg);
+            expect(() => instance.getExecutorService('lazy-exec')).toThrow(/inline.*production|production.*inline/i);
         } finally {
             instance.shutdown();
         }
@@ -555,9 +562,76 @@ describe('Block 17R.1 — Executor Scatter Production Closure', () => {
         expect(config.getAllowInlineBackend()).toBe(true);
     });
 
+    // ── Track D: Startup-time fail-fast validation ────────────────────────────
+
+    test('27. HeliosInstance constructor fails fast when pre-registered executor config uses inline without override', async () => {
+        const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
+        const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
+
+        const execCfg = new ExecutorConfig('eager-exec');
+        execCfg.setExecutionBackend('inline');
+        // NOT setting allowInlineBackend
+
+        const hcfg = new HeliosConfig('startup-fail-fast');
+        hcfg.addExecutorConfig(execCfg);
+
+        // Constructor itself must throw — before any getExecutorService() call
+        expect(() => new HeliosInstanceImpl(hcfg)).toThrow(/inline.*production|production.*inline/i);
+    });
+
+    test('28. HeliosInstance constructor succeeds when pre-registered inline executor has testing override', async () => {
+        const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
+        const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
+
+        const execCfg = new ExecutorConfig('test-exec');
+        execCfg.setExecutionBackend('inline');
+        execCfg.setAllowInlineBackend(true);
+
+        const hcfg = new HeliosConfig('startup-override-ok');
+        hcfg.addExecutorConfig(execCfg);
+
+        const instance = new HeliosInstanceImpl(hcfg);
+        try {
+            expect(instance).toBeDefined();
+        } finally {
+            instance.shutdown();
+        }
+    });
+
+    test('29. HeliosInstance constructor succeeds when no pre-registered executor configs exist', async () => {
+        const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
+        const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
+
+        const hcfg = new HeliosConfig('no-exec-configs');
+        const instance = new HeliosInstanceImpl(hcfg);
+        try {
+            expect(instance).toBeDefined();
+        } finally {
+            instance.shutdown();
+        }
+    });
+
+    test('30. HeliosInstance constructor fails fast with multiple executor configs if any uses inline without override', async () => {
+        const { HeliosConfig } = await import('@zenystx/helios-core/config/HeliosConfig.js');
+        const { HeliosInstanceImpl } = await import('@zenystx/helios-core/instance/impl/HeliosInstanceImpl.js');
+
+        const scatterCfg = new ExecutorConfig('ok-exec');
+        // default is scatter, fine
+
+        const inlineCfg = new ExecutorConfig('bad-exec');
+        inlineCfg.setExecutionBackend('inline');
+        // NOT setting allowInlineBackend
+
+        const hcfg = new HeliosConfig('multi-exec-fail');
+        hcfg.addExecutorConfig(scatterCfg);
+        hcfg.addExecutorConfig(inlineCfg);
+
+        expect(() => new HeliosInstanceImpl(hcfg)).toThrow(/inline.*production|production.*inline/i);
+    });
+
     // ── Track E: End-to-end verification ─────────────────────────────────────
 
-    test('27. VERIFICATION: distributed executor work never runs on the main event loop with scatter backend', async () => {
+    test('31. VERIFICATION: distributed executor work never runs on the main event loop with scatter backend', async () => {
         const config = new ExecutorConfig('verify');
         config.setExecutionBackend('scatter');
         const registry = new TaskTypeRegistry();
