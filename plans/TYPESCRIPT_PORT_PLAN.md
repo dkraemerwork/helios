@@ -340,13 +340,13 @@ Goal: make the client runtime actually connect, route requests, and recover list
 
 Tasks:
 
-- [ ] Add `ClientConnection`, `ClientConnectionManager`, and connection-state ownership for the remote client runtime.
-- [ ] Implement bootstrap, multi-address connect, auth failure classification, heartbeat, timeout, backoff, reconnect, and cluster-mismatch behavior.
-- [ ] Add `ClientInvocation`, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, and `ClientListenerService`.
-- [ ] Add member-list refresh, partition-table refresh, correlation tracking, retry classification, and redirection/resubmission behavior.
-- [ ] Add listener registration bookkeeping, reconnect re-registration, and event-delivery semantics through one central listener service.
-- [ ] Add the required member-side protocol tasks for cluster view, partition metadata, listener registration/removal, and distributed-object metadata.
-- [ ] Run a verification task that proves all remote calls and listeners flow through the central client runtime services only, with no in-process fake backing stores or test-only runtime shortcuts.
+- [x] Add `ClientConnection`, `ClientConnectionManager`, and connection-state ownership for the remote client runtime.
+- [x] Implement bootstrap, multi-address connect, auth failure classification, heartbeat, timeout, backoff, reconnect, and cluster-mismatch behavior.
+- [x] Add `ClientInvocation`, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, and `ClientListenerService`.
+- [x] Add member-list refresh, partition-table refresh, correlation tracking, retry classification, and redirection/resubmission behavior.
+- [x] Add listener registration bookkeeping, reconnect re-registration, and event-delivery semantics through one central listener service.
+- [x] Add the required member-side protocol tasks for cluster view, partition metadata, listener registration/removal, and distributed-object metadata.
+- [x] Run a verification task that proves all remote calls and listeners flow through the central client runtime services only, with no in-process fake backing stores or test-only runtime shortcuts.
 
 ### Block 20.5 — Server-capability closure for shared `HeliosInstance` contract
 
@@ -511,7 +511,7 @@ Tasks:
 - [x] **Block 20.1** — Client parity matrix + surface freeze + packaging contract (`src/client` keep/rewrite/move/delete matrix, Hazelcast-to-Helios parity matrix, `HeliosClient implements HeliosInstance`, `getConfig()` contract decision, root export cleanup, wildcard export freeze) — ~12 tests/docs gates
 - [x] **Block 20.2** — Public client API + config model + serialization foundation (`HeliosClient`, lifecycle shell, shutdown-all policy, real `ClientConfig`, typed network/security/retry/failover config, production config loading, single serialization owner) — ~18 tests
 - [x] **Block 20.3** — Member-side client protocol server + auth/session lifecycle (server-owned client protocol runtime outside `src/client`, moved task handlers, auth/session registry, request dispatch, response correlation, heartbeat/disconnect handling) — ~20 tests
-- [ ] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests
+- [x] **Block 20.4** — Client connection manager + invocation/cluster/partition/listener services (`ClientConnectionManager`, reconnect/backoff/auth classification, `ClientInvocationService`, `ClientClusterService`, `ClientPartitionService`, `ClientListenerService`, member-list/partition refresh, listener re-registration) — ~22 tests
 - [ ] **Block 20.5** — Server-capability closure for shared `HeliosInstance` contract (method-by-method audit, remote closure for retained contract items, blockers resolved for list/set/reliableTopic/multimap/replicatedMap/distributedObject/getConfig/executor, no permanent half-stubs on `HeliosClient`) — ~18 tests
 - [ ] **Block 20.6** — Proxy manager + distributed object lifecycle + core remote proxies (`ProxyManager`, distributed object create/destroy/list tasks, `ClientMapProxy`, `ClientQueueProxy`, `ClientTopicProxy`, additional proxies only after server closure, orphan codec deletion) — ~24 tests
 - [ ] **Block 20.7** — Near-cache completion + advanced feature closure (real remote near-cache wrapping, binary metadata fetch, reconnect repair/stale-read protection, advanced-feature keep/defer closure for cache/query-cache/transactions/SQL/secondary services) — ~22 tests
