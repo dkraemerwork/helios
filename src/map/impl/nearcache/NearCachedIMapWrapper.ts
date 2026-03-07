@@ -159,6 +159,16 @@ export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
         return this._delegate.removeEntryListener(listenerId);
     }
 
+    addPartitionLostListener(
+        listener: (event: import('@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl').MapPartitionLostEvent) => void,
+    ): string {
+        return this._delegate.addPartitionLostListener(listener);
+    }
+
+    removePartitionLostListener(listenerId: string): boolean {
+        return this._delegate.removePartitionLostListener(listenerId);
+    }
+
     lock(key: K): void { this._delegate.lock(key); }
     tryLock(key: K): boolean { return this._delegate.tryLock(key); }
     unlock(key: K): void { this._delegate.unlock(key); }

@@ -8,6 +8,7 @@ import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
+import type { MapPartitionLostEvent } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 
 export interface IMap<K, V> {
     /** Returns the name of this map. */
@@ -104,6 +105,18 @@ export interface IMap<K, V> {
 
     /** Removes the listener with the given registration ID. Returns true if removed. */
     removeEntryListener(listenerId: string): boolean;
+
+    // ── Partition-lost listeners ──────────────────────────────────────────────
+
+    /**
+     * Adds a map-scoped partition-lost listener.
+     * Port of Hazelcast {@code IMap.addPartitionLostListener(MapPartitionLostListener)}.
+     * @returns a registration ID that can be passed to removePartitionLostListener
+     */
+    addPartitionLostListener(listener: (event: MapPartitionLostEvent) => void): string;
+
+    /** Removes the partition-lost listener with the given registration ID. */
+    removePartitionLostListener(listenerId: string): boolean;
 
     // ── Locking ──────────────────────────────────────────────────────────────
 

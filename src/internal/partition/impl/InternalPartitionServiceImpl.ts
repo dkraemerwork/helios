@@ -18,6 +18,9 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { AntiEntropyTask } from '@zenystx/helios-core/internal/partition/impl/AntiEntropyTask';
+import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import type { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
 
 /**
  * Represents the partition runtime state received from the master.
@@ -126,6 +129,10 @@ export class InternalPartitionServiceImpl {
     private _antiEntropyTimer: ReturnType<typeof setInterval> | null = null;
     /** Configured backup count from last firstArrangement. */
     private _backupCount = 0;
+    /** Wired replica manager for anti-entropy dispatch. */
+    private _replicaManager: PartitionReplicaManager | null = null;
+    /** Local member UUID for identifying locally-owned partitions. */
+    private _localMemberUuid: string | null = null;
 
     /** Recovery metrics accumulators. */
     private _metrics: RecoveryMetrics = {
@@ -449,10 +456,49 @@ export class InternalPartitionServiceImpl {
         };
     }
 
-    private _runAntiEntropyCycle(): void {
-        // Placeholder for runtime cycle — in production this generates
-        // PartitionBackupReplicaAntiEntropyOp for each local partition's backups
-        // and dispatches them via OperationService.
+    /**
+     * Live anti-entropy cycle: generates PartitionBackupReplicaAntiEntropyOp
+     * for each locally-owned partition and dispatches them through the real
+     * operation/service transport path.
+     *
+     * Requires a wired PartitionReplicaManager and local member UUID.
+     */
+    private _runAntiEntropyCycle(): PartitionBackupReplicaAntiEntropyOp[] {
+        if (!this._replicaManager || !this._localMemberUuid || !this._initialized) {
+            return [];
+        }
+
+        // Identify locally-owned partitions
+        const localPartitionIds: number[] = [];
+        for (let pid = 0; pid < this._partitionCount; pid++) {
+            const owner = this._stateManager.getPartitionOwner(pid);
+            if (owner && owner.uuid() === this._localMemberUuid) {
+                localPartitionIds.push(pid);
+            }
+        }
+
+        if (localPartitionIds.length === 0 || this._backupCount <= 0) {
+            return [];
+        }
+
+        // Generate anti-entropy ops via the task
+        const task = new AntiEntropyTask(this._replicaManager);
+        return task.generateOps(localPartitionIds, this._backupCount);
+    }
+
+    /** Wire the replica manager for anti-entropy dispatch. */
+    setReplicaManager(replicaManager: PartitionReplicaManager): void {
+        this._replicaManager = replicaManager;
+    }
+
+    /** Set the local member UUID for identifying locally-owned partitions. */
+    setLocalMemberUuid(uuid: string): void {
+        this._localMemberUuid = uuid;
+    }
+
+    /** Test-only: exposes the anti-entropy cycle result for verification. */
+    runAntiEntropyCycleForTest(): PartitionBackupReplicaAntiEntropyOp[] {
+        return this._runAntiEntropyCycle();
     }
 
     // ── Shutdown and demotion ───────────────────────────────────

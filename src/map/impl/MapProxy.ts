@@ -65,6 +65,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Set of serialized key strings that are currently locked. */
     private readonly _locks = new Set<string>();
 
+    /** Map-scoped partition-lost listeners keyed by registration ID. */
+    private readonly _partitionLostListeners = new Map<string, (event: import('@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl').MapPartitionLostEvent) => void>();
+
     /** MapDataStore: wired lazily on first store-touching call. */
     private _mapDataStore: MapDataStore<K, V> = EmptyMapDataStore.empty<K, V>();
 
@@ -454,6 +457,20 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     removeEntryListener(listenerId: string): boolean {
         return this._listeners.delete(listenerId);
+    }
+
+    // ── Partition-lost listeners ──────────────────────────────────────────
+
+    addPartitionLostListener(
+        listener: (event: import('@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl').MapPartitionLostEvent) => void,
+    ): string {
+        const id = crypto.randomUUID();
+        this._partitionLostListeners.set(id, listener);
+        return id;
+    }
+
+    removePartitionLostListener(listenerId: string): boolean {
+        return this._partitionLostListeners.delete(listenerId);
     }
 
     // ── Locking ───────────────────────────────────────────────────────────
