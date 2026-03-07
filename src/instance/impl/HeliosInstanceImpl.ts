@@ -80,6 +80,7 @@ import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/C
 import { HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
+import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -111,6 +112,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _distributedQueueService: DistributedQueueService | null = null;
   private _distributedTopicService: DistributedTopicService | null = null;
   private _reliableTopicService: ReliableTopicService;
+  private _ringbufferService!: RingbufferService;
 
   // Per-name data-structure caches (same name → same instance)
   private readonly _maps = new Map<string, MapProxy<unknown, unknown>>();
@@ -201,9 +203,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Validate executor configs: reject inline backend in production unless testing override is set
     this._validateExecutorConfigs();
 
-    // Reliable topic service — always available (single-node ringbuffer-backed)
-    this._reliableTopicService = new ReliableTopicService(this._name, this._config);
-
     // Lifecycle and cluster
     this._lifecycleService = new HeliosLifecycleService();
     this._cluster = new LocalCluster();
@@ -211,6 +210,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Start TCP networking if configured (creates NodeEngine with routing)
     // or create default single-node NodeEngine
     this._startNetworking();
+
+    // RingbufferService — backs reliable topic storage through service containers
+    this._ringbufferService = new RingbufferService(this._nodeEngine);
+
+    // Reliable topic service — always available (single-node ringbuffer-backed via RingbufferService)
+    this._reliableTopicService = new ReliableTopicService(this._name, this._config, this._ringbufferService);
 
     // Initialize Blitz lifecycle manager if configured
     this._initBlitzLifecycle();
@@ -886,6 +891,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   getNodeEngine(): NodeEngineImpl {
     return this._nodeEngine;
+  }
+
+  getRingbufferService(): RingbufferService {
+    return this._ringbufferService;
   }
 
   // ── Near-cache access ─────────────────────────────────────────────────────

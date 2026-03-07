@@ -4,6 +4,10 @@
  * plain MessageListener and future ReliableMessageListener contracts.
  *
  * Port of com.hazelcast.topic.impl.reliable.MessageRunner.
+ *
+ * Block 19T.1: Supports notify-driven wakeup — when new items are appended
+ * the service calls notify() which immediately triggers a poll instead of
+ * waiting for the next polling interval.
  */
 import { Message } from "@zenystx/helios-core/topic/Message";
 import type { MessageListener } from "@zenystx/helios-core/topic/MessageListener";
@@ -14,6 +18,7 @@ export class ReliableTopicListenerRunner<T> {
   private _sequence: number;
   private _cancelled = false;
   private _pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private _waiting = false;
   private readonly _topicName: string;
   private readonly _listener: MessageListener<T>;
   private readonly _ringbuffer: ArrayRingbuffer<ReliableTopicMessageRecord>;
@@ -46,10 +51,27 @@ export class ReliableTopicListenerRunner<T> {
       clearTimeout(this._pollTimer);
       this._pollTimer = null;
     }
+    this._waiting = false;
   }
 
   isCancelled(): boolean {
     return this._cancelled;
+  }
+
+  /**
+   * Called by ReliableTopicService when new items are appended to the
+   * backing ringbuffer. Immediately triggers a poll if the runner is
+   * currently waiting for data.
+   */
+  notify(): void {
+    if (this._cancelled || !this._waiting) return;
+    this._waiting = false;
+    if (this._pollTimer !== null) {
+      clearTimeout(this._pollTimer);
+      this._pollTimer = null;
+    }
+    // Use queueMicrotask for immediate but non-recursive delivery
+    queueMicrotask(() => this._poll());
   }
 
   private _schedulePoll(): void {
@@ -68,11 +90,14 @@ export class ReliableTopicListenerRunner<T> {
       this._sequence = head;
     }
 
-    // Nothing to read yet
+    // Nothing to read yet — mark as waiting for notify
     if (this._sequence > tail) {
+      this._waiting = true;
       this._schedulePoll();
       return;
     }
+
+    this._waiting = false;
 
     // Read up to batchSize items
     let count = 0;

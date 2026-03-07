@@ -24,10 +24,12 @@ export class ReliableTopicProxyImpl<T> implements ITopic<T> {
   }
 
   publish(message: T): void {
+    this._checkDestroyed();
     this._service.publish(this._name, message);
   }
 
   publishAsync(message: T): Promise<void> {
+    this._checkDestroyed();
     return this._service.publishAsync(this._name, message);
   }
 
@@ -61,5 +63,11 @@ export class ReliableTopicProxyImpl<T> implements ITopic<T> {
     this._destroyed = true;
     this._service.destroy(this._name);
     this._onDestroy?.();
+  }
+
+  private _checkDestroyed(): void {
+    if (this._destroyed) {
+      throw new Error(`Topic '${this._name}' has been destroyed`);
+    }
   }
 }

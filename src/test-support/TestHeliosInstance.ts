@@ -18,6 +18,7 @@ import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
+import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { IList } from "@zenystx/helios-core/collection/IList";
@@ -37,7 +38,8 @@ export class TestHeliosInstance {
   private readonly sets = new Map<string, SetImpl<unknown>>();
   private readonly topics = new Map<string, TopicImpl<unknown>>();
   private readonly reliableTopics = new Map<string, ITopic<unknown>>();
-  private readonly _reliableTopicService = new ReliableTopicService("test-instance", new HeliosConfig());
+  private readonly _ringbufferService: RingbufferService;
+  private readonly _reliableTopicService: ReliableTopicService;
   private readonly multiMaps = new Map<
     string,
     MultiMapImpl<unknown, unknown>
@@ -46,6 +48,8 @@ export class TestHeliosInstance {
 
   constructor(nodeEngine?: TestNodeEngine) {
     this.nodeEngine = nodeEngine ?? new TestNodeEngine();
+    this._ringbufferService = new RingbufferService(this.nodeEngine);
+    this._reliableTopicService = new ReliableTopicService("test-instance", new HeliosConfig(), this._ringbufferService);
     this.nodeEngine.registerService(
       "hz:impl:mapService",
       this._mapContainerService,
