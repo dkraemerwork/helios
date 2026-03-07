@@ -115,7 +115,6 @@ describe('Block 21.4 — Multi-process clustered MapStore production proof', () 
         if (cluster) await cluster.shutdownAll();
         for (const p of proxies) p.stop();
         proxies = [];
-        portCounter = 0;
     });
 
     // ═══════════════════════════════════════════════════════════

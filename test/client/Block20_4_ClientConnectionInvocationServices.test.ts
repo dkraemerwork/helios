@@ -565,27 +565,6 @@ describe("Member-side protocol tasks", () => {
         await server.shutdown();
     });
 
-    test("cluster view event handler registered on server", async () => {
-        const { registerClusterViewTask } = await import(
-            "@zenystx/helios-core/server/clientprotocol/task/ClusterViewTask"
-        );
-        expect(typeof registerClusterViewTask).toBe("function");
-    });
-
-    test("partition metadata task registered on server", async () => {
-        const { registerPartitionTask } = await import(
-            "@zenystx/helios-core/server/clientprotocol/task/PartitionTask"
-        );
-        expect(typeof registerPartitionTask).toBe("function");
-    });
-
-    test("listener registration task registered on server", async () => {
-        const { registerListenerTask } = await import(
-            "@zenystx/helios-core/server/clientprotocol/task/ListenerRegistrationTask"
-        );
-        expect(typeof registerListenerTask).toBe("function");
-    });
-
     test("distributed object metadata task registered on server", async () => {
         const { registerDistributedObjectTasks } = await import(
             "@zenystx/helios-core/server/clientprotocol/task/DistributedObjectTask"

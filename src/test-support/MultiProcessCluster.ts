@@ -60,6 +60,14 @@ export class MultiProcessCluster {
         };
         this._members.set(opts.name, handle);
 
+        // Reject all pending IPC messages when the process exits unexpectedly
+        proc.exited.then(() => {
+            for (const [, p] of handle.pending) {
+                p.reject(new Error(`Process exited: ${opts.name}`));
+            }
+            handle.pending.clear();
+        });
+
         // Wait for worker ready signal
         await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Worker ready timeout')), 10000);
@@ -235,7 +243,7 @@ export class MultiProcessCluster {
      */
     async shutdownMember(memberName: string): Promise<void> {
         try {
-            await this._send(memberName, { type: 'shutdown' }, 5000);
+            await this._send(memberName, { type: 'shutdown' }, 3000);
         } catch {
             // If IPC fails, force kill
             this.killMember(memberName);
@@ -306,7 +314,13 @@ export class MultiProcessCluster {
                 reject: (e: Error) => { clearTimeout(timeout); reject(e); },
             });
 
-            handle.proc.send(msg);
+            try {
+                handle.proc.send(msg);
+            } catch {
+                handle.pending.delete(id);
+                clearTimeout(timeout);
+                reject(new Error(`IPC send failed (process exited): ${memberName}`));
+            }
         });
     }
 }

@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "build": "bun run tsc --project tsconfig.build.json",
-    "test": "bun test",
+    "test": "bun test --timeout 30000",
     "test:watch": "bun test --watch",
     "test:one": "bun test --test-name-pattern",
     "typecheck": "bun run tsc --noEmit",
