@@ -90,6 +90,15 @@ export interface RecoveryMetrics {
 
 type PartitionLostListener = (event: PartitionLostEvent) => void;
 
+/** Map-scoped partition-lost event — Hazelcast MapPartitionLostEvent parity. */
+export interface MapPartitionLostEvent {
+    mapName: string;
+    partitionId: number;
+    lostReplicaCount: number;
+}
+
+type MapPartitionLostListener = (event: MapPartitionLostEvent) => void;
+
 export class InternalPartitionServiceImpl {
     private readonly _stateManager: PartitionStateManager;
     private readonly _partitionCount: number;
@@ -103,6 +112,8 @@ export class InternalPartitionServiceImpl {
     private readonly _snapshots = new Map<string, PartitionTableView>();
     /** Partition-lost listeners keyed by registration ID. */
     private readonly _partitionLostListeners = new Map<string, PartitionLostListener>();
+    /** Map-scoped partition-lost listeners: registrationId → { mapName, listener }. */
+    private readonly _mapPartitionLostListeners = new Map<string, { mapName: string; listener: MapPartitionLostListener }>();
     /** Pending replica sync requests keyed by sync ID. */
     private readonly _pendingSyncRequests = new Map<string, SyncRequestInfo>();
     /** Fenced rejoining member UUIDs. */
@@ -314,6 +325,26 @@ export class InternalPartitionServiceImpl {
         for (const listener of this._partitionLostListeners.values()) {
             listener(event);
         }
+        // Emit to all registered map-scoped listeners
+        for (const entry of this._mapPartitionLostListeners.values()) {
+            entry.listener({
+                mapName: entry.mapName,
+                partitionId: event.partitionId,
+                lostReplicaCount: event.lostReplicaCount,
+            });
+        }
+    }
+
+    // ── Map-scoped partition-lost events (R5/R8 parity) ────────
+
+    onMapPartitionLost(mapName: string, listener: MapPartitionLostListener): string {
+        const id = crypto.randomUUID();
+        this._mapPartitionLostListeners.set(id, { mapName, listener });
+        return id;
+    }
+
+    removeMapPartitionLostListener(listenerId: string): boolean {
+        return this._mapPartitionLostListeners.delete(listenerId);
     }
 
     // ── Sync request management (R7) ────────────────────────────

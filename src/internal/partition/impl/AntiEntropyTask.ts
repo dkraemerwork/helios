@@ -29,12 +29,14 @@ export class AntiEntropyTask {
 
         for (const partitionId of localPartitionIds) {
             const versions = this._replicaManager.getPartitionReplicaVersions(partitionId);
+            const namespaceVersions = this._replicaManager.getAllNamespaceVersions(partitionId);
 
             for (let replicaIndex = 1; replicaIndex <= backupCount; replicaIndex++) {
                 ops.push(new PartitionBackupReplicaAntiEntropyOp(
                     partitionId,
                     versions,
                     replicaIndex,
+                    namespaceVersions.size > 0 ? namespaceVersions : undefined,
                 ));
             }
         }
