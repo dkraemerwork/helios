@@ -8,8 +8,9 @@
  * TestHeliosInstance remains available for lightweight unit tests that do not
  * need the full service registry.
  *
- * Block 7.5 addition: when NetworkConfig has TCP-IP join enabled, a
- * TcpClusterTransport is started and map mutations are broadcast to peers.
+ * Block 21.1: When TCP-IP join is enabled, map operations route through
+ * OperationService with owner-routed partition dispatch (no legacy
+ * MAP_PUT/MAP_REMOVE/MAP_CLEAR broadcast).
  */
 import { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
@@ -17,8 +18,17 @@ import { SerializationConfig } from "@zenystx/helios-core/internal/serialization
 import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
-import { NetworkedMapProxy } from "@zenystx/helios-core/map/impl/NetworkedMapProxy";
 import { NearCachedIMapWrapper } from "@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper";
+import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
+import { Address } from "@zenystx/helios-core/cluster/Address";
+import type { PartitionService } from "@zenystx/helios-core/spi/PartitionService";
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import {
+  serializeOperation,
+  deserializeOperation,
+  encodeResponsePayload,
+  decodeResponsePayload,
+} from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
 import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
@@ -93,7 +103,7 @@ function parseMemberAddress(member: string): [string, number] {
 export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _name: string;
   private readonly _config: HeliosConfig;
-  private readonly _nodeEngine: NodeEngineImpl;
+  private _nodeEngine!: NodeEngineImpl;
   private readonly _mapService: MapContainerService;
   private readonly _lifecycleService: HeliosLifecycleService;
   private _cluster: Cluster;
@@ -164,12 +174,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Production SerializationServiceImpl — single shared instance for NodeEngine + NearCacheManager.
     const serializationConfig = new SerializationConfig();
     this._ss = new SerializationServiceImpl(serializationConfig);
-    this._nodeEngine = new NodeEngineImpl(this._ss);
 
-    // Register MapContainerService
+    // MapContainerService — must be registered before any map proxy creation
     this._mapService = new MapContainerService();
-    this._mapService.setNodeEngine(this._nodeEngine);
-    this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
 
     // Near-cache manager — shares the same serialization service as the node engine
     this._nearCacheManager = new DefaultNearCacheManager(this._ss);
@@ -181,7 +188,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._lifecycleService = new HeliosLifecycleService();
     this._cluster = new LocalCluster();
 
-    // Start TCP networking if configured
+    // Start TCP networking if configured (creates NodeEngine with routing)
+    // or create default single-node NodeEngine
     this._startNetworking();
 
     // Initialize Blitz lifecycle manager if configured
@@ -230,33 +238,118 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   private _startNetworking(): void {
     const tcpIp = this._config.getNetworkConfig().getJoin().getTcpIpConfig();
-    if (!tcpIp.isEnabled()) return;
+    if (!tcpIp.isEnabled()) {
+      // Single-node mode: default NodeEngine with local-only operation service
+      this._nodeEngine = new NodeEngineImpl(this._ss);
+      this._mapService.setNodeEngine(this._nodeEngine);
+      this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
+      return;
+    }
 
     const port = this._config.getNetworkConfig().getPort();
     this._transport = new TcpClusterTransport(this._name);
     this._transport.start(port, "0.0.0.0");
 
-    // Wire transport callbacks
-    this._transport.onRemotePut = (mapName, key, value) => {
-      this._applyRemotePut(mapName, key, value);
-    };
-    this._transport.onRemoteRemove = (mapName, key) => {
-      this._applyRemoteRemove(mapName, key);
-    };
-    this._transport.onRemoteClear = (mapName) => {
-      this._applyRemoteClear(mapName);
-    };
-    this._transport.onRemoteInvalidate = (mapName, key) => {
-      // Invalidate near-cache entry for this map (if a near-cache exists)
-      const nearCache = this._nearCacheManager.getNearCache(mapName);
-      if (nearCache) {
-        nearCache.invalidate(key);
-      }
+    // Create cluster coordinator (needs transport bound port)
+    this._clusterCoordinator = new HeliosClusterCoordinator(
+      this._name,
+      this._config,
+      this._transport,
+      this._ss,
+    );
+    this._clusterCoordinator.bootstrap();
+    this._cluster = this._clusterCoordinator.getCluster();
 
-      // Fire external callbacks (test hooks, etc.)
-      for (const cb of this._invalidateCallbacks) {
-        cb(mapName, key);
-      }
+    // Build a partition service adapter that delegates to the coordinator
+    const coordinator = this._clusterCoordinator;
+    const localAddress = coordinator.getLocalAddress();
+    const clusteredPartitionService: PartitionService = {
+      getPartitionCount: () => 271,
+      getPartitionId: (key: Data) => {
+        const hash = key.getPartitionHash();
+        const mod = hash % 271;
+        return mod < 0 ? mod + 271 : mod;
+      },
+      getPartitionOwner: (partitionId: number) => {
+        const ownerId = coordinator.getOwnerId(partitionId);
+        if (ownerId === null) return null;
+        return coordinator.getMemberAddress(ownerId);
+      },
+      isMigrating: () => false,
+    };
+
+    // Build a routing-mode OperationService with remoteSend wired to transport
+    const transport = this._transport;
+    const pendingResponses = new Map<number, {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+    }>();
+    this._pendingResponses = pendingResponses;
+
+    let callIdCounter = 1;
+    const operationService = new OperationServiceImpl(
+      null as unknown as NodeEngineImpl, // will be set below via back-reference
+      {
+        localMode: false,
+        localAddress,
+        remoteSend: async (op, target) => {
+          const callId = callIdCounter++;
+          const { operationType, payload } = serializeOperation(op);
+          const targetMemberId = this._findMemberIdByAddress(target);
+          if (targetMemberId === null) {
+            throw new Error(`No member found for address ${target.getHost()}:${target.getPort()}`);
+          }
+
+          return new Promise<void>((resolve, reject) => {
+            pendingResponses.set(callId, {
+              resolve: (value: unknown) => {
+                op.sendResponse(value);
+                resolve();
+              },
+              reject: (error: Error) => {
+                reject(error);
+              },
+            });
+
+            transport.send(targetMemberId, {
+              type: 'OPERATION',
+              callId,
+              partitionId: op.partitionId,
+              operationType,
+              payload,
+              senderId: coordinator.getLocalMemberId(),
+            });
+
+            // Timeout after 10 seconds
+            setTimeout(() => {
+              if (pendingResponses.has(callId)) {
+                pendingResponses.delete(callId);
+                reject(new Error(`Operation timed out (callId=${callId})`));
+              }
+            }, 10_000);
+          });
+        },
+      },
+    );
+
+    // Create NodeEngine with clustered operation service and partition service
+    this._nodeEngine = new NodeEngineImpl(this._ss, {
+      localAddress,
+      operationService,
+      partitionService: clusteredPartitionService,
+    });
+
+    // Back-patch the operation service's node engine reference
+    (operationService as any)._nodeEngine = this._nodeEngine;
+
+    this._mapService.setNodeEngine(this._nodeEngine);
+    this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
+
+    // Wire transport callbacks
+    this._transport.onRemoteInvalidate = (mapName, key) => {
+      const nearCache = this._nearCacheManager.getNearCache(mapName);
+      if (nearCache) nearCache.invalidate(key);
+      for (const cb of this._invalidateCallbacks) cb(mapName, key);
     };
     this._transport.onPeerConnected = (nodeId) => {
       this._clusterCoordinator?.handlePeerConnected(nodeId);
@@ -265,6 +358,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._clusterCoordinator?.handlePeerDisconnected(nodeId);
     };
     this._transport.onMessage = (message) => {
+      // Handle OPERATION messages: execute on this node and send response
+      if (message.type === 'OPERATION') {
+        this._handleRemoteOperation(message);
+        return;
+      }
+      // Handle OPERATION_RESPONSE messages: complete pending invocations
+      if (message.type === 'OPERATION_RESPONSE') {
+        this._handleOperationResponse(message);
+        return;
+      }
+
       if (this._clusterCoordinator?.handleMessage(message) === true) {
         return;
       }
@@ -274,14 +378,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._distributedTopicService?.handleMessage(message);
     };
 
-    this._clusterCoordinator = new HeliosClusterCoordinator(
-      this._name,
-      this._config,
-      this._transport,
-      this._ss,
-    );
-    this._clusterCoordinator.bootstrap();
-    this._cluster = this._clusterCoordinator.getCluster();
+    // Legacy MAP_PUT/MAP_REMOVE/MAP_CLEAR callbacks are no longer used
+    // for authoritative map operations. Keep as no-ops for compatibility
+    // with any legacy messages from older nodes.
+    this._transport.onRemotePut = () => {};
+    this._transport.onRemoteRemove = () => {};
+    this._transport.onRemoteClear = () => {};
+
     this._distributedQueueService = new DistributedQueueService(
       this._name,
       this._config,
@@ -300,10 +403,80 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Connect to configured peers (fire-and-forget)
     for (const member of tcpIp.getMembers()) {
       const [host, peerPort] = parseMemberAddress(member);
-      this._transport.connectToPeer(host, peerPort).catch(() => {
-        // Connection may fail transiently; callers use waitForPeers() to poll
-      });
+      this._transport.connectToPeer(host, peerPort).catch(() => {});
     }
+  }
+
+  /** Pending remote operation responses (callId → resolver). */
+  private _pendingResponses: Map<number, {
+    resolve: (value: unknown) => void;
+    reject: (error: Error) => void;
+  }> | null = null;
+
+  /** Handle an incoming OPERATION message: execute locally and send response. */
+  private _handleRemoteOperation(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION' }>): void {
+    const { callId, partitionId, operationType, payload } = message;
+    const op = deserializeOperation(operationType, payload as any);
+    op.partitionId = partitionId;
+    op.setNodeEngine(this._nodeEngine);
+
+    void (async () => {
+      let responseValue: unknown = undefined;
+      let errorMsg: string | null = null;
+
+      op.setResponseHandler({
+        sendResponse: (_op, response) => {
+          responseValue = response;
+        },
+      });
+
+      try {
+        await op.beforeRun();
+        await op.run();
+      } catch (e) {
+        errorMsg = e instanceof Error ? e.message : String(e);
+      }
+
+      // Find who sent this and reply
+      const senderMemberId = this._findSenderForOperation(message);
+      if (senderMemberId !== null && this._transport !== null) {
+        this._transport.send(senderMemberId, {
+          type: 'OPERATION_RESPONSE',
+          callId,
+          payload: encodeResponsePayload(responseValue),
+          error: errorMsg,
+        });
+      }
+    })();
+  }
+
+  /** Handle an incoming OPERATION_RESPONSE message. */
+  private _handleOperationResponse(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION_RESPONSE' }>): void {
+    const pending = this._pendingResponses?.get(message.callId);
+    if (pending === undefined) return;
+    this._pendingResponses!.delete(message.callId);
+    if (message.error !== null) {
+      pending.reject(new Error(message.error));
+    } else {
+      pending.resolve(decodeResponsePayload(message.payload));
+    }
+  }
+
+  /** Extract the sender member ID from an OPERATION message. */
+  private _findSenderForOperation(message: { senderId: string }): string | null {
+    return message.senderId ?? null;
+  }
+
+  /** Find the member ID for a given address. */
+  private _findMemberIdByAddress(target: Address): string | null {
+    if (this._clusterCoordinator === null) return null;
+    const members = this._cluster.getMembers();
+    for (const member of members) {
+      if (member.getAddress().equals(target)) {
+        return member.getUuid();
+      }
+    }
+    return null;
   }
 
   private _initBlitzLifecycle(): void {
@@ -366,62 +539,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
    */
   getBlitzLifecycleManager(): HeliosBlitzLifecycleManager | null {
     return this._blitzLifecycleManager;
-  }
-
-  private _applyRemotePut(mapName: string, key: unknown, value: unknown): void {
-    const proxy = this._maps.get(mapName);
-    if (proxy instanceof NetworkedMapProxy) {
-      proxy.applyRemotePut(key as never, value as never);
-    } else {
-      // Map not yet accessed locally — apply directly to the correct partition store.
-      const kd = this._nodeEngine.toData(key);
-      const vd = this._nodeEngine.toData(value);
-      if (kd !== null && vd !== null) {
-        const partitionId = this._nodeEngine
-          .getPartitionService()
-          .getPartitionId(kd);
-        const store = this._mapService.getOrCreateRecordStore(
-          mapName,
-          partitionId,
-        );
-        store.put(kd, vd, -1, -1);
-      }
-    }
-  }
-
-  private _applyRemoteRemove(mapName: string, key: unknown): void {
-    const proxy = this._maps.get(mapName);
-    if (proxy instanceof NetworkedMapProxy) {
-      proxy.applyRemoteRemove(key as never);
-    } else {
-      const kd = this._nodeEngine.toData(key);
-      if (kd !== null) {
-        const partitionId = this._nodeEngine
-          .getPartitionService()
-          .getPartitionId(kd);
-        const store = this._mapService.getOrCreateRecordStore(
-          mapName,
-          partitionId,
-        );
-        store.remove(kd);
-      }
-    }
-  }
-
-  private _applyRemoteClear(mapName: string): void {
-    const proxy = this._maps.get(mapName);
-    if (proxy instanceof NetworkedMapProxy) {
-      proxy.applyRemoteClear();
-    } else {
-      // Clear all partitions for this map
-      const partitionCount = this._nodeEngine
-        .getPartitionService()
-        .getPartitionCount();
-      for (let i = 0; i < partitionCount; i++) {
-        const store = this._mapService.getRecordStore(mapName, i);
-        if (store !== null) store.clear();
-      }
-    }
   }
 
   // ── Public TCP helpers ───────────────────────────────────────────────
@@ -737,24 +854,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
       const mapStoreConfig = this._config
         .getMapConfig(name)
         ?.getMapStoreConfig();
-      if (this._transport !== null) {
-        proxy = new NetworkedMapProxy<unknown, unknown>(
-          name,
-          store,
-          this._nodeEngine,
-          this._mapService,
-          this._transport,
-          mapStoreConfig,
-        );
-      } else {
-        proxy = new MapProxy<unknown, unknown>(
-          name,
-          store,
-          this._nodeEngine,
-          this._mapService,
-          mapStoreConfig,
-        );
-      }
+      // Block 21.1: Always use MapProxy — routing is handled by OperationService
+      // (no more NetworkedMapProxy broadcast path)
+      proxy = new MapProxy<unknown, unknown>(
+        name,
+        store,
+        this._nodeEngine,
+        this._mapService,
+        mapStoreConfig,
+      );
       this._maps.set(name, proxy);
     }
     return proxy;

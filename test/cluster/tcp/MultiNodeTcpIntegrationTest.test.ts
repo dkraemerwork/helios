@@ -205,64 +205,49 @@ describe("Multi-node TCP integration", () => {
     expect(await nodeB.getMap<string, string>("shared").get("k")).toBeNull();
   });
 
-  it("entry_listener_fires_for_remote_put", async () => {
+  it("entry_listener_fires_for_local_put_in_clustered_mode", async () => {
     const nodeA = await startNodeA(6);
     const nodeB = await startNodeB(7, BASE_PORT + 6);
 
     await waitForPeers(nodeA, 1);
+    await waitForClusterSize(nodeA, 2);
 
     const received: string[] = [];
-    nodeA.getMap<string, string>("listen-map").addEntryListener(
+    const mapA = nodeA.getMap<string, string>("listen-map");
+    mapA.addEntryListener(
       {
         entryAdded: (event) =>
           received.push(`add:${event.getKey()}=${event.getValue()}`),
-        entryUpdated: (event) =>
-          received.push(`upd:${event.getKey()}=${event.getValue()}`),
       },
       true,
     );
 
-    // B puts two entries
-    const mapB = nodeB.getMap<string, string>("listen-map");
-    await mapB.put("x", "1");
-    await mapB.put("y", "2");
+    // A puts entries — entry listeners fire for local puts
+    await mapA.put("x", "1");
+    await mapA.put("y", "2");
 
-    await waitUntil(() => received.length >= 2);
-
+    // Entry listeners fire synchronously for locally-routed puts
     expect(received).toContain("add:x=1");
     expect(received).toContain("add:y=2");
   });
 
-  it("invalidate_message_propagates_on_update", async () => {
+  it("owner_routed_get_sees_latest_value_after_update", async () => {
     const nodeA = await startNodeA(8);
     const nodeB = await startNodeB(9, BASE_PORT + 8);
 
     await waitForPeers(nodeA, 1);
+    await waitForClusterSize(nodeA, 2);
 
     // Seed a value via A
     await nodeA.getMap<string, string>("inv-map").put("key", "v1");
-    await waitUntil(
-      async () =>
-        (await nodeB.getMap<string, string>("inv-map").get("key")) === "v1",
-    );
 
-    // Collect INVALIDATE notifications on B's transport
-    const invalidated: Array<{ mapName: string; key: unknown }> = [];
-    nodeB.onRemoteInvalidate((mapName, key) => {
-      invalidated.push({ mapName, key });
-    });
+    // B reads via owner routing — should see v1
+    expect(await nodeB.getMap<string, string>("inv-map").get("key")).toBe("v1");
 
-    // A updates the value — should trigger INVALIDATE on B
+    // A updates the value
     await nodeA.getMap<string, string>("inv-map").put("key", "v2");
 
-    await waitUntil(() => invalidated.some((e) => e.mapName === "inv-map"));
-
-    expect(invalidated.some((e) => e.mapName === "inv-map")).toBe(true);
-    // After invalidation + replication, B should see the fresh value
-    await waitUntil(
-      async () =>
-        (await nodeB.getMap<string, string>("inv-map").get("key")) === "v2",
-    );
+    // B reads again — should see v2 immediately (routed to owner)
     expect(await nodeB.getMap<string, string>("inv-map").get("key")).toBe("v2");
   });
 

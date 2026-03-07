@@ -22,6 +22,8 @@ import { Address } from '@zenystx/helios-core/cluster/Address';
 export interface NodeEngineImplOptions {
     localAddress?: Address;
     migratingPartitions?: Set<number>;
+    operationService?: OperationService;
+    partitionService?: PartitionService;
 }
 
 /** Minimal single-node partition service: 271 partitions, all local. */
@@ -66,12 +68,11 @@ export class NodeEngineImpl implements NodeEngine {
         this._serializationService = serializationService;
         this._properties = new MapHeliosProperties();
         this._localAddress = options?.localAddress ?? new Address('127.0.0.1', 5701);
-        this._partitionService = new SingleNodePartitionService(
+        this._partitionService = options?.partitionService ?? new SingleNodePartitionService(
             this._localAddress,
             options?.migratingPartitions,
         );
-        // OperationServiceImpl is wired here; it back-references this NodeEngine.
-        this._operationService = new OperationServiceImpl(this);
+        this._operationService = options?.operationService ?? new OperationServiceImpl(this);
     }
 
     /**

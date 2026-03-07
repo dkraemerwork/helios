@@ -431,12 +431,12 @@ maps.
 
 Tasks:
 
-- Make clustered `NodeEngine` / partition-owner routing real in TCP-clustered mode.
-- Fully wire remote operation request/response/backup handling for partition-routed operations.
-- Remove `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` as the authoritative clustered map consistency path.
-- Make clustered map correctness depend on owner-routed operations, not peer replay.
-- Add tests proving non-owner callers execute map mutations on the current partition owner.
-- Run a verification task that proves the clustered map execution substrate is real and no longer
+- [x] Make clustered `NodeEngine` / partition-owner routing real in TCP-clustered mode.
+- [x] Fully wire remote operation request/response/backup handling for partition-routed operations.
+- [x] Remove `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` as the authoritative clustered map consistency path.
+- [x] Make clustered map correctness depend on owner-routed operations, not peer replay.
+- [x] Add tests proving non-owner callers execute map mutations on the current partition owner.
+- [x] Run a verification task that proves the clustered map execution substrate is real and no longer
   relies on mutation broadcast shortcuts.
 
 ### Block 21.2 — Partition-scoped MapStore runtime + owner-only persistence
@@ -518,7 +518,7 @@ Tasks:
 - [x] **Block 20.8** — Examples/docs/exports + final remote-client GA proof (public exports only, separate Bun client example, auth/reconnect/nearcache examples, real-network acceptance suites, hygiene gates for no REST fallback/no orphan handlers/no wildcard leakage) — 56 tests
 - [ ] **Phase 20 checkpoint** — root typecheck green; client runtime tests green; targeted real-network client protocol tests green; separate Bun app can import `HeliosClient` from `@zenystx/helios-core`, connect over binary protocol, use every retained remote `HeliosInstance` capability honestly, survive reconnect, and shut down cleanly; 0 fail, 0 error
 - [x] **Block 21.0** — Backup partition recovery parity foundation (`plans/BACKUP_PARTITION_RECOVERY_PARITY_PLAN.md`, one partition-service authority, no clustered recovery shortcuts, member-removal bookkeeping, promotion-first repair, backup refill, partition-lost signaling, runtime anti-entropy, real remote replica sync, service-state replication closure, stale-rejoin fencing, observability/config/docs/test-support closure, crash/rejoin proof) — ~28 tests
-- [ ] **Block 21.1** — Cluster execution substrate + owner-routed map path (real partition-owner routing, remote operation request/response/backup flow, no authoritative `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` replay path) — ~18 tests
+- [x] **Block 21.1** — Cluster execution substrate + owner-routed map path (real partition-owner routing, remote operation request/response/backup flow, no authoritative `MAP_PUT` / `MAP_REMOVE` / `MAP_CLEAR` replay path) — ~18 tests
 - [ ] **Block 21.2** — Partition-scoped MapStore runtime + owner-only persistence (shared map-level lifecycle + partition-scoped stores, owner-side `store`/`delete`/`load`, backup no-external-write semantics, clustered `putAll`/`getAll` bulk paths) — ~22 tests
 - [ ] **Block 21.3** — Migration, failover, shutdown handoff, and coordinated eager/clear (`MigrationAwareService` participation, write-behind queue replication, owner promotion cutover, clustered eager-load coordination, clustered clear, deterministic shutdown handoff) — ~24 tests
 - [ ] **Block 21.4** — Real adapter proof + clustered MapStore production gate (counting-store proof, Mongo clustered proof after Phase 19, durability docs, supported clustered docs/examples only) — ~18 tests

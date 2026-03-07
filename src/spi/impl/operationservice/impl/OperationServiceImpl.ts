@@ -224,6 +224,23 @@ export class OperationServiceImpl implements OperationService {
 
         const runOnce = async (): Promise<void> => {
             try {
+                // Check if the invocation target is remote
+                const targetAddr = invocation.targetAddress;
+                const isRemote = this._remoteSend !== null
+                    && this._localAddress !== null
+                    && targetAddr !== null
+                    && !targetAddr.equals(this._localAddress);
+
+                if (isRemote) {
+                    // Remote execution: delegate to remoteSend callback
+                    await this._remoteSend!(op, targetAddr!);
+                    if (!invocation.future.isDone()) {
+                        invocation.notifyNormalResponse(undefined, 0);
+                    }
+                    return;
+                }
+
+                // Local execution
                 // Migration guard check
                 const partitionService = this._nodeEngine.getPartitionService() as any;
                 if (op.partitionId >= 0 && typeof partitionService.isMigrating === 'function') {

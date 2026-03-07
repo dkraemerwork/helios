@@ -113,13 +113,15 @@ export interface MembersViewResponseMsg {
   readonly members: WireMemberInfo[];
 }
 
-/** Generic operation routing (Phase C). */
+/** Generic operation routing (Block 21.1). */
 export interface OperationMsg {
   readonly type: "OPERATION";
   readonly callId: number;
   readonly partitionId: number;
   readonly operationType: string;
   readonly payload: unknown;
+  /** Node ID of the sender for response routing. */
+  readonly senderId: string;
 }
 
 /** Operation response (Phase C). */

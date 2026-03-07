@@ -152,6 +152,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         partitionId: 13,
         operationType: "MAP_PUT",
         payload: { mapName: "test", key: "k", value: "v" },
+        senderId: "node-1",
       };
       const resp: ClusterMessage = {
         type: "OPERATION_RESPONSE",
