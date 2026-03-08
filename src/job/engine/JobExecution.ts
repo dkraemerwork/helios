@@ -232,17 +232,36 @@ export class JobExecution {
 
   /**
    * Collect per-vertex metrics from the running execution.
+   * Reads actual item counts from processors and queue sizes from channels.
    */
   getMetrics(): VertexMetrics[] {
-    return this.vertexRuntimes.map(vr => ({
-      name: vr.name,
-      type: vr.type,
-      itemsIn: vr.itemsIn,
-      itemsOut: vr.itemsOut,
-      queueSize: vr.outbox?.size ?? 0,
-      latencyP50Ms: 0,
-      latencyP99Ms: 0,
-      latencyMaxMs: 0,
-    }));
+    return this.vertexRuntimes.map(vr => {
+      let itemsIn = 0;
+      let itemsOut = 0;
+
+      if (vr.sourceProcessor) {
+        // Sources have no inbox — itemsIn is 0, itemsOut = items emitted
+        itemsOut = (vr.sourceProcessor as any).offset ?? 0;
+      } else if (vr.operatorProcessor) {
+        // Operators: itemsIn = itemsProcessed (items received), itemsOut = items emitted (same for map)
+        const processed = (vr.operatorProcessor as any).itemsProcessed ?? 0;
+        itemsIn = processed;
+        itemsOut = processed;
+      } else if (vr.sinkProcessor) {
+        // Sinks: itemsIn = items written, no outbox
+        itemsIn = (vr.sinkProcessor as any).itemsWritten ?? 0;
+      }
+
+      return {
+        name: vr.name,
+        type: vr.type,
+        itemsIn,
+        itemsOut,
+        queueSize: vr.outbox?.size ?? 0,
+        latencyP50Ms: 0,
+        latencyP99Ms: 0,
+        latencyMaxMs: 0,
+      };
+    });
   }
 }

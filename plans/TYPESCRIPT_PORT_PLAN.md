@@ -1082,7 +1082,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
 - [x] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
 - [x] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
-- [ ] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
+- [x] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
 - [ ] **Phase 23 checkpoint** — All Blitz job supervision tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; `blitz.newJob()` returns a BlitzJob with full Jet-parity lifecycle; streaming runtime engine drives data through DAG with source/operator/sink processors connected by AsyncChannel (local) and NATS (distributed) edges; Chandy-Lamport barrier snapshots provide exactly-once and at-least-once guarantees; master-supervised coordination with Helios fencing; auto-scaling with debounced restart on member join/leave; master failover resumes from IMap; job metrics collected cross-member; light jobs work without coordination; NestJS bridge proxies all new methods; no `BlitzJob` method is a throw-stub or deferred placeholder; no processor, channel, edge, or coordinator method is a fake or mock implementation; no public API returns hardcoded zeros or placeholder data; distributed edges use real NATS transport (not in-memory mocks); snapshot store uses real NATS KV; docs/examples/exports only claim behavior that is actually wired; no stubs, no deferrals, no mock implementations
 
 ## Phase 23 — Blitz Job Supervision (Hazelcast Jet-Parity Autonomous Job Lifecycle)
@@ -1308,24 +1308,24 @@ Depends on: Block 23.12 (full integration).
 **Goal:** Full end-to-end acceptance proving Blitz job supervision is production-ready with Hazelcast Jet semantic parity.
 
 **TODO — Block 23.INT**:
-- [ ] E2E: `blitz.newJob(pipeline, config)` → pipeline executes → data flows source → operators → sink
-- [ ] E2E: batch job completes when source is exhausted (RUNNING → COMPLETING → COMPLETED)
-- [ ] E2E: streaming job runs until cancel (RUNNING → CANCELLED)
-- [ ] E2E: `job.suspend()` exports snapshot then stops (RUNNING → SUSPENDED_EXPORTING_SNAPSHOT → SUSPENDED)
-- [ ] E2E: `job.resume()` restores from snapshot and continues (SUSPENDED → NOT_RUNNING → STARTING → RUNNING)
-- [ ] E2E: exactly-once processing — barrier alignment produces no duplicates after restart
-- [ ] E2E: at-least-once processing — snapshot restore with possible duplicates
-- [ ] E2E: member loss → job restarts from last snapshot with surviving members
-- [ ] E2E: member join → debounced restart includes new member
-- [ ] E2E: master failover → new master resumes coordination from IMap
-- [ ] E2E: `job.getMetrics()` returns aggregated cross-member metrics
-- [ ] E2E: light job runs without coordination overhead
-- [ ] E2E: `blitz.getJob(id)`, `blitz.getJob(name)`, `blitz.getJobs()` return correct results
-- [ ] E2E: `job.addStatusListener()` fires on every state transition
-- [ ] E2E: split-brain protection suspends jobs on minority side
-- [ ] E2E: distributed edges (partitioned, broadcast, unicast) route data correctly across members
-- [ ] Full regression: `bun test` at root — 0 fail, 0 error
-- [ ] Run a verification task that proves the full Blitz job supervision feature is production ready, end to end, and free of stubs, mock implementations, fake fallbacks, deferred methods, or unwired runtime paths; every `BlitzJob` lifecycle method must be wired through real coordinator/executor/snapshot paths; data must flow through real processors and channels; distributed edges must use real NATS; no public API method may throw `UnsupportedOperationError` or return placeholder values: `bun test` at root green, `bun run typecheck` clean
+- [x] E2E: `blitz.newJob(pipeline, config)` → pipeline executes → data flows source → operators → sink
+- [x] E2E: batch job completes when source is exhausted (RUNNING → COMPLETING → COMPLETED)
+- [x] E2E: streaming job runs until cancel (RUNNING → CANCELLED)
+- [x] E2E: `job.suspend()` exports snapshot then stops (RUNNING → SUSPENDED_EXPORTING_SNAPSHOT → SUSPENDED)
+- [x] E2E: `job.resume()` restores from snapshot and continues (SUSPENDED → NOT_RUNNING → STARTING → RUNNING)
+- [x] E2E: exactly-once processing — barrier alignment produces no duplicates after restart
+- [x] E2E: at-least-once processing — snapshot restore with possible duplicates
+- [x] E2E: member loss → job restarts from last snapshot with surviving members
+- [x] E2E: member join → debounced restart includes new member
+- [x] E2E: master failover → new master resumes coordination from IMap
+- [x] E2E: `job.getMetrics()` returns aggregated cross-member metrics
+- [x] E2E: light job runs without coordination overhead
+- [x] E2E: `blitz.getJob(id)`, `blitz.getJob(name)`, `blitz.getJobs()` return correct results
+- [x] E2E: `job.addStatusListener()` fires on every state transition
+- [x] E2E: split-brain protection suspends jobs on minority side
+- [x] E2E: distributed edges (partitioned, broadcast, unicast) route data correctly across members
+- [x] Full regression: `bun test` at root — 0 fail, 0 error
+- [x] Run a verification task that proves the full Blitz job supervision feature is production ready, end to end, and free of stubs, mock implementations, fake fallbacks, deferred methods, or unwired runtime paths; every `BlitzJob` lifecycle method must be wired through real coordinator/executor/snapshot paths; data must flow through real processors and channels; distributed edges must use real NATS; no public API method may throw `UnsupportedOperationError` or return placeholder values: `bun test` at root green, `bun run typecheck` clean
 
 ## End-to-End Completion Requirements
 
