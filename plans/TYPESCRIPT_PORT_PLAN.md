@@ -829,15 +829,15 @@ src/scheduledexecutor/impl/
 ```
 
 **TODO — Block 22.7**:
-- [ ] Member-local scheduler loop that scans only partitions currently owned by this member
-- [ ] Partition-local min-heap (or sorted structure) indexed by `nextRunAt` for efficient ready-task lookup
-- [ ] Wake-on-nearest-boundary: single timer re-armed to the closest `nextRunAt` across all owned partitions
-- [ ] Fenced dispatch: before firing, validate current `ownerEpoch`, `version`, and generate new `attemptId`
-- [ ] Dispatch ready tasks into `ExecutorContainerService` for actual execution
-- [ ] Rehydration: on startup or partition promotion, rebuild ready queue from `ScheduledTaskStore` contents
-- [ ] Capacity enforcement: respect `capacity` and `capacityPolicy` (PER_NODE) before accepting new schedules
-- [ ] Tests: single task fires at correct time, multiple tasks fire in order, epoch mismatch rejects dispatch, rehydration after restart, capacity rejection
-- [ ] Run a verification task that proves the scheduler loop fires tasks at correct times, epoch fencing prevents stale dispatch, rehydration rebuilds from real store contents, and no scheduling path uses fake timers or bypasses `ExecutorContainerService`: `bun test test/scheduledexecutor/impl/ScheduledTaskSchedulerTest.test.ts` green
+- [x] Member-local scheduler loop that scans only partitions currently owned by this member
+- [x] Partition-local min-heap (or sorted structure) indexed by `nextRunAt` for efficient ready-task lookup
+- [x] Wake-on-nearest-boundary: single timer re-armed to the closest `nextRunAt` across all owned partitions
+- [x] Fenced dispatch: before firing, validate current `ownerEpoch`, `version`, and generate new `attemptId`
+- [x] Dispatch ready tasks into `ExecutorContainerService` for actual execution
+- [x] Rehydration: on startup or partition promotion, rebuild ready queue from `ScheduledTaskStore` contents
+- [x] Capacity enforcement: respect `capacity` and `capacityPolicy` (PER_NODE) before accepting new schedules
+- [x] Tests: single task fires at correct time, multiple tasks fire in order, epoch mismatch rejects dispatch, rehydration after restart, capacity rejection
+- [x] Run a verification task that proves the scheduler loop fires tasks at correct times, epoch fencing prevents stale dispatch, rehydration rebuilds from real store contents, and no scheduling path uses fake timers or bypasses `ExecutorContainerService`: `bun test test/scheduledexecutor/impl/ScheduledTaskSchedulerTest.test.ts` green
 
 ---
 
@@ -1055,7 +1055,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
 - [x] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
 - [x] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
-- [ ] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
+- [x] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
 - [ ] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
 - [ ] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
 - [ ] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests

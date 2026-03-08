@@ -105,6 +105,10 @@ export class ScheduledExecutorContainerService {
         return this._memberBin;
     }
 
+    getConfigs(): ReadonlyMap<string, ScheduledExecutorConfig> {
+        return this._configs;
+    }
+
     // --- One-shot scheduling ---
 
     /**
@@ -224,6 +228,14 @@ export class ScheduledExecutorContainerService {
             if (this._shutdown) return;
             this._dispatchReadyTasks();
         }, ScheduledExecutorContainerService.TICK_INTERVAL_MS);
+    }
+
+    /**
+     * Stop the built-in timer coordinator.
+     * Used when an external ScheduledTaskScheduler takes over dispatch responsibility.
+     */
+    stopTimerCoordinator(): void {
+        this._stopTimerCoordinator();
     }
 
     private _stopTimerCoordinator(): void {
