@@ -18,6 +18,7 @@
  */
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import { BinarySerializationStrategy } from '@zenystx/helios-core/cluster/tcp/BinarySerializationStrategy';
+import { OutboundBatcher } from '@zenystx/helios-core/cluster/tcp/OutboundBatcher';
 import { ScatterSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/ScatterSerializationStrategy';
 import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
@@ -48,6 +49,7 @@ export class TcpClusterTransport {
      * length-prefixed frame can be extracted.
      */
     private readonly _buffers = new Map<EventloopChannel, FrameDecoderState>();
+    private readonly _outboundBatchers = new Map<EventloopChannel, OutboundBatcher>();
 
     // ── External callbacks (set by HeliosInstanceImpl) ────────────────────
 
@@ -110,6 +112,10 @@ export class TcpClusterTransport {
             ch.close();
         }
         this._peers.clear();
+        for (const batcher of this._outboundBatchers.values()) {
+            batcher.dispose();
+        }
+        this._outboundBatchers.clear();
         this._buffers.clear();
         this._server?.stop(true);
         this._server = null;
@@ -219,28 +225,24 @@ export class TcpClusterTransport {
     }
 
     private _sendMsg(ch: EventloopChannel, msg: ClusterMessage): boolean {
+        const batcher = this._outboundBatchers.get(ch) ?? this._createOutboundBatcher(ch);
+
         if (typeof this._strategy.serializeInto === 'function') {
             const out = wireBufferPool.takeOutputBuffer();
             try {
                 this._strategy.serializeInto(out, msg);
                 const payloadSize = out.position() as number;
-                const frame = Buffer.allocUnsafe(4 + payloadSize);
-                frame.writeUInt32BE(payloadSize, 0);
-                out.toByteArrayView(0, payloadSize).copy(frame, 4);
-                return ch.write(frame);
+                return batcher.enqueue(out.toByteArrayView(0, payloadSize));
             } finally {
                 wireBufferPool.returnOutputBuffer(out);
             }
         }
 
-        const payload = this._strategy.serialize(msg);
-        const frame = Buffer.allocUnsafe(4 + payload.length);
-        frame.writeUInt32BE(payload.length, 0);
-        frame.set(payload, 4);
-        return ch.write(frame);
+        return batcher.enqueue(this._strategy.serialize(msg));
     }
 
     private _onConnect(ch: EventloopChannel): void {
+        this._createOutboundBatcher(ch);
         this._buffers.set(ch, {
             buffer: Buffer.allocUnsafe(INITIAL_READ_BUFFER_SIZE),
             readOffset: 0,
@@ -251,6 +253,9 @@ export class TcpClusterTransport {
     }
 
     private _onClose(ch: EventloopChannel): void {
+        const batcher = this._outboundBatchers.get(ch);
+        batcher?.dispose();
+        this._outboundBatchers.delete(ch);
         this._buffers.delete(ch);
         for (const [id, peerCh] of this._peers) {
             if (peerCh === ch) {
@@ -355,5 +360,11 @@ export class TcpClusterTransport {
                 this.onMessage(msg);
                 break;
         }
+    }
+
+    private _createOutboundBatcher(ch: EventloopChannel): OutboundBatcher {
+        const batcher = new OutboundBatcher(ch);
+        this._outboundBatchers.set(ch, batcher);
+        return batcher;
     }
 }

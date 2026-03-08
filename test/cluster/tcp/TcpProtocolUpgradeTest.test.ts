@@ -364,6 +364,8 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
       close: () => {},
       bytesRead: () => 0,
       bytesWritten: () => 0,
+      queuedFrames: () => 0,
+      pendingBytes: () => 0,
     } as any;
 
     expect(() => (transport as any)._onConnect(channel)).not.toThrow();
@@ -386,6 +388,8 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         close: () => {},
         bytesRead: () => 0,
         bytesWritten: () => 0,
+        queuedFrames: () => 0,
+        pendingBytes: () => 0,
       } as any;
 
       (transport as any)._onConnect(channel);
@@ -420,6 +424,8 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         close: () => {},
         bytesRead: () => 0,
         bytesWritten: () => 0,
+        queuedFrames: () => 0,
+        pendingBytes: () => 0,
       } as any;
 
       (transport as any)._onConnect(channel);
@@ -462,6 +468,8 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         close: () => {},
         bytesRead: () => 0,
         bytesWritten: () => 0,
+        queuedFrames: () => 0,
+        pendingBytes: () => 0,
       } as any;
 
       (transport as any)._onConnect(channel);
