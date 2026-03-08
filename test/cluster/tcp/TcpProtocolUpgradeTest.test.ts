@@ -336,6 +336,44 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
     expect(t).toBeDefined();
   });
 
+  it("transport prefers serializeInto when strategy supports pooled encoding", () => {
+    let serializeIntoCalled = false;
+    let serializeCalled = false;
+    let writtenFrame: Buffer | null = null;
+    const custom: SerializationStrategy = {
+      serialize(): Buffer {
+        serializeCalled = true;
+        throw new Error("serialize should not be used when serializeInto exists");
+      },
+      serializeInto(out, msg): void {
+        serializeIntoCalled = true;
+        const payload = Buffer.from(JSON.stringify(msg), "utf8");
+        out.writeBytes(payload, 0, payload.length);
+      },
+      deserialize(buf: Buffer): ClusterMessage {
+        return JSON.parse(buf.toString("utf8")) as ClusterMessage;
+      },
+    };
+
+    const transport = createTransport("nodeA", custom);
+    const channel = {
+      write: (frame: Buffer) => {
+        writtenFrame = Buffer.from(frame);
+        return true;
+      },
+      close: () => {},
+      bytesRead: () => 0,
+      bytesWritten: () => 0,
+    } as any;
+
+    expect(() => (transport as any)._onConnect(channel)).not.toThrow();
+    expect(serializeIntoCalled).toBe(true);
+    expect(serializeCalled).toBe(false);
+    expect(writtenFrame).not.toBeNull();
+    const frame = Buffer.from(writtenFrame ?? []);
+    expect(frame.readUInt32BE(0)).toBe(frame.length - 4);
+  });
+
   describe("stateful frame decoder", () => {
     it("reassembles a frame split across multiple chunks", () => {
       const transport = createTransport("nodeA");

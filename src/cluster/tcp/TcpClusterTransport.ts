@@ -21,6 +21,7 @@ import { BinarySerializationStrategy } from '@zenystx/helios-core/cluster/tcp/Bi
 import { ScatterSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/ScatterSerializationStrategy';
 import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
+import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
 
 interface FrameDecoderState {
     buffer: Buffer;
@@ -218,6 +219,20 @@ export class TcpClusterTransport {
     }
 
     private _sendMsg(ch: EventloopChannel, msg: ClusterMessage): boolean {
+        if (typeof this._strategy.serializeInto === 'function') {
+            const out = wireBufferPool.takeOutputBuffer();
+            try {
+                this._strategy.serializeInto(out, msg);
+                const payloadSize = out.position() as number;
+                const frame = Buffer.allocUnsafe(4 + payloadSize);
+                frame.writeUInt32BE(payloadSize, 0);
+                out.toByteArrayView(0, payloadSize).copy(frame, 4);
+                return ch.write(frame);
+            } finally {
+                wireBufferPool.returnOutputBuffer(out);
+            }
+        }
+
         const payload = this._strategy.serialize(msg);
         const frame = Buffer.allocUnsafe(4 + payload.length);
         frame.writeUInt32BE(payload.length, 0);

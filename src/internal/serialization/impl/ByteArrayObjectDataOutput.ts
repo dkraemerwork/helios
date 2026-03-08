@@ -362,6 +362,19 @@ export class ByteArrayObjectDataOutput {
         return newBuffer;
     }
 
+    toByteArrayView(): Buffer;
+    toByteArrayView(offset: number, end: number): Buffer;
+    toByteArrayView(offset = 0, end = this.pos): Buffer {
+        if (this.buffer == null) {
+            return Buffer.alloc(0);
+        }
+        return this.buffer.subarray(offset, end);
+    }
+
+    reset(): void {
+        this.pos = 0;
+    }
+
     clear(): void {
         this.pos = 0;
         if (this.buffer != null && this.buffer.length > this.initialSize * 8) {

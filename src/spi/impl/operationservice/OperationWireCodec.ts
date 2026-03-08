@@ -8,6 +8,7 @@ import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/seriali
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import { IdentifiedDataSerializableRegistry } from '@zenystx/helios-core/internal/serialization/IdentifiedDataSerializableRegistry';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
 import { ClearOperation } from '@zenystx/helios-core/map/impl/operation/ClearOperation';
 import { DeleteOperation } from '@zenystx/helios-core/map/impl/operation/DeleteOperation';
 import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
@@ -133,18 +134,26 @@ function registerOperations(): void {
 registerOperations();
 
 export function serializeOperation(op: Operation): { factoryId: number; classId: number; payload: Buffer } {
-    const out = new ByteArrayObjectDataOutput(128, null, BIG_ENDIAN);
-    const { factoryId, classId } = operationRegistry.encode(out, op);
-    return {
-        factoryId,
-        classId,
-        payload: out.toByteArray(),
-    };
+    const out = wireBufferPool.takeOutputBuffer();
+    try {
+        const { factoryId, classId } = operationRegistry.encode(out, op);
+        return {
+            factoryId,
+            classId,
+            payload: out.toByteArray(),
+        };
+    } finally {
+        wireBufferPool.returnOutputBuffer(out);
+    }
 }
 
 export function deserializeOperation(factoryId: number, classId: number, payload: Buffer): Operation {
-    const inp = new ByteArrayObjectDataInput(payload, null as never, BIG_ENDIAN);
-    return operationRegistry.decode(factoryId, classId, inp);
+    const inp = wireBufferPool.takeInputBuffer(payload);
+    try {
+        return operationRegistry.decode(factoryId, classId, inp);
+    } finally {
+        wireBufferPool.returnInputBuffer(inp);
+    }
 }
 
 export function writeOperationPayload(out: ByteArrayObjectDataOutput, op: Operation): { factoryId: number; classId: number } {
@@ -165,14 +174,22 @@ export function readOperationPayload(inp: ByteArrayObjectDataInput): Operation {
 }
 
 export function encodeResponsePayload(value: unknown): { kind: number; payload: Buffer } {
-    const out = new ByteArrayObjectDataOutput(128, null, BIG_ENDIAN);
-    const kind = writeResponsePayload(out, value);
-    return { kind, payload: out.toByteArray() };
+    const out = wireBufferPool.takeOutputBuffer();
+    try {
+        const kind = writeResponsePayload(out, value);
+        return { kind, payload: out.toByteArray() };
+    } finally {
+        wireBufferPool.returnOutputBuffer(out);
+    }
 }
 
 export function decodeResponsePayload(kind: number, payload: Buffer): unknown {
-    const inp = new ByteArrayObjectDataInput(payload, null as never, BIG_ENDIAN);
-    return readResponsePayload(kind, inp);
+    const inp = wireBufferPool.takeInputBuffer(payload);
+    try {
+        return readResponsePayload(kind, inp);
+    } finally {
+        wireBufferPool.returnInputBuffer(inp);
+    }
 }
 
 export function writeResponsePayload(out: ByteArrayObjectDataOutput, value: unknown): number {

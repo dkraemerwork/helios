@@ -59,6 +59,7 @@ import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/Inlin
 import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/ScatterExecutionBackend";
 import { TaskTypeRegistry } from "@zenystx/helios-core/executor/impl/TaskTypeRegistry";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
+import { PendingResponseEntryPool, type PendingResponseEntry } from "@zenystx/helios-core/instance/impl/PendingResponseEntryPool";
 import { BlitzReadinessState, HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
@@ -192,13 +193,6 @@ interface TopicClientListenerRegistration {
   topicName: string;
   registrationId: string;
   topicListenerId: string;
-}
-
-interface PendingResponseEntry {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  createdAt: number;
-  timeoutMs: number;
 }
 
 /** Parse "host:port" or "host" (default port 5701). */
@@ -337,6 +331,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientTopicListenerRegistrations = new Map<string, TopicClientListenerRegistration>();
   private readonly _clientSessionTopicListeners = new Map<string, Set<string>>();
   private readonly _addressToMemberId = new Map<string, string>();
+  private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationSweepHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: HeliosConfig) {
@@ -550,17 +545,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
           }
 
           return new Promise<void>((resolve, reject) => {
-            pendingResponses.set(callId, {
-              resolve: (value: unknown) => {
+            const pendingEntry = this._pendingResponseEntryPool.take(
+              (value: unknown) => {
                 op.sendResponse(value);
                 resolve();
               },
-              reject: (error: Error) => {
+              (error: Error) => {
                 reject(error);
               },
-              createdAt: Date.now(),
-              timeoutMs: REMOTE_OPERATION_TIMEOUT_MS,
-            });
+              REMOTE_OPERATION_TIMEOUT_MS,
+            );
+            pendingResponses.set(callId, pendingEntry);
 
             const sent = transport.send(targetMemberId, {
               type: 'OPERATION',
@@ -574,7 +569,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
             if (!sent) {
               // Peer disconnected or channel closed — fail fast
-              pendingResponses.delete(callId);
+              const pending = this._takePendingResponse(callId);
+              this._getPendingResponseEntryPool().release(pending);
               reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
               return;
             }
@@ -770,14 +766,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Handle an incoming OPERATION_RESPONSE message. */
   private _handleOperationResponse(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION_RESPONSE' }>): void {
-    const pending = this._pendingResponses?.get(message.callId);
+    const pending = this._takePendingResponse(message.callId);
     if (pending === undefined) return;
-    this._pendingResponses!.delete(message.callId);
     if (message.error !== null) {
-      pending.reject(new Error(message.error));
+      pending.reject?.(new Error(message.error));
     } else {
-      pending.resolve(message.payload);
+      pending.resolve?.(message.payload);
     }
+    this._getPendingResponseEntryPool().release(pending);
   }
 
   private _dispatchAntiEntropy(
@@ -923,9 +919,26 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (now - pending.createdAt < pending.timeoutMs) {
         continue;
       }
-      this._pendingResponses.delete(callId);
-      pending.reject(new Error(`Operation timed out (callId=${callId})`));
+      this._takePendingResponse(callId);
+      pending.reject?.(new Error(`Operation timed out (callId=${callId})`));
+      this._getPendingResponseEntryPool().release(pending);
     }
+  }
+
+  private _getPendingResponseEntryPool(): PendingResponseEntryPool {
+    if (this._pendingResponseEntryPool === undefined) {
+      this._pendingResponseEntryPool = new PendingResponseEntryPool();
+    }
+    return this._pendingResponseEntryPool;
+  }
+
+  private _takePendingResponse(callId: number): PendingResponseEntry | undefined {
+    const pending = this._pendingResponses?.get(callId);
+    if (pending === undefined || this._pendingResponses === null) {
+      return undefined;
+    }
+    this._pendingResponses.delete(callId);
+    return pending;
   }
 
   private _addressKey(address: Address): string {

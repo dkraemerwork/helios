@@ -1,10 +1,12 @@
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 
 export interface SerializationStrategy {
     serialize(message: ClusterMessage): Uint8Array;
     deserialize(buffer: Uint8Array): ClusterMessage;
+    serializeInto?(out: ByteArrayObjectDataOutput, message: ClusterMessage): void;
 }
 
 const JSON_TEXT_ENCODER = new TextEncoder();

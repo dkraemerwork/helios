@@ -7,6 +7,7 @@ import { ExecuteCallableOperation } from '@zenystx/helios-core/executor/impl/Exe
 import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation';
 import { ShutdownOperation } from '@zenystx/helios-core/executor/impl/ShutdownOperation';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import { ClearOperation } from '@zenystx/helios-core/map/impl/operation/ClearOperation';
 import { DeleteOperation } from '@zenystx/helios-core/map/impl/operation/DeleteOperation';
 import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
@@ -150,5 +151,14 @@ describe('BinarySerializationStrategy', () => {
             const encoded = encodeResponsePayload(payload);
             expect(decodeResponsePayload(encoded.kind, encoded.payload)).toEqual(payload);
         }
+    });
+
+    it('serializeInto matches serialize output bytes', () => {
+        const message = sampleOperationMessage();
+        const out = new ByteArrayObjectDataOutput(64, null, 'BE');
+
+        strategy.serializeInto(out, message);
+
+        expect(out.toByteArray()).toEqual(Buffer.from(strategy.serialize(message)));
     });
 });

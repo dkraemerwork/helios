@@ -20,6 +20,7 @@ import type { EncodedData } from '@zenystx/helios-core/cluster/tcp/DataWireCodec
 import type { SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { BIG_ENDIAN, ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
 import { decodeResponsePayload, encodeResponsePayload } from '@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec';
 
 const PROTOCOL_VERSION = 1;
@@ -79,7 +80,17 @@ const MESSAGE_ID_TO_TYPE = Object.fromEntries(
 
 export class BinarySerializationStrategy implements SerializationStrategy {
     serialize(message: ClusterMessage): Uint8Array {
-        const out = new ByteArrayObjectDataOutput(256, null, BIG_ENDIAN);
+        const out = wireBufferPool.takeOutputBuffer();
+        try {
+            this.serializeInto(out, message);
+            return out.toByteArray();
+        } finally {
+            wireBufferPool.returnOutputBuffer(out);
+        }
+    }
+
+    serializeInto(out: ByteArrayObjectDataOutput, message: ClusterMessage): void {
+        out.reset();
         out.writeByte(PROTOCOL_VERSION);
         out.writeShort(this._buildFlags(message));
         out.writeInt(this._partitionId(message));
@@ -90,26 +101,29 @@ export class BinarySerializationStrategy implements SerializationStrategy {
         out.writeShort(MESSAGE_TYPE_TO_ID[message.type]);
         this._writeMessageBody(out, message);
         out.writeInt(payloadSizeOffset, (out.position() as number) - payloadStart);
-        return out.toByteArray();
     }
 
     deserialize(buffer: Uint8Array): ClusterMessage {
-        const inp = new ByteArrayObjectDataInput(Buffer.from(buffer), null as never, BIG_ENDIAN);
-        const version = inp.readUnsignedByte();
-        if (version !== PROTOCOL_VERSION) {
-            throw new Error(`Unsupported protocol version: ${version}`);
+        const inp = wireBufferPool.takeInputBuffer(toBufferView(buffer));
+        try {
+            const version = inp.readUnsignedByte();
+            if (version !== PROTOCOL_VERSION) {
+                throw new Error(`Unsupported protocol version: ${version}`);
+            }
+            const flags = inp.readUnsignedShort();
+            const partitionId = inp.readInt();
+            const payloadSize = inp.readInt();
+            const payloadStart = inp.position() as number;
+            const messageTypeId = inp.readUnsignedShort() as MessageTypeId;
+            const message = this._readMessageBody(inp, messageTypeId, flags, partitionId);
+            const bytesRead = (inp.position() as number) - payloadStart;
+            if (bytesRead !== payloadSize) {
+                throw new Error(`Malformed packet payload size: expected ${payloadSize}, read ${bytesRead}`);
+            }
+            return message;
+        } finally {
+            wireBufferPool.returnInputBuffer(inp);
         }
-        const flags = inp.readUnsignedShort();
-        const partitionId = inp.readInt();
-        const payloadSize = inp.readInt();
-        const payloadStart = inp.position() as number;
-        const messageTypeId = inp.readUnsignedShort() as MessageTypeId;
-        const message = this._readMessageBody(inp, messageTypeId, flags, partitionId);
-        const bytesRead = (inp.position() as number) - payloadStart;
-        if (bytesRead !== payloadSize) {
-            throw new Error(`Malformed packet payload size: expected ${payloadSize}, read ${bytesRead}`);
-        }
-        return message;
     }
 
     private _writeMessageBody(out: ByteArrayObjectDataOutput, message: ClusterMessage): void {
@@ -453,6 +467,13 @@ export class BinarySerializationStrategy implements SerializationStrategy {
         }
         return NO_PARTITION;
     }
+}
+
+function toBufferView(buffer: Uint8Array): Buffer {
+    if (Buffer.isBuffer(buffer)) {
+        return buffer;
+    }
+    return Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 }
 
 function writeMembershipMessage(out: ByteArrayObjectDataOutput, message: FinalizeJoinMsg | MembersUpdateMsg): void {
