@@ -61,18 +61,29 @@ const DEFAULT_MAX_OUTBOUND = 256 * 1024;
 // ─── EventloopChannel ─────────────────────────────────────────────────────────
 
 /**
- * A single bounded TCP channel.  Wraps a Bun TCP socket and enforces an explicit
- * backpressure contract: {@link write} returns `false` rather than silently dropping
- * or infinitely buffering data.
+ * A single TCP channel with an unbounded write queue.
+ *
+ * Mirrors Hazelcast's NioOutboundPipeline: writes are always accepted into an
+ * internal queue (never rejected for backpressure). When the OS socket buffer
+ * is full, frames accumulate in the queue and are flushed on the next `drain`
+ * event from Bun's event loop.
+ *
+ * This guarantees zero message loss under load — the same contract Hazelcast
+ * provides with its `ConcurrentLinkedQueue`-backed NIO pipeline.
  */
 export class EventloopChannel {
     private readonly _socket: SocketWriter;
     private _closed = false;
     private _bytesRead = 0;
     private _bytesWritten = 0;
-    /** Bytes written to socket.write() since the last drain event. */
+    /** Bytes written to socket.write() that haven't been confirmed drained yet. */
     private _pendingBytes = 0;
     private readonly _maxOutbound: number;
+    /**
+     * Unbounded write queue — frames that couldn't be written immediately because
+     * the socket's outbound buffer was full. Flushed on the next drain event.
+     */
+    private readonly _writeQueue: Buffer[] = [];
 
     constructor(socket: SocketWriter, maxOutbound: number) {
         this._socket = socket;
@@ -81,16 +92,33 @@ export class EventloopChannel {
 
     /**
      * Write `data` to the channel.
-     * @returns `true` if the data was accepted; `false` if:
-     *   - the channel is already closed, or
-     *   - adding `data.length` to the current pending counter would exceed
-     *     {@link EventloopOptions.maxOutboundBytes} (explicit backpressure).
+     *
+     * If the socket can accept the data immediately, it is written directly.
+     * Otherwise the frame is queued and will be flushed when the socket drains.
+     *
+     * @returns `true` if the data was accepted (directly or queued);
+     *   `false` only if the channel is closed.
      */
     write(data: Buffer): boolean {
         if (this._closed) return false;
-        if (this._pendingBytes + data.length > this._maxOutbound) return false;
-        this._pendingBytes += data.length;
-        this._socket.write(data);
+
+        // If there are already queued frames, append to maintain FIFO order
+        if (this._writeQueue.length > 0) {
+            this._writeQueue.push(data);
+            this._bytesWritten += data.length;
+            return true;
+        }
+
+        // Try direct write if under the outbound limit
+        if (this._pendingBytes + data.length <= this._maxOutbound) {
+            this._pendingBytes += data.length;
+            this._socket.write(data);
+            this._bytesWritten += data.length;
+            return true;
+        }
+
+        // Socket buffer full — queue the frame for drain-based flush
+        this._writeQueue.push(data);
         this._bytesWritten += data.length;
         return true;
     }
@@ -102,6 +130,7 @@ export class EventloopChannel {
     close(): void {
         if (!this._closed) {
             this._closed = true;
+            this._writeQueue.length = 0;
             this._socket.end();
         }
     }
@@ -110,20 +139,46 @@ export class EventloopChannel {
     bytesRead(): number { return this._bytesRead; }
     bytesWritten(): number { return this._bytesWritten; }
 
+    /** Number of frames waiting in the write queue (for diagnostics). */
+    queuedFrames(): number { return this._writeQueue.length; }
+
     // ── internal hooks (called by socket handlers) ────────────────────────
 
     /** @internal */
     _recordRead(n: number): void { this._bytesRead += n; }
 
     /**
-     * Reset the pending-bytes counter.  Called by the socket `drain` event,
-     * which signals that the OS write buffer has been fully flushed.
+     * Called by the socket `drain` event — the OS write buffer has been flushed.
+     * Resets the pending counter and flushes any queued frames.
      * @internal
      */
-    _onDrain(): void { this._pendingBytes = 0; }
+    _onDrain(): void {
+        this._pendingBytes = 0;
+        this._flushQueue();
+    }
 
     /** @internal */
-    _markClosed(): void { this._closed = true; }
+    _markClosed(): void {
+        this._closed = true;
+        this._writeQueue.length = 0;
+    }
+
+    /**
+     * Flush queued frames to the socket until the outbound limit is hit again.
+     * Remaining frames stay in the queue for the next drain cycle.
+     */
+    private _flushQueue(): void {
+        while (this._writeQueue.length > 0) {
+            const frame = this._writeQueue[0];
+            if (this._pendingBytes + frame.length > this._maxOutbound) {
+                // Socket buffer would overflow — stop flushing, wait for next drain
+                break;
+            }
+            this._writeQueue.shift();
+            this._pendingBytes += frame.length;
+            this._socket.write(frame);
+        }
+    }
 }
 
 // ─── EventloopServer ─────────────────────────────────────────────────────────

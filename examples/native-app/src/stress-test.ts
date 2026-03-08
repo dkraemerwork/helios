@@ -50,10 +50,10 @@ function parseArgs(): StressOptions {
   const args = process.argv.slice(2);
   const opts: StressOptions = {
     durationSec: 60,
-    mapConcurrency: 20,
-    executorConcurrency: 6,
-    nearCacheConcurrency: 10,
-    crossNodeConcurrency: 10,
+    mapConcurrency: 40,
+    executorConcurrency: 8,
+    nearCacheConcurrency: 20,
+    crossNodeConcurrency: 20,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -89,10 +89,10 @@ Usage:
 
 Options:
   --duration <seconds>              Test duration (default: 60)
-  --map-concurrency <n>             Concurrent IMap put/get/delete loops (default: 20)
-  --executor-concurrency <n>        Concurrent scatter executor task loops (default: 6)
-  --near-cache-concurrency <n>      Concurrent near-cache read loops (default: 10)
-  --cross-node-concurrency <n>      Concurrent cross-node partition ops (default: 10)
+  --map-concurrency <n>             Concurrent IMap put/get/delete loops (default: 40)
+  --executor-concurrency <n>        Concurrent scatter executor task loops (default: 8)
+  --near-cache-concurrency <n>      Concurrent near-cache read loops (default: 20)
+  --cross-node-concurrency <n>      Concurrent cross-node partition ops (default: 20)
   --help                            Show this help
 
 Monitor the cluster at:
@@ -293,12 +293,7 @@ async function mapWorkload(
   signal: AbortSignal,
 ): Promise<void> {
   let seq = 0;
-  let backoffMs = 0;
   while (!signal.aborted) {
-    if (backoffMs > 0) {
-      await Bun.sleep(backoffMs);
-      backoffMs = 0;
-    }
     const key = `k-${seq++ % 10_000}`;
     try {
       const op = Math.random();
@@ -315,8 +310,6 @@ async function mapWorkload(
     } catch {
       if (signal.aborted) return;
       stats.mapErrors++;
-      // Backpressure — brief pause to let TCP drain
-      backoffMs = 1;
     }
   }
 }
@@ -348,7 +341,6 @@ async function nearCacheWorkload(
       if (signal.aborted) return;
       stats.nearCacheErrors++;
     }
-    if (seq % 8 === 0) await Bun.sleep(0);
   }
 }
 
@@ -377,7 +369,6 @@ async function crossNodeWorkload(
       if (signal.aborted) return;
       stats.crossNodeErrors++;
     }
-    if (seq % 8 === 0) await Bun.sleep(0);
   }
 }
 
@@ -430,8 +421,6 @@ async function executorWorkload(
       if (signal.aborted) return;
       stats.executorErrors++;
     }
-    // Executor tasks are heavier — yield after each to keep TCP responsive
-    await Bun.sleep(0);
   }
 }
 

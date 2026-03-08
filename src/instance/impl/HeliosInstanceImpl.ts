@@ -556,10 +556,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
             });
 
             if (!sent) {
-              // Channel backpressure or peer disconnected — fail fast instead
-              // of waiting for the 10s timeout
+              // Peer disconnected or channel closed — fail fast
               pendingResponses.delete(callId);
-              reject(new Error(`Send failed (backpressure or peer disconnected, callId=${callId})`));
+              reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
               return;
             }
 
