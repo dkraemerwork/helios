@@ -1075,7 +1075,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
 - [x] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
 - [x] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
-- [ ] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
+- [x] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
 - [ ] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
 - [ ] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
 - [ ] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
@@ -1189,11 +1189,11 @@ Depends on: Block 23.4 (tasklets), Block 23.5 (distributed edges).
 **Goal:** Assemble the full DAG execution on a single member and manage multiple job executions per member.
 
 **TODO — Block 23.6**:
-- [ ] Create `src/job/ExecutionPlan.ts`: `ExecutionPlan`, `EdgeRoutingEntry`, `EdgeRoutingTable`, `computeExecutionPlan()` — computes NATS subject routing table from DAG + member topology
-- [ ] Create `src/job/engine/JobExecution.ts`: wires up full DAG on one member — creates AsyncChannels for local edges, ProcessorTasklets for each vertex, DistributedEdgeSenders/Receivers for distributed edges, starts all async loops, stops all on cancel
-- [ ] Create `src/job/BlitzJobExecutor.ts`: manages multiple JobExecutions per member, handles START_EXECUTION/STOP_EXECUTION commands, collects local metrics, injects snapshot barriers
-- [ ] Tests: execution plan computation for various topologies, single DAG execution (source → map → filter → sink), distributed edge wiring, multi-job concurrent execution, metrics collection, abort/stop cleanup
-- [ ] Run a verification task that proves `JobExecution` wires a real DAG with real channels and processors, `BlitzJobExecutor` manages concurrent jobs with real lifecycle, metrics are collected from actual processing, and no execution path is a mock or deferred stub: `bun test test/blitz/job/engine/JobExecutionTest.test.ts test/blitz/job/BlitzJobExecutorTest.test.ts` green
+- [x] Create `src/job/ExecutionPlan.ts`: `ExecutionPlan`, `EdgeRoutingEntry`, `EdgeRoutingTable`, `computeExecutionPlan()` — computes NATS subject routing table from DAG + member topology
+- [x] Create `src/job/engine/JobExecution.ts`: wires up full DAG on one member — creates AsyncChannels for local edges, ProcessorTasklets for each vertex, DistributedEdgeSenders/Receivers for distributed edges, starts all async loops, stops all on cancel
+- [x] Create `src/job/BlitzJobExecutor.ts`: manages multiple JobExecutions per member, handles START_EXECUTION/STOP_EXECUTION commands, collects local metrics, injects snapshot barriers
+- [x] Tests: execution plan computation for various topologies, single DAG execution (source → map → filter → sink), distributed edge wiring, multi-job concurrent execution, metrics collection, abort/stop cleanup
+- [x] Run a verification task that proves `JobExecution` wires a real DAG with real channels and processors, `BlitzJobExecutor` manages concurrent jobs with real lifecycle, metrics are collected from actual processing, and no execution path is a mock or deferred stub: `bun test test/blitz/job/engine/JobExecutionTest.test.ts test/blitz/job/BlitzJobExecutorTest.test.ts` green
 
 ---
 
