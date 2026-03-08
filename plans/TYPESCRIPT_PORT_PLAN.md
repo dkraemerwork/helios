@@ -1073,7 +1073,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
 - [x] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
 - [x] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
-- [ ] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
+- [x] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
 - [ ] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
 - [ ] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
 - [ ] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
@@ -1159,12 +1159,12 @@ Depends on: Block 23.3 (processors).
 **Goal:** Build the per-vertex processing loop with Chandy-Lamport barrier alignment for exactly-once.
 
 **TODO — Block 23.4**:
-- [ ] Create `src/job/engine/ProcessorTasklet.ts`: wraps a processor, manages inbox/outbox, runs processing loop with metrics collection, implements barrier alignment for multi-input vertices (exactly-once: buffer post-barrier items from one input until all inputs have barriers; at-least-once: immediate save), tracks per-vertex metrics (itemsIn, itemsOut, queueSize, latency)
-- [ ] `injectBarrier(snapshotId)`: inject barrier into tasklet's inbox
-- [ ] `saveSnapshot(snapshotId, store)`: save tasklet state to SnapshotStore, return size in bytes
-- [ ] `restoreSnapshot(snapshotId, store)`: restore tasklet state from SnapshotStore
-- [ ] Tests: single-input barrier passthrough, multi-input barrier alignment (buffer until all inputs have barrier), exactly-once vs at-least-once behavior difference, snapshot save/restore round-trip, metrics tracking accuracy, abort signal stops loop
-- [ ] Run a verification task that proves barrier alignment is real (exactly-once buffers post-barrier items until all inputs report, at-least-once does immediate save), snapshot save/restore round-trips through `SnapshotStore`, metrics reflect actual processing, and no tasklet method is a stub or deferred: `bun test test/blitz/job/engine/ProcessorTaskletTest.test.ts` green
+- [x] Create `src/job/engine/ProcessorTasklet.ts`: wraps a processor, manages inbox/outbox, runs processing loop with metrics collection, implements barrier alignment for multi-input vertices (exactly-once: buffer post-barrier items from one input until all inputs have barriers; at-least-once: immediate save), tracks per-vertex metrics (itemsIn, itemsOut, queueSize, latency)
+- [x] `injectBarrier(snapshotId)`: inject barrier into tasklet's inbox
+- [x] `saveSnapshot(snapshotId, store)`: save tasklet state to SnapshotStore, return size in bytes
+- [x] `restoreSnapshot(snapshotId, store)`: restore tasklet state from SnapshotStore
+- [x] Tests: single-input barrier passthrough, multi-input barrier alignment (buffer until all inputs have barrier), exactly-once vs at-least-once behavior difference, snapshot save/restore round-trip, metrics tracking accuracy, abort signal stops loop
+- [x] Run a verification task that proves barrier alignment is real (exactly-once buffers post-barrier items until all inputs report, at-least-once does immediate save), snapshot save/restore round-trips through `SnapshotStore`, metrics reflect actual processing, and no tasklet method is a stub or deferred: `bun test test/blitz/job/engine/ProcessorTaskletTest.test.ts` green
 
 ---
 
