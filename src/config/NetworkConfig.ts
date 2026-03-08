@@ -2,6 +2,7 @@ import { InterfacesConfig } from '@zenystx/helios-core/config/InterfacesConfig';
 import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
 import { MemcacheProtocolConfig } from '@zenystx/helios-core/config/MemcacheProtocolConfig';
 import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
+import { TcpTransportScatterConfig } from '@zenystx/helios-core/config/TcpTransportScatterConfig';
 
 export class NetworkConfig {
     static readonly DEFAULT_PORT = 5701;
@@ -18,6 +19,7 @@ export class NetworkConfig {
     private _outboundPorts: number[] = [];
     private _restApiConfig: RestApiConfig = new RestApiConfig();
     private _memcacheProtocolConfig: MemcacheProtocolConfig = new MemcacheProtocolConfig();
+    private _tcpTransportScatterConfig: TcpTransportScatterConfig = new TcpTransportScatterConfig();
     private _clientProtocolPort: number = -1;
     private _clientProtocolUsername: string | null = null;
     private _clientProtocolPassword: string | null = null;
@@ -137,6 +139,15 @@ export class NetworkConfig {
 
     setMemcacheProtocolConfig(memcacheProtocolConfig: MemcacheProtocolConfig): this {
         this._memcacheProtocolConfig = memcacheProtocolConfig;
+        return this;
+    }
+
+    getTcpTransportScatterConfig(): TcpTransportScatterConfig {
+        return this._tcpTransportScatterConfig;
+    }
+
+    setTcpTransportScatterConfig(tcpTransportScatterConfig: TcpTransportScatterConfig): this {
+        this._tcpTransportScatterConfig = tcpTransportScatterConfig;
         return this;
     }
 

@@ -14,7 +14,10 @@ import {
 import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
 import { serializeOperation } from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
 import { SetOperation } from "@zenystx/helios-core/map/impl/operation/SetOperation";
-import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import {
+  TcpClusterTransport,
+  type TcpClusterTransportOptions,
+} from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { afterEach, describe, expect, it } from "bun:test";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -59,8 +62,9 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
   function createTransport(
     nodeId: string,
     strategy?: SerializationStrategy,
+    options?: TcpClusterTransportOptions,
   ): TcpClusterTransport {
-    const t = new TcpClusterTransport(nodeId, strategy);
+    const t = new TcpClusterTransport(nodeId, strategy, options);
     transports.push(t);
     return t;
   }
@@ -297,6 +301,43 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
 
     await waitUntil(() => received.some((m) => m.type === "HEARTBEAT"));
     expect(received.some((m) => m.type === "HEARTBEAT")).toBe(true);
+  });
+
+  it("scatter outbound encoding preserves transport ordering end-to-end", async () => {
+    const messageCount = 12;
+    const portA = nextPort();
+    const tA = createTransport("nodeA");
+    const tB = createTransport("nodeB", undefined, {
+      scatterOutboundEncoding: true,
+      scatterOutboundEncoder: {
+        inputCapacityBytes: 1024,
+        outputCapacityBytes: 1024,
+      },
+    });
+    tA.start(portA, "127.0.0.1");
+
+    const received: ClusterMessage[] = [];
+    tA.onMessage = (msg) => {
+      if (msg.type === "HEARTBEAT") {
+        received.push(msg);
+      }
+    };
+
+    await tB.connectToPeer("127.0.0.1", portA);
+    await waitUntil(() => tA.peerCount() >= 1);
+
+    for (let index = 0; index < messageCount; index++) {
+      expect(tB.send("nodeA", {
+        type: "HEARTBEAT",
+        senderUuid: `scatter-${index}`,
+        timestamp: index,
+      })).toBe(true);
+    }
+
+    await waitUntil(() => received.length === messageCount);
+    expect(received.map((msg) => ({ senderUuid: (msg as any).senderUuid, timestamp: (msg as any).timestamp }))).toEqual(
+      Array.from({ length: messageCount }, (_, index) => ({ senderUuid: `scatter-${index}`, timestamp: index })),
+    );
   });
 
   // ── 4. Connection auto-close on member removal ────────────────────────

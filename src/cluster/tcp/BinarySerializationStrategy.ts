@@ -469,6 +469,12 @@ export class BinarySerializationStrategy implements SerializationStrategy {
     }
 }
 
+const DEFAULT_BINARY_SERIALIZATION_STRATEGY = new BinarySerializationStrategy();
+
+export function serializeBinaryClusterMessage(message: ClusterMessage): Uint8Array {
+    return DEFAULT_BINARY_SERIALIZATION_STRATEGY.serialize(message);
+}
+
 function toBufferView(buffer: Uint8Array): Buffer {
     if (Buffer.isBuffer(buffer)) {
         return buffer;

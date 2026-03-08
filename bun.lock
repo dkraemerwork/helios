@@ -9,7 +9,7 @@
         "@nats-io/kv": "^3.3.1",
         "@nats-io/transport-node": "^3.3.1",
         "@zenystx/helios-core": "^1.0.0",
-        "@zenystx/scatterjs": "0.1.0",
+        "@zenystx/scatterjs": "0.1.1",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -401,7 +401,7 @@
 
     "@zenystx/helios-turso": ["@zenystx/helios-turso@workspace:packages/turso"],
 
-    "@zenystx/scatterjs": ["@zenystx/scatterjs@0.1.0", "", {}, "sha512-XCTNZcrsCUl+XKaiy3tY77AdEps44P1HnDawAZCh3mDh1jqJPzy15Ma8O8NQTnCbn7kWzz8pQhwIKgnhPUSppA=="],
+    "@zenystx/scatterjs": ["@zenystx/scatterjs@0.1.1", "", {}, "sha512-H3MJJAgO5XnwU3GQuGkj49CX/oRChn7inIm4qOw9l3owKFcY48IeWfmG7RsvHpxQqfIWs3htxFeeKhJMFoIa9g=="],
 
     "adm-zip": ["adm-zip@0.4.16", "", {}, "sha512-TFi4HBKSGfIKsK5YCkKaaFG2m4PEDyViZmEwof3MTIgzimHLto6muaHVpbrljdIvIrFZzEq/p4nafOeLcYegrg=="],
 
@@ -598,6 +598,8 @@
     "@aws-sdk/client-s3/@aws-sdk/util-user-agent-node": ["@aws-sdk/util-user-agent-node@3.973.3", "", { "dependencies": { "@aws-sdk/middleware-user-agent": "^3.972.18", "@aws-sdk/types": "^3.973.5", "@smithy/node-config-provider": "^4.3.11", "@smithy/types": "^4.13.0", "tslib": "^2.6.2" }, "peerDependencies": { "aws-crt": ">=1.0.0" }, "optionalPeers": ["aws-crt"] }, "sha512-8s2cQmTUOwcBlIJyI9PAZNnnnF+cGtdhHc1yzMMsSD/GR/Hxj7m0IGUE92CslXXb8/p5Q76iqOCjN1GFwyf+1A=="],
 
     "@zenystx/helios-blitz/@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
+
+    "@zenystx/helios-core/@zenystx/scatterjs": ["@zenystx/scatterjs@0.1.0", "", {}, "sha512-XCTNZcrsCUl+XKaiy3tY77AdEps44P1HnDawAZCh3mDh1jqJPzy15Ma8O8NQTnCbn7kWzz8pQhwIKgnhPUSppA=="],
 
     "@zenystx/helios-dynamodb/@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
 

@@ -309,6 +309,33 @@ function parseNetworkConfig(raw: Record<string, unknown>, config: HeliosConfig):
     if ('join' in raw && raw['join'] !== null && typeof raw['join'] === 'object') {
         parseJoinConfig(raw['join'] as Record<string, unknown>, config);
     }
+
+    if ('tcp-scatter' in raw && raw['tcp-scatter'] !== null && typeof raw['tcp-scatter'] === 'object') {
+        parseTcpScatterConfig(raw['tcp-scatter'] as Record<string, unknown>, config);
+    }
+    if ('tcpScatter' in raw && raw['tcpScatter'] !== null && typeof raw['tcpScatter'] === 'object') {
+        parseTcpScatterConfig(raw['tcpScatter'] as Record<string, unknown>, config);
+    }
+}
+
+function parseTcpScatterConfig(raw: Record<string, unknown>, config: HeliosConfig): void {
+    const scatterConfig = config.getNetworkConfig().getTcpTransportScatterConfig();
+
+    if (typeof raw['enabled'] === 'boolean') {
+        scatterConfig.setEnabled(raw['enabled'] as boolean);
+    }
+    if (typeof raw['input-capacity-bytes'] === 'number') {
+        scatterConfig.setInputCapacityBytes(raw['input-capacity-bytes'] as number);
+    }
+    if (typeof raw['inputCapacityBytes'] === 'number') {
+        scatterConfig.setInputCapacityBytes(raw['inputCapacityBytes'] as number);
+    }
+    if (typeof raw['output-capacity-bytes'] === 'number') {
+        scatterConfig.setOutputCapacityBytes(raw['output-capacity-bytes'] as number);
+    }
+    if (typeof raw['outputCapacityBytes'] === 'number') {
+        scatterConfig.setOutputCapacityBytes(raw['outputCapacityBytes'] as number);
+    }
 }
 
 function parseJoinConfig(raw: Record<string, unknown>, config: HeliosConfig): void {

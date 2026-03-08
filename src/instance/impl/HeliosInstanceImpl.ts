@@ -468,7 +468,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
 
     const port = this._config.getNetworkConfig().getPort();
-    this._transport = new TcpClusterTransport(this._name);
+    const scatterConfig = this._config.getNetworkConfig().getTcpTransportScatterConfig();
+    this._transport = new TcpClusterTransport(this._name, undefined, {
+      scatterOutboundEncoding: scatterConfig.isEnabled(),
+      scatterOutboundEncoder: {
+        inputCapacityBytes: scatterConfig.getInputCapacityBytes(),
+        outputCapacityBytes: scatterConfig.getOutputCapacityBytes(),
+      },
+    });
     this._transport.start(port, "0.0.0.0");
 
     // Create cluster coordinator (needs transport bound port)

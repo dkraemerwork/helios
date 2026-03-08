@@ -32,6 +32,7 @@ export { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 export { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
 export { TcpIpConfig } from "@zenystx/helios-core/config/TcpIpConfig";
 export { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
+export { TcpTransportScatterConfig } from "@zenystx/helios-core/config/TcpTransportScatterConfig";
 
 // ── Core / Instance ───────────────────────────────────────────────────────────
 export type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";

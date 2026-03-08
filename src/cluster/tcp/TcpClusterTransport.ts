@@ -19,7 +19,7 @@
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import { BinarySerializationStrategy } from '@zenystx/helios-core/cluster/tcp/BinarySerializationStrategy';
 import { OutboundBatcher } from '@zenystx/helios-core/cluster/tcp/OutboundBatcher';
-import { ScatterSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/ScatterSerializationStrategy';
+import { ScatterOutboundEncoder, type ScatterOutboundEncoderOptions } from '@zenystx/helios-core/cluster/tcp/ScatterOutboundEncoder';
 import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
 import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
@@ -32,10 +32,16 @@ interface FrameDecoderState {
 
 const INITIAL_READ_BUFFER_SIZE = 64 * 1024;
 
+export interface TcpClusterTransportOptions {
+    scatterOutboundEncoding?: boolean;
+    scatterOutboundEncoder?: ScatterOutboundEncoderOptions;
+}
+
 export class TcpClusterTransport {
     private readonly _nodeId: string;
     private readonly _strategy: SerializationStrategy;
-    private readonly _scatterStrategy: ScatterSerializationStrategy;
+    private readonly _scatterOutboundEncoding: boolean;
+    private readonly _scatterOutboundEncoderOptions?: ScatterOutboundEncoderOptions;
     private _server: EventloopServer | null = null;
 
     /**
@@ -50,6 +56,7 @@ export class TcpClusterTransport {
      */
     private readonly _buffers = new Map<EventloopChannel, FrameDecoderState>();
     private readonly _outboundBatchers = new Map<EventloopChannel, OutboundBatcher>();
+    private readonly _scatterOutboundEncoders = new Map<EventloopChannel, ScatterOutboundEncoder>();
 
     // ── External callbacks (set by HeliosInstanceImpl) ────────────────────
 
@@ -68,10 +75,11 @@ export class TcpClusterTransport {
     /** Fired for any non-HELLO message that is not handled by legacy callbacks. */
     onMessage: (msg: ClusterMessage) => void = () => {};
 
-    constructor(nodeId: string, strategy?: SerializationStrategy) {
+    constructor(nodeId: string, strategy?: SerializationStrategy, options?: TcpClusterTransportOptions) {
         this._nodeId = nodeId;
         this._strategy = strategy ?? new BinarySerializationStrategy();
-        this._scatterStrategy = new ScatterSerializationStrategy({ poolSize: 4 });
+        this._scatterOutboundEncoding = options?.scatterOutboundEncoding ?? true;
+        this._scatterOutboundEncoderOptions = options?.scatterOutboundEncoder;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -116,10 +124,13 @@ export class TcpClusterTransport {
             batcher.dispose();
         }
         this._outboundBatchers.clear();
+        for (const encoder of this._scatterOutboundEncoders.values()) {
+            encoder.dispose();
+        }
+        this._scatterOutboundEncoders.clear();
         this._buffers.clear();
         this._server?.stop(true);
         this._server = null;
-        this._scatterStrategy.destroy();
     }
 
     // ── Peer info ─────────────────────────────────────────────────────────
@@ -227,6 +238,13 @@ export class TcpClusterTransport {
     private _sendMsg(ch: EventloopChannel, msg: ClusterMessage): boolean {
         const batcher = this._outboundBatchers.get(ch) ?? this._createOutboundBatcher(ch);
 
+        if (this._shouldUseScatterOutboundEncoding()) {
+            const encoder = this._scatterOutboundEncoders.get(ch) ?? this._createScatterOutboundEncoder(ch, batcher);
+            if (encoder !== null) {
+                return encoder.enqueue(msg);
+            }
+        }
+
         if (typeof this._strategy.serializeInto === 'function') {
             const out = wireBufferPool.takeOutputBuffer();
             try {
@@ -256,6 +274,9 @@ export class TcpClusterTransport {
         const batcher = this._outboundBatchers.get(ch);
         batcher?.dispose();
         this._outboundBatchers.delete(ch);
+        const encoder = this._scatterOutboundEncoders.get(ch);
+        encoder?.dispose();
+        this._scatterOutboundEncoders.delete(ch);
         this._buffers.delete(ch);
         for (const [id, peerCh] of this._peers) {
             if (peerCh === ch) {
@@ -366,5 +387,19 @@ export class TcpClusterTransport {
         const batcher = new OutboundBatcher(ch);
         this._outboundBatchers.set(ch, batcher);
         return batcher;
+    }
+
+    private _shouldUseScatterOutboundEncoding(): boolean {
+        return this._scatterOutboundEncoding && this._strategy instanceof BinarySerializationStrategy;
+    }
+
+    private _createScatterOutboundEncoder(ch: EventloopChannel, batcher: OutboundBatcher): ScatterOutboundEncoder | null {
+        try {
+            const encoder = new ScatterOutboundEncoder(batcher, this._scatterOutboundEncoderOptions);
+            this._scatterOutboundEncoders.set(ch, encoder);
+            return encoder;
+        } catch {
+            return null;
+        }
     }
 }
