@@ -2,6 +2,8 @@ import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { BlitzService, type BlitzEventListener } from '../BlitzService.js';
 import { type Pipeline } from '../Pipeline.js';
 import { type BatchPipeline } from '../batch/BatchPipeline.js';
+import type { BlitzJob } from '@zenystx/helios-core/job/BlitzJob.js';
+import type { JobConfig } from '@zenystx/helios-core/job/JobConfig.js';
 
 /**
  * NestJS-injectable wrapper around {@link BlitzService}.
@@ -56,6 +58,26 @@ export class HeliosBlitzService implements OnModuleDestroy {
     /** Returns `true` if a pipeline with the given name is currently running. */
     isRunning(name: string): boolean {
         return this.blitz.isRunning(name);
+    }
+
+    /** Create and start a new job from a pipeline. */
+    async newJob(pipeline: Pipeline, config?: JobConfig): Promise<BlitzJob> {
+        return this.blitz.newJob(pipeline, config);
+    }
+
+    /** Create and start a lightweight local-only job. */
+    async newLightJob(pipeline: Pipeline, config?: JobConfig): Promise<BlitzJob> {
+        return this.blitz.newLightJob(pipeline, config);
+    }
+
+    /** Look up a job by its ID. */
+    getJob(id: string): BlitzJob | null {
+        return this.blitz.getJob(id);
+    }
+
+    /** Get all jobs, optionally filtered by name. */
+    getJobs(name?: string): BlitzJob[] {
+        return this.blitz.getJobs(name);
     }
 
     /**

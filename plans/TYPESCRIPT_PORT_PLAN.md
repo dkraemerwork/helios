@@ -1081,7 +1081,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
 - [x] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
 - [x] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
-- [ ] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
+- [x] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
 - [ ] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
 - [ ] **Phase 23 checkpoint** — All Blitz job supervision tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; `blitz.newJob()` returns a BlitzJob with full Jet-parity lifecycle; streaming runtime engine drives data through DAG with source/operator/sink processors connected by AsyncChannel (local) and NATS (distributed) edges; Chandy-Lamport barrier snapshots provide exactly-once and at-least-once guarantees; master-supervised coordination with Helios fencing; auto-scaling with debounced restart on member join/leave; master failover resumes from IMap; job metrics collected cross-member; light jobs work without coordination; NestJS bridge proxies all new methods; no `BlitzJob` method is a throw-stub or deferred placeholder; no processor, channel, edge, or coordinator method is a fake or mock implementation; no public API returns hardcoded zeros or placeholder data; distributed edges use real NATS transport (not in-memory mocks); snapshot store uses real NATS KV; docs/examples/exports only claim behavior that is actually wired; no stubs, no deferrals, no mock implementations
 
@@ -1290,14 +1290,14 @@ Depends on: Block 23.10 (coordinator), Block 23.7 (pipeline serialization).
 **Goal:** Wire everything into BlitzService and update all integration surfaces.
 
 **TODO — Block 23.12**:
-- [ ] Modify `src/BlitzService.ts`: add `newJob(pipeline, config)`, `newLightJob(pipeline)`, `getJob(idOrName)`, `getJobs(name?)`, `setCoordinator(coordinator)` — wire BlitzJobCoordinator and BlitzJobExecutor, deprecate `submit()`/`cancel()` (delegate to newJob internally)
-- [ ] Modify `src/BlitzEvent.ts`: add JOB_STARTED, JOB_COMPLETED, JOB_FAILED, JOB_CANCELLED, JOB_SUSPENDED, JOB_RESTARTING, SNAPSHOT_STARTED, SNAPSHOT_COMPLETED events
-- [ ] Modify `src/index.ts`: export all new job types (BlitzJob, JobConfig, JobStatus, ProcessingGuarantee, BlitzJobMetrics, etc.)
-- [ ] Modify `src/nestjs/HeliosBlitzService.ts`: add `newJob()`, `newLightJob()`, `getJob()`, `getJobs()` proxy methods
-- [ ] Standalone mode (no coordinator): newJob() runs locally as light job, full streaming runtime engine works
-- [ ] Cluster mode (with coordinator): newJob() delegates to BlitzJobCoordinator, distributed execution, failover, snapshots
-- [ ] Tests: standalone newJob creates and runs job, cluster newJob distributes, getJob/getJobs work, BlitzEvent fires on lifecycle transitions, NestJS proxy delegates correctly, deprecated submit() still works
-- [ ] Run a verification task that proves `BlitzService.newJob()` returns a real `BlitzJob` with full Jet-parity lifecycle in both standalone and cluster mode, NestJS bridge methods are real proxies (not throw-stubs), exports expose all new job types, and no integration surface is partially wired or deferred: `bun test packages/blitz/` green, existing tests still pass
+- [x] Modify `src/BlitzService.ts`: add `newJob(pipeline, config)`, `newLightJob(pipeline)`, `getJob(idOrName)`, `getJobs(name?)`, `setCoordinator(coordinator)` — wire BlitzJobCoordinator and BlitzJobExecutor, deprecate `submit()`/`cancel()` (delegate to newJob internally)
+- [x] Modify `src/BlitzEvent.ts`: add JOB_STARTED, JOB_COMPLETED, JOB_FAILED, JOB_CANCELLED, JOB_SUSPENDED, JOB_RESTARTING, SNAPSHOT_STARTED, SNAPSHOT_COMPLETED events
+- [x] Modify `src/index.ts`: export all new job types (BlitzJob, JobConfig, JobStatus, ProcessingGuarantee, BlitzJobMetrics, etc.)
+- [x] Modify `src/nestjs/HeliosBlitzService.ts`: add `newJob()`, `newLightJob()`, `getJob()`, `getJobs()` proxy methods
+- [x] Standalone mode (no coordinator): newJob() runs locally as light job, full streaming runtime engine works
+- [x] Cluster mode (with coordinator): newJob() delegates to BlitzJobCoordinator, distributed execution, failover, snapshots
+- [x] Tests: standalone newJob creates and runs job, cluster newJob distributes, getJob/getJobs work, BlitzEvent fires on lifecycle transitions, NestJS proxy delegates correctly, deprecated submit() still works
+- [x] Run a verification task that proves `BlitzService.newJob()` returns a real `BlitzJob` with full Jet-parity lifecycle in both standalone and cluster mode, NestJS bridge methods are real proxies (not throw-stubs), exports expose all new job types, and no integration surface is partially wired or deferred: `bun test packages/blitz/` green, existing tests still pass
 
 ---
 

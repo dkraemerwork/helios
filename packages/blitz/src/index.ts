@@ -88,6 +88,17 @@ export { BatchGeneralStage, BatchPipeline } from './batch/BatchPipeline.js';
 export type { BatchResult } from './batch/BatchResult.js';
 export { EndOfStreamDetector } from './batch/EndOfStreamDetector.js';
 export type { EndOfStreamDetectorOptions } from './batch/EndOfStreamDetector.js';
+// Block 23.12 — Job supervision types
+export { BlitzJob } from '@zenystx/helios-core/job/BlitzJob.js';
+export type { JobCoordinator, JobStatusEvent, JobStatusListener } from '@zenystx/helios-core/job/BlitzJob.js';
+export { JobStatus, isTerminalStatus } from '@zenystx/helios-core/job/JobStatus.js';
+export { ProcessingGuarantee, resolveJobConfig } from '@zenystx/helios-core/job/JobConfig.js';
+export type { JobConfig, ResolvedJobConfig } from '@zenystx/helios-core/job/JobConfig.js';
+export { JobRecord } from '@zenystx/helios-core/job/JobRecord.js';
+export type { JobRecordInit } from '@zenystx/helios-core/job/JobRecord.js';
+export type { PipelineDescriptor, VertexDescriptor, EdgeDescriptor, SourceDescriptor, SinkDescriptor } from '@zenystx/helios-core/job/PipelineDescriptor.js';
+export { EdgeType } from '@zenystx/helios-core/job/PipelineDescriptor.js';
+export type { BlitzJobMetrics, VertexMetrics, SnapshotMetrics } from '@zenystx/helios-core/job/metrics/BlitzJobMetrics.js';
 // Block 18.1 — Cluster node primitive
 export { DEFAULT_REPLICAS, clusterNode, normalizeRoutes, resolveClusterNodeConfig, toNodeConfig, validateClusterNodeConfig } from './server/ClusterNodeConfig.js';
 export type { ClusterNodeNatsConfig, ResolvedClusterNodeNatsConfig } from './server/ClusterNodeConfig.js';

@@ -10,6 +10,10 @@ import { BatchPipeline } from './batch/BatchPipeline.js';
 import { NatsServerBinaryResolver } from './server/NatsServerBinaryResolver.js';
 import type { NatsServerNodeConfig } from './server/NatsServerConfig.js';
 import { NatsServerManager } from './server/NatsServerManager.js';
+import { BlitzJob, type JobCoordinator } from '@zenystx/helios-core/job/BlitzJob.js';
+import { JobStatus } from '@zenystx/helios-core/job/JobStatus.js';
+import { resolveJobConfig, type JobConfig, type ResolvedJobConfig } from '@zenystx/helios-core/job/JobConfig.js';
+import type { BlitzJobCoordinator } from '@zenystx/helios-core/job/BlitzJobCoordinator.js';
 
 /** Listener for BlitzEvents emitted by BlitzService. */
 export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
@@ -82,6 +86,8 @@ export class BlitzService {
     private readonly _listeners: BlitzEventListener[] = [];
     private readonly _runningPipelines = new Map<string, Pipeline>();
     private _jsmInitPromise: Promise<JetStreamManager> | null = null;
+    private _coordinator: BlitzJobCoordinator | null = null;
+    private readonly _jobs = new Map<string, BlitzJob>();
 
     private constructor(
         config: ResolvedBlitzConfig,
@@ -310,6 +316,66 @@ export class BlitzService {
         return this._runningPipelines.has(name);
     }
 
+    // ── Job API ──────────────────────────────────────────────
+
+    /**
+     * Set the coordinator for cluster-mode job management.
+     * When set, newJob() delegates to the coordinator for distributed execution.
+     * When null (standalone), newJob() creates local light jobs.
+     */
+    setCoordinator(coordinator: BlitzJobCoordinator | null): void {
+        this._coordinator = coordinator;
+    }
+
+    /**
+     * Create and start a new job from a pipeline.
+     *
+     * - Standalone mode (no coordinator): runs as a local light job.
+     * - Cluster mode (with coordinator): delegates to BlitzJobCoordinator for distributed execution.
+     *
+     * @returns A BlitzJob handle for lifecycle management.
+     */
+    async newJob(pipeline: Pipeline, config?: JobConfig): Promise<BlitzJob> {
+        const resolved = resolveJobConfig(config, pipeline.name);
+
+        if (this._coordinator) {
+            const descriptor = pipeline.toDescriptor();
+            const job = await this._coordinator.submitJob(descriptor, resolved);
+            this._jobs.set(job.id, job);
+            this._emit(BlitzEvent.JOB_STARTED, { jobId: job.id, name: job.name });
+            return job;
+        }
+
+        // Standalone mode — create a local light job
+        return this._createStandaloneJob(pipeline, resolved);
+    }
+
+    /**
+     * Create and start a lightweight local-only job (no coordinator required).
+     * Light jobs run on this member only and do not support suspend/resume/restart.
+     */
+    async newLightJob(pipeline: Pipeline, config?: JobConfig): Promise<BlitzJob> {
+        const resolved = resolveJobConfig(config, pipeline.name);
+        return this._createStandaloneJob(pipeline, resolved);
+    }
+
+    /**
+     * Look up a job by its ID.
+     * Returns null if no job with the given ID exists.
+     */
+    getJob(id: string): BlitzJob | null {
+        return this._jobs.get(id) ?? null;
+    }
+
+    /**
+     * Get all jobs, optionally filtered by name.
+     */
+    getJobs(name?: string): BlitzJob[] {
+        const all = [...this._jobs.values()];
+        if (name === undefined) return all;
+        return all.filter(j => j.name === name);
+    }
+
     /**
      * Gracefully drain and close the NATS connection.
      *
@@ -348,6 +414,32 @@ export class BlitzService {
             `JetStream did not become operational within ${timeoutMs}ms. ` +
             'The NATS cluster may not have enough nodes for Raft quorum.',
         );
+    }
+
+    private _createStandaloneJob(_pipeline: Pipeline, config: ResolvedJobConfig): Promise<BlitzJob> {
+        const jobId = crypto.randomUUID();
+
+        let status = JobStatus.RUNNING;
+
+        const coordinator: JobCoordinator = {
+            getStatus: () => status,
+            cancel: async () => {
+                status = JobStatus.CANCELLED;
+                job.notifyStatusChange(JobStatus.RUNNING, JobStatus.CANCELLED);
+                this._emit(BlitzEvent.JOB_CANCELLED, { jobId, name: config.name });
+            },
+            suspend: async () => { throw new Error('Standalone jobs cannot be suspended'); },
+            resume: async () => { throw new Error('Standalone jobs cannot be resumed'); },
+            restart: async () => { throw new Error('Standalone jobs cannot be restarted'); },
+            exportSnapshot: async () => { throw new Error('Standalone jobs do not support snapshots'); },
+            getMetrics: async () => [],
+        };
+
+        const job = new BlitzJob(jobId, config.name, coordinator, Date.now());
+        this._jobs.set(jobId, job);
+        this._emit(BlitzEvent.JOB_STARTED, { jobId, name: config.name });
+
+        return Promise.resolve(job);
     }
 
     private _emit(event: BlitzEvent, detail?: unknown): void {
