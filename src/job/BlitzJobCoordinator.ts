@@ -5,12 +5,14 @@ import type { PipelineDescriptor } from './PipelineDescriptor.js';
 import type { ResolvedJobConfig } from './JobConfig.js';
 import type { BlitzJobExecutor } from './BlitzJobExecutor.js';
 import type { Message } from '../topic/Message.js';
+import type { VertexMetrics, BlitzJobMetrics } from './metrics/BlitzJobMetrics.js';
 import { ProcessingGuarantee } from './JobConfig.js';
 import { JobRecord } from './JobRecord.js';
 import { JobStatus } from './JobStatus.js';
 import { BlitzJob, type JobCoordinator } from './BlitzJob.js';
 import { computeExecutionPlan } from './ExecutionPlan.js';
 import { SnapshotCoordinator } from './snapshot/SnapshotCoordinator.js';
+import { MetricsCollector } from './metrics/MetricsCollector.js';
 
 export interface AuthorityTuple {
   masterMemberId: string;
@@ -24,6 +26,15 @@ interface PendingReadyWait {
   readyMembers: Set<string>;
   resolve: () => void;
   reject: (err: Error) => void;
+}
+
+interface PendingMetricsRequest {
+  jobId: string;
+  requestId: string;
+  expectedMembers: Set<string>;
+  responses: Map<string, VertexMetrics[]>;
+  resolve: (result: BlitzJobMetrics) => void;
+  timeoutTimer: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -44,6 +55,8 @@ export class BlitzJobCoordinator {
   private readonly _jobStatuses = new Map<string, JobStatus>();
   private readonly _pendingReady = new Map<string, PendingReadyWait>();
   private readonly _scaleUpTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly _pendingMetrics = new Map<string, PendingMetricsRequest>();
+  private _metricsTimeoutMs: number = 5000;
   private readonly _topicListenerId: string | null = null;
 
   // Light jobs — local-only, no IMap
@@ -57,6 +70,7 @@ export class BlitzJobCoordinator {
     memberIds: string[],
     authority: AuthorityTuple,
     totalMemberCount?: number,
+    metricsTimeoutMs?: number,
   ) {
     this._imap = imap;
     this._topic = topic;
@@ -64,6 +78,7 @@ export class BlitzJobCoordinator {
     this._memberIds = [...memberIds];
     this._authority = authority;
     this._totalMemberCount = totalMemberCount ?? memberIds.length;
+    this._metricsTimeoutMs = metricsTimeoutMs ?? 5000;
 
     this._topicListenerId = this._topic.addMessageListener(
       (msg: Message<JobCommand>) => this._handleMessage(msg),
@@ -319,6 +334,12 @@ export class BlitzJobCoordinator {
       pending.reject(new Error('Demoted'));
     }
     this._pendingReady.clear();
+
+    // Clear pending metrics requests
+    for (const pending of this._pendingMetrics.values()) {
+      clearTimeout(pending.timeoutTimer);
+    }
+    this._pendingMetrics.clear();
   }
 
   async onPromotion(authority: AuthorityTuple, aliveMembers: string[]): Promise<void> {
@@ -489,7 +510,36 @@ export class BlitzJobCoordinator {
         this._pendingReady.delete(cmd.jobId);
         pending.resolve();
       }
+    } else if (cmd.type === 'METRICS_RESPONSE') {
+      const pending = this._pendingMetrics.get(cmd.requestId);
+      if (!pending) return;
+      if (pending.jobId !== cmd.jobId) return;
+
+      // Idempotent — ignore duplicate from same member
+      if (pending.responses.has(cmd.memberId)) return;
+
+      pending.responses.set(cmd.memberId, cmd.metrics);
+
+      const allReceived = [...pending.expectedMembers].every(m => pending.responses.has(m));
+      if (allReceived) {
+        clearTimeout(pending.timeoutTimer);
+        this._pendingMetrics.delete(cmd.requestId);
+        this._resolveMetrics(pending);
+      }
     }
+  }
+
+  private _resolveMetrics(pending: PendingMetricsRequest): void {
+    const snapshotCoordinator = this._snapshotCoordinators.get(pending.jobId);
+    const snapshotMetrics = snapshotCoordinator?.getSnapshotMetrics() ?? {
+      snapshotCount: 0,
+      lastSnapshotDurationMs: 0,
+      lastSnapshotBytes: 0,
+      lastSnapshotTimestamp: 0,
+    };
+
+    const result = MetricsCollector.aggregate(pending.responses, snapshotMetrics);
+    pending.resolve(result);
   }
 
   private _startSnapshotCoordinator(jobId: string, config: ResolvedJobConfig): void {
@@ -543,8 +593,45 @@ export class BlitzJobCoordinator {
         if (!sc) throw new Error('No snapshot coordinator for this job');
         await sc.initiateSnapshot(name);
       },
-      getMetrics: async () => this._executor.getLocalMetrics(jobId) ?? [],
+      getMetrics: () => this._collectMetrics(jobId),
     };
+  }
+
+  private _collectMetrics(jobId: string): Promise<BlitzJobMetrics> {
+    const requestId = crypto.randomUUID();
+    const record = this._jobStatuses.get(jobId);
+    if (!record) {
+      return Promise.resolve(MetricsCollector.aggregate(new Map(), {
+        snapshotCount: 0, lastSnapshotDurationMs: 0,
+        lastSnapshotBytes: 0, lastSnapshotTimestamp: 0,
+      }));
+    }
+
+    // Determine participating members from the IMap record
+    const expectedMembers = new Set(this._memberIds);
+
+    return new Promise((resolve) => {
+      const timeoutTimer = setTimeout(() => {
+        // Timeout — resolve with whatever we have
+        const pending = this._pendingMetrics.get(requestId);
+        if (!pending) return;
+        this._pendingMetrics.delete(requestId);
+        this._resolveMetrics(pending);
+      }, this._metricsTimeoutMs);
+
+      const pending: PendingMetricsRequest = {
+        jobId,
+        requestId,
+        expectedMembers,
+        responses: new Map(),
+        resolve,
+        timeoutTimer,
+      };
+      this._pendingMetrics.set(requestId, pending);
+
+      // Publish COLLECT_METRICS to all members
+      this._topic.publish({ type: 'COLLECT_METRICS', jobId, requestId });
+    });
   }
 
   private async _getAllJobRecords(): Promise<JobRecord[]> {

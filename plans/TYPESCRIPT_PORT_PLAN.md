@@ -1080,7 +1080,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
 - [x] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
 - [x] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
-- [ ] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
+- [x] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
 - [ ] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
 - [ ] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
 - [ ] **Phase 23 checkpoint** — All Blitz job supervision tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; `blitz.newJob()` returns a BlitzJob with full Jet-parity lifecycle; streaming runtime engine drives data through DAG with source/operator/sink processors connected by AsyncChannel (local) and NATS (distributed) edges; Chandy-Lamport barrier snapshots provide exactly-once and at-least-once guarantees; master-supervised coordination with Helios fencing; auto-scaling with debounced restart on member join/leave; master failover resumes from IMap; job metrics collected cross-member; light jobs work without coordination; NestJS bridge proxies all new methods; no `BlitzJob` method is a throw-stub or deferred placeholder; no processor, channel, edge, or coordinator method is a fake or mock implementation; no public API returns hardcoded zeros or placeholder data; distributed edges use real NATS transport (not in-memory mocks); snapshot store uses real NATS KV; docs/examples/exports only claim behavior that is actually wired; no stubs, no deferrals, no mock implementations
@@ -1276,10 +1276,10 @@ Depends on: Block 23.6 (executor metrics), Block 23.10 (coordinator).
 **Goal:** Build the cross-member job metrics collection and aggregation.
 
 **TODO — Block 23.11**:
-- [ ] Create `src/job/metrics/MetricsCollector.ts`: `aggregate()` static method combines per-member VertexMetrics into BlitzJobMetrics — sums itemsIn/Out, combines latency distributions, sums snapshot metrics
-- [ ] Wire COLLECT_METRICS / METRICS_RESPONSE flow through ITopic: BlitzJob.getMetrics() → coordinator sends COLLECT_METRICS → each member responds with local metrics → coordinator aggregates with timeout
-- [ ] Tests: single-member aggregation, multi-member aggregation, partial response handling (timeout), latency distribution merging, snapshot metrics aggregation
-- [ ] Run a verification task that proves metrics flow through real ITopic COLLECT_METRICS/METRICS_RESPONSE protocol, aggregation combines real per-member data, partial-response timeout is handled, and no metrics path returns hardcoded zeros or fake data: `bun test test/blitz/job/metrics/MetricsCollectorTest.test.ts` green
+- [x] Create `src/job/metrics/MetricsCollector.ts`: `aggregate()` static method combines per-member VertexMetrics into BlitzJobMetrics — sums itemsIn/Out, combines latency distributions, sums snapshot metrics
+- [x] Wire COLLECT_METRICS / METRICS_RESPONSE flow through ITopic: BlitzJob.getMetrics() → coordinator sends COLLECT_METRICS → each member responds with local metrics → coordinator aggregates with timeout
+- [x] Tests: single-member aggregation, multi-member aggregation, partial response handling (timeout), latency distribution merging, snapshot metrics aggregation
+- [x] Run a verification task that proves metrics flow through real ITopic COLLECT_METRICS/METRICS_RESPONSE protocol, aggregation combines real per-member data, partial-response timeout is handled, and no metrics path returns hardcoded zeros or fake data: `bun test test/blitz/job/metrics/MetricsCollectorTest.test.ts` green
 
 ---
 

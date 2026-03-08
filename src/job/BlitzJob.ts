@@ -1,5 +1,5 @@
 import { type JobStatus, isTerminalStatus } from './JobStatus.js';
-import type { VertexMetrics } from './metrics/BlitzJobMetrics.js';
+import type { VertexMetrics, BlitzJobMetrics } from './metrics/BlitzJobMetrics.js';
 
 export interface JobStatusEvent {
   readonly jobId: string;
@@ -19,7 +19,7 @@ export interface JobCoordinator {
   resume(): Promise<void>;
   restart(): Promise<void>;
   exportSnapshot(name: string): Promise<void>;
-  getMetrics(): Promise<VertexMetrics[]>;
+  getMetrics(): Promise<BlitzJobMetrics | VertexMetrics[]>;
   getStatus(): JobStatus;
 }
 
@@ -74,7 +74,7 @@ export class BlitzJob {
     return this._coordinator.exportSnapshot(name);
   }
 
-  async getMetrics(): Promise<VertexMetrics[]> {
+  async getMetrics(): Promise<BlitzJobMetrics | VertexMetrics[]> {
     return this._coordinator.getMetrics();
   }
 
