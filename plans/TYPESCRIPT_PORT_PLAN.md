@@ -754,13 +754,13 @@ Depends on: Block 22.3 (container service).
 **Goal:** Implement cancel, dispose, and shutdown lifecycle matching Hazelcast semantics.
 
 **TODO — Block 22.4**:
-- [ ] `cancel()`: stop future scheduling, do not interrupt in-flight run, transition to `CANCELLED`, preserve terminal metadata
-- [ ] `dispose()`: permanently remove task state from store, free task name for reuse, free handler target; subsequent access returns `StaleTaskException`
-- [ ] Versioned terminal-write ordering: cancel/dispose vs completion races resolved by record `version` — whoever commits a version increment first wins
-- [ ] `shutdown()`: reject new submissions with `RejectedExecutionException`, existing scheduled tasks continue to their natural completion or cancellation
-- [ ] Stale-task behavior: accessing a disposed handler returns `StaleTaskException`; reconstructing a handler for a disposed task via `getScheduledFuture(handler)` succeeds but any subsequent operation fails with `StaleTaskException`
-- [ ] Tests: cancel before fire prevents execution, cancel during run does not interrupt, dispose removes state, dispose frees name, shutdown rejects new, race scenarios
-- [ ] Run a verification task that proves cancel/dispose/shutdown semantics are real, versioned terminal-write ordering resolves races deterministically, and no lifecycle path silently swallows errors or defers behavior: `bun test test/scheduledexecutor/impl/ScheduledExecutorLifecycleTest.test.ts` green
+- [x] `cancel()`: stop future scheduling, do not interrupt in-flight run, transition to `CANCELLED`, preserve terminal metadata
+- [x] `dispose()`: permanently remove task state from store, free task name for reuse, free handler target; subsequent access returns `StaleTaskException`
+- [x] Versioned terminal-write ordering: cancel/dispose vs completion races resolved by record `version` — whoever commits a version increment first wins
+- [x] `shutdown()`: reject new submissions with `RejectedExecutionException`, existing scheduled tasks continue to their natural completion or cancellation
+- [x] Stale-task behavior: accessing a disposed handler returns `StaleTaskException`; reconstructing a handler for a disposed task via `getScheduledFuture(handler)` succeeds but any subsequent operation fails with `StaleTaskException`
+- [x] Tests: cancel before fire prevents execution, cancel during run does not interrupt, dispose removes state, dispose frees name, shutdown rejects new, race scenarios
+- [x] Run a verification task that proves cancel/dispose/shutdown semantics are real, versioned terminal-write ordering resolves races deterministically, and no lifecycle path silently swallows errors or defers behavior: `bun test test/scheduledexecutor/impl/ScheduledExecutorLifecycleTest.test.ts` green
 
 ---
 
@@ -1052,7 +1052,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.1** — `IScheduledExecutorService` + `IScheduledFuture<V>` + `ScheduledTaskHandler` contracts (full Hazelcast-parity API surface: `schedule`, `scheduleOnMember`, `scheduleOnKeyOwner`, `scheduleOnAllMembers`, `scheduleOnMembers`, `scheduleAtFixedRate`, all member/key fixed-rate variants, `getScheduledFuture(handler)`, `getAllScheduledFutures()`, `shutdown()`, portable handler serialization/reconstruction, `ScheduledTaskStatistics` interface) — ~15 tests
 - [x] **Block 22.2** — `ScheduledTaskDescriptor` + state model + `ScheduledTaskStore` (task record with `taskName`, `handlerId`, `executorName`, `taskType`, `scheduleKind`, `ownerKind`, `ownerEpoch`, `version`, `attemptId`, state enum `scheduled`/`running`/`done`/`cancelled`/`disposed`/`suspended`, run history entries with timing/outcome/attempt/epoch metadata, oldest-entry eviction, named-task `fail-if-exists` duplicate policy, unnamed stable task ID generation) — ~18 tests
 - [x] **Block 22.3** — `ScheduledExecutorContainerService` + local one-shot execution (partition-local task store management, one-shot delayed task scheduling via timer coordinator, dispatch into existing `ExecutorContainerService`, result envelope capture, wall-clock + monotonic hybrid timing, task state transitions on completion) — ~16 tests
-- [ ] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
+- [x] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
 - [ ] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
 - [ ] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
 - [ ] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests

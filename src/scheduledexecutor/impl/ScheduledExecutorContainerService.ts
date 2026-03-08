@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { ScheduledExecutorConfig } from '@zenystx/helios-core/config/ScheduledExecutorConfig.js';
+import { ExecutorRejectedExecutionException } from '@zenystx/helios-core/executor/ExecutorExceptions.js';
+import { StaleTaskException } from '@zenystx/helios-core/scheduledexecutor/StaleTaskException.js';
 import { ScheduledExecutorMemberBin } from './ScheduledExecutorMemberBin.js';
 import { ScheduledExecutorPartition } from './ScheduledExecutorPartition.js';
 import { ScheduledTaskDescriptor } from './ScheduledTaskDescriptor.js';
@@ -118,7 +120,7 @@ export class ScheduledExecutorContainerService {
         partitionId: number,
     ): ScheduledTaskDescriptor {
         if (this._shutdown) {
-            throw new Error(`ScheduledExecutorContainerService is shut down`);
+            throw new ExecutorRejectedExecutionException('ScheduledExecutorContainerService is shut down');
         }
 
         const config = this._configs.get(executorName);
@@ -143,6 +145,67 @@ export class ScheduledExecutorContainerService {
 
         const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
         store.schedule(descriptor);
+
+        return descriptor;
+    }
+
+    // --- Lifecycle: cancel / dispose / getTaskDescriptor ---
+
+    /**
+     * Cancel a scheduled task. Stops future scheduling without interrupting in-flight runs.
+     * Uses versioned terminal-write ordering: only succeeds if the task is in a cancellable state.
+     *
+     * @returns true if the task was cancelled, false if already in a terminal state (DONE, CANCELLED).
+     * @throws StaleTaskException if the task has been disposed.
+     */
+    cancelTask(executorName: string, taskName: string, partitionId: number): boolean {
+        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        const descriptor = store.get(taskName);
+
+        if (!descriptor) {
+            throw new StaleTaskException(taskName);
+        }
+
+        if (descriptor.state === ScheduledTaskState.DONE || descriptor.state === ScheduledTaskState.CANCELLED) {
+            return false;
+        }
+
+        // Versioned terminal write: increment version and transition
+        descriptor.version++;
+        descriptor.transitionTo(ScheduledTaskState.CANCELLED);
+        return true;
+    }
+
+    /**
+     * Dispose a scheduled task. Permanently removes task state from the store,
+     * freeing the task name for reuse.
+     *
+     * @throws StaleTaskException if the task has already been disposed (not found in store).
+     */
+    disposeTask(executorName: string, taskName: string, partitionId: number): void {
+        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        const descriptor = store.get(taskName);
+
+        if (!descriptor) {
+            throw new StaleTaskException(taskName);
+        }
+
+        // Versioned terminal write: increment version, transition to DISPOSED, then remove
+        descriptor.version++;
+        descriptor.transitionTo(ScheduledTaskState.DISPOSED);
+        store.remove(taskName);
+    }
+
+    /**
+     * Get a task descriptor by name. Throws StaleTaskException if disposed (not in store).
+     */
+    getTaskDescriptor(executorName: string, taskName: string, partitionId: number): ScheduledTaskDescriptor {
+        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        const descriptor = store.get(taskName);
+
+        if (!descriptor) {
+            throw new StaleTaskException(taskName);
+        }
 
         return descriptor;
     }
