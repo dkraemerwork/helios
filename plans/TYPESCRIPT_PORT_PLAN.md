@@ -1070,7 +1070,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests
 - [ ] **Phase 22 checkpoint** — All scheduled executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; scheduled executor config wiring, partition-owned and member-owned scheduling, fixed-rate periodic engine, migration/recovery/anti-entropy, client parity, stats/metrics are all exercised and production-ready within the defined scope; `StatefulTask` is documented as a known parity gap for the first release; no `IScheduledExecutorService` or `IScheduledFuture` method is a throw-stub, deferred placeholder, or unwired passthrough; `getScheduledExecutorService(name)` returns a real proxy; every operation routes through `OperationService`; no public API returns hardcoded zeros or fake data; docs/examples/exports/test-support only claim behavior that is actually wired
 - [x] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
-- [ ] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
+- [x] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
 - [ ] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
 - [ ] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
 - [ ] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
@@ -1117,10 +1117,10 @@ Depends on: Block 23.0 (types).
 **Goal:** Build the core engine primitives: bounded async queue with backpressure and latency tracking.
 
 **TODO — Block 23.1**:
-- [ ] Create `src/job/engine/AsyncChannel.ts`: bounded async queue with `send()` (blocks when full), `receive()` (blocks when empty), `tryReceive()`, `size`, `isFull`, `close()`, `[Symbol.asyncIterator]()` — implements backpressure via `maxProcessorAccumulatedRecords`
-- [ ] Create `src/job/metrics/LatencyTracker.ts`: circular buffer latency tracker with `record()`, `getP50()`, `getP99()`, `getMax()`, `reset()` — lock-free single-threaded design
-- [ ] Tests: send/receive ordering, backpressure blocks sender when full, receiver blocks when empty, close unblocks waiters, async iterator works, capacity limits enforced, p50/p99/max computation accuracy, buffer rotation
-- [ ] Run a verification task that proves `AsyncChannel` backpressure is real (sender blocks, not drops), `LatencyTracker` percentile math is correct, and no primitive method is a no-op or deferred stub: `bun test test/blitz/job/engine/AsyncChannelTest.test.ts test/blitz/job/metrics/LatencyTrackerTest.test.ts` green
+- [x] Create `src/job/engine/AsyncChannel.ts`: bounded async queue with `send()` (blocks when full), `receive()` (blocks when empty), `tryReceive()`, `size`, `isFull`, `close()`, `[Symbol.asyncIterator]()` — implements backpressure via `maxProcessorAccumulatedRecords`
+- [x] Create `src/job/metrics/LatencyTracker.ts`: circular buffer latency tracker with `record()`, `getP50()`, `getP99()`, `getMax()`, `reset()` — lock-free single-threaded design
+- [x] Tests: send/receive ordering, backpressure blocks sender when full, receiver blocks when empty, close unblocks waiters, async iterator works, capacity limits enforced, p50/p99/max computation accuracy, buffer rotation
+- [x] Run a verification task that proves `AsyncChannel` backpressure is real (sender blocks, not drops), `LatencyTracker` percentile math is correct, and no primitive method is a no-op or deferred stub: `bun test test/blitz/job/engine/AsyncChannelTest.test.ts test/blitz/job/metrics/LatencyTrackerTest.test.ts` green
 
 ---
 
