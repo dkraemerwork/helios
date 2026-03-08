@@ -9,6 +9,26 @@ import { ScheduledTaskDescriptor } from './ScheduledTaskDescriptor.js';
 import { ScheduledTaskState } from './ScheduledTaskState.js';
 import type { TaskDefinition } from './TaskDefinition.js';
 import type { RunHistoryEntry } from './RunHistoryEntry.js';
+import { ScheduledExecutorStats, type ScheduledExecutorStatsSnapshot } from './ScheduledExecutorStats.js';
+
+/**
+ * Per-executor diagnostics entry.
+ */
+export interface ScheduledExecutorDiagnosticsEntry {
+    readonly activeSchedules: number;
+    readonly stats: ScheduledExecutorStatsSnapshot;
+    readonly isShutdown: boolean;
+}
+
+/**
+ * Full diagnostics snapshot for the scheduled executor service.
+ */
+export interface ScheduledExecutorDiagnostics {
+    readonly isShutdown: boolean;
+    readonly partitionCount: number;
+    readonly executorCount: number;
+    readonly executors: Record<string, ScheduledExecutorDiagnosticsEntry>;
+}
 
 /**
  * Snapshot of a single task descriptor for replication.
@@ -55,6 +75,7 @@ export class ScheduledExecutorContainerService {
     private readonly _configs = new Map<string, ScheduledExecutorConfig>();
     private _shutdown = false;
     private _timerHandle: ReturnType<typeof setInterval> | null = null;
+    private readonly _executorStats = new ScheduledExecutorStats();
 
     /** Tick interval in ms for the timer coordinator. */
     private static readonly TICK_INTERVAL_MS = 10;
@@ -475,6 +496,65 @@ export class ScheduledExecutorContainerService {
         }
 
         return data;
+    }
+
+    // --- Stats + Metrics + Diagnostics ---
+
+    /**
+     * Get the executor-level stats aggregator.
+     */
+    getExecutorStats(): ScheduledExecutorStats {
+        return this._executorStats;
+    }
+
+    /**
+     * Count non-terminal (active) scheduled tasks for a given executor across
+     * all partitions and the member bin.
+     */
+    getActiveScheduleCount(executorName: string): number {
+        let count = 0;
+        for (const partition of this._partitions) {
+            const store = partition.getOrCreateContainer(executorName);
+            for (const desc of store.getAll()) {
+                if (desc.state !== ScheduledTaskState.DONE &&
+                    desc.state !== ScheduledTaskState.CANCELLED &&
+                    desc.state !== ScheduledTaskState.DISPOSED &&
+                    desc.state !== ScheduledTaskState.SUPPRESSED) {
+                    count++;
+                }
+            }
+        }
+        const memberStore = this._memberBin.getOrCreateContainer(executorName);
+        for (const desc of memberStore.getAll()) {
+            if (desc.state !== ScheduledTaskState.DONE &&
+                desc.state !== ScheduledTaskState.CANCELLED &&
+                desc.state !== ScheduledTaskState.DISPOSED &&
+                desc.state !== ScheduledTaskState.SUPPRESSED) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Diagnostics snapshot for admin visibility.
+     * Exposes per-executor stats, active schedule counts, and service state.
+     */
+    getDiagnostics(): ScheduledExecutorDiagnostics {
+        const executors: Record<string, ScheduledExecutorDiagnosticsEntry> = {};
+        for (const [name] of this._configs) {
+            executors[name] = {
+                activeSchedules: this.getActiveScheduleCount(name),
+                stats: this._executorStats.getSnapshot(name),
+                isShutdown: this._shutdown,
+            };
+        }
+        return {
+            isShutdown: this._shutdown,
+            partitionCount: this._partitionCount,
+            executorCount: this._configs.size,
+            executors,
+        };
     }
 
     // --- Timer Coordinator ---

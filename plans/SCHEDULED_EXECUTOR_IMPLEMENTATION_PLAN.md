@@ -713,3 +713,20 @@ If implementation starts now, the first coding milestone should be:
 5. make that path deterministic under cancel/shutdown before adding periodic behavior
 
 That gives Helios a narrow but real foundation instead of jumping directly into full parity.
+
+## Known First-Release Limitations
+
+### `StatefulTask` Parity Gap
+
+Hazelcast's `StatefulTask<K, V>` interface allows scheduled tasks to save and restore
+user-defined state across replicas via `save(Map<K, V>)` and `load(Map<K, V>)` callbacks.
+This enables tasks to carry durable application state through migrations and replica promotions.
+
+**Helios first release does not implement `StatefulTask`.** Scheduled tasks are stateless
+from the framework's perspective — they carry execution metadata (run count, timing, epoch,
+version) but not user-defined key-value state snapshots.
+
+Applications requiring durable task state should persist it externally (e.g., in a Helios
+`IMap`, database, or other store) and reload it at task execution time.
+
+This is tracked as a known follow-up item for a future release (see Locked Design Decision #29).

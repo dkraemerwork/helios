@@ -1,5 +1,6 @@
 import { ScheduledTaskState } from './ScheduledTaskState.js';
 import type { RunHistoryEntry } from './RunHistoryEntry.js';
+import { ScheduledTaskStatisticsImpl } from './ScheduledTaskStatisticsImpl.js';
 
 /**
  * The kind of schedule: one-shot or periodic.
@@ -59,6 +60,7 @@ export class ScheduledTaskDescriptor {
 
     private readonly _history: RunHistoryEntry[] = [];
     private _maxHistoryEntries: number;
+    private readonly _taskStatistics = new ScheduledTaskStatisticsImpl();
 
     constructor(params: {
         taskName: string;
@@ -136,5 +138,13 @@ export class ScheduledTaskDescriptor {
      */
     get maxHistoryEntries(): number {
         return this._maxHistoryEntries;
+    }
+
+    /**
+     * Per-task statistics tracker. Wire {@link ScheduledTaskStatisticsImpl.onBeforeRun}
+     * and {@link ScheduledTaskStatisticsImpl.onAfterRun} from the dispatch path.
+     */
+    getTaskStatistics(): ScheduledTaskStatisticsImpl {
+        return this._taskStatistics;
     }
 }

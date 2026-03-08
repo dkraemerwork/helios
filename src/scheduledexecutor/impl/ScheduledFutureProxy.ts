@@ -37,17 +37,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
             this._handler.getPartitionId(),
         );
 
-        const lastRunDuration = descriptor.lastRunCompletedAt > 0
-            ? descriptor.lastRunCompletedAt - descriptor.lastRunStartedAt
-            : 0;
-
-        return {
-            totalRuns: descriptor.runCount,
-            lastRunDurationMs: lastRunDuration,
-            lastIdleTimeMs: 0,
-            totalRunTimeMs: lastRunDuration * descriptor.runCount,
-            totalIdleTimeMs: 0,
-        };
+        return descriptor.getTaskStatistics().snapshot();
     }
 
     async dispose(): Promise<void> {
