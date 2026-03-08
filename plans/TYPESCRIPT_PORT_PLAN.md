@@ -921,13 +921,13 @@ Depends on: Block 22.11 (anti-entropy).
 **Goal:** Ensure promoted owners correctly recover scheduled tasks after owner crash.
 
 **TODO — Block 22.12**:
-- [ ] Promoted owner fences retired owner epoch before making any replay or reschedule decisions
-- [ ] One-shot tasks not durably completed (no completion ack in store) are eligible for re-run — at-least-once semantics
-- [ ] Periodic tasks: overdue catch-up coalesces to one immediate run, then resumes on next aligned fixed-rate slot
-- [ ] Version/attempt fencing: a stale completion commit from the old owner (with old `attemptId` or `ownerEpoch`) is rejected by the promoted owner's store
-- [ ] Crash-loop validation: repeated crash/promote cycles do not accumulate orphaned task records or cause runaway re-runs
-- [ ] Tests: one-shot recovery after crash, periodic recovery with catch-up, stale completion rejected, crash-loop stress, no orphaned metadata
-- [ ] Run a verification task that proves crash recovery replays from real replicated state, version/attempt fencing rejects stale completions, crash-loop cycles do not leak orphaned records, and no recovery path is a fake passthrough: `bun test test/scheduledexecutor/impl/ScheduledExecutorCrashRecoveryTest.test.ts` green
+- [x] Promoted owner fences retired owner epoch before making any replay or reschedule decisions
+- [x] One-shot tasks not durably completed (no completion ack in store) are eligible for re-run — at-least-once semantics
+- [x] Periodic tasks: overdue catch-up coalesces to one immediate run, then resumes on next aligned fixed-rate slot
+- [x] Version/attempt fencing: a stale completion commit from the old owner (with old `attemptId` or `ownerEpoch`) is rejected by the promoted owner's store
+- [x] Crash-loop validation: repeated crash/promote cycles do not accumulate orphaned task records or cause runaway re-runs
+- [x] Tests: one-shot recovery after crash, periodic recovery with catch-up, stale completion rejected, crash-loop stress, no orphaned metadata
+- [x] Run a verification task that proves crash recovery replays from real replicated state, version/attempt fencing rejects stale completions, crash-loop cycles do not leak orphaned records, and no recovery path is a fake passthrough: `bun test test/scheduledexecutor/impl/ScheduledExecutorCrashRecoveryTest.test.ts` green
 
 ---
 
@@ -1060,7 +1060,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
 - [x] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests
 - [x] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
-- [ ] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests
+- [x] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests
 - [ ] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
 - [ ] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
 - [ ] **Block 22.15** — Stats + metrics + diagnostics (`ScheduledTaskStatistics` parity, pending/started/completed/cancelled/failed counters, scheduler-lag metrics, active-schedule gauge, pool health, admin visibility hooks, documented `StatefulTask` parity gap for first release) — ~12 tests

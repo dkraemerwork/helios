@@ -51,6 +51,12 @@ export class ScheduledTaskDescriptor {
     version: number;
     attemptId: string;
 
+    /**
+     * Whether this one-shot task has been durably completed (ack'd to store).
+     * Used by crash recovery to distinguish "never ran" from "completed but suspended for migration."
+     */
+    completedDurably = false;
+
     private readonly _history: RunHistoryEntry[] = [];
     private _maxHistoryEntries: number;
 
@@ -91,6 +97,7 @@ export class ScheduledTaskDescriptor {
         this.ownerEpoch = params.ownerEpoch ?? 0;
         this.version = params.version ?? 0;
         this.attemptId = params.attemptId ?? '';
+        this.completedDurably = false;
         this._maxHistoryEntries = params.maxHistoryEntries ?? 100;
     }
 
