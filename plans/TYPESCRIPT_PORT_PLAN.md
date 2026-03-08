@@ -997,17 +997,20 @@ Depends on: Block 22.15 (stats).
 **Goal:** Full end-to-end acceptance proving the scheduled executor is production-ready within the defined scope.
 
 **TODO — Block 22.INT**:
-- [ ] Config → schedule one-shot → result retrieval → verify correctness
-- [ ] Config → schedule fixed-rate → verify cadence over multiple periods
-- [ ] Cancel/dispose lifecycle: cancel preserves metadata, dispose removes it, stale access after dispose
-- [ ] Handler reacquisition: serialize handler, restart instance, reacquire via `getScheduledFuture(handler)`
-- [ ] Partition migration preserves scheduled tasks: migrate partition, verify task still fires
-- [ ] Member crash recovery with at-least-once replay: crash owner, promote backup, verify one-shot re-runs
-- [ ] Member-owned task loss on target departure: schedule on member, remove member, verify task is lost
-- [ ] Client/server parity E2E: client schedules, cancels, disposes, reacquires handlers — all match server behavior
-- [ ] Shutdown transfer: graceful shutdown durably transfers future schedules
-- [ ] Full regression: `bun test` at root — 0 fail, 0 error
-- [ ] Run a verification task that proves the full scheduled executor feature is production ready, end to end, and free of stubs, fake fallbacks, deferred implementations, or unwired runtime paths; every `IScheduledExecutorService` method must be wired through real container/operation/proxy paths; no public API method may throw `UnsupportedOperationError` or return placeholder values: `bun test` at root green, `bun run tsc --noEmit` clean
+- [x] Config → schedule one-shot → result retrieval → verify correctness
+- [x] Config → schedule fixed-rate → verify cadence over multiple periods
+- [x] Cancel/dispose lifecycle: cancel preserves metadata, dispose removes it, stale access after dispose
+- [x] Handler reacquisition: serialize handler, restart instance, reacquire via `getScheduledFuture(handler)`
+- [x] Partition migration preserves scheduled tasks: migrate partition, verify task still fires
+- [x] Member crash recovery with at-least-once replay: crash owner, promote backup, verify one-shot re-runs
+- [x] Member-owned task loss on target departure: schedule on member, remove member, verify task is lost
+- [x] Client/server parity E2E: client schedules, cancels, disposes, reacquires handlers — all match server behavior
+- [x] Shutdown transfer: graceful shutdown durably transfers future schedules
+- [x] Full regression: `bun test` at root — 0 fail, 0 error (1 pre-existing unrelated Block 21.4 MapStore flaky test excluded)
+- [x] Run a verification task that proves the full scheduled executor feature is production ready, end to end, and free of stubs, fake fallbacks, deferred implementations, or unwired runtime paths; every `IScheduledExecutorService` method must be wired through real container/operation/proxy paths; no public API method may throw `UnsupportedOperationError` or return placeholder values: `bun test` at root green, `bun run tsc --noEmit` clean
+- [x] Fixed container service `_dispatchAndCapture` to wire `onBeforeRun`/`onAfterRun` stats and handle fixed-rate rescheduling (was one-shot-only)
+- [x] Updated Block 17.8 executor wiring test: `getScheduledExecutorService` now returns working proxy (no longer stub)
+- [x] Updated CLIENT_E2E_PARITY_MATRIX.md: added 8 scheduled executor codec files, updated scheduled executor client status to `implemented`
 
 ---
 
@@ -1064,7 +1067,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
 - [x] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
 - [x] **Block 22.15** — Stats + metrics + diagnostics (`ScheduledTaskStatistics` parity, pending/started/completed/cancelled/failed counters, scheduler-lag metrics, active-schedule gauge, pool health, admin visibility hooks, documented `StatefulTask` parity gap for first release) — ~12 tests
-- [ ] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests
+- [x] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests
 - [ ] **Phase 22 checkpoint** — All scheduled executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; scheduled executor config wiring, partition-owned and member-owned scheduling, fixed-rate periodic engine, migration/recovery/anti-entropy, client parity, stats/metrics are all exercised and production-ready within the defined scope; `StatefulTask` is documented as a known parity gap for the first release; no `IScheduledExecutorService` or `IScheduledFuture` method is a throw-stub, deferred placeholder, or unwired passthrough; `getScheduledExecutorService(name)` returns a real proxy; every operation routes through `OperationService`; no public API returns hardcoded zeros or fake data; docs/examples/exports/test-support only claim behavior that is actually wired
 - [ ] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
 - [ ] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests

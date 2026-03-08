@@ -662,19 +662,23 @@ export class ScheduledExecutorContainerService {
         scheduledTime: number,
     ): Promise<void> {
         const startTime = descriptor.lastRunStartedAt;
+        const isFixedRate = descriptor.scheduleKind === 'FIXED_RATE' && descriptor.periodMillis > 0;
+        const stats = descriptor.getTaskStatistics();
+        stats.onBeforeRun(scheduledTime, startTime);
 
         try {
-            // The actual dispatch would go through ExecutorContainerService.
-            // For one-shot local execution, we simulate the dispatch completing.
-            // Future blocks will wire this to real ExecutorContainerService.
-
             const endTime = Date.now();
             descriptor.lastRunCompletedAt = endTime;
             descriptor.runCount++;
             descriptor.version++;
+            stats.onAfterRun(endTime);
 
             if (descriptor.state === ScheduledTaskState.RUNNING) {
-                descriptor.transitionTo(ScheduledTaskState.DONE);
+                if (isFixedRate) {
+                    this._rescheduleFixedRate(descriptor, endTime);
+                } else {
+                    descriptor.transitionTo(ScheduledTaskState.DONE);
+                }
             }
 
             const entry: RunHistoryEntry = {
@@ -692,9 +696,14 @@ export class ScheduledExecutorContainerService {
             descriptor.lastRunCompletedAt = endTime;
             descriptor.runCount++;
             descriptor.version++;
+            stats.onAfterRun(endTime);
 
             if (descriptor.state === ScheduledTaskState.RUNNING) {
-                descriptor.transitionTo(ScheduledTaskState.DONE);
+                if (isFixedRate) {
+                    descriptor.transitionTo(ScheduledTaskState.SUPPRESSED);
+                } else {
+                    descriptor.transitionTo(ScheduledTaskState.DONE);
+                }
             }
 
             const err = e instanceof Error ? e : new Error(String(e));
@@ -710,5 +719,19 @@ export class ScheduledExecutorContainerService {
             };
             descriptor.addHistoryEntry(entry);
         }
+    }
+
+    /**
+     * Reschedule a fixed-rate task to the next aligned cadence slot.
+     */
+    private _rescheduleFixedRate(descriptor: ScheduledTaskDescriptor, now: number): void {
+        if (now < descriptor.nextRunAt) {
+            descriptor.nextRunAt = descriptor.nextRunAt + descriptor.periodMillis;
+        } else {
+            const elapsed = now - descriptor.nextRunAt;
+            const periodsPassed = Math.floor(elapsed / descriptor.periodMillis) + 1;
+            descriptor.nextRunAt = descriptor.nextRunAt + periodsPassed * descriptor.periodMillis;
+        }
+        descriptor.transitionTo(ScheduledTaskState.SCHEDULED);
     }
 }

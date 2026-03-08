@@ -91,11 +91,12 @@ describe('HeliosInstance executor wiring (Block 17.8)', () => {
         expect(() => inst.getExecutorService('late')).toThrow();
     });
 
-    test('getScheduledExecutorService stub throws deterministic message', () => {
+    test('getScheduledExecutorService returns a working proxy', () => {
         const inst = createInstance();
-        expect(() => inst.getScheduledExecutorService('test')).toThrow(
-            /ScheduledExecutorService.*not supported.*deferred/i,
-        );
+        const sched = inst.getScheduledExecutorService('test');
+        expect(sched).toBeDefined();
+        expect(typeof sched.schedule).toBe('function');
+        expect(typeof sched.shutdown).toBe('function');
     });
 
     test('executor supports registerTaskType and submitLocal round-trip', async () => {

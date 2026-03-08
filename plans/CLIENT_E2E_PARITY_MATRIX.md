@@ -115,6 +115,14 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | `src/client/impl/protocol/codec/ClientGetDistributedObjectsCodec.ts` | keep | proxy | distributed objects listing codec |
 | `src/client/impl/protocol/codec/ClientDestroyProxyCodec.ts` | keep | proxy | proxy destroy operation codec |
 | `src/client/impl/protocol/codec/ClientCreateProxyCodec.ts` | keep | proxy | proxy create operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorSubmitToPartitionCodec.ts` | keep | scheduled executor | submit-to-partition operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorSubmitToMemberCodec.ts` | keep | scheduled executor | submit-to-member operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorCancelCodec.ts` | keep | scheduled executor | cancel task operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorDisposeCodec.ts` | keep | scheduled executor | dispose task operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorGetAllScheduledFuturesCodec.ts` | keep | scheduled executor | get all futures operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorGetStatsCodec.ts` | keep | scheduled executor | get stats operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorGetStateCodec.ts` | keep | scheduled executor | get state operation codec |
+| `src/client/impl/protocol/codec/ScheduledExecutorShutdownCodec.ts` | keep | scheduled executor | shutdown operation codec |
 | `src/client/proxy/*.ts` | keep | proxy layer | retained public/runtime proxies for map, queue, topic, executor deferral, and proxy manager |
 | `src/client/spi/*.ts` | keep | runtime services | retained listener, cluster, and partition services |
 | `src/client/invocation/*.ts` | keep | invocation layer | retained request execution primitives |
@@ -157,7 +165,7 @@ been removed from the shared contract and remain as member-only methods on `Heli
 | Reliable topic client | `src/client/proxy/ClientReliableTopicProxy.ts` | `ClientReliableTopicProxy` | NOT-RETAINED | No server-side reliable-topic protocol handler; client proxy had fake listener codec; narrowed out of `HeliosInstance` shared contract in Block 20.7 | `test/client/Block20_7_NearCacheAdvancedFeatureClosure.test.ts` |
 | PN counter client | `src/client/proxy/ClientPNCounterProxy.ts` | `ClientPNCounterProxy` | blocked-by-server | server runtime absent | — |
 | Flake ID client | `src/client/proxy/ClientFlakeIdGeneratorProxy.ts` | `ClientFlakeIdGeneratorProxy` | blocked-by-server | server runtime absent | — |
-| Scheduled executor client | `src/client/proxy/ClientScheduledExecutorProxy.ts` | scheduled executor proxy | blocked-by-server | server runtime absent | — |
+| Scheduled executor client | `src/client/proxy/ClientScheduledExecutorProxy.ts` | scheduled executor proxy | implemented | server runtime live via Phase 22 | `test/scheduledexecutor/ScheduledExecutorAcceptanceTest.test.ts` |
 | CP client | n/a | CP subsystem client surface | unsupported-by-design | Helios server runtime absent; OSS parity can reject clearly | — |
 
 ---
