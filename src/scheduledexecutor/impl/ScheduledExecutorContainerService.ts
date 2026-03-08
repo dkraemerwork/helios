@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { ScheduledExecutorConfig } from '@zenystx/helios-core/config/ScheduledExecutorConfig.js';
 import { ExecutorRejectedExecutionException } from '@zenystx/helios-core/executor/ExecutorExceptions.js';
+import type { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent.js';
 import { StaleTaskException } from '@zenystx/helios-core/scheduledexecutor/StaleTaskException.js';
 import { ScheduledExecutorMemberBin } from './ScheduledExecutorMemberBin.js';
 import { ScheduledExecutorPartition } from './ScheduledExecutorPartition.js';
@@ -238,6 +239,62 @@ export class ScheduledExecutorContainerService {
         }
 
         return descriptor;
+    }
+
+    // --- MigrationAwareService lifecycle ---
+
+    /**
+     * Called before migration starts. If this node is the source and the current
+     * replica index is primary (0), suspend all tasks in the migrating partition
+     * to prevent duplicate firing during migration.
+     *
+     * Hazelcast parity: DistributedScheduledExecutorService.beforeMigration()
+     */
+    beforeMigration(event: PartitionMigrationEvent): void {
+        const partition = this._partitions[event.partitionId]!;
+        if (event.migrationEndpoint === 'SOURCE' && event.currentReplicaIndex === 0) {
+            partition.suspendTasks();
+        }
+    }
+
+    /**
+     * Called after migration completes successfully.
+     * - On SOURCE: discard partition state when losing ownership (newReplicaIndex < 0).
+     * - On DESTINATION as new primary (newReplicaIndex === 0): increment epoch and promote
+     *   suspended tasks so the new owner can fire them.
+     *
+     * Hazelcast parity: DistributedScheduledExecutorService.commitMigration()
+     */
+    commitMigration(event: PartitionMigrationEvent): void {
+        const partition = this._partitions[event.partitionId]!;
+
+        if (event.migrationEndpoint === 'SOURCE') {
+            if (event.newReplicaIndex < 0) {
+                partition.discardAll();
+            }
+        } else if (event.newReplicaIndex === 0) {
+            // Becoming primary: epoch increment then promote
+            partition.incrementEpoch();
+            partition.promoteSuspended();
+        }
+    }
+
+    /**
+     * Called after migration fails and must be rolled back.
+     * - On DESTINATION: discard any replicated state that arrived during migration.
+     * - On SOURCE as primary (currentReplicaIndex === 0): re-promote suspended tasks
+     *   back to SCHEDULED since this node retains ownership.
+     *
+     * Hazelcast parity: DistributedScheduledExecutorService.rollbackMigration()
+     */
+    rollbackMigration(event: PartitionMigrationEvent): void {
+        const partition = this._partitions[event.partitionId]!;
+
+        if (event.migrationEndpoint === 'DESTINATION') {
+            partition.discardAll();
+        } else if (event.currentReplicaIndex === 0) {
+            partition.promoteSuspended();
+        }
     }
 
     // --- Replication / Migration ---
