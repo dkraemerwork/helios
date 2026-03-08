@@ -1078,7 +1078,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
 - [x] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
 - [x] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
-- [ ] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
+- [x] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
 - [ ] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
 - [ ] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
 - [ ] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
@@ -1235,12 +1235,12 @@ Depends on: Block 23.2 (SnapshotStore), Block 23.4 (barrier alignment), Block 23
 **Goal:** Build the master-side periodic snapshot coordinator that drives Chandy-Lamport cycles.
 
 **TODO — Block 23.9**:
-- [ ] Create `src/job/snapshot/SnapshotCoordinator.ts`: runs on master, starts periodic timer (snapshotIntervalMillis), initiates snapshot cycles — generates snapshotId, sends INJECT_BARRIER to all members via ITopic, waits for BARRIER_COMPLETE from all members, marks snapshot committed, updates JobRecord.lastSnapshotId
-- [ ] Implement `initiateSnapshot()` for on-demand snapshots (exportSnapshot)
-- [ ] Handle partial member completion (timeout + retry), member-loss during snapshot
-- [ ] Track snapshot metrics: count, duration, size
-- [ ] Tests: periodic snapshot timer fires, barrier injection reaches all members, snapshot completes when all members report, partial member failure handled, on-demand snapshot works, metrics tracked
-- [ ] Run a verification task that proves the snapshot coordinator drives real Chandy-Lamport barrier cycles via ITopic, waits for real member BARRIER_COMPLETE responses, handles partial failure and member loss, and no snapshot path is a fake local-only shortcut: `bun test test/blitz/job/snapshot/SnapshotCoordinatorTest.test.ts` green
+- [x] Create `src/job/snapshot/SnapshotCoordinator.ts`: runs on master, starts periodic timer (snapshotIntervalMillis), initiates snapshot cycles — generates snapshotId, sends INJECT_BARRIER to all members via ITopic, waits for BARRIER_COMPLETE from all members, marks snapshot committed, updates JobRecord.lastSnapshotId
+- [x] Implement `initiateSnapshot()` for on-demand snapshots (exportSnapshot)
+- [x] Handle partial member completion (timeout + retry), member-loss during snapshot
+- [x] Track snapshot metrics: count, duration, size
+- [x] Tests: periodic snapshot timer fires, barrier injection reaches all members, snapshot completes when all members report, partial member failure handled, on-demand snapshot works, metrics tracked
+- [x] Run a verification task that proves the snapshot coordinator drives real Chandy-Lamport barrier cycles via ITopic, waits for real member BARRIER_COMPLETE responses, handles partial failure and member loss, and no snapshot path is a fake local-only shortcut: `bun test test/blitz/job/snapshot/SnapshotCoordinatorTest.test.ts` green
 
 ---
 
