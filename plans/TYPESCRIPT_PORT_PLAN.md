@@ -853,12 +853,12 @@ src/scheduledexecutor/impl/operation/
 ```
 
 **TODO — Block 22.8**:
-- [ ] Schedule/create operations return success only after required backup acknowledgements (controlled by `durability` config)
-- [ ] `ScheduledExecutorReplicationOperation`: replicate partition-owned schedule metadata to backup replicas
-- [ ] Durability config controls replica count: `durability=0` means primary-only, `durability=1` means one backup, etc.
-- [ ] Capacity is ignored during partition migration to prevent data loss; counts repaired post-migration
-- [ ] Tests: create ack waits for backup, durability=0 does not wait, replication operation transfers full partition state, capacity bypass during migration
-- [ ] Run a verification task that proves durable create waits for real backup acks, replication transfers real partition state, and no replication path is a no-op stub or silently skips backup synchronization: `bun test test/scheduledexecutor/impl/operation/ScheduledExecutorReplicationTest.test.ts` green
+- [x] Schedule/create operations return success only after required backup acknowledgements (controlled by `durability` config)
+- [x] `ScheduledExecutorReplicationOperation`: replicate partition-owned schedule metadata to backup replicas
+- [x] Durability config controls replica count: `durability=0` means primary-only, `durability=1` means one backup, etc.
+- [x] Capacity is ignored during partition migration to prevent data loss; counts repaired post-migration
+- [x] Tests: create ack waits for backup, durability=0 does not wait, replication operation transfers full partition state, capacity bypass during migration
+- [x] Run a verification task that proves durable create waits for real backup acks, replication transfers real partition state, and no replication path is a no-op stub or silently skips backup synchronization: `bun test test/scheduledexecutor/impl/operation/ScheduledExecutorReplicationTest.test.ts` green
 
 ---
 
@@ -1056,7 +1056,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
 - [x] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
 - [x] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
-- [ ] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
+- [x] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
 - [ ] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
 - [ ] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests
 - [ ] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests

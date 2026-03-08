@@ -10,6 +10,32 @@ import type { TaskDefinition } from './TaskDefinition.js';
 import type { RunHistoryEntry } from './RunHistoryEntry.js';
 
 /**
+ * Snapshot of a single task descriptor for replication.
+ */
+export interface ScheduledTaskSnapshot {
+    readonly taskName: string;
+    readonly handlerId: string;
+    readonly executorName: string;
+    readonly taskType: string;
+    readonly scheduleKind: 'ONE_SHOT' | 'FIXED_RATE';
+    readonly ownerKind: 'PARTITION' | 'MEMBER';
+    readonly partitionId: number;
+    readonly memberUuid: string | null;
+    readonly initialDelayMillis: number;
+    readonly periodMillis: number;
+    readonly nextRunAt: number;
+    readonly durabilityReplicaCount: number;
+    readonly ownerEpoch: number;
+    readonly version: number;
+    readonly maxHistoryEntries: number;
+}
+
+/**
+ * Replication payload: executorName → taskName → snapshot.
+ */
+export type ScheduledExecutorReplicationData = Map<string, Map<string, ScheduledTaskSnapshot>>;
+
+/**
  * Central service managing partition-local scheduled task stores and dispatching one-shot firings.
  *
  * Implements ManagedService lifecycle (init, reset, shutdown) and RemoteService
@@ -212,6 +238,120 @@ export class ScheduledExecutorContainerService {
         }
 
         return descriptor;
+    }
+
+    // --- Replication / Migration ---
+
+    /**
+     * Enqueue a task as SUSPENDED on this node (backup/migration path).
+     * Bypasses capacity checks to prevent data loss during migration.
+     *
+     * Hazelcast parity: ScheduledExecutorContainer.enqueueSuspended(TaskDefinition)
+     */
+    enqueueSuspended(
+        executorName: string,
+        definition: TaskDefinition,
+        partitionId: number,
+    ): void {
+        const config = this._configs.get(executorName);
+        const maxHistory = config?.getMaxHistoryEntriesPerTask() ?? 100;
+
+        const descriptor = new ScheduledTaskDescriptor({
+            taskName: definition.name,
+            handlerId: randomUUID(),
+            executorName,
+            taskType: definition.command,
+            scheduleKind: definition.type === 'SINGLE_RUN' ? 'ONE_SHOT' : 'FIXED_RATE',
+            ownerKind: 'PARTITION',
+            partitionId,
+            initialDelayMillis: definition.delay,
+            periodMillis: definition.period,
+            nextRunAt: 0,
+            maxHistoryEntries: maxHistory,
+        });
+
+        // Start as SCHEDULED then immediately transition to SUSPENDED
+        descriptor.transitionTo(ScheduledTaskState.SUSPENDED);
+
+        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        // Bypass duplicate check for migration — use internal map directly
+        store.schedule(descriptor);
+    }
+
+    /**
+     * Enqueue a task from a replication snapshot as SUSPENDED.
+     * Preserves original handlerId, epoch, version, and timing metadata.
+     * Bypasses capacity checks.
+     */
+    enqueueSuspendedFromSnapshot(
+        executorName: string,
+        snapshot: ScheduledTaskSnapshot,
+        partitionId: number,
+    ): void {
+        const descriptor = new ScheduledTaskDescriptor({
+            taskName: snapshot.taskName,
+            handlerId: snapshot.handlerId,
+            executorName: snapshot.executorName,
+            taskType: snapshot.taskType,
+            scheduleKind: snapshot.scheduleKind,
+            ownerKind: snapshot.ownerKind,
+            partitionId,
+            memberUuid: snapshot.memberUuid,
+            initialDelayMillis: snapshot.initialDelayMillis,
+            periodMillis: snapshot.periodMillis,
+            nextRunAt: snapshot.nextRunAt,
+            durabilityReplicaCount: snapshot.durabilityReplicaCount,
+            ownerEpoch: snapshot.ownerEpoch,
+            version: snapshot.version,
+            maxHistoryEntries: snapshot.maxHistoryEntries,
+        });
+
+        // Start as SCHEDULED then immediately transition to SUSPENDED
+        descriptor.transitionTo(ScheduledTaskState.SUSPENDED);
+
+        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        store.schedule(descriptor);
+    }
+
+    /**
+     * Prepare a replication data payload for a given partition.
+     * Collects all task descriptors across all executors in that partition.
+     *
+     * Hazelcast parity: ScheduledExecutorPartition.prepareReplicationOperation()
+     */
+    prepareReplicationData(partitionId: number): ScheduledExecutorReplicationData {
+        const data: ScheduledExecutorReplicationData = new Map();
+        const partition = this._partitions[partitionId]!;
+
+        for (const [executorName] of this._configs) {
+            const store = partition.getOrCreateContainer(executorName);
+            const tasks = store.getAll();
+            if (tasks.length === 0) continue;
+
+            const taskMap = new Map<string, ScheduledTaskSnapshot>();
+            for (const desc of tasks) {
+                taskMap.set(desc.taskName, {
+                    taskName: desc.taskName,
+                    handlerId: desc.handlerId,
+                    executorName: desc.executorName,
+                    taskType: desc.taskType,
+                    scheduleKind: desc.scheduleKind,
+                    ownerKind: desc.ownerKind,
+                    partitionId: desc.partitionId,
+                    memberUuid: desc.memberUuid,
+                    initialDelayMillis: desc.initialDelayMillis,
+                    periodMillis: desc.periodMillis,
+                    nextRunAt: desc.nextRunAt,
+                    durabilityReplicaCount: desc.durabilityReplicaCount,
+                    ownerEpoch: desc.ownerEpoch,
+                    version: desc.version,
+                    maxHistoryEntries: desc.maxHistoryEntries,
+                });
+            }
+            data.set(executorName, taskMap);
+        }
+
+        return data;
     }
 
     // --- Timer Coordinator ---
