@@ -1069,7 +1069,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.15** — Stats + metrics + diagnostics (`ScheduledTaskStatistics` parity, pending/started/completed/cancelled/failed counters, scheduler-lag metrics, active-schedule gauge, pool health, admin visibility hooks, documented `StatefulTask` parity gap for first release) — ~12 tests
 - [x] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests
 - [ ] **Phase 22 checkpoint** — All scheduled executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; scheduled executor config wiring, partition-owned and member-owned scheduling, fixed-rate periodic engine, migration/recovery/anti-entropy, client parity, stats/metrics are all exercised and production-ready within the defined scope; `StatefulTask` is documented as a known parity gap for the first release; no `IScheduledExecutorService` or `IScheduledFuture` method is a throw-stub, deferred placeholder, or unwired passthrough; `getScheduledExecutorService(name)` returns a real proxy; every operation routes through `OperationService`; no public API returns hardcoded zeros or fake data; docs/examples/exports/test-support only claim behavior that is actually wired
-- [ ] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
+- [x] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
 - [ ] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
 - [ ] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
 - [ ] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
@@ -1099,14 +1099,14 @@ Depends on: Block 22.15 (stats).
 **Goal:** Define all foundational types needed before any runtime code.
 
 **TODO — Block 23.0**:
-- [ ] Create `src/job/JobConfig.ts`: `ProcessingGuarantee` enum (NONE, AT_LEAST_ONCE, EXACTLY_ONCE), `JobConfig` interface, `ResolvedJobConfig` interface, `resolveJobConfig()` with Jet-matching defaults (snapshotIntervalMillis=10000, autoScaling=true, suspendOnFailure=false, scaleUpDelayMillis=10000, splitBrainProtection=false, maxProcessorAccumulatedRecords=16384)
-- [ ] Create `src/job/JobStatus.ts`: `JobStatus` enum with all 10 Jet states (NOT_RUNNING, STARTING, RUNNING, COMPLETING, COMPLETED, FAILED, CANCELLED, SUSPENDED_EXPORTING_SNAPSHOT, SUSPENDED, RESTARTING)
-- [ ] Create `src/job/PipelineDescriptor.ts`: `VertexDescriptor`, `EdgeDescriptor`, `SourceDescriptor`, `SinkDescriptor`, `EdgeType` enum (LOCAL, LOCAL_PARTITIONED, DISTRIBUTED_UNICAST, DISTRIBUTED_PARTITIONED, DISTRIBUTED_BROADCAST, ALL_TO_ONE), `PipelineDescriptor` interface
-- [ ] Create `src/job/engine/ProcessorItem.ts`: union type for data, barrier, eos, watermark items
-- [ ] Create `src/job/JobCommand.ts`: `JobCommand` union type for all inter-member commands (START_EXECUTION, STOP_EXECUTION, INJECT_BARRIER, BARRIER_COMPLETE, EXECUTION_READY, EXECUTION_FAILED, EXECUTION_COMPLETED, COLLECT_METRICS, METRICS_RESPONSE)
-- [ ] Create `src/job/metrics/BlitzJobMetrics.ts`: `BlitzJobMetrics`, `VertexMetrics`, `SnapshotMetrics` interfaces
-- [ ] Tests: config resolver defaults, config validation, status enum values, descriptor serialization round-trip, edge type coverage
-- [ ] Run a verification task that proves all foundation types are real, config resolver defaults match Jet, status enum covers all 10 Jet states, descriptor serialization round-trips losslessly, and no type is a placeholder or partial definition: `bun test test/blitz/job/` green
+- [x] Create `src/job/JobConfig.ts`: `ProcessingGuarantee` enum (NONE, AT_LEAST_ONCE, EXACTLY_ONCE), `JobConfig` interface, `ResolvedJobConfig` interface, `resolveJobConfig()` with Jet-matching defaults (snapshotIntervalMillis=10000, autoScaling=true, suspendOnFailure=false, scaleUpDelayMillis=10000, splitBrainProtection=false, maxProcessorAccumulatedRecords=16384)
+- [x] Create `src/job/JobStatus.ts`: `JobStatus` enum with all 10 Jet states (NOT_RUNNING, STARTING, RUNNING, COMPLETING, COMPLETED, FAILED, CANCELLED, SUSPENDED_EXPORTING_SNAPSHOT, SUSPENDED, RESTARTING)
+- [x] Create `src/job/PipelineDescriptor.ts`: `VertexDescriptor`, `EdgeDescriptor`, `SourceDescriptor`, `SinkDescriptor`, `EdgeType` enum (LOCAL, LOCAL_PARTITIONED, DISTRIBUTED_UNICAST, DISTRIBUTED_PARTITIONED, DISTRIBUTED_BROADCAST, ALL_TO_ONE), `PipelineDescriptor` interface
+- [x] Create `src/job/engine/ProcessorItem.ts`: union type for data, barrier, eos, watermark items
+- [x] Create `src/job/JobCommand.ts`: `JobCommand` union type for all inter-member commands (START_EXECUTION, STOP_EXECUTION, INJECT_BARRIER, BARRIER_COMPLETE, EXECUTION_READY, EXECUTION_FAILED, EXECUTION_COMPLETED, COLLECT_METRICS, METRICS_RESPONSE)
+- [x] Create `src/job/metrics/BlitzJobMetrics.ts`: `BlitzJobMetrics`, `VertexMetrics`, `SnapshotMetrics` interfaces
+- [x] Tests: config resolver defaults, config validation, status enum values, descriptor serialization round-trip, edge type coverage
+- [x] Run a verification task that proves all foundation types are real, config resolver defaults match Jet, status enum covers all 10 Jet states, descriptor serialization round-trips losslessly, and no type is a placeholder or partial definition: `bun test test/blitz/job/` green
 
 ---
 
