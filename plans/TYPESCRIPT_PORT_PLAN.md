@@ -1074,7 +1074,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
 - [x] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
 - [x] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
-- [ ] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
+- [x] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
 - [ ] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
 - [ ] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
 - [ ] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
@@ -1175,10 +1175,10 @@ Depends on: Block 23.1 (AsyncChannel), Block 23.0 (types).
 **Goal:** Build the NATS transport layer for distributed edges.
 
 **TODO — Block 23.5**:
-- [ ] Create `src/job/engine/DistributedEdgeSender.ts`: consumes from local outbox, serializes items (JSON), publishes to appropriate NATS subject based on edge type (unicast round-robin, partitioned by key hash, broadcast), transmits barriers as NATS messages with `blitz-barrier`/`blitz-snapshot-id` headers
-- [ ] Create `src/job/engine/DistributedEdgeReceiver.ts`: subscribes to NATS subjects, deserializes items, pushes to local inbox, recognizes barrier messages from headers, uses JetStream for durable edges (AT_LEAST_ONCE/EXACTLY_ONCE) and core NATS for fire-and-forget (NONE)
-- [ ] Tests: sender/receiver round-trip for each edge type (unicast, partitioned, broadcast, allToOne), barrier passthrough via NATS headers, JetStream vs core NATS selection by processing guarantee, backpressure from inbox propagates to receiver
-- [ ] Run a verification task that proves distributed edges use real NATS pub/sub or JetStream (not in-memory mocks), every edge type routes correctly, barriers flow via NATS headers, and no edge sender/receiver is a fake local shortcut: `bun test test/blitz/job/engine/DistributedEdgeTest.test.ts` green (embedded NATS)
+- [x] Create `src/job/engine/DistributedEdgeSender.ts`: consumes from local outbox, serializes items (JSON), publishes to appropriate NATS subject based on edge type (unicast round-robin, partitioned by key hash, broadcast), transmits barriers as NATS messages with `blitz-barrier`/`blitz-snapshot-id` headers
+- [x] Create `src/job/engine/DistributedEdgeReceiver.ts`: subscribes to NATS subjects, deserializes items, pushes to local inbox, recognizes barrier messages from headers, uses JetStream for durable edges (AT_LEAST_ONCE/EXACTLY_ONCE) and core NATS for fire-and-forget (NONE)
+- [x] Tests: sender/receiver round-trip for each edge type (unicast, partitioned, broadcast, allToOne), barrier passthrough via NATS headers, JetStream vs core NATS selection by processing guarantee, backpressure from inbox propagates to receiver
+- [x] Run a verification task that proves distributed edges use real NATS pub/sub or JetStream (not in-memory mocks), every edge type routes correctly, barriers flow via NATS headers, and no edge sender/receiver is a fake local shortcut: `bun test test/blitz/job/engine/DistributedEdgeTest.test.ts` green (embedded NATS)
 
 ---
 
