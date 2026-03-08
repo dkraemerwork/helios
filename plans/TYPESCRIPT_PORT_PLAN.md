@@ -1072,7 +1072,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
 - [x] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
 - [x] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
-- [ ] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
+- [x] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
 - [ ] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
 - [ ] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
 - [ ] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
@@ -1144,11 +1144,11 @@ Depends on: Block 23.1 (AsyncChannel), Block 23.2 (SnapshotStore).
 **Goal:** Build the per-vertex processors that drive data through the DAG.
 
 **TODO — Block 23.3**:
-- [ ] Create `src/job/engine/SourceProcessor.ts`: wraps `Source<T>`, drives async iterable into outbox, handles barrier injection (pause reading, save offset, forward barrier), EOS detection
-- [ ] Create `src/job/engine/SinkProcessor.ts`: wraps `Sink<T>`, drains inbox, handles barriers (save state, forward), handles EOS (flush sink, signal completion)
-- [ ] Create `src/job/engine/OperatorProcessor.ts`: wraps vertex fn (map/filter/flatMap), reads inbox → applies fn → writes outbox, handles barriers passthrough and state save
-- [ ] Tests: source emits items to outbox, source handles EOS, source pauses on barrier injection, sink drains inbox and writes, sink flushes on EOS, operator map/filter transform correctness, operator barrier passthrough, all processors respect abort signal
-- [ ] Run a verification task that proves all three processor types drive data through real `AsyncChannel` inboxes/outboxes, barrier handling is Chandy-Lamport compliant, abort signal stops processing, and no processor method is a passthrough stub: `bun test test/blitz/job/engine/` green
+- [x] Create `src/job/engine/SourceProcessor.ts`: wraps `Source<T>`, drives async iterable into outbox, handles barrier injection (pause reading, save offset, forward barrier), EOS detection
+- [x] Create `src/job/engine/SinkProcessor.ts`: wraps `Sink<T>`, drains inbox, handles barriers (save state, forward), handles EOS (flush sink, signal completion)
+- [x] Create `src/job/engine/OperatorProcessor.ts`: wraps vertex fn (map/filter/flatMap), reads inbox → applies fn → writes outbox, handles barriers passthrough and state save
+- [x] Tests: source emits items to outbox, source handles EOS, source pauses on barrier injection, sink drains inbox and writes, sink flushes on EOS, operator map/filter transform correctness, operator barrier passthrough, all processors respect abort signal
+- [x] Run a verification task that proves all three processor types drive data through real `AsyncChannel` inboxes/outboxes, barrier handling is Chandy-Lamport compliant, abort signal stops processing, and no processor method is a passthrough stub: `bun test test/blitz/job/engine/` green
 
 ---
 
