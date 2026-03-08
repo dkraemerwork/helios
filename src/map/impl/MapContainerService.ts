@@ -18,6 +18,8 @@
  * behavior from {@code com.hazelcast.map.impl.MapMigrationAwareService}.
  */
 import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
+import type { StoreLatencyTracker } from '@zenystx/helios-core/diagnostics/StoreLatencyTracker';
+import { LocalMapStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
@@ -63,6 +65,12 @@ export interface EagerLoadEpoch {
 
 export class MapContainerService implements MigrationAwareService {
     private readonly _stores = new Map<string, RecordStore>();
+
+    /** Per-map LocalMapStatsImpl instances, keyed by map name. */
+    private readonly _mapStats = new Map<string, LocalMapStatsImpl>();
+
+    /** Optional store latency tracker — injected by HeliosInstanceImpl when monitoring is enabled. */
+    private _storeLatencyTracker: StoreLatencyTracker | null = null;
 
     /** Per-map MapStoreContext instances (created lazily via singleflight). */
     private readonly _mapStoreContexts = new Map<string, MapStoreContext<unknown, unknown>>();
@@ -234,6 +242,9 @@ export class MapContainerService implements MigrationAwareService {
         if (!inFlight) {
             inFlight = (async () => {
                 const created = await MapStoreContext.create<K, V>(mapName, mapStoreConfig) as unknown as MapStoreContext<unknown, unknown>;
+                if (this._storeLatencyTracker !== null) {
+                    created.setLatencyTracker(this._storeLatencyTracker);
+                }
                 this._mapStoreContexts.set(mapName, created);
 
                 // EAGER load: pre-populate RecordStore via NodeEngine serialization
@@ -657,6 +668,40 @@ export class MapContainerService implements MigrationAwareService {
                 const recordStore = this.getOrCreateRecordStore(mapName, partitionId);
                 recordStore.put(kd, vd, -1, -1);
             }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Per-map statistics
+    // ═══════════════════════════════════════════════════════════════
+
+    /** Returns the LocalMapStatsImpl for a map, creating it lazily if absent. */
+    getOrCreateMapStats(mapName: string): LocalMapStatsImpl {
+        let stats = this._mapStats.get(mapName);
+        if (stats === undefined) {
+            stats = new LocalMapStatsImpl();
+            this._mapStats.set(mapName, stats);
+        }
+        return stats;
+    }
+
+    /** Returns a snapshot of all per-map stats keyed by map name. */
+    getAllMapStats(): Map<string, import('@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl').LocalMapStats> {
+        const result = new Map<string, import('@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl').LocalMapStats>();
+        for (const [name, stats] of this._mapStats) {
+            result.set(name, stats.toSnapshot());
+        }
+        return result;
+    }
+
+    /**
+     * Attach a StoreLatencyTracker. Propagates to all existing MapStoreContexts and
+     * will be applied to contexts created in the future.
+     */
+    setStoreLatencyTracker(tracker: StoreLatencyTracker | null): void {
+        this._storeLatencyTracker = tracker;
+        for (const ctx of this._mapStoreContexts.values()) {
+            ctx.setLatencyTracker(tracker);
         }
     }
 

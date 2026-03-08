@@ -77,6 +77,15 @@ export class MetricsRegistry {
     buildPayload(provider: MonitorStateProvider): MonitorPayload {
         const migrationMetrics = provider.getMigrationMetrics();
         const operationMetrics = provider.getOperationMetrics();
+        const mapStatsMap = provider.getMapStats();
+        const queueStatsMap = provider.getQueueStats();
+        const topicStatsMap = provider.getTopicStats();
+        const mapStats: Record<string, import('@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl').LocalMapStats> = {};
+        for (const [k, v] of mapStatsMap) mapStats[k] = v;
+        const queueStats: Record<string, import('@zenystx/helios-core/collection/LocalQueueStats').LocalQueueStats> = {};
+        for (const [k, v] of queueStatsMap) queueStats[k] = v;
+        const topicStats: Record<string, import('@zenystx/helios-core/topic/LocalTopicStats').LocalTopicStats> = {};
+        for (const [k, v] of topicStatsMap) topicStats[k] = v;
         return {
             instanceName: provider.getInstanceName(),
             nodeState: provider.getNodeState(),
@@ -91,6 +100,11 @@ export class MetricsRegistry {
             latest: this.getLatest(),
             migrationQueueSize: migrationMetrics.migrationQueueSize,
             operationQueueSize: operationMetrics.queueSize,
+            mapStats,
+            storeLatency: provider.getStoreLatencyMetrics(),
+            queueStats,
+            topicStats,
+            systemEvents: provider.getSystemEvents(),
         };
     }
 

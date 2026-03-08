@@ -5,6 +5,12 @@
  * and stored in the {@link MetricsRegistry} ring buffer.
  */
 
+export type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
+export type { LocalQueueStats } from '@zenystx/helios-core/collection/LocalQueueStats';
+export type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
+export type { StoreLatencyMetrics } from '@zenystx/helios-core/diagnostics/StoreLatencyTracker';
+export type { SystemEvent } from '@zenystx/helios-core/diagnostics/SystemEventLog';
+
 /** Event loop latency percentiles (nanoseconds). */
 export interface EventLoopMetrics {
     /** Mean event loop delay (ms). */
@@ -242,4 +248,19 @@ export interface MonitorPayload {
 
     /** Current operation queue size (live snapshot from OperationService). */
     operationQueueSize: number;
+
+    /** Per-map operation counters and memory stats. Empty object when no maps accessed. */
+    mapStats: Record<string, import('@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl').LocalMapStats>;
+
+    /** MapStore/MapLoader call latency breakdown. Null when monitoring or MapStore is not active. */
+    storeLatency: import('@zenystx/helios-core/diagnostics/StoreLatencyTracker').StoreLatencyMetrics | null;
+
+    /** Per-queue operation counters. Empty object when no queues created. */
+    queueStats: Record<string, import('@zenystx/helios-core/collection/LocalQueueStats').LocalQueueStats>;
+
+    /** Per-topic operation counters. Empty object when no topics created. */
+    topicStats: Record<string, import('@zenystx/helios-core/topic/LocalTopicStats').LocalTopicStats>;
+
+    /** Recent system events (last 20) from the SystemEventLog. */
+    systemEvents: import('@zenystx/helios-core/diagnostics/SystemEventLog').SystemEvent[];
 }

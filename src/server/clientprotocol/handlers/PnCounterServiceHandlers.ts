@@ -52,7 +52,7 @@ const PN_GET_CONFIGURED_REPLICA_COUNT_REQUEST  = 0x1d0300;
 const PN_GET_CONFIGURED_REPLICA_COUNT_RESPONSE = 0x1d0301;
 
 // Response header size: messageType(4) + correlationId(8)
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
@@ -180,7 +180,8 @@ function _pnValueResponse(
     b.fill(0);
     b.writeUInt32LE(messageType >>> 0, 0);
     b.writeBigInt64LE(value, RH);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
 
     // replicaTimestamps list
     msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
@@ -203,7 +204,8 @@ function _intResponse(messageType: number, value: number): ClientMessage {
     b.fill(0);
     b.writeUInt32LE(messageType >>> 0, 0);
     b.writeInt32LE(value | 0, RH);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }

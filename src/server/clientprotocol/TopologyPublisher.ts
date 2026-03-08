@@ -45,8 +45,8 @@ export class TopologyPublisher {
     private readonly _registry: ClientSessionRegistry;
     private readonly _logger: ILogger | null;
 
-    /** Sessions that have subscribed to cluster view events (keyed by sessionId). */
-    private readonly _clusterViewSubscribers = new Set<string>();
+    /** Sessions that have subscribed to cluster view events (keyed by sessionId → correlationId). */
+    private readonly _clusterViewSubscribers = new Map<string, number>();
 
     /** Sessions that have subscribed to partition-lost events (keyed by sessionId). */
     private readonly _partitionLostSubscribers = new Map<string, {
@@ -93,7 +93,7 @@ export class TopologyPublisher {
      * @param correlationId The request correlation ID to use for the response.
      */
     subscribeToClusterView(session: ClientSession, correlationId: number): void {
-        this._clusterViewSubscribers.add(session.getSessionId());
+        this._clusterViewSubscribers.set(session.getSessionId(), correlationId);
 
         // Send ack response
         const response = ClientAddClusterViewListenerCodec.encodeResponse();
@@ -101,8 +101,8 @@ export class TopologyPublisher {
         session.sendMessage(response);
 
         // Immediately push current state to the new subscriber
-        this._pushMemberView(session);
-        this._pushPartitionView(session);
+        this._pushMemberView(session, correlationId);
+        this._pushPartitionView(session, correlationId);
     }
 
     /**
@@ -155,10 +155,10 @@ export class TopologyPublisher {
         this._memberListVersion++;
         this._lastMembers = members;
 
-        for (const sessionId of this._clusterViewSubscribers) {
+        for (const [sessionId, corrId] of this._clusterViewSubscribers) {
             const session = this._registry.getSession(sessionId);
             if (session !== null && session.isAuthenticated()) {
-                this._pushMemberView(session);
+                this._pushMemberView(session, corrId);
             } else {
                 // Session gone — clean up
                 this._clusterViewSubscribers.delete(sessionId);
@@ -185,10 +185,10 @@ export class TopologyPublisher {
         this._partitionVersion++;
         this._lastPartitions = partitions;
 
-        for (const sessionId of this._clusterViewSubscribers) {
+        for (const [sessionId, corrId] of this._clusterViewSubscribers) {
             const session = this._registry.getSession(sessionId);
             if (session !== null && session.isAuthenticated()) {
-                this._pushPartitionView(session);
+                this._pushPartitionView(session, corrId);
             } else {
                 this._clusterViewSubscribers.delete(sessionId);
             }
@@ -272,24 +272,39 @@ export class TopologyPublisher {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    private _pushMemberView(session: ClientSession): void {
+    private _pushMemberView(session: ClientSession, correlationId: number): void {
         const event = ClientAddClusterViewListenerCodec.encodeMembersViewEvent(
             this._memberListVersion,
             this._lastMembers,
         );
+        event.setCorrelationId(correlationId);
         session.pushEvent(event);
     }
 
-    private _pushPartitionView(session: ClientSession): void {
-        const entries: Array<[number, string | null]> = [];
+    private _pushPartitionView(session: ClientSession, correlationId: number): void {
+        // Transform partitionId→ownerUuid to ownerUuid→partitionIdList
+        // (the official EntryListUUIDListInteger format)
+        const byOwner = new Map<string, number[]>();
         for (const [partitionId, ownerUuid] of this._lastPartitions) {
-            entries.push([partitionId, ownerUuid]);
+            if (ownerUuid === null) continue;
+            const list = byOwner.get(ownerUuid);
+            if (list !== undefined) {
+                list.push(partitionId);
+            } else {
+                byOwner.set(ownerUuid, [partitionId]);
+            }
+        }
+
+        const entries: Array<[string, number[]]> = [];
+        for (const [uuid, partitions] of byOwner) {
+            entries.push([uuid, partitions]);
         }
 
         const event = ClientAddClusterViewListenerCodec.encodePartitionsViewEvent(
             this._partitionVersion,
             entries,
         );
+        event.setCorrelationId(correlationId);
         session.pushEvent(event);
     }
 }

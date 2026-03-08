@@ -16,6 +16,8 @@ import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/p
 import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
 import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
 import { Address } from "@zenystx/helios-core/cluster/Address";
+import { MemberInfo } from "@zenystx/helios-core/cluster/MemberInfo";
+import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import { LocalCluster } from "@zenystx/helios-core/cluster/impl/LocalCluster";
 import { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
@@ -103,6 +105,14 @@ import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitio
 import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
 import { MigrationQueue } from "@zenystx/helios-core/internal/partition/impl/MigrationQueue";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
+import { StoreLatencyTracker } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
+import { SystemEventLog } from "@zenystx/helios-core/diagnostics/SystemEventLog";
+import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
+import type { LocalQueueStats } from "@zenystx/helios-core/collection/LocalQueueStats";
+import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats";
+import type { StoreLatencyMetrics } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
+import type { SystemEvent } from "@zenystx/helios-core/diagnostics/SystemEventLog";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
 import type { PartitionService } from "@zenystx/helios-core/spi/PartitionService";
@@ -320,6 +330,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Client protocol server — non-null when client protocol port is configured (>= 0). */
   private _clientProtocolServer: ClientProtocolServer | null = null;
 
+  /** Resolves when the client protocol server has finished binding its TCP port. */
+  private _clientProtocolReady: Promise<void> = Promise.resolve();
+
   /** Current log level (mutable via REST CLUSTER_WRITE). */
   private _logLevel: string = "INFO";
 
@@ -377,6 +390,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Operation service impl — reference kept for metrics access. */
   private _operationServiceImpl: OperationServiceImpl | null = null;
+
+  // ── Diagnostics ────────────────────────────────────────────────────────────
+
+  /** Slow operation detector — created and started in _initMonitor(). */
+  private _slowOperationDetector: SlowOperationDetector | null = null;
+
+  /** Store latency tracker — created in _initMonitor(), wired to MapContainerService. */
+  private _storeLatencyTracker: StoreLatencyTracker | null = null;
+
+  /** System event log — ring buffer of cluster lifecycle events. */
+  private readonly _systemEventLog = new SystemEventLog();
 
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
@@ -555,8 +579,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._clusterCoordinator.onMembershipChanged(() => {
       this._rebuildAddressToMemberIdCache();
       this._handleExecutorMembershipChange();
+      this._systemEventLog.pushEvent('MEMBER_JOINED', 'Cluster membership changed');
     });
     this._clusterCoordinator.onMemberRemoved((memberId) => {
+      this._systemEventLog.pushEvent('MEMBER_LEFT', `Member left: ${memberId}`, { memberId });
       queueMicrotask(() => {
         this._invocationMonitor.failInvocationsForMember(memberId);
         this._failLocalBackupAckWaitersForMember(memberId);
@@ -715,9 +741,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
     this._transport.onPeerConnected = (nodeId) => {
       this._clusterCoordinator?.handlePeerConnected(nodeId);
+      this._systemEventLog.pushEvent('CONNECTION_OPENED', `Peer connected: ${nodeId}`, { nodeId });
     };
     this._transport.onPeerDisconnected = (nodeId) => {
       this._clusterCoordinator?.handlePeerDisconnected(nodeId);
+      this._systemEventLog.pushEvent('CONNECTION_CLOSED', `Peer disconnected: ${nodeId}`, { nodeId });
     };
     this._transport.onMessage = (message) => {
       // Handle OPERATION messages: execute on this node and send response
@@ -862,7 +890,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       multicastService: this._multicastService,
       localAddress: { host: '127.0.0.1', port: boundPort },
       localUuid: this._name,
-      clusterName: this._config.getName(),
+      clusterName: this._config.getClusterName(),
       partitionCount: 271,
       version: { major: 1, minor: 0, patch: 0 },
     });
@@ -1694,12 +1722,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
         : null,
     });
 
-    this._clientProtocolServer.setSessionCloseHandler((session) => {
-      this._removeClientTopicListenersForSession(session.getSessionId());
-    });
+    // Bun.listen() is synchronous — the port is bound as soon as start() runs.
+    // We must start() BEFORE registering handlers so that srv.getPort() returns
+    // the actual bound port (especially for ephemeral port 0).
+    this._clientProtocolReady = this._clientProtocolServer.start();
 
     this._registerClientProtocolHandlers();
-    this._clientProtocolServer.start().catch(() => {});
   }
 
   private _registerClientProtocolHandlers(): void {
@@ -2134,6 +2162,37 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // ── TopologyPublisher ─────────────────────────────────────────────────
     const topologyPublisher = new TopologyPublisher(srv.getSessionRegistry());
+    topologyPublisher.start();
+
+    // Build a MemberInfo for the local member so clients see Members [1]
+    const localMember = this._cluster.getLocalMember();
+    const memberAddress = new Address(
+      '127.0.0.1',
+      srv.getPort() > 0 ? srv.getPort() : this._config.getNetworkConfig().getPort(),
+    );
+    const localMemberInfo = new MemberInfo(
+      memberAddress,
+      localMember.getUuid(),
+      localMember.getAttributes(),
+      localMember.isLiteMember(),
+      localMember.getVersion().isUnknown()
+        ? new MemberVersion(5, 5, 0)
+        : localMember.getVersion(),
+    );
+    topologyPublisher.publishMemberListUpdate([localMemberInfo]);
+
+    // Assign all partitions to the local member UUID
+    const partitionOwnership = new Map<number, string | null>();
+    for (let i = 0; i < partitionCount; i++) {
+      partitionOwnership.set(i, localMember.getUuid());
+    }
+    topologyPublisher.publishPartitionTableUpdate(partitionOwnership);
+
+    // Wire session close handler to clean up topology subscriptions
+    srv.setSessionCloseHandler((session) => {
+      topologyPublisher.onSessionClosed(session.getSessionId());
+      this._removeClientTopicListenersForSession(session.getSessionId());
+    });
 
     // ── Wire all handlers ─────────────────────────────────────────────────
     registerAllHandlers({
@@ -2251,6 +2310,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
    */
   getClientProtocolPort(): number {
     return this._clientProtocolServer?.getPort() ?? 0;
+  }
+
+  /**
+   * Returns a promise that resolves once the client protocol server's TCP port
+   * is bound and ready to accept connections.  Callers (e.g. test helpers) can
+   * await this instead of sleeping an arbitrary duration.
+   */
+  waitForClientProtocolReady(): Promise<void> {
+    return this._clientProtocolReady;
   }
 
   /**
@@ -2458,6 +2526,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._transport = null;
     this._metricsSampler?.stop();
     this._healthMonitor?.stop();
+    this._slowOperationDetector?.stop();
+    this._slowOperationDetector = null;
+    this._storeLatencyTracker = null;
     this._restServer.stop();
   }
 
@@ -3059,6 +3130,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._config.getNetworkConfig().getRestApiConfig()
       .enableGroups(RestEndpointGroup.MONITOR);
 
+    // T16: Create and start slow operation detector
+    this._slowOperationDetector = new SlowOperationDetector();
+    this._slowOperationDetector.start();
+    if (this._operationServiceImpl !== null) {
+      this._operationServiceImpl.setSlowOperationDetector(this._slowOperationDetector);
+    }
+
+    // T17: Create store latency tracker and wire to MapContainerService
+    this._storeLatencyTracker = new StoreLatencyTracker();
+    this._mapService.setStoreLatencyTracker(this._storeLatencyTracker);
+
     const stateProvider = this._createMonitorStateProvider();
     this._metricsRegistry = new MetricsRegistry(monitorConfig);
     this._metricsSampler = new MetricsSampler(monitorConfig, stateProvider, this._metricsRegistry);
@@ -3097,6 +3179,24 @@ export class HeliosInstanceImpl implements HeliosInstance {
       getInvocationMetrics: (): InvocationMetrics => this._getInvocationMetrics(),
       getBlitzMetrics: () => this._getBlitzMetrics(),
       getJobCounterMetrics: (): JobCounterMetrics | null => this._getJobCounterMetrics(),
+      getMapStats: (): Map<string, LocalMapStats> => this._mapService.getAllMapStats(),
+      getStoreLatencyMetrics: (): StoreLatencyMetrics | null =>
+        this._storeLatencyTracker !== null ? this._storeLatencyTracker.getStats() : null,
+      getQueueStats: (): Map<string, LocalQueueStats> => {
+        const result = new Map<string, LocalQueueStats>();
+        for (const [name, queue] of this._queues) {
+          result.set(name, queue.getLocalQueueStats());
+        }
+        return result;
+      },
+      getTopicStats: (): Map<string, LocalTopicStats> => {
+        const result = new Map<string, LocalTopicStats>();
+        for (const [name, topic] of this._topics) {
+          result.set(name, topic.getLocalTopicStats());
+        }
+        return result;
+      },
+      getSystemEvents: (): SystemEvent[] => this._systemEventLog.getRecentEvents(20),
     };
   }
 

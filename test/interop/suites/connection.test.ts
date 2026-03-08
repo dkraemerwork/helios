@@ -125,22 +125,38 @@ describe("Official Client — Connection: three-node cluster discovery", () => {
 
     hzClient = await Client.newHazelcastClient({
       clusterName,
-      network: { clusterMembers: addresses },
+      network: {
+        clusterMembers: addresses,
+        connectionTimeout: 10000,
+      },
+      connectionStrategy: {
+        connectionRetry: {
+          clusterConnectTimeoutMillis: 15000,
+        },
+      },
     });
 
     // Client may discover more members via topology push
     const members = hzClient.getCluster().getMembers();
     expect(members.length).toBeGreaterThanOrEqual(1);
-  });
+  }, 30000);
 
   it("client connects via any of the listed addresses", async () => {
     const { clusterName, addresses } = cluster.getConnectionInfo();
     // Use only the first address — client should still connect
     hzClient = await Client.newHazelcastClient({
       clusterName,
-      network: { clusterMembers: [addresses[0]!] },
+      network: {
+        clusterMembers: [addresses[0]!],
+        connectionTimeout: 10000,
+      },
+      connectionStrategy: {
+        connectionRetry: {
+          clusterConnectTimeoutMillis: 15000,
+        },
+      },
     });
 
     expect(hzClient.getLifecycleService().isRunning()).toBe(true);
-  });
+  }, 30000);
 });

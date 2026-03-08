@@ -39,7 +39,7 @@ export class MemberInfoCodec {
         clientMessage.add(new ClientMessage.Frame(buf));
 
         AddressCodec.encode(clientMessage, memberInfo.address);
-        MapCodec.encode(clientMessage, memberInfo.attributes.size > 0 ? memberInfo.attributes : null);
+        MapCodec.encode(clientMessage, memberInfo.attributes);
         MemberVersionCodec.encode(clientMessage, memberInfo.version);
 
         // addressMap as list of (EndpointQualifier, Address) pairs

@@ -1,3 +1,4 @@
+import type { StoreLatencyTracker } from '../../../diagnostics/StoreLatencyTracker.js';
 import { MapKeyStream } from '../../MapKeyStream.js';
 import type { MapLoader } from '../../MapLoader.js';
 import type { MapStore } from '../../MapStore.js';
@@ -9,6 +10,7 @@ export class MapStoreWrapper<K = unknown, V = unknown> {
   readonly supportsLifecycle: boolean;
 
   private readonly _impl: AnyStore<K, V>;
+  private _latencyTracker: StoreLatencyTracker | null = null;
 
   constructor(impl: AnyStore<K, V>) {
     this._impl = impl;
@@ -18,16 +20,29 @@ export class MapStoreWrapper<K = unknown, V = unknown> {
       typeof (impl as any).destroy === 'function';
   }
 
+  /** Attach a latency tracker. Called by HeliosInstanceImpl when monitoring is enabled. */
+  setLatencyTracker(tracker: StoreLatencyTracker | null): void {
+    this._latencyTracker = tracker;
+  }
+
   async load(key: K): Promise<V | null> {
-    return this._impl.load(key);
+    const t0 = Date.now();
+    const result = await this._impl.load(key);
+    this._latencyTracker?.recordLatency('load', Date.now() - t0);
+    return result;
   }
 
   async loadAll(keys: K[]): Promise<Map<K, V>> {
-    return this._impl.loadAll(keys);
+    const t0 = Date.now();
+    const result = await this._impl.loadAll(keys);
+    this._latencyTracker?.recordLatency('loadAll', Date.now() - t0);
+    return result;
   }
 
   async loadAllKeys(): Promise<MapKeyStream<K>> {
+    const t0 = Date.now();
     const result = await this._impl.loadAllKeys();
+    this._latencyTracker?.recordLatency('loadAllKeys', Date.now() - t0);
     // Support legacy adapters returning K[] by wrapping in MapKeyStream
     if (result instanceof MapKeyStream) {
       return result;
@@ -37,25 +52,33 @@ export class MapStoreWrapper<K = unknown, V = unknown> {
 
   async store(key: K, value: V): Promise<void> {
     if (this.isMapStore) {
+      const t0 = Date.now();
       await (this._impl as MapStore<K, V>).store(key, value);
+      this._latencyTracker?.recordLatency('store', Date.now() - t0);
     }
   }
 
   async storeAll(entries: Map<K, V>): Promise<void> {
     if (this.isMapStore && entries.size > 0) {
+      const t0 = Date.now();
       await (this._impl as MapStore<K, V>).storeAll(entries);
+      this._latencyTracker?.recordLatency('storeAll', Date.now() - t0);
     }
   }
 
   async delete(key: K): Promise<void> {
     if (this.isMapStore) {
+      const t0 = Date.now();
       await (this._impl as MapStore<K, V>).delete(key);
+      this._latencyTracker?.recordLatency('delete', Date.now() - t0);
     }
   }
 
   async deleteAll(keys: K[]): Promise<void> {
     if (this.isMapStore && keys.length > 0) {
+      const t0 = Date.now();
       await (this._impl as MapStore<K, V>).deleteAll(keys);
+      this._latencyTracker?.recordLatency('deleteAll', Date.now() - t0);
     }
   }
 

@@ -10,6 +10,7 @@ import { SinkProcessor } from './SinkProcessor.js';
 import { OperatorProcessor } from './OperatorProcessor.js';
 import type { DistributedEdgeSender } from './DistributedEdgeSender.js';
 import type { DistributedEdgeReceiver } from './DistributedEdgeReceiver.js';
+import { tagsForVertex } from '../metrics/MetricTags.js';
 
 export interface OperatorFnEntry {
   readonly fn: (value: unknown) => unknown;
@@ -18,6 +19,8 @@ export interface OperatorFnEntry {
 
 export interface JobExecutionConfig {
   readonly jobId: string;
+  readonly jobName?: string;
+  readonly executionId?: string;
   readonly plan: ExecutionPlan;
   readonly memberId: string;
   readonly sources: Map<string, Source<unknown>>;
@@ -49,6 +52,13 @@ interface VertexRuntime {
  * Creates AsyncChannels for local edges, SourceProcessors for source vertices,
  * OperatorProcessors for operator vertices, SinkProcessors for sink vertices.
  * Starts all async loops and stops all on cancel via AbortController.
+ *
+ * Now also tracks:
+ *   - T11: watermark fields via OperatorProcessor.getLatencyMetrics()
+ *   - T12: queueCapacity from AsyncChannel
+ *   - T13: executionStartTime / executionCompletionTime
+ *   - T14: per-vertex tag maps via tagsForVertex()
+ *   - T15: user-defined custom metrics from OperatorProcessor
  */
 export class JobExecution {
   private readonly config: JobExecutionConfig;
@@ -57,12 +67,27 @@ export class JobExecution {
   private readonly sourceProcessors: SourceProcessor<unknown>[] = [];
   private _completionPromise: Promise<void> | null = null;
 
+  /** T13: wall-clock time when start() is called. */
+  private readonly _startTime = Date.now();
+  /** T13: wall-clock time when the job finishes naturally. -1 while running. */
+  private _completionTime = -1;
+
   constructor(config: JobExecutionConfig) {
     this.config = config;
   }
 
   get jobId(): string {
     return this.config.jobId;
+  }
+
+  /** T13: Epoch ms when this execution was started. */
+  get startTime(): number {
+    return this._startTime;
+  }
+
+  /** T13: Epoch ms when this execution completed. -1 while still running. */
+  get completionTime(): number {
+    return this._completionTime;
   }
 
   /**
@@ -206,7 +231,10 @@ export class JobExecution {
       }
     }
 
-    this._completionPromise = Promise.allSettled(promises).then(() => {});
+    this._completionPromise = Promise.allSettled(promises).then(() => {
+      // T13: record completion time when all vertex promises settle
+      this._completionTime = Date.now();
+    });
   }
 
   /**
@@ -266,10 +294,16 @@ export class JobExecution {
 
   /**
    * Collect per-vertex metrics from the running execution.
-   * Reads actual item counts from processors, queue sizes from channels,
-   * and distributed traffic counters from any attached distributed edge components.
+   *
+   * Reads actual item counts from processors, queue sizes and capacities from
+   * channels, watermark tracking state, tags, user-defined metrics, and
+   * distributed traffic counters from any attached distributed edge components.
    */
   getMetrics(): VertexMetrics[] {
+    const jobId = this.config.jobId;
+    const jobName = this.config.jobName ?? jobId;
+    const executionId = this.config.executionId ?? jobId;
+
     return this.vertexRuntimes.map(vr => {
       let itemsIn = 0;
       let itemsOut = 0;
@@ -278,11 +312,20 @@ export class JobExecution {
       let latencyP99Ms = 0;
       let latencyMaxMs = 0;
 
+      // T11: watermark defaults
+      let topObservedWm = -1;
+      let coalescedWm = -1;
+      let lastForwardedWm = -1;
+      let lastForwardedWmLatency = -1;
+
+      // T15: user metrics default
+      let userMetrics: ReadonlyMap<string, number> | undefined;
+
       if (vr.sourceProcessor) {
         // Sources have no inbox — itemsIn is 0, itemsOut = items emitted
         itemsOut = (vr.sourceProcessor as any).offset ?? 0;
       } else if (vr.operatorProcessor) {
-        // Operators: itemsIn = itemsProcessed (items received), itemsOut = items emitted (same for map)
+        // Operators: itemsIn = itemsProcessed (items received), itemsOut = items emitted
         const processed = (vr.operatorProcessor as any).itemsProcessed ?? 0;
         itemsIn = processed;
         itemsOut = processed;
@@ -290,6 +333,13 @@ export class JobExecution {
         latencyP50Ms = latency.latencyP50Ms;
         latencyP99Ms = latency.latencyP99Ms;
         latencyMaxMs = latency.latencyMaxMs;
+        // T11: watermarks from operator
+        topObservedWm = latency.topObservedWm;
+        coalescedWm = latency.coalescedWm;
+        lastForwardedWm = latency.lastForwardedWm;
+        lastForwardedWmLatency = latency.lastForwardedWmLatency;
+        // T15: user metrics from operator
+        userMetrics = latency.userMetrics.size > 0 ? latency.userMetrics : undefined;
       } else if (vr.sinkProcessor) {
         // Sinks: itemsIn = items written, no outbox
         itemsIn = (vr.sinkProcessor as any).itemsWritten ?? 0;
@@ -310,12 +360,26 @@ export class JobExecution {
         distributedBytesIn += receiver.bytesIn;
       }
 
+      // T14: build tag map for this vertex
+      const tags = tagsForVertex({
+        jobId,
+        jobName,
+        executionId,
+        vertexName: vr.name,
+        procType: vr.type,
+        isSource: vr.type === 'source',
+        isSink: vr.type === 'sink',
+        processorIndex: 0,
+      });
+
       return {
         name: vr.name,
         type: vr.type,
         itemsIn,
         itemsOut,
         queueSize: vr.outbox?.size ?? 0,
+        // T12: real channel capacity
+        queueCapacity: vr.outbox?.capacity ?? 0,
         latencyP50Ms,
         latencyP99Ms,
         latencyMaxMs,
@@ -323,6 +387,15 @@ export class JobExecution {
         distributedItemsOut,
         distributedBytesIn,
         distributedBytesOut,
+        // T11: watermark fields
+        topObservedWm,
+        coalescedWm,
+        lastForwardedWm,
+        lastForwardedWmLatency,
+        // T14: tags
+        tags,
+        // T15: user metrics (omit key when empty to keep object clean)
+        ...(userMetrics ? { userMetrics } : {}),
       };
     });
   }

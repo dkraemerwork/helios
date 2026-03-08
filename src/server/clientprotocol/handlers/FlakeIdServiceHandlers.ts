@@ -28,7 +28,7 @@ const FLAKE_NEW_ID_BATCH_REQUEST  = 0x1e0100;
 const FLAKE_NEW_ID_BATCH_RESPONSE = 0x1e0101;
 
 // Response header size: messageType(4) + correlationId(8)
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
@@ -80,7 +80,8 @@ function _newIdBatchResponse(base: bigint, increment: bigint, batchSize: number)
     b.writeBigInt64LE(base, RH);
     b.writeBigInt64LE(increment, RH + LONG_SIZE_IN_BYTES);
     b.writeInt32LE(batchSize | 0, RH + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }

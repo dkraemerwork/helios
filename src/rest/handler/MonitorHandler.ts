@@ -103,9 +103,12 @@ export class MonitorHandler {
                 const initPayload = registry.buildPayload(provider);
                 write(`event: init\ndata: ${JSON.stringify(initPayload)}\n\n`);
 
-                // Subscribe to new samples
+                // Subscribe to new samples — also piggyback a payload refresh so diagnostics panels stay live
                 const unsubscribe = registry.subscribe((sample) => {
                     write(`event: sample\ndata: ${JSON.stringify(sample)}\n\n`);
+                    // Refresh payload-level fields (mapStats, queueStats, topicStats, systemEvents, storeLatency)
+                    const refreshPayload = registry.buildPayload(provider);
+                    write(`event: payload\ndata: ${JSON.stringify(refreshPayload)}\n\n`);
                 });
 
                 // Keepalive timer

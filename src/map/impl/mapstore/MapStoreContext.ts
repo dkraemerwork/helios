@@ -1,5 +1,6 @@
 import type { MapStoreConfig } from '../../../config/MapStoreConfig.js';
 import { InitialLoadMode } from '../../../config/MapStoreConfig.js';
+import type { StoreLatencyTracker } from '../../../diagnostics/StoreLatencyTracker.js';
 import { LoadOnlyMapDataStore } from './LoadOnlyMapDataStore.js';
 import type { MapDataStore } from './MapDataStore.js';
 import { MapStoreDynamicLoader } from './MapStoreDynamicLoader.js';
@@ -160,6 +161,11 @@ export class MapStoreContext<K, V> {
 
   getInitialEntries(): Map<K, V> | null {
     return this._initialEntries;
+  }
+
+  /** Attach a latency tracker to the underlying MapStoreWrapper. */
+  setLatencyTracker(tracker: StoreLatencyTracker | null): void {
+    this._wrapper.setLatencyTracker(tracker);
   }
 
   async destroy(): Promise<void> {

@@ -9,10 +9,8 @@ import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/prot
 import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
 import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
 import { Address } from '@zenystx/helios-core/cluster/Address';
-import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
-import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { describe, expect, it } from 'bun:test';
 
 function roundTrip(msg: ClientMessage): ClientMessage {
@@ -95,15 +93,13 @@ describe('ClientMessage encode/decode round-trip', () => {
         expect(decoded.labels).toEqual(['label1', 'label2']);
     });
 
-    it('clientAuthentication response with MemberInfo list round-trip', () => {
+    it('clientAuthentication response round-trip', () => {
         const address = new Address('127.0.0.1', 5701);
         const memberUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        const version = MemberVersion.of(5, 4, 0);
-        const memberInfo = new MemberInfo(address, memberUuid, null, false, version);
 
         const clusterId = '11111111-2222-3333-4444-555555555555';
         const msg = ClientAuthenticationCodec.encodeResponse(
-            0, address, memberUuid, 1, '5.4.0', 271, clusterId, false, null, null, [memberInfo]
+            0, address, memberUuid, 1, '5.4.0', 271, clusterId, false
         );
         const result = roundTrip(msg);
 
@@ -114,11 +110,6 @@ describe('ClientMessage encode/decode round-trip', () => {
         expect(decoded.clusterId).toBe(clusterId);
         expect(decoded.failoverSupported).toBe(false);
         expect(decoded.serverHazelcastVersion).toBe('5.4.0');
-        expect(decoded.memberInfos.length).toBe(1);
-        expect(decoded.memberInfos[0].address.host).toBe('127.0.0.1');
-        expect(decoded.memberInfos[0].address.port).toBe(5701);
-        expect(decoded.memberInfos[0].uuid).toBe(memberUuid);
-        expect(decoded.memberInfos[0].liteMember).toBe(false);
     });
 
     it('mapAddEntryListener event round-trip', () => {

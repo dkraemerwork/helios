@@ -6,6 +6,11 @@
  * to remain decoupled and independently testable.
  */
 
+import type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
+import type { LocalQueueStats } from '@zenystx/helios-core/collection/LocalQueueStats';
+import type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
+import type { StoreLatencyMetrics } from '@zenystx/helios-core/diagnostics/StoreLatencyTracker';
+import type { SystemEvent } from '@zenystx/helios-core/diagnostics/SystemEventLog';
 import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitionInfo, MigrationMetrics, ObjectInventory, OperationMetrics, ThreadPoolMetrics, TransportMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
 
 export interface MonitorStateProvider {
@@ -73,4 +78,34 @@ export interface MonitorStateProvider {
      * Always returns a valid object; counts are 0 when no remote invocations are active.
      */
     getInvocationMetrics(): InvocationMetrics;
+
+    /**
+     * Per-map operation counters and memory stats — snapshot from MapContainerService.
+     * Returns an empty map when no maps have been accessed yet.
+     */
+    getMapStats(): Map<string, LocalMapStats>;
+
+    /**
+     * MapStore/MapLoader call latency breakdown — snapshot from StoreLatencyTracker.
+     * Returns null when monitoring or MapStore is not active.
+     */
+    getStoreLatencyMetrics(): StoreLatencyMetrics | null;
+
+    /**
+     * Per-queue operation counters — aggregated from all IQueue instances.
+     * Returns an empty map when no queues have been created.
+     */
+    getQueueStats(): Map<string, LocalQueueStats>;
+
+    /**
+     * Per-topic operation counters — aggregated from all ITopic instances.
+     * Returns an empty map when no topics have been created.
+     */
+    getTopicStats(): Map<string, LocalTopicStats>;
+
+    /**
+     * Recent system events from the SystemEventLog ring buffer.
+     * Returns an empty array when the log has not been initialized.
+     */
+    getSystemEvents(): SystemEvent[];
 }

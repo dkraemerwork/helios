@@ -11,6 +11,7 @@
     "packages/mongodb",
     "packages/turso",
     "packages/dynamodb",
+    "packages/management-center",
     "test/interop"
   ],
   "main": "dist/src/index.js",

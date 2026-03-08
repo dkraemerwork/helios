@@ -35,7 +35,7 @@ const CE_ESTIMATE_REQUEST  = 0x1b0200;
 const CE_ESTIMATE_RESPONSE = 0x1b0201;
 
 // Response header size: messageType(4) + correlationId(8)
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
@@ -92,7 +92,8 @@ function _emptyResponse(messageType: number): ClientMessage {
     const b = Buffer.allocUnsafe(RH);
     b.fill(0);
     b.writeUInt32LE(messageType >>> 0, 0);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -103,7 +104,8 @@ function _longResponse(messageType: number, value: bigint): ClientMessage {
     b.fill(0);
     b.writeUInt32LE(messageType >>> 0, 0);
     b.writeBigInt64LE(value, RH);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }

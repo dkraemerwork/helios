@@ -335,8 +335,6 @@ describe("authentication", () => {
         expect(response.memberUuid).toBeTruthy();
         expect(response.clusterId).toBeTruthy();
         expect(response.partitionCount).toBeGreaterThan(0);
-        expect(response.memberInfos).toBeInstanceOf(Array);
-        expect(response.memberInfos.length).toBeGreaterThanOrEqual(1);
 
         // Session registry should have one session
         expect(server.getSessionRegistry().getSessionCount()).toBe(1);

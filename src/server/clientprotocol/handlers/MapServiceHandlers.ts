@@ -137,8 +137,8 @@ const MAP_PUT_IF_ABSENT_MAX_IDLE_RESPONSE_TYPE = 0x012901;
 const MAP_SET_TTL_REQUEST_TYPE    = 0x012a00;
 const MAP_SET_TTL_RESPONSE_TYPE   = 0x012a01;
 
-// Standard response header (messageType + correlationId) = 12 bytes
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+// Standard response header (messageType + correlationId + backupAcks) = 16 bytes
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -591,7 +591,8 @@ function _encodeEmptyResponse(responseType: number): ClientMessage {
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -602,7 +603,8 @@ function _encodeBooleanResponse(responseType: number, value: boolean): ClientMes
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
     buf.writeUInt8(value ? 1 : 0, RESPONSE_HEADER_SIZE);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -612,7 +614,8 @@ function _encodeNullableDataResponse(responseType: number, data: Data | null): C
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     if (data === null) {
         msg.add(CM.NULL_FRAME);
     } else {
@@ -627,7 +630,8 @@ function _encodeListenerRegistrationResponse(responseType: number, registrationI
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     StringCodec.encode(msg, registrationId);
     msg.setFinal();
     return msg;
@@ -638,7 +642,8 @@ function _encodeDataListResponse(responseType: number, items: Data[]): ClientMes
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
     for (const item of items) {
         DataCodec.encode(msg, item);
@@ -653,7 +658,8 @@ function _encodeEntryListResponse(responseType: number, entries: Array<[Data, Da
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
     for (const [k, v] of entries) {
         DataCodec.encode(msg, k);

@@ -26,7 +26,7 @@ const SQL_FETCH_REQUEST    = 0x210200; const SQL_FETCH_RESPONSE    = 0x210201;
 const SQL_CLOSE_REQUEST    = 0x210300; const SQL_CLOSE_RESPONSE    = 0x210301;
 const SQL_MAPPING_DDL_REQUEST = 0x210400; const SQL_MAPPING_DDL_RESPONSE = 0x210401;
 
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
 /** SQL QueryId wire layout: 4 longs (localHigh, localLow, globalHigh, globalLow) */
 const QUERY_ID_SIZE = 4 * LONG_SIZE_IN_BYTES; // 32 bytes
@@ -134,7 +134,8 @@ function _encodeSqlExecuteResponse(result: SqlExecuteResult): ClientMessage {
     b.writeBigInt64LE(result.updateCount, RH);
     b.writeInt32LE(result.partitionArgumentIndex | 0, RH + LONG_SIZE_IN_BYTES);
     b.writeUInt8(result.isInfiniteRows ? 1 : 0, RH + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
 
     // Row metadata (nullable)
     if (result.rowMetadata !== null) {
@@ -164,7 +165,8 @@ function _encodeSqlExecuteResponse(result: SqlExecuteResult): ClientMessage {
 function _encodeSqlFetchResponse(result: SqlFetchResult): ClientMessage {
     const msg = CM.createForEncode();
     const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(SQL_FETCH_RESPONSE >>> 0, 0);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
 
     // Row page (nullable)
     if (result.rowPage !== null) {
@@ -237,7 +239,8 @@ function _encodeSqlError(msg: typeof CM.prototype, error: SqlError): void {
 function _empty(t: number): ClientMessage {
     const msg = CM.createForEncode();
     const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0);
-    msg.add(new CM.Frame(b)); msg.setFinal(); return msg;
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg;
 }
 
 function _decodeDataList(iter: CM.ForwardFrameIterator): Data[] {

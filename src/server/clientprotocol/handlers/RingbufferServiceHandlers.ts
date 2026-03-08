@@ -36,7 +36,7 @@ const RB_READ_ONE_REQUEST     = 0x190700; const RB_READ_ONE_RESPONSE     = 0x190
 const RB_ADD_ALL_REQUEST      = 0x190800; const RB_ADD_ALL_RESPONSE      = 0x190801;
 const RB_READ_MANY_REQUEST    = 0x190900; const RB_READ_MANY_RESPONSE    = 0x190901;
 
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -124,13 +124,15 @@ function _long(t: number, v: bigint): ClientMessage {
     const msg = CM.createForEncode();
     const b = Buffer.allocUnsafe(RH + LONG_SIZE_IN_BYTES);
     b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeBigInt64LE(v, RH);
-    msg.add(new CM.Frame(b)); msg.setFinal(); return msg;
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg;
 }
 
 function _nullable(t: number, data: Data | null): ClientMessage {
     const msg = CM.createForEncode();
     const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     if (data === null) { msg.add(CM.NULL_FRAME); } else { DataCodec.encode(msg, data); }
     msg.setFinal(); return msg;
 }
@@ -148,7 +150,8 @@ function _encodeReadManyResponse(result: {
     b.writeUInt32LE(RB_READ_MANY_RESPONSE >>> 0, 0);
     b.writeInt32LE(result.readCount | 0, RH);
     b.writeBigInt64LE(result.nextSeq, RH + INT_SIZE_IN_BYTES);
-    msg.add(new CM.Frame(b));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     // Items list
     msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
     for (const item of result.items) {

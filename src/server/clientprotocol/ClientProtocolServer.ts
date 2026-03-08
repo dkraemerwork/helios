@@ -13,7 +13,6 @@ import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/C
 import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
 import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
 import { Address } from "@zenystx/helios-core/cluster/Address";
-import { MemberInfo } from "@zenystx/helios-core/cluster/MemberInfo";
 import {
     Eventloop,
     EventloopServer,
@@ -29,7 +28,6 @@ import { ClientSessionRegistry } from "@zenystx/helios-core/server/clientprotoco
 import { AuthGuard } from "@zenystx/helios-core/server/clientprotocol/AuthGuard";
 import type { TlsConfig } from "@zenystx/helios-core/server/clientprotocol/TlsConfig";
 import type { AuthAuditListener } from "@zenystx/helios-core/server/clientprotocol/AuthGuard";
-import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 /** Options for ClientProtocolServer construction. */
 export interface ClientProtocolServerOptions {
@@ -403,26 +401,16 @@ export class ClientProtocolServer {
                 this._authGuard.auditAuthSuccess(session);
 
                 const memberAddress = new Address(this._host, this.getPort());
-                const memberInfo = new MemberInfo(
-                    memberAddress,
-                    this._memberUuid,
-                    new Map(),
-                    false,
-                    new MemberVersion(0, 1, 0),
-                );
 
                 return ClientAuthenticationCodec.encodeResponse(
                     AuthenticationStatus.AUTHENTICATED.getId(),
                     memberAddress,
                     this._memberUuid,
                     this._serializationVersion,
-                    "1.0.0",
+                    "5.5.0",
                     this._partitionCount,
                     this._clusterId,
                     false,
-                    null,
-                    null,
-                    [memberInfo],
                 );
             },
         );
@@ -477,13 +465,10 @@ export class ClientProtocolServer {
             null,
             null,
             this._serializationVersion,
-            "1.0.0",
+            "5.5.0",
             this._partitionCount,
             this._clusterId,
             false,
-            null,
-            null,
-            [],
         );
     }
 

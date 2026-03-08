@@ -21,6 +21,7 @@ function makeVertex(name: string, type: 'source' | 'operator' | 'sink', override
     itemsIn: 0,
     itemsOut: 0,
     queueSize: 0,
+    queueCapacity: 0,
     latencyP50Ms: 0,
     latencyP99Ms: 0,
     latencyMaxMs: 0,
@@ -28,6 +29,10 @@ function makeVertex(name: string, type: 'source' | 'operator' | 'sink', override
     distributedItemsOut: 0,
     distributedBytesIn: 0,
     distributedBytesOut: 0,
+    topObservedWm: -1,
+    coalescedWm: -1,
+    lastForwardedWm: -1,
+    lastForwardedWmLatency: -1,
     ...overrides,
   };
 }

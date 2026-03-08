@@ -76,7 +76,7 @@ export class HeliosClusterCoordinator {
 
     this._localAddress = new Address("127.0.0.1", boundPort);
     this._localMember = new MemberImpl.Builder(this._localAddress)
-      .uuid(this._instanceName)
+      .uuid(crypto.randomUUID())
       .version(new MemberVersion(1, 0, 0))
       .localMember(true)
       .build();

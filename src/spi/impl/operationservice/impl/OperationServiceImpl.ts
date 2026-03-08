@@ -6,6 +6,7 @@
  * backward-compatible localMode for existing tests.
  */
 import type { Address } from '@zenystx/helios-core/cluster/Address';
+import type { SlowOperationDetector } from '@zenystx/helios-core/diagnostics/SlowOperationDetector';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 import { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
 import { InvocationRegistry } from '@zenystx/helios-core/spi/impl/operationservice/InvocationRegistry';
@@ -27,6 +28,8 @@ export interface OperationServiceImplOptions {
      * through this callback instead of being rejected.
      */
     remoteSend?: (op: Operation, target: Address) => Promise<void>;
+    /** Optional slow-operation detector — wired by HeliosInstanceImpl when monitoring is enabled. */
+    slowOperationDetector?: SlowOperationDetector;
 }
 
 export interface OperationStats {
@@ -46,6 +49,7 @@ export class OperationServiceImpl implements OperationService {
     private readonly _invocationTryCount: number;
     private readonly _afterLocalRun: ((op: Operation) => Promise<void>) | null;
     private readonly _remoteSend: ((op: Operation, target: Address) => Promise<void>) | null;
+    private _slowOperationDetector: SlowOperationDetector | null;
     private _callIdCounter = 1n;
     private _runningCount = 0;
     private _completedCount = 0;
@@ -57,9 +61,15 @@ export class OperationServiceImpl implements OperationService {
         this._invocationTryCount = options?.invocationTryCount ?? 250;
         this._afterLocalRun = options?.afterLocalRun ?? null;
         this._remoteSend = options?.remoteSend ?? null;
+        this._slowOperationDetector = options?.slowOperationDetector ?? null;
         this._registry = new InvocationRegistry(
             options?.maxConcurrentInvocations ?? 100_000,
         );
+    }
+
+    /** Attach (or detach) a slow-operation detector at runtime. */
+    setSlowOperationDetector(detector: SlowOperationDetector | null): void {
+        this._slowOperationDetector = detector;
     }
 
     getInvocationRegistry(): InvocationRegistry {
@@ -79,6 +89,9 @@ export class OperationServiceImpl implements OperationService {
      */
     async run(op: Operation): Promise<void> {
         this._prepareOperation(op);
+        const trackingId = String(op.getCallId());
+        const operationName = op.constructor.name;
+        this._slowOperationDetector?.startTracking(trackingId, operationName);
         this._runningCount++;
         try {
             await op.beforeRun();
@@ -86,6 +99,7 @@ export class OperationServiceImpl implements OperationService {
         } finally {
             this._runningCount--;
             this._completedCount++;
+            this._slowOperationDetector?.stopTracking(trackingId);
         }
     }
 
@@ -279,6 +293,8 @@ export class OperationServiceImpl implements OperationService {
                 }
 
                 await op.beforeRun();
+                const slowTrackId = String(op.getCallId());
+                this._slowOperationDetector?.startTracking(slowTrackId, op.constructor.name);
                 this._runningCount++;
                 try {
                     if (this._afterLocalRun !== null) {
@@ -308,6 +324,7 @@ export class OperationServiceImpl implements OperationService {
                     }
                 } finally {
                     this._runningCount--;
+                    this._slowOperationDetector?.stopTracking(slowTrackId);
                 }
             } catch (e) {
                 if (invocation.future.isDone()) return;
@@ -359,6 +376,9 @@ export class OperationServiceImpl implements OperationService {
         });
 
         void (async () => {
+            const trackingId = String(op.getCallId());
+            const operationName = op.constructor.name;
+            this._slowOperationDetector?.startTracking(trackingId, operationName);
             this._runningCount++;
             try {
                 await op.beforeRun();
@@ -373,6 +393,7 @@ export class OperationServiceImpl implements OperationService {
                 }
             } finally {
                 this._runningCount--;
+                this._slowOperationDetector?.stopTracking(trackingId);
             }
         })();
 

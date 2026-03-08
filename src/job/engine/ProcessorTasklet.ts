@@ -3,6 +3,7 @@ import type { ProcessorItem } from './ProcessorItem.js';
 import type { VertexMetrics } from '../metrics/BlitzJobMetrics.js';
 import type { SnapshotStore } from '../snapshot/SnapshotStore.js';
 import { LatencyTracker } from '../metrics/LatencyTracker.js';
+import { WatermarkTracker } from '../metrics/WatermarkTracker.js';
 import { ProcessingGuarantee } from '../JobConfig.js';
 
 const ABORTED = Symbol('aborted');
@@ -42,11 +43,15 @@ interface TaskletState {
  *   - AT_LEAST_ONCE: immediate save on first barrier (no alignment)
  *   - NONE: barriers are dropped entirely
  *
- * Tracks per-vertex metrics: itemsIn, itemsOut, queueSize, latency.
+ * Tracks per-vertex metrics: itemsIn, itemsOut, queueSize, queueCapacity, latency,
+ * watermark progression (T11), and exposes them via getMetrics().
  */
 export class ProcessorTasklet {
   private readonly config: ProcessorTaskletConfig;
   private readonly latencyTracker = new LatencyTracker(1024);
+
+  /** T11: watermark tracker — edgeCount matches the number of inboxes. */
+  private readonly watermarkTracker: WatermarkTracker;
 
   private _itemsIn = 0;
   private _itemsOut = 0;
@@ -56,6 +61,7 @@ export class ProcessorTasklet {
 
   constructor(config: ProcessorTaskletConfig) {
     this.config = config;
+    this.watermarkTracker = new WatermarkTracker(Math.max(1, config.inboxes.length));
   }
 
   /**
@@ -182,7 +188,10 @@ export class ProcessorTasklet {
           }
 
           case 'watermark':
+            // T11: track watermark progression
+            this.watermarkTracker.observeWatermark(item.timestamp, ordinal);
             await outbox.send(item);
+            this.watermarkTracker.forwardWatermark(item.timestamp);
             break;
 
           case 'eos':
@@ -239,15 +248,20 @@ export class ProcessorTasklet {
 
   /**
    * Get current per-vertex metrics.
+   * Includes T11 watermark fields and T12 queueCapacity from outbox channel.
    */
   getMetrics(): VertexMetrics {
     const totalQueueSize = this.config.inboxes.reduce((sum, ch) => sum + ch.size, 0);
+    // T12: capacity is the outbox capacity (what downstream consumers see)
+    const queueCapacity = this.config.outbox.capacity;
+
     return {
       name: this.config.vertexName,
       type: 'operator',
       itemsIn: this._itemsIn,
       itemsOut: this._itemsOut,
       queueSize: totalQueueSize,
+      queueCapacity,
       latencyP50Ms: this.latencyTracker.getP50(),
       latencyP99Ms: this.latencyTracker.getP99(),
       latencyMaxMs: this.latencyTracker.getMax(),
@@ -255,6 +269,11 @@ export class ProcessorTasklet {
       distributedItemsOut: 0,
       distributedBytesIn: 0,
       distributedBytesOut: 0,
+      // T11: watermark fields
+      topObservedWm: this.watermarkTracker.topObservedWm,
+      coalescedWm: this.watermarkTracker.coalescedWm,
+      lastForwardedWm: this.watermarkTracker.lastForwardedWm,
+      lastForwardedWmLatency: this.watermarkTracker.lastForwardedWmLatency,
     };
   }
 

@@ -27,7 +27,7 @@ const TOPIC_REMOVE_LISTENER_RESPONSE_TYPE = 0x0b0b01;
 const TOPIC_PUBLISH_ALL_REQUEST_TYPE      = 0x040200;
 const TOPIC_PUBLISH_ALL_RESPONSE_TYPE     = 0x040201;
 
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -76,7 +76,8 @@ function _encodeEmptyResponse(responseType: number): ClientMessage {
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -87,7 +88,8 @@ function _encodeBooleanResponse(responseType: number, value: boolean): ClientMes
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
     buf.writeUInt8(value ? 1 : 0, RESPONSE_HEADER_SIZE);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }

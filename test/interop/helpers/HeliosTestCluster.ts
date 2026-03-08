@@ -50,8 +50,16 @@ export class HeliosTestCluster {
   private _connectionInfo: ClusterConnectionInfo | null = null;
   private _started = false;
 
+  /**
+   * Unique multicast port for this cluster instance. Uses a random port in
+   * the high range (40000–49999) to avoid collisions between concurrent test
+   * runs and the default Hazelcast multicast port (54327).
+   */
+  private readonly _multicastPort: number;
+
   constructor(clusterName?: string) {
     this._clusterName = clusterName ?? `interop-${++clusterCounter}-${Date.now()}`;
+    this._multicastPort = 40000 + Math.floor(Math.random() * 10000);
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -112,17 +120,24 @@ export class HeliosTestCluster {
     }
 
     const basePort = 17000 + Math.floor(Math.random() * 1000) * 3;
-    const memberPorts: number[] = Array.from({ length: nodeCount }, (_, i) => basePort + i);
 
     for (let i = 0; i < nodeCount; i++) {
       const nodeName = `${this._clusterName}-node-${i}`;
-      const cfg = this._buildConfig(nodeName, memberPorts[i]!, memberPorts.filter((_, j) => j !== i));
+      const memberPort = basePort + i;
+      const cfg = this._buildConfig(nodeName, memberPort, nodeCount);
       const inst = await Helios.newInstance(cfg);
       this._instances.push(inst);
     }
 
-    // Allow client protocol servers to bind their ephemeral ports
-    await sleep(120);
+    // Wait for every client protocol server to finish binding its TCP port.
+    await Promise.all(
+      this._instances.map((inst) => inst.waitForClientProtocolReady()),
+    );
+
+    // For multi-node clusters, give multicast discovery time to form the cluster.
+    if (nodeCount > 1) {
+      await sleep(600);
+    }
 
     const members: MemberConnectionInfo[] = this._instances.map((inst, i) => ({
       name: `node-${i}`,
@@ -153,7 +168,7 @@ export class HeliosTestCluster {
     return this._connectionInfo;
   }
 
-  private _buildConfig(nodeName: string, memberPort: number, peerPorts: number[]): HeliosConfig {
+  private _buildConfig(nodeName: string, memberPort: number, nodeCount: number): HeliosConfig {
     const cfg = new HeliosConfig(nodeName);
     cfg.setClusterName(this._clusterName);
 
@@ -162,15 +177,17 @@ export class HeliosTestCluster {
     // Client protocol on ephemeral port (0 = OS-assigned)
     network.setClientProtocolPort(0);
 
-    if (peerPorts.length > 0) {
-      // Enable TCP-IP join for multi-node clusters
-      const tcpIp = network.getJoin().getTcpIpConfig();
-      tcpIp.setEnabled(true);
-      network.setPort(memberPort);
-      network.setPortAutoIncrement(false);
-      for (const port of peerPorts) {
-        tcpIp.addMember(`127.0.0.1:${port}`);
-      }
+    // Bind the cluster transport on a deterministic port
+    network.setPort(memberPort);
+    network.setPortAutoIncrement(false);
+
+    if (nodeCount > 1) {
+      // Multi-node: use multicast discovery with a unique port per cluster
+      // to prevent cross-test interference.
+      const multicast = network.getJoin().getMulticastConfig();
+      multicast.setEnabled(true);
+      multicast.setMulticastPort(this._multicastPort);
+      multicast.setLoopbackModeEnabled(true);
     } else {
       // Single-node: no join needed — disable multicast to keep tests fast
       network.getJoin().getMulticastConfig().setEnabled(false);

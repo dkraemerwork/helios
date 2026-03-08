@@ -38,6 +38,8 @@ const CLIENT_STATISTICS_REQUEST_TYPE     = 0x000c00;
 const CLIENT_STATISTICS_RESPONSE_TYPE    = 0x000c01;
 const CLIENT_TRIGGER_PARTITION_ASSIGN_REQUEST_TYPE  = 0x001300;
 const CLIENT_TRIGGER_PARTITION_ASSIGN_RESPONSE_TYPE = 0x001301;
+const CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE  = 0x000f00;
+const CLIENT_LOCAL_BACKUP_LISTENER_RESPONSE_TYPE = 0x000f01;
 
 // ── Distributed object registry ───────────────────────────────────────────────
 
@@ -138,21 +140,32 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
     dispatcher.register(CLIENT_TRIGGER_PARTITION_ASSIGN_REQUEST_TYPE, async (_msg, _session) => {
         return _encodeTriggerPartitionAssignmentResponse();
     });
+
+    // ── LocalBackupListener (0x000f00) ───────────────────────────────────────
+    // The official client registers a backup listener during startup.
+    // The server responds with a registration UUID.  We don't need to
+    // implement actual backup events for a single-member cluster, but
+    // we must accept the registration so the client starts cleanly.
+    dispatcher.register(CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE, async (_msg, _session) => {
+        return _encodeLocalBackupListenerResponse();
+    });
 }
 
 // ── Inline response encoders ──────────────────────────────────────────────────
 
 import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES; // 12
+/** Standard response initial frame: type(4) + correlationId(8) + backupAcks/partitionId(4) = 16. */
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
 
 function _encodePingResponse(): ClientMessage {
     const msg = CM.createForEncode();
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_PING_RESPONSE_TYPE >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -162,7 +175,8 @@ function _encodeStatisticsResponse(): ClientMessage {
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_STATISTICS_RESPONSE_TYPE >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -172,7 +186,34 @@ function _encodeTriggerPartitionAssignmentResponse(): ClientMessage {
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_TRIGGER_PARTITION_ASSIGN_RESPONSE_TYPE >>> 0, 0);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    msg.setFinal();
+    return msg;
+}
+
+/**
+ * Encode the response for ClientLocalBackupListener (0x000f01).
+ *
+ * Response initial frame layout:
+ *   [0..3]   type = 0x000f01
+ *   [4..11]  correlationId (set by caller)
+ *   [12]     backupAcks (byte, 0)
+ *   [13..29] registrationUUID (17 bytes: isNull(1) + msb(8) + lsb(8))
+ *
+ * Total: 30 bytes.
+ */
+const BACKUP_LISTENER_RESPONSE_UUID_OFFSET = 13; // RESPONSE_BACKUP_ACKS_OFFSET(12) + BYTE_SIZE(1)
+const BACKUP_LISTENER_RESPONSE_SIZE = BACKUP_LISTENER_RESPONSE_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 13 + 17 = 30
+
+function _encodeLocalBackupListenerResponse(): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(BACKUP_LISTENER_RESPONSE_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(CLIENT_LOCAL_BACKUP_LISTENER_RESPONSE_TYPE >>> 0, 0);
+    FixedSizeTypesCodec.encodeUUID(buf, BACKUP_LISTENER_RESPONSE_UUID_OFFSET, crypto.randomUUID());
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }

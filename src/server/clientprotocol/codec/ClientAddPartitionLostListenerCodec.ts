@@ -99,7 +99,8 @@ export class ClientAddPartitionLostListenerCodec {
         buf.writeUInt32LE(RESPONSE_MESSAGE_TYPE >>> 0, 0);
         buf.fill(0, INT_SIZE_IN_BYTES, RESPONSE_REGISTRATION_ID_OFFSET);
         FixedSizeTypesCodec.encodeUUID(buf, RESPONSE_REGISTRATION_ID_OFFSET, registrationId);
-        msg.add(new ClientMessageFrame(buf, ClientMessage.IS_FINAL_FLAG));
+        const UNFRAGMENTED_MESSAGE = ClientMessage.BEGIN_FRAGMENT_FLAG | ClientMessage.END_FRAGMENT_FLAG;
+        msg.add(new ClientMessageFrame(buf, UNFRAGMENTED_MESSAGE | ClientMessage.IS_FINAL_FLAG));
         return msg;
     }
 
@@ -135,7 +136,8 @@ export class ClientAddPartitionLostListenerCodec {
         buf.writeInt32LE(lostBackupCount | 0, EVENT_LOST_BACKUP_COUNT_OFFSET);
         FixedSizeTypesCodec.encodeUUID(buf, EVENT_SOURCE_UUID_OFFSET, sourceUuid);
 
-        const frame = new ClientMessageFrame(buf, ClientMessage.IS_EVENT_FLAG | ClientMessage.IS_FINAL_FLAG);
+        const EVENT_FLAGS = ClientMessage.BEGIN_FRAGMENT_FLAG | ClientMessage.END_FRAGMENT_FLAG | ClientMessage.IS_EVENT_FLAG | ClientMessage.IS_FINAL_FLAG;
+        const frame = new ClientMessageFrame(buf, EVENT_FLAGS);
         msg.add(frame);
 
         return msg;

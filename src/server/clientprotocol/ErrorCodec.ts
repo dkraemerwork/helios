@@ -110,10 +110,11 @@ export class ErrorCodec {
         const msg = ClientMessage.createForEncode();
 
         // Initial frame: standard 16-byte header with responseType = 0 (exception)
+        const UNFRAGMENTED = ClientMessage.BEGIN_FRAGMENT_FLAG | ClientMessage.END_FRAGMENT_FLAG;
         const buf = Buffer.allocUnsafe(RESPONSE_HEADER_CONTENT_SIZE);
         buf.writeUInt32LE(EXCEPTION_RESPONSE_MESSAGE_TYPE >>> 0, 0);
         buf.fill(0, 4, RESPONSE_HEADER_CONTENT_SIZE); // correlationId + partitionId = 0
-        msg.add(new ClientMessageFrame(buf));
+        msg.add(new ClientMessageFrame(buf, UNFRAGMENTED));
 
         // BEGIN outer list (one ErrorHolder)
         msg.add(new ClientMessageFrame(Buffer.alloc(0), ClientMessage.BEGIN_DATA_STRUCTURE_FLAG));

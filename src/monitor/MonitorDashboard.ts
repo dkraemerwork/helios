@@ -340,6 +340,25 @@ export function renderMonitorDashboard(): string {
     .type-badge.topic { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); color: var(--emerald); }
     .type-badge.executor { background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.25); color: var(--cyan); }
 
+    /* ─── Event log type badges ───────────────────────────────── */
+    .event-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-family: var(--mono);
+      border: 1px solid;
+    }
+    .event-badge.MEMBER_JOINED    { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.3); color: var(--emerald); }
+    .event-badge.MEMBER_LEFT      { background: rgba(239,68,68,0.10);  border-color: rgba(239,68,68,0.3);  color: var(--red); }
+    .event-badge.CONNECTION_OPENED   { background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.3); color: var(--blue); }
+    .event-badge.CONNECTION_CLOSED   { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.3);  color: var(--red); }
+    .event-badge.MIGRATION_STARTED   { background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.3); color: var(--amber); }
+    .event-badge.MIGRATION_COMPLETED { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.3); color: var(--emerald); }
+    .event-badge.STATE_CHANGED    { background: rgba(168,85,247,0.10); border-color: rgba(168,85,247,0.3); color: #a855f7; }
+
     .num { text-align: right; }
 
     /* ─── Charts grid ─────────────────────────────────────────── */
@@ -982,6 +1001,104 @@ export function renderMonitorDashboard(): string {
         <span class="blitz-label">JetStream</span>
         <span class="blitz-value" id="blitz-jetstream">—</span>
       </div>
+    </div>
+  </div>
+
+  <!-- ─── Per-Map Stats ────────────────────────────────────── -->
+  <div class="panel" id="map-stats-section" style="display:none">
+    <div class="panel-head">
+      <span class="panel-title">Per-Map Stats</span>
+      <span class="panel-meta" id="map-stats-meta">—</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Map</th>
+            <th class="num">Gets</th>
+            <th class="num">Puts</th>
+            <th class="num">Removes</th>
+            <th class="num">Sets</th>
+            <th class="num">Avg Get (ms)</th>
+            <th class="num">Avg Put (ms)</th>
+            <th class="num">Owned Entries</th>
+            <th class="num">Heap (KB)</th>
+          </tr>
+        </thead>
+        <tbody id="map-stats-tbody">
+          <tr class="empty-row"><td colspan="9">No map data</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── MapStore Latency ─────────────────────────────────── -->
+  <div class="panel" id="store-latency-section" style="display:none">
+    <div class="panel-head">
+      <span class="panel-title">MapStore Latency</span>
+      <span class="panel-meta">ms</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Operation</th>
+            <th class="num">Count</th>
+            <th class="num">Avg (ms)</th>
+            <th class="num">Max (ms)</th>
+            <th class="num">Total (ms)</th>
+          </tr>
+        </thead>
+        <tbody id="store-latency-tbody">
+          <tr class="empty-row"><td colspan="5">No store data</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── Queue &amp; Topic Stats ──────────────────────────── -->
+  <div class="panel" id="queue-topic-section" style="display:none">
+    <div class="panel-head">
+      <span class="panel-title">Queue &amp; Topic Stats</span>
+      <span class="panel-meta" id="queue-topic-meta">—</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Name</th>
+            <th class="num">Offers / Publishes</th>
+            <th class="num">Polls / Receives</th>
+            <th class="num">Owned</th>
+          </tr>
+        </thead>
+        <tbody id="queue-topic-tbody">
+          <tr class="empty-row"><td colspan="5">No queue/topic data</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── System Event Log ─────────────────────────────────── -->
+  <div class="panel" id="system-events-section" style="display:none">
+    <div class="panel-head">
+      <span class="panel-title">System Events</span>
+      <span class="panel-meta" id="system-events-meta">—</span>
+    </div>
+    <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="system-events-tbody">
+          <tr class="empty-row"><td colspan="3">No events</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -1743,6 +1860,202 @@ export function renderMonitorDashboard(): string {
     }).join('');
   }
 
+  // ─── Per-map stats ───────────────────────────────────────────────
+  function renderMapStats() {
+    // Aggregate map stats from all nodes (active tab or all)
+    var activeUrls = (activeTab === 'all') ? nodeUrls : [activeTab];
+    var merged = {};
+    activeUrls.forEach(function(url) {
+      var state = nodes.get(url);
+      var payload = state && state.payload;
+      if (!payload || !payload.mapStats) return;
+      Object.keys(payload.mapStats).forEach(function(name) {
+        var s = payload.mapStats[name];
+        if (!merged[name]) {
+          merged[name] = Object.assign({}, s);
+        } else {
+          var m = merged[name];
+          m.getCount += s.getCount || 0;
+          m.putCount += s.putCount || 0;
+          m.removeCount += s.removeCount || 0;
+          m.setCount += s.setCount || 0;
+          m.totalGetLatencyMs += s.totalGetLatencyMs || 0;
+          m.totalPutLatencyMs += s.totalPutLatencyMs || 0;
+          m.ownedEntryCount += s.ownedEntryCount || 0;
+          m.heapCostBytes += s.heapCostBytes || 0;
+        }
+      });
+    });
+
+    var names = Object.keys(merged);
+    var section = el('map-stats-section');
+    var tbody = el('map-stats-tbody');
+    if (!section || !tbody) return;
+
+    if (!names.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    var meta = el('map-stats-meta');
+    if (meta) meta.textContent = names.length + ' map' + (names.length !== 1 ? 's' : '');
+
+    tbody.innerHTML = names.map(function(name) {
+      var s = merged[name];
+      var avgGet = s.getCount > 0 ? fmt(s.totalGetLatencyMs / s.getCount) : '—';
+      var avgPut = s.putCount > 0 ? fmt(s.totalPutLatencyMs / s.putCount) : '—';
+      return '<tr>'
+        + '<td>' + escHtml(name) + '</td>'
+        + '<td class="num">' + fmtNum(s.getCount) + '</td>'
+        + '<td class="num">' + fmtNum(s.putCount) + '</td>'
+        + '<td class="num">' + fmtNum(s.removeCount) + '</td>'
+        + '<td class="num">' + fmtNum(s.setCount) + '</td>'
+        + '<td class="num">' + avgGet + '</td>'
+        + '<td class="num">' + avgPut + '</td>'
+        + '<td class="num">' + fmtNum(s.ownedEntryCount) + '</td>'
+        + '<td class="num">' + fmt(s.heapCostBytes / 1024, 1) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  // ─── Store latency ───────────────────────────────────────────────
+  function renderStoreLatency() {
+    // Use active-tab node's store latency (doesn't meaningfully aggregate)
+    var url = (activeTab === 'all') ? nodeUrls[0] : activeTab;
+    var state = url ? nodes.get(url) : null;
+    var payload = state && state.payload;
+    var sl = payload && payload.storeLatency;
+
+    var section = el('store-latency-section');
+    var tbody = el('store-latency-tbody');
+    if (!section || !tbody) return;
+
+    if (!sl) {
+      section.style.display = 'none';
+      return;
+    }
+
+    var ops = Object.keys(sl);
+    var hasData = ops.some(function(op) { return sl[op].count > 0; });
+    if (!hasData) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+
+    tbody.innerHTML = ops.filter(function(op) { return sl[op].count > 0; }).map(function(op) {
+      var s = sl[op];
+      return '<tr>'
+        + '<td>' + escHtml(op) + '</td>'
+        + '<td class="num">' + fmtNum(s.count) + '</td>'
+        + '<td class="num">' + fmt(s.avgLatencyMs) + '</td>'
+        + '<td class="num">' + fmt(s.maxLatencyMs) + '</td>'
+        + '<td class="num">' + fmt(s.totalLatencyMs) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  // ─── Queue &amp; Topic stats ──────────────────────────────────────
+  function renderQueueTopicStats() {
+    var activeUrls = (activeTab === 'all') ? nodeUrls : [activeTab];
+    var rows = [];
+    var seenKeys = new Set();
+
+    activeUrls.forEach(function(url) {
+      var state = nodes.get(url);
+      var payload = state && state.payload;
+      if (!payload) return;
+
+      if (payload.queueStats) {
+        Object.keys(payload.queueStats).forEach(function(name) {
+          var key = 'Q:' + name;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            var s = payload.queueStats[name];
+            rows.push({ type: 'Queue', cls: 'queue', name: name, offer: s.offerCount || 0, poll: s.pollCount || 0, owned: s.ownedItemCount || 0 });
+          }
+        });
+      }
+      if (payload.topicStats) {
+        Object.keys(payload.topicStats).forEach(function(name) {
+          var key = 'T:' + name;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            var s = payload.topicStats[name];
+            rows.push({ type: 'Topic', cls: 'topic', name: name, offer: s.publishCount || 0, poll: s.receiveCount || 0, owned: '—' });
+          }
+        });
+      }
+    });
+
+    var section = el('queue-topic-section');
+    var tbody = el('queue-topic-tbody');
+    if (!section || !tbody) return;
+
+    if (!rows.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    var meta = el('queue-topic-meta');
+    if (meta) meta.textContent = rows.length + ' object' + (rows.length !== 1 ? 's' : '');
+
+    tbody.innerHTML = rows.map(function(r) {
+      return '<tr>'
+        + '<td><span class="type-badge ' + r.cls + '">' + r.type + '</span></td>'
+        + '<td>' + escHtml(r.name) + '</td>'
+        + '<td class="num">' + fmtNum(r.offer) + '</td>'
+        + '<td class="num">' + fmtNum(r.poll) + '</td>'
+        + '<td class="num">' + (typeof r.owned === 'number' ? fmtNum(r.owned) : r.owned) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  // ─── System event log ────────────────────────────────────────────
+  function renderSystemEvents() {
+    // Union of events from all visible nodes, sorted chronologically (newest last → display newest first)
+    var activeUrls = (activeTab === 'all') ? nodeUrls : [activeTab];
+    var allEvents = [];
+    activeUrls.forEach(function(url) {
+      var state = nodes.get(url);
+      var payload = state && state.payload;
+      if (!payload || !payload.systemEvents) return;
+      payload.systemEvents.forEach(function(ev) { allEvents.push(ev); });
+    });
+    // Sort newest-first for display
+    allEvents.sort(function(a, b) { return b.timestamp - a.timestamp; });
+    // Deduplicate by timestamp+type+message across nodes
+    var seen = new Set();
+    var deduped = allEvents.filter(function(ev) {
+      var key = ev.timestamp + ':' + ev.type + ':' + ev.message;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    var section = el('system-events-section');
+    var tbody = el('system-events-tbody');
+    if (!section || !tbody) return;
+
+    if (!deduped.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    var meta = el('system-events-meta');
+    if (meta) meta.textContent = deduped.length + ' event' + (deduped.length !== 1 ? 's' : '');
+
+    tbody.innerHTML = deduped.slice(0, 20).map(function(ev) {
+      var d = new Date(ev.timestamp);
+      var timeStr = d.toLocaleTimeString();
+      return '<tr>'
+        + '<td style="white-space:nowrap;color:var(--muted);font-size:11px;">' + escHtml(timeStr) + '</td>'
+        + '<td><span class="event-badge ' + escHtml(ev.type) + '">' + escHtml(ev.type) + '</span></td>'
+        + '<td style="font-size:12px;">' + escHtml(ev.message) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
   // ─── Full render ─────────────────────────────────────────────────
   function renderAll() {
     renderHeader();
@@ -1783,6 +2096,11 @@ export function renderMonitorDashboard(): string {
         if (samples.length) renderSample(samples[samples.length - 1]);
       }
     }
+
+    renderMapStats();
+    renderStoreLatency();
+    renderQueueTopicStats();
+    renderSystemEvents();
   }
 
   // ─── SSE connection per node ─────────────────────────────────────
@@ -1816,6 +2134,17 @@ export function renderMonitorDashboard(): string {
         renderAll();
       } catch (err) {
         console.error('Monitor: failed to parse sample from', nodeUrl, err);
+      }
+    });
+
+    es.addEventListener('payload', function(e) {
+      try {
+        const payload = JSON.parse(e.data);
+        state.payload = payload;
+        state.instanceName = payload.instanceName || state.instanceName;
+        renderAll();
+      } catch (err) {
+        console.error('Monitor: failed to parse payload refresh from', nodeUrl, err);
       }
     });
 

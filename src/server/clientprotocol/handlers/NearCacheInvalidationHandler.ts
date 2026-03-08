@@ -212,7 +212,8 @@ class NearCacheInvalidationSerializer implements InvalidationEventSerializer {
         initBuf.writeInt32LE(event.partitionId, INITIAL_FRAME_SIZE);
         initBuf.writeBigInt64LE(BigInt(event.sequence), INITIAL_FRAME_SIZE + INT_SIZE_IN_BYTES);
 
-        const initFrame = new CM.Frame(initBuf, CM.IS_EVENT_FLAG);
+        const EVENT_FLAGS = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG | CM.IS_EVENT_FLAG;
+        const initFrame = new CM.Frame(initBuf, EVENT_FLAGS);
         msg.add(initFrame);
 
         // Key bytes frame
@@ -252,7 +253,8 @@ class NearCacheInvalidationSerializer implements InvalidationEventSerializer {
         initBuf.fill(0);
         initBuf.writeUInt32LE(MAP_NEAR_CACHE_BATCH_INVALIDATION_EVENT_TYPE >>> 0, 0);
         initBuf.writeInt32LE(count, INITIAL_FRAME_SIZE);
-        msg.add(new CM.Frame(initBuf, CM.IS_EVENT_FLAG));
+        const EVENT_FLAGS = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG | CM.IS_EVENT_FLAG;
+        msg.add(new CM.Frame(initBuf, EVENT_FLAGS));
 
         // Encode each key entry
         for (const entry of event.keys) {
@@ -295,7 +297,8 @@ class NearCacheInvalidationSerializer implements InvalidationEventSerializer {
         initBuf.fill(0);
         initBuf.writeUInt32LE(MAP_NEAR_CACHE_CLEAR_INVALIDATION_EVENT_TYPE >>> 0, 0);
         initBuf.writeInt32LE(partitionCount, INITIAL_FRAME_SIZE);
-        msg.add(new CM.Frame(initBuf, CM.IS_EVENT_FLAG));
+        const EVENT_FLAGS = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG | CM.IS_EVENT_FLAG;
+        msg.add(new CM.Frame(initBuf, EVENT_FLAGS));
 
         // Partition metadata entries
         for (const [partitionId, partitionUuid] of event.partitionUuids) {
@@ -360,7 +363,8 @@ function _encodeStringResponse(responseType: number, value: string, correlationI
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
     buf.writeInt32LE(correlationId, INT_SIZE_IN_BYTES);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     StringCodec.encode(msg, value);
     msg.setFinal();
     return msg;
@@ -374,7 +378,8 @@ function _encodeBooleanResponse(responseType: number, value: boolean, correlatio
     buf.writeUInt32LE(responseType >>> 0, 0);
     buf.writeInt32LE(correlationId, INT_SIZE_IN_BYTES);
     buf.writeUInt8(value ? 1 : 0, INITIAL_FRAME_SIZE);
-    msg.add(new CM.Frame(buf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }
@@ -403,7 +408,8 @@ function _encodeMetadataResponse(
     initBuf.writeUInt32LE(responseType >>> 0, 0);
     initBuf.writeInt32LE(correlationId, INT_SIZE_IN_BYTES);
     initBuf.writeInt32LE(metadata.length, INITIAL_FRAME_SIZE);
-    msg.add(new CM.Frame(initBuf));
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(initBuf, UNFRAGMENTED_MESSAGE));
 
     for (const mapMeta of metadata) {
         // Map name

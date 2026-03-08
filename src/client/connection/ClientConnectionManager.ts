@@ -266,11 +266,22 @@ export class ClientConnectionManager {
             this._clusterId = authResp.clusterId;
         }
 
-        // Notify cluster service with member info from auth response
-        if (this._clusterService && authResp.memberInfos.length > 0) {
+        // Notify cluster service with member info synthesized from auth response.
+        // The official protocol no longer includes memberInfos in the auth
+        // response — construct a single-member view from address + UUID.
+        if (this._clusterService && authResp.memberUuid && authResp.address) {
+            const { MemberInfo } = await import('@zenystx/helios-core/cluster/MemberInfo');
+            const { MemberVersion } = await import('@zenystx/helios-core/version/MemberVersion');
+            const syntheticMember = new MemberInfo(
+                authResp.address,
+                authResp.memberUuid,
+                new Map(),
+                false,
+                new MemberVersion(0, 1, 0),
+            );
             this._clusterService.handleMembersViewEvent(
                 1,
-                authResp.memberInfos,
+                [syntheticMember],
                 authResp.clusterId ?? "",
             );
         }
