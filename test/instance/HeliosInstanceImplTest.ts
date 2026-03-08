@@ -10,6 +10,7 @@
  */
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { Address } from "@zenystx/helios-core/cluster/Address";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import type { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
@@ -248,6 +249,65 @@ describe("HeliosInstanceImpl", () => {
       expect(data).not.toBeNull();
       const obj = ne.toObject<{ a: number }>(data);
       expect(obj?.a).toBe(1);
+    });
+  });
+
+  describe("phase 1 quick wins", () => {
+    it("sweeps expired pending responses without touching fresh ones", () => {
+      const instance = Object.create(HeliosInstanceImpl.prototype) as any;
+
+      const rejected: string[] = [];
+      instance._pendingResponses = new Map([
+        [
+          1,
+          {
+            resolve: () => {},
+            reject: (error: Error) => rejected.push(error.message),
+            createdAt: 1_000,
+            timeoutMs: 10,
+          },
+        ],
+        [
+          2,
+          {
+            resolve: () => {},
+            reject: () => rejected.push("fresh should not reject"),
+            createdAt: 1_995,
+            timeoutMs: 10,
+          },
+        ],
+      ]);
+
+      instance._sweepPendingResponses(2_000);
+
+      expect(rejected).toEqual(["Operation timed out (callId=1)"]);
+      expect(instance._pendingResponses.has(1)).toBe(false);
+      expect(instance._pendingResponses.has(2)).toBe(true);
+    });
+
+    it("rebuilds the address-to-member cache for O(1) lookups", () => {
+      const instance = Object.create(HeliosInstanceImpl.prototype) as any;
+
+      instance._addressToMemberId = new Map();
+      instance._clusterCoordinator = {};
+      instance._cluster = {
+        getMembers: () => [
+          {
+            getAddress: () => new Address("127.0.0.1", 5701),
+            getUuid: () => "member-a",
+          },
+          {
+            getAddress: () => new Address("127.0.0.1", 5702),
+            getUuid: () => "member-b",
+          },
+        ],
+      };
+
+      instance._rebuildAddressToMemberIdCache();
+
+      expect(instance._findMemberIdByAddress(new Address("127.0.0.1", 5701))).toBe("member-a");
+      expect(instance._findMemberIdByAddress(new Address("127.0.0.1", 5702))).toBe("member-b");
+      expect(instance._findMemberIdByAddress(new Address("127.0.0.1", 5799))).toBeNull();
     });
   });
 });

@@ -60,12 +60,31 @@ describe('Block 16.C4 — MapProxy routes through OperationService', () => {
         expect(invokeOnPartitionSpy).toHaveBeenCalled();
     });
 
+    test('set reuses one partition lookup for pre-read and invoke', async () => {
+        const { proxy, ne } = makeFixture();
+        const getPartitionIdSpy = spyOn(ne.getPartitionService(), 'getPartitionId');
+
+        await proxy.set('key1', 42);
+
+        expect(getPartitionIdSpy).toHaveBeenCalledTimes(1);
+    });
+
     test('delete routes through invokeOnPartition', async () => {
         const { proxy, invokeOnPartitionSpy } = makeFixture();
         await proxy.put('key1', 42);
         invokeOnPartitionSpy.mockClear();
         await proxy.delete('key1');
         expect(invokeOnPartitionSpy).toHaveBeenCalled();
+    });
+
+    test('delete reuses one partition lookup for pre-read and invoke', async () => {
+        const { proxy, ne } = makeFixture();
+        await proxy.put('key1', 42);
+
+        const getPartitionIdSpy = spyOn(ne.getPartitionService(), 'getPartitionId');
+        await proxy.delete('key1');
+
+        expect(getPartitionIdSpy).toHaveBeenCalledTimes(1);
     });
 
     test('putIfAbsent routes through invokeOnPartition', async () => {

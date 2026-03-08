@@ -33,6 +33,17 @@ function nextPort(): number {
   return BASE_PORT + portCounter++;
 }
 
+function encodeFrame(
+  strategy: SerializationStrategy,
+  message: ClusterMessage,
+): Buffer {
+  const payload = strategy.serialize(message);
+  const frame = Buffer.allocUnsafe(4 + payload.length);
+  frame.writeUInt32BE(payload.length, 0);
+  frame.set(payload, 4);
+  return frame;
+}
+
 describe("TCP Protocol Upgrade (Block 16.A5)", () => {
   const transports: TcpClusterTransport[] = [];
 
@@ -199,7 +210,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         // Wrap in a simple envelope
         const envelope = Buffer.alloc(buf.length + 1);
         envelope[0] = 0x01; // version marker
-        buf.copy(envelope, 1);
+        envelope.set(buf, 1);
         return envelope;
       },
       deserialize(buf: Buffer): ClusterMessage {
@@ -299,5 +310,124 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
     // The transport should use the custom strategy internally
     // We verify by checking the strategy was accepted (constructor param)
     expect(t).toBeDefined();
+  });
+
+  describe("stateful frame decoder", () => {
+    it("reassembles a frame split across multiple chunks", () => {
+      const transport = createTransport("nodeA");
+      const strategy = new JsonSerializationStrategy();
+      const received: ClusterMessage[] = [];
+      transport.onMessage = (msg) => received.push(msg);
+
+      const channel = {
+        write: () => true,
+        close: () => {},
+        bytesRead: () => 0,
+        bytesWritten: () => 0,
+      } as any;
+
+      (transport as any)._onConnect(channel);
+
+      const frame = encodeFrame(strategy, {
+        type: "HEARTBEAT",
+        senderUuid: "nodeB",
+        timestamp: 123,
+      });
+
+      (transport as any)._onData(channel, frame.subarray(0, 2));
+      (transport as any)._onData(channel, frame.subarray(2, 9));
+      (transport as any)._onData(channel, frame.subarray(9));
+
+      expect(received).toEqual([
+        {
+          type: "HEARTBEAT",
+          senderUuid: "nodeB",
+          timestamp: 123,
+        },
+      ]);
+    });
+
+    it("decodes multiple complete frames from one chunk", () => {
+      const transport = createTransport("nodeA");
+      const strategy = new JsonSerializationStrategy();
+      const received: ClusterMessage[] = [];
+      transport.onMessage = (msg) => received.push(msg);
+
+      const channel = {
+        write: () => true,
+        close: () => {},
+        bytesRead: () => 0,
+        bytesWritten: () => 0,
+      } as any;
+
+      (transport as any)._onConnect(channel);
+
+      const first = encodeFrame(strategy, {
+        type: "HEARTBEAT",
+        senderUuid: "nodeB",
+        timestamp: 1,
+      });
+      const second = encodeFrame(strategy, {
+        type: "FETCH_MEMBERS_VIEW",
+        requesterId: "nodeC",
+        requestTimestamp: 2,
+      });
+
+      (transport as any)._onData(channel, Buffer.concat([first, second]));
+
+      expect(received).toEqual([
+        {
+          type: "HEARTBEAT",
+          senderUuid: "nodeB",
+          timestamp: 1,
+        },
+        {
+          type: "FETCH_MEMBERS_VIEW",
+          requesterId: "nodeC",
+          requestTimestamp: 2,
+        },
+      ]);
+    });
+
+    it("grows the decoder buffer for oversized frames", () => {
+      const transport = createTransport("nodeA");
+      const strategy = new JsonSerializationStrategy();
+      const received: ClusterMessage[] = [];
+      transport.onMessage = (msg) => received.push(msg);
+
+      const channel = {
+        write: () => true,
+        close: () => {},
+        bytesRead: () => 0,
+        bytesWritten: () => 0,
+      } as any;
+
+      (transport as any)._onConnect(channel);
+
+      const largeValue = "x".repeat(80_000);
+      const frame = encodeFrame(strategy, {
+        type: "OPERATION",
+        callId: 99,
+        partitionId: 7,
+        operationType: "MAP_PUT",
+        payload: { mapName: "big", key: "k", value: largeValue },
+        senderId: "nodeB",
+      });
+
+      (transport as any)._onData(channel, frame);
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({
+        type: "OPERATION",
+        callId: 99,
+        partitionId: 7,
+        senderId: "nodeB",
+      });
+      expect((received[0] as Extract<ClusterMessage, { type: "OPERATION" }>).payload).toEqual({
+        mapName: "big",
+        key: "k",
+        value: largeValue,
+      });
+    });
   });
 });

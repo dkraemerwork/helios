@@ -121,6 +121,8 @@ const QUEUE_SERVICE_NAME = "hz:impl:queueService";
 const TOPIC_SERVICE_NAME = "hz:impl:topicService";
 const RELIABLE_TOPIC_SERVICE_NAME = "hz:impl:reliableTopicService";
 const EXECUTOR_SERVICE_NAME = "hz:impl:executorService";
+const REMOTE_OPERATION_TIMEOUT_MS = 10_000;
+const INVOCATION_SWEEP_INTERVAL_MS = 1_000;
 
 type BlitzServerManagerLike = {
   shutdown(): Promise<void>;
@@ -192,6 +194,13 @@ interface TopicClientListenerRegistration {
   topicName: string;
   registrationId: string;
   topicListenerId: string;
+}
+
+interface PendingResponseEntry {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  createdAt: number;
+  timeoutMs: number;
 }
 
 /** Parse "host:port" or "host" (default port 5701). */
@@ -329,6 +338,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _shutdownHooks: Array<() => Promise<void>> = [];
   private readonly _clientTopicListenerRegistrations = new Map<string, TopicClientListenerRegistration>();
   private readonly _clientSessionTopicListeners = new Map<string, Set<string>>();
+  private readonly _addressToMemberId = new Map<string, string>();
+  private _invocationSweepHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
@@ -485,7 +496,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._dispatchAntiEntropy(targetUuid, op);
     });
     this._knownExecutorMemberIds = this._captureCurrentMemberIds();
+    this._rebuildAddressToMemberIdCache();
     this._clusterCoordinator.onMembershipChanged(() => {
+      this._rebuildAddressToMemberIdCache();
       this._handleExecutorMembershipChange();
     });
 
@@ -520,11 +533,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Build a routing-mode OperationService with remoteSend wired to transport
     const transport = this._transport;
-    const pendingResponses = new Map<number, {
-      resolve: (value: unknown) => void;
-      reject: (error: Error) => void;
-    }>();
+    const pendingResponses = new Map<number, PendingResponseEntry>();
     this._pendingResponses = pendingResponses;
+    this._startInvocationSweeper();
 
     let callIdCounter = 1;
     const operationService = new OperationServiceImpl(
@@ -549,6 +560,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
               reject: (error: Error) => {
                 reject(error);
               },
+              createdAt: Date.now(),
+              timeoutMs: REMOTE_OPERATION_TIMEOUT_MS,
             });
 
             const sent = transport.send(targetMemberId, {
@@ -567,13 +580,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
               return;
             }
 
-            // Timeout after 10 seconds
-            setTimeout(() => {
-              if (pendingResponses.has(callId)) {
-                pendingResponses.delete(callId);
-                reject(new Error(`Operation timed out (callId=${callId})`));
-              }
-            }, 10_000);
           });
         },
       },
@@ -724,10 +730,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   /** Pending remote operation responses (callId → resolver). */
-  private _pendingResponses: Map<number, {
-    resolve: (value: unknown) => void;
-    reject: (error: Error) => void;
-  }> | null = null;
+  private _pendingResponses: Map<number, PendingResponseEntry> | null = null;
 
   /** Handle an incoming OPERATION message: execute locally and send response. */
   private _handleRemoteOperation(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION' }>): void {
@@ -896,16 +899,53 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return message.senderId ?? null;
   }
 
+  private _startInvocationSweeper(): void {
+    if (this._invocationSweepHandle !== null) {
+      return;
+    }
+    this._invocationSweepHandle = setInterval(() => {
+      this._sweepPendingResponses();
+    }, INVOCATION_SWEEP_INTERVAL_MS);
+  }
+
+  private _stopInvocationSweeper(): void {
+    if (this._invocationSweepHandle === null) {
+      return;
+    }
+    clearInterval(this._invocationSweepHandle);
+    this._invocationSweepHandle = null;
+  }
+
+  private _sweepPendingResponses(now: number = Date.now()): void {
+    if (this._pendingResponses === null) {
+      return;
+    }
+    for (const [callId, pending] of this._pendingResponses) {
+      if (now - pending.createdAt < pending.timeoutMs) {
+        continue;
+      }
+      this._pendingResponses.delete(callId);
+      pending.reject(new Error(`Operation timed out (callId=${callId})`));
+    }
+  }
+
+  private _addressKey(address: Address): string {
+    return `${address.getHost()}:${address.getPort()}`;
+  }
+
+  private _rebuildAddressToMemberIdCache(): void {
+    this._addressToMemberId.clear();
+    if (this._clusterCoordinator === null) {
+      return;
+    }
+    for (const member of this._cluster.getMembers()) {
+      this._addressToMemberId.set(this._addressKey(member.getAddress()), member.getUuid());
+    }
+  }
+
   /** Find the member ID for a given address. */
   private _findMemberIdByAddress(target: Address): string | null {
-    if (this._clusterCoordinator === null) return null;
-    const members = this._cluster.getMembers();
-    for (const member of members) {
-      if (member.getAddress().equals(target)) {
-        return member.getUuid();
-      }
-    }
-    return null;
+    return this._addressToMemberId.get(this._addressKey(target)) ?? null;
   }
 
   private _initBlitzLifecycle(): void {
@@ -1606,6 +1646,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   shutdown(): void {
     this._running = false;
     this._blitzAuthorityEpoch += 1;
+    this._stopInvocationSweeper();
     // Shut down all executor containers + proxies (fire-and-forget the promises)
     for (const [name, exec] of Array.from(this._executors.entries())) {
       const container = this._executorContainers.get(name)

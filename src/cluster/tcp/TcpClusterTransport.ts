@@ -21,6 +21,14 @@ import { ScatterSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/S
 import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
 
+interface FrameDecoderState {
+    buffer: Buffer;
+    readOffset: number;
+    writeOffset: number;
+}
+
+const INITIAL_READ_BUFFER_SIZE = 64 * 1024;
+
 export class TcpClusterTransport {
     private readonly _nodeId: string;
     private readonly _strategy: SerializationStrategy;
@@ -37,7 +45,7 @@ export class TcpClusterTransport {
      * Per-channel receive buffer: accumulates raw bytes until a complete
      * length-prefixed frame can be extracted.
      */
-    private readonly _buffers = new Map<EventloopChannel, Buffer>();
+    private readonly _buffers = new Map<EventloopChannel, FrameDecoderState>();
 
     // ── External callbacks (set by HeliosInstanceImpl) ────────────────────
 
@@ -168,7 +176,7 @@ export class TcpClusterTransport {
         const payload = await this._scatterStrategy.serializeAsync(msg);
         const frame = Buffer.allocUnsafe(4 + payload.length);
         frame.writeUInt32BE(payload.length, 0);
-        payload.copy(frame, 4);
+        frame.set(payload, 4);
         return ch.write(frame);
     }
 
@@ -216,12 +224,16 @@ export class TcpClusterTransport {
         const payload = this._strategy.serialize(msg);
         const frame = Buffer.allocUnsafe(4 + payload.length);
         frame.writeUInt32BE(payload.length, 0);
-        payload.copy(frame, 4);
+        frame.set(payload, 4);
         return ch.write(frame);
     }
 
     private _onConnect(ch: EventloopChannel): void {
-        this._buffers.set(ch, Buffer.alloc(0));
+        this._buffers.set(ch, {
+            buffer: Buffer.allocUnsafe(INITIAL_READ_BUFFER_SIZE),
+            readOffset: 0,
+            writeOffset: 0,
+        });
         // Immediately announce this node's identity
         this._sendMsg(ch, { type: 'HELLO', nodeId: this._nodeId });
     }
@@ -238,16 +250,30 @@ export class TcpClusterTransport {
     }
 
     private _onData(ch: EventloopChannel, incoming: Buffer): void {
-        // Copy incoming data (Eventloop docs: data view is only valid during callback)
-        let buf = this._buffers.get(ch) ?? Buffer.alloc(0);
-        buf = Buffer.concat([buf, Buffer.from(incoming)]);
+        if (incoming.length === 0) {
+            return;
+        }
 
-        while (buf.length >= 4) {
-            const msgLen = buf.readUInt32BE(0);
-            if (buf.length < 4 + msgLen) break;
+        const state = this._buffers.get(ch) ?? {
+            buffer: Buffer.allocUnsafe(INITIAL_READ_BUFFER_SIZE),
+            readOffset: 0,
+            writeOffset: 0,
+        };
+        this._buffers.set(ch, state);
 
-            const msgBytes = buf.subarray(4, 4 + msgLen);
-            buf = buf.subarray(4 + msgLen);
+        this._ensureReadCapacity(state, incoming.length);
+        incoming.copy(state.buffer, state.writeOffset);
+        state.writeOffset += incoming.length;
+
+        while (state.writeOffset - state.readOffset >= 4) {
+            const msgLen = state.buffer.readUInt32BE(state.readOffset);
+            if (state.writeOffset - state.readOffset < 4 + msgLen) break;
+
+            const msgBytes = state.buffer.subarray(
+                state.readOffset + 4,
+                state.readOffset + 4 + msgLen,
+            );
+            state.readOffset += 4 + msgLen;
 
             try {
                 const msg = this._strategy.deserialize(msgBytes);
@@ -257,7 +283,35 @@ export class TcpClusterTransport {
             }
         }
 
-        this._buffers.set(ch, buf);
+        if (state.readOffset === state.writeOffset) {
+            state.readOffset = 0;
+            state.writeOffset = 0;
+        }
+    }
+
+    private _ensureReadCapacity(state: FrameDecoderState, incomingLength: number): void {
+        const unreadBytes = state.writeOffset - state.readOffset;
+        const requiredCapacity = unreadBytes + incomingLength;
+
+        if (requiredCapacity <= state.buffer.length) {
+            if (state.readOffset > 0 && state.writeOffset + incomingLength > state.buffer.length) {
+                state.buffer.copy(state.buffer, 0, state.readOffset, state.writeOffset);
+                state.readOffset = 0;
+                state.writeOffset = unreadBytes;
+            }
+            return;
+        }
+
+        let nextCapacity = state.buffer.length;
+        while (nextCapacity < requiredCapacity) {
+            nextCapacity *= 2;
+        }
+
+        const nextBuffer = Buffer.allocUnsafe(nextCapacity);
+        state.buffer.copy(nextBuffer, 0, state.readOffset, state.writeOffset);
+        state.buffer = nextBuffer;
+        state.readOffset = 0;
+        state.writeOffset = unreadBytes;
     }
 
     private _handleMsg(ch: EventloopChannel, msg: ClusterMessage): void {

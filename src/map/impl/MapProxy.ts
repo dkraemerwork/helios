@@ -202,11 +202,10 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
+        const partitionId = this._partitionIdForKeyData(kd);
         // Read old value for index removal before overwrite
-        const oldValue = this.containsKey(key) ? await this._readCurrentValue(key) : null;
-        await this._invokeOnKeyPartition<void>(
-            new SetOperation(this._name, kd, vd, -1, -1), kd,
-        );
+        const oldValue = await this._readCurrentValueByData(kd, partitionId);
+        await this._invokeOnPartition<void>(new SetOperation(this._name, kd, vd, -1, -1), partitionId);
         // MapStore write now happens inside SetOperation on the partition owner
         this._updateIndex(key, value, oldValue);
         if (oldValue === null) {
@@ -248,12 +247,11 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     async delete(key: K): Promise<void> {
         await this._ensureMapDataStore();
-        // Read old value for index removal before delete
-        const oldValue = await this._readCurrentValue(key);
         const kd = this._toData(key);
-        const removed = await this._invokeOnKeyPartition<boolean>(
-            new DeleteOperation(this._name, kd), kd,
-        );
+        const partitionId = this._partitionIdForKeyData(kd);
+        // Read old value for index removal before delete
+        const oldValue = await this._readCurrentValueByData(kd, partitionId);
+        const removed = await this._invokeOnPartition<boolean>(new DeleteOperation(this._name, kd), partitionId);
         // MapStore delete now happens inside DeleteOperation on the partition owner
         if (removed && oldValue !== null) {
             this._removeFromIndex(key, oldValue);
@@ -265,7 +263,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     containsKey(key: K): boolean {
         const kd = this._toData(key);
-        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+        const partitionId = this._partitionIdForKeyData(kd);
         const store = this._containerService.getOrCreateRecordStore(this._name, partitionId);
         return store.containsKey(kd);
     }
@@ -565,11 +563,19 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Read the current value for a key without going through get() (no load-on-miss). */
     private async _readCurrentValue(key: K): Promise<V | null> {
         const kd = this._toData(key);
-        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+        const partitionId = this._partitionIdForKeyData(kd);
+        return this._readCurrentValueByData(kd, partitionId);
+    }
+
+    private async _readCurrentValueByData(keyData: Data, partitionId: number): Promise<V | null> {
         const store = this._containerService.getOrCreateRecordStore(this._name, partitionId);
-        const data = store.get(kd);
+        const data = store.get(keyData);
         if (data === null) return null;
         return this._toObject<V>(data);
+    }
+
+    private _partitionIdForKeyData(keyData: Data): number {
+        return this._nodeEngine.getPartitionService().getPartitionId(keyData);
     }
 
     // ── Indexed query helpers ────────────────────────────────────────────
