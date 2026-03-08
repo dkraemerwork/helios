@@ -15,6 +15,7 @@ import type { InternalPartitionImpl } from '@zenystx/helios-core/internal/partit
 import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
 import { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
 import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/InternalPartition';
+import { MAX_BACKUP_COUNT } from '@zenystx/helios-core/internal/partition/IPartition';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
 import type { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
@@ -132,8 +133,14 @@ export class InternalPartitionServiceImpl {
     private _antiEntropyRunning = false;
     /** Anti-entropy interval handle. */
     private _antiEntropyTimer: ReturnType<typeof setInterval> | null = null;
-    /** Configured backup count from last firstArrangement. */
-    private _backupCount = 0;
+    /**
+     * Partition-table backup count.
+     * Hazelcast always allocates MAX_BACKUP_COUNT (6) replica slots in the
+     * partition table topology. Per-data-structure backupCount (MapConfig,
+     * QueueConfig, etc.) controls which slots receive actual data replication
+     * at the operation layer.
+     */
+    private _backupCount: number = MAX_BACKUP_COUNT;
     /** Wired replica manager for anti-entropy dispatch. */
     private _replicaManager: PartitionReplicaManager | null = null;
     /** Local member UUID for identifying locally-owned partitions. */
@@ -195,7 +202,17 @@ export class InternalPartitionServiceImpl {
 
     // ── Partition table lifecycle ────────────────────────────────
 
-    firstArrangement(members: Member[], _masterAddress: Address, backupCount: number = 0): void {
+    /**
+     * Initial partition assignment.
+     *
+     * In production, always called with backupCount = MAX_BACKUP_COUNT (6),
+     * matching Hazelcast's behaviour: the partition table always allocates
+     * all replica slots regardless of per-data-structure backupCount.
+     *
+     * The optional parameter is retained for unit tests that need to verify
+     * specific backup topologies (e.g., 2 members with backupCount=1).
+     */
+    firstArrangement(members: Member[], _masterAddress: Address, backupCount: number = MAX_BACKUP_COUNT): void {
         this._backupCount = backupCount;
         this._stateManager.initializePartitionAssignments(members, backupCount);
         this._initialized = true;

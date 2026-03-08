@@ -105,14 +105,24 @@ export class HeapNearCacheRecordMap<K, R extends NearCacheRecord> {
         const total = this._map.size;
         if (total === 0) return [];
         const n = Math.min(sampleCount, total);
-        const entries = Array.from(this._map.entries());
-        // Fisher-Yates partial shuffle for a random sample
-        for (let i = 0; i < n; i++) {
-            const j = i + Math.floor(Math.random() * (total - i));
-            const tmp = entries[i];
-            entries[i] = entries[j];
-            entries[j] = tmp;
+
+        const samples: Array<[K, R]> = [];
+        let seen = 0;
+
+        for (const entry of this._map.entries()) {
+            if (seen < n) {
+                samples.push(entry);
+                seen++;
+                continue;
+            }
+
+            const replaceIndex = Math.floor(Math.random() * (seen + 1));
+            if (replaceIndex < n) {
+                samples[replaceIndex] = entry;
+            }
+            seen++;
         }
-        return entries.slice(0, n);
+
+        return samples;
     }
 }

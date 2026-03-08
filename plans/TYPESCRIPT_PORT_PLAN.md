@@ -1084,6 +1084,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
 - [x] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
 - [ ] **Phase 23 checkpoint** — All Blitz job supervision tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; `blitz.newJob()` returns a BlitzJob with full Jet-parity lifecycle; streaming runtime engine drives data through DAG with source/operator/sink processors connected by AsyncChannel (local) and NATS (distributed) edges; Chandy-Lamport barrier snapshots provide exactly-once and at-least-once guarantees; master-supervised coordination with Helios fencing; auto-scaling with debounced restart on member join/leave; master failover resumes from IMap; job metrics collected cross-member; light jobs work without coordination; NestJS bridge proxies all new methods; no `BlitzJob` method is a throw-stub or deferred placeholder; no processor, channel, edge, or coordinator method is a fake or mock implementation; no public API returns hardcoded zeros or placeholder data; distributed edges use real NATS transport (not in-memory mocks); snapshot store uses real NATS KV; docs/examples/exports only claim behavior that is actually wired; no stubs, no deferrals, no mock implementations
+- [ ] **Block 24.FINAL** — Phase 22/23 execution-contract audit + repo honesty closure (reopen earlier blocks/checkpoints on mismatch, no retained throw stubs/placeholders/deferred markers on claimed surfaces, no stale docs/examples/test-support/export claims, no fake/shared-process proof, cross-plan contradiction resolution for `SCHEDULED_EXECUTOR_IMPLEMENTATION_PLAN.md` and `packages/blitz/PLAN-job-supervision.md`, fresh same-branch proof including all Phase 17R-21 commands plus Phase 22/23 commands, repo-wide honesty audits, independent final verification agent, final footer `PHASE-22-FINAL: PASS` / `PHASE-23-FINAL: PASS` / `REPO-HONESTY-SWEEP-22-23: PASS` / `INDEPENDENT-FINAL-VERIFICATION-22-23: PASS`) — final closure gate
 
 ## Phase 23 — Blitz Job Supervision (Hazelcast Jet-Parity Autonomous Job Lifecycle)
 
@@ -1327,9 +1328,38 @@ Depends on: Block 23.12 (full integration).
 - [x] Full regression: `bun test` at root — 0 fail, 0 error
 - [x] Run a verification task that proves the full Blitz job supervision feature is production ready, end to end, and free of stubs, mock implementations, fake fallbacks, deferred methods, or unwired runtime paths; every `BlitzJob` lifecycle method must be wired through real coordinator/executor/snapshot paths; data must flow through real processors and channels; distributed edges must use real NATS; no public API method may throw `UnsupportedOperationError` or return placeholder values: `bun test` at root green, `bun run typecheck` clean
 
+### Block 24.FINAL — Phase 22/23 execution-contract audit + repo honesty closure
+
+Goal: apply the same closure discipline from Block 21.5 to the Phase 22 and Phase 23 work, ensuring no
+stale claims, fake proofs, or documentation drift remain after the scheduled executor and Blitz job
+supervision implementations landed.
+
+Tasks:
+
+- [ ] Audit Phases 22-23 end to end across code, tests, docs, examples, test-support, exports, config/bootstrap wiring, and authoritative plans; if any claimed behavior, proof, export, config path, lifecycle path, or parity statement is missing, partial, stale, contradicted, or implemented differently than claimed, reopen the affected block and checkpoint before doing more closure work.
+- [ ] Remove or fully implement every retained throw stub, placeholder, fake fallback, deferred marker, `TODO`/`FIXME`/`later`/`not yet` shipping path, and every public or test-support surface that still depends on one of those markers for Phases 22-23 claimed behavior.
+- [ ] Resolve every contradictory status across this file, `plans/SCHEDULED_EXECUTOR_IMPLEMENTATION_PLAN.md`, `packages/blitz/PLAN-job-supervision.md`, `plans/DISTRIBUTED_EXECUTOR_PLAN.md`, and `plans/CLIENT_E2E_PARITY_MATRIX.md`; no block, checkpoint, appendix, matrix, or backlog may claim complete/retained/deferred status that conflicts with repo reality or with another canonical plan.
+- [ ] Rerun fresh same-branch proof after the last change to code, tests, docs, `README.md`, examples, test-support, exports, `package.json`, config/bootstrap wiring, or authoritative plans. Final closure is invalid if it relies on historical proof, partial reruns, or "covered by previous run" wording.
+- [ ] Rerun and report at minimum these commands, all green, on the final tree:
+  `bun run typecheck`; `bun test`; `bun test packages/blitz/`;
+  `bun test test/scheduledexecutor/`;
+  `bun test test/blitz/job/`;
+  `bun test test/config/ScheduledExecutorConfigTest.test.ts`;
+  plus all Phase 17R-21 proof commands from Block 21.5.
+- [ ] Rerun and report these exact repo-wide honesty audits on the final tree, review every hit, and classify each one as exactly one of `ALLOWED-RETAINED-LABEL`, `TEST-ONLY`, `DOC-HISTORICAL`, or `FAIL`:
+  `rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!.git/**' --glob '!plans/**' "(not yet implemented|deferred|blocked-by-server)" .`
+  `rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!.git/**' --glob '!plans/**' "(stub|placeholder|TODO|FIXME|throw new Error\(|throw new UnsupportedOperation|NYI|not implemented)" src packages examples test README.md .`
+- [ ] Verify package-export honesty and surface honesty together for Phases 22-23: `package.json` exports, root barrels, public entrypoints, docs, examples, fixtures, and test-support must expose only supported finished surfaces.
+- [ ] In the end, run an independent final verification with a fresh general-task agent that reviews code, tests, docs, examples, test-support, exports, plans, and final proof outputs for Phases 22-23. If that verification finds any gap, contradiction, stale claim, fake proof, or unresolved marker, reopen the affected block/checkpoint and continue the loop until the verifier returns clean.
+- [ ] Emit the final closure footer exactly in this order, on separate lines, with no substitutions:
+  `PHASE-22-FINAL: PASS`
+  `PHASE-23-FINAL: PASS`
+  `REPO-HONESTY-SWEEP-22-23: PASS`
+  `INDEPENDENT-FINAL-VERIFICATION-22-23: PASS`
+
 ## End-to-End Completion Requirements
 
-Phases 17R-21 and `Block 21.5` are not complete unless all of the following are true:
+Phases 17R-23 are not complete unless all of the following are true:
 
 - distributed executor task bodies run off-main-thread through a real Scatter-backed execution path in production, with the main Bun event loop limited to transport, routing, backpressure, and response correlation
 - no distributed executor path falls back to direct factory invocation or silent inline execution on the main event loop
@@ -1390,6 +1420,38 @@ Phases 17R-21 and `Block 21.5` are not complete unless all of the following are 
   unresolved `FAIL`
 - an independent final verification general-task agent has re-reviewed the final tree and returned
   clean with no reopened gaps
+
+- `IScheduledExecutorService` is a real member-side product surface with Hazelcast-parity partition-owned durable scheduling, fixed-rate periodic tasks, member-owned scheduling, and full client protocol codec support
+- `getScheduledExecutorService(name)` returns a real proxy, not a deferred-feature throw or a stub
+- scheduled task state machine enforces legal transitions only, and versioned terminal-write ordering resolves cancel/dispose vs completion races deterministically
+- partition-owned scheduled tasks survive migration with epoch fencing: the old owner cannot fire after fencing, the promoted owner decides catch-up/replay, and epoch increments on every ownership change
+- durable create waits for real backup acknowledgments controlled by `durability` config before acknowledging to callers
+- fixed-rate cadence is timeline-aligned, no-overlap skip prevents double-fire, and exception suppression is terminal for the periodic task
+- crash recovery replays from real replicated state with at-least-once semantics for one-shot tasks and coalesced catch-up for periodic tasks; stale completions from the old owner are rejected by version/attempt fencing
+- member-owned tasks are lifecycle-bound to the target member: member departure loses the task (Hazelcast parity), not silently migrated
+- anti-entropy repair for scheduled executor metadata follows highest-epoch-then-highest-version conflict resolution, tombstones prevent resurrection of disposed tasks, and repair triggers on ownership events
+- `ClientScheduledExecutorProxy` and 8 scheduled executor codec files provide full client protocol parity for schedule, cancel, dispose, get-state, get-stats, get-all-scheduled-futures, submit-to-member, and shutdown
+- `ScheduledTaskStatistics` reports real execution metrics, not hardcoded zeros or placeholder values
+- `StatefulTask` is documented as a known first-release parity gap; no code, docs, or examples imply it is supported
+- no `IScheduledExecutorService` or `IScheduledFuture` method is a throw-stub, deferred placeholder, or unwired passthrough
+
+- `blitz.newJob(pipeline, config)` returns a `BlitzJob` with full Hazelcast Jet-parity lifecycle: join, cancel, suspend, resume, restart, exportSnapshot, getMetrics, addStatusListener
+- `blitz.newLightJob(pipeline)` returns a lightweight single-member job with no coordination overhead
+- `blitz.getJob(id)`, `blitz.getJob(name)`, `blitz.getJobs()`, `blitz.getJobs(name)` provide job lookup from IMap-stored `JobRecord` instances
+- job lifecycle state machine matches Jet exactly: NOT_RUNNING → STARTING → RUNNING → COMPLETING → COMPLETED (batch), plus RESTARTING, SUSPENDED_EXPORTING_SNAPSHOT, SUSPENDED, FAILED, CANCELLED
+- streaming runtime engine drives data through the DAG: SourceProcessor → OperatorProcessor → SinkProcessor, connected by bounded `AsyncChannel` queues for local edges and NATS subjects for distributed edges
+- distributed edges use NATS JetStream for durable delivery (AT_LEAST_ONCE / EXACTLY_ONCE) or core NATS pub/sub for fire-and-forget (NONE); no distributed edge path uses in-memory mocks or local-only shortcuts
+- Chandy-Lamport barrier snapshot protocol provides exactly-once processing: barrier alignment buffers post-barrier items until all inputs report (exactly-once), immediate save for at-least-once, barriers dropped for none
+- snapshot state is stored in real NATS KV buckets, not in-memory fakes
+- master-supervised job coordination via `BlitzJobCoordinator` uses the Helios fencing pattern `(masterMemberId, memberListVersion, fenceToken)` for all authoritative operations
+- auto-scaling handles member loss (restart from last snapshot) and member join (debounced restart with `scaleUpDelayMillis`)
+- master failover reads `JobRecord` instances from IMap and resumes coordination for RUNNING jobs
+- split-brain protection suspends protected jobs on the minority side
+- per-vertex job metrics (itemsIn/Out, queueSize, p50/p99/max latency, snapshot metrics) are collected via ITopic request/reply and aggregated cross-member by `MetricsCollector`
+- NestJS bridge (`HeliosBlitzService`) proxies `newJob`, `newLightJob`, `getJob`, `getJobs` as real delegates to the Helios-owned `BlitzService` instance
+- `BlitzEvent` includes all job lifecycle events: JOB_STARTED, JOB_COMPLETED, JOB_FAILED, JOB_CANCELLED, JOB_SUSPENDED, JOB_RESTARTING, SNAPSHOT_STARTED, SNAPSHOT_COMPLETED
+- `Pipeline.toDescriptor()` serializes the full DAG losslessly; `Edge` supports fluent `.distributed()`, `.partitioned(keyFn)`, `.broadcast()`, `.allToOne()` configuration
+- no `BlitzJob` method is a throw-stub or deferred placeholder; no processor, channel, edge, or coordinator method is a fake or mock implementation
 
 ## Cross-File Wiring That Must Not Be Missed
 
@@ -1577,6 +1639,67 @@ When implementing Phase 23, verify all relevant surfaces, not just `packages/bli
 - `README.md`
 - `examples/native-app/`
 
+## Known Deferrals and Future Work
+
+This section consolidates all explicitly deferred items across the v1 port. Each item is documented
+in at least one authoritative location. No item here is a hidden gap — every deferral was a
+deliberate scope decision.
+
+### Deferred to v2
+
+| Item | Authoritative Source | Reason |
+|------|---------------------|--------|
+| SQL Engine | `plans/V1_TYPESCRIPT_PORT_PLAN.md` | Requires porting Apache Calcite (~500k lines of Java); `getSql()` throws deterministic error |
+| CP Subsystem (Raft) | `plans/V1_TYPESCRIPT_PORT_PLAN.md` | FencedLock, IAtomicLong, ISemaphore, ICountDownLatch — significant consensus protocol work; `getCPSubsystem()` throws deterministic error |
+| `IDurableExecutorService` | `plans/DISTRIBUTED_EXECUTOR_PLAN.md` | Ring-buffer replicated executor; Phase 17 covers Tier 1 (immediate, non-durable) only |
+| TLS support | `plans/V1_TYPESCRIPT_PORT_PLAN.md` | Will use `Bun.serve({ tls })` |
+| Authentication / JWT / security realm | `plans/V1_TYPESCRIPT_PORT_PLAN.md` | Full auth stack deferred |
+| Split-brain merge policies | `plans/MULTI_NODE_RESILIENCE_PLAN.md` | Detection is implemented; merge policies require sophisticated conflict resolution |
+| Phi-Accrual failure detector | `plans/MULTI_NODE_RESILIENCE_PLAN.md` | Using Deadline detector; Phi-Accrual is an accuracy improvement |
+| Partial disconnection detection | `plans/MULTI_NODE_RESILIENCE_PLAN.md` | Requires master-aggregated connectivity graph |
+| Chunked migration | `plans/MULTI_NODE_RESILIENCE_PLAN.md` | Using full-state transfer; chunked is a performance optimization |
+| Merkle-tree differential sync | `plans/MULTI_NODE_RESILIENCE_PLAN.md` | Using full state transfer; differential is a bandwidth optimization |
+
+### Known First-Release Parity Gaps
+
+| Item | Authoritative Source | Detail |
+|------|---------------------|--------|
+| `StatefulTask` | `plans/SCHEDULED_EXECUTOR_IMPLEMENTATION_PLAN.md` (Decision #29) | Hazelcast `StatefulTask<K,V>` save/restore callbacks not implemented; apps must persist task state externally |
+| `scheduleWithFixedDelay(...)` | Phase 22 Block 22.1 | Not part of Hazelcast `IScheduledExecutorService` parity |
+
+### NOT-RETAINED Remote Client Surfaces
+
+These surfaces were narrowed out of the shared `HeliosInstance` contract during Phase 20 and remain
+member-only on `HeliosInstanceImpl`. The `DEFERRED_CLIENT_FEATURES` constant in
+`src/client/HeliosClient.ts` is the programmatic source of truth.
+
+| Surface | Reason |
+|---------|--------|
+| `getReliableTopic()` | No server-side reliable-topic client protocol handler |
+| `getExecutorService()` | No server-side executor client protocol handler |
+| `getScheduledExecutorService()` | Member-side only; server-side client protocol not wired for remote access |
+| `getList()`, `getSet()`, `getMultiMap()`, `getReplicatedMap()` | Local-only implementations, no distributed service backing |
+
+### Blocked-by-Server Client Features
+
+These require server-side runtime work before the remote client can support them.
+
+| Surface | Blocker |
+|---------|---------|
+| Cache / JCache | Server cache runtime absent |
+| Query cache | Server query-cache runtime absent |
+| Transactions | Cluster-safe transaction semantics absent |
+| SQL | SQL engine deferred to v2 |
+| PN counter | Server runtime absent |
+| Flake ID generator | Server runtime absent (`crypto.randomUUID()` replacement) |
+| Cardinality estimator | Server runtime absent |
+
+### Not Porting (Permanent)
+
+OSGi, WAN replication, CRDT, vector search, durable executor (ring-buffer tier), flake ID generator,
+data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise), legacy Java extension
+modules (Kafka, Hadoop, Avro, CDC, gRPC, Kinesis, Python connectors).
+
 ## Commit Convention
 
 ```text
@@ -1587,6 +1710,6 @@ refactor(<module>): <what changed>
 
 ## Plan Note
 
-This file intentionally contains only the remaining master work.
+This file intentionally contains only the remaining master work and the consolidated deferrals inventory.
 
 The archived v1 plan is preserved at `plans/V1_TYPESCRIPT_PORT_PLAN.md`.

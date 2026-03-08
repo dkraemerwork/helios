@@ -482,7 +482,11 @@ export class HeliosClusterCoordinator {
     const members = this._clusterService.getMembers();
     const masterAddress =
       this._clusterService.getMasterAddress() ?? this._localAddress;
-    freshPartitionService.firstArrangement(members, masterAddress, 6);
+    // Hazelcast always allocates MAX_BACKUP_COUNT (6) replica slots in the
+    // partition table — the topology is independent of per-map backupCount.
+    // Per-data-structure backupCount (MapConfig, QueueConfig, etc.) controls
+    // which slots receive actual data replication at the operation layer.
+    freshPartitionService.firstArrangement(members, masterAddress);
     for (
       let partitionId = 0;
       partitionId < freshPartitionService.getPartitionCount();

@@ -52,7 +52,8 @@ Server capability reality from the current codebase:
 - `list`, `set`, `multimap`, `replicated map`: current implementations are explicitly single-node/in-memory subsets, so remote parity is blocked until member-side distributed semantics exist.
 - `executor service`: current API exists, but it includes Helios-specific local-only registration and inline execution behavior that is not remotely portable; remote executor parity is blocked until a real member-targeted client protocol and callable serialization model exist.
 - `transactions`: current service is still documented as single-node-oriented, so remote transactional client parity is blocked until server-side transactional guarantees are cluster-safe.
-- `reliable topic`, `SQL`, `CP`, `scheduled executor`, `PN counter`, `flake ID`: not currently present as releaseable server features and must remain unsupported or deferred unless server runtime lands first. Reliable topic is specifically blocked for client-readiness purposes until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`.
+- `reliable topic`, `SQL`, `CP`, `PN counter`, `flake ID`: not currently present as releaseable server features and must remain unsupported or deferred unless server runtime lands first. Reliable topic is specifically blocked for client-readiness purposes until the Phase 19T checkpoint is green in `plans/TYPESCRIPT_PORT_PLAN.md`.
+- `scheduled executor`: server runtime delivered in Phase 22; remote client exposure (`HeliosClient.getScheduledExecutorService()`) remains deferred pending client-protocol wiring.
 
 Conclusion: current `src/client` is a foundation library and test harness, not a remote client product.
 
@@ -83,7 +84,8 @@ Conclusion: current `src/client` is a foundation library and test harness, not a
 - transactions: blocked-by-server today
 - JCache client: blocked pending honest audit of member-side cache service, client cache manager, and binary protocol support
 - query cache: blocked until both map query-cache server runtime and client listener/event stack exist
-- SQL, reliable topic, flake ID, PN counter, scheduled executor, CP: unsupported or deferred unless server runtime lands before client GA; reliable topic remains blocked until Phase 19T is green
+- SQL, reliable topic, flake ID, PN counter, CP: unsupported or deferred unless server runtime lands before client GA; reliable topic remains blocked until Phase 19T is green
+- scheduled executor: server runtime live (Phase 22); remote client `HeliosClient` exposure deferred pending client-protocol wiring
 
 ### 2.3 Unsupported-By-Design Rules
 

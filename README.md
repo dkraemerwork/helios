@@ -528,7 +528,6 @@ All four implement the same `MapStore` interface — swap backends without chang
 | ----------------------- | ----------------------------------------------------------------- |
 | **SQL Engine**          | Requires porting Apache Calcite (~500k lines of Java)             |
 | **CP Subsystem (Raft)** | Strong consistency via Raft consensus — significant protocol work |
-| **Scheduled Executor**  | Distributed cron-style task execution                             |
 
 ### Not Porting
 

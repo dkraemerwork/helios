@@ -257,9 +257,9 @@ describe('Deferred service stubs', () => {
         expect(() => (hz as unknown as Record<string, () => void>).getCPSubsystem()).toThrow(/cp.*not supported|deferred/i);
     });
 
-    it('getScheduledExecutorService() throws a deferred-feature error', async () => {
+    it('getScheduledExecutorService() returns a working proxy', async () => {
         const hz = await Helios.newInstance();
-        expect(() => (hz as unknown as Record<string, (...args: unknown[]) => void>).getScheduledExecutorService('s1'))
-            .toThrow(/scheduledexecutor.*not supported|deferred/i);
+        const sched = (hz as unknown as Record<string, (...args: unknown[]) => unknown>).getScheduledExecutorService('s1');
+        expect(sched).toBeDefined();
     });
 });

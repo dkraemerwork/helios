@@ -19,8 +19,8 @@ executor for Helios. It must support:
 - off-main-thread task execution via `@zenystx/scatterjs` `scatter.pool()` worker threads
 - bounded queueing, bounded worker-pool growth, cancellation, shutdown, and monitoring
 
-This phase does not deliver durable replay or scheduled execution. `IDurableExecutorService`
-and `IScheduledExecutorService` stay deferred to Phase 18+.
+This phase does not deliver durable replay. `IDurableExecutorService` stays deferred to v2.
+`IScheduledExecutorService` was delivered separately in Phase 22.
 
 ## Loop Contract
 
@@ -733,7 +733,7 @@ Expose the executor through the public instance facade and integrate lifecycle c
 - register `ExecutorContainerService` with `NodeEngine`
 - expose any missing cluster service runtime needed by executor code
 - wire executor draining into node shutdown path via awaited shutdown hook
-- keep `getScheduledExecutorService()` as a deterministic stub
+- `getScheduledExecutorService()` is now a real proxy (delivered in Phase 22)
 - use `ExecutorServicePermission` when the broader security enforcement path is active
 
 If needed for graceful shutdown, add `shutdownAsync(): Promise<void>` to `HeliosInstance` or
@@ -746,7 +746,7 @@ If needed for graceful shutdown, add `shutdownAsync(): Promise<void>` to `Helios
 - executor service registered in node engine
 - shutdown path awaits executor drain hook
 - named executors coexist with different configs
-- scheduled executor stub message stays explicit and deterministic
+- scheduled executor proxy returns a working service (Phase 22)
 
 ---
 
@@ -1052,15 +1052,13 @@ Reopened executor closure is not ready unless all of the following are true:
 
 ---
 
-## Scope Exclusions
+## Scope Exclusions and Delivery Status
 
-Deferred to Phase 18+:
+Deferred to v2:
 
 - `IDurableExecutorService`
-- `IScheduledExecutorService`
 - task result retrieval after submitter death
 - durable ring-buffer replication of submitted tasks
-- periodic/stateful scheduled task containers
 
 Not accepted in Phase 17:
 
@@ -1068,6 +1066,10 @@ Not accepted in Phase 17:
 - remote inline function execution
 - unbounded `queueCapacity = 0` semantics
 - transparent replay after accepted remote task loss
+
+Delivered separately:
+
+- `IScheduledExecutorService` — delivered in Phase 22 (`plans/SCHEDULED_EXECUTOR_IMPLEMENTATION_PLAN.md`)
 
 ## Historical Success Criteria
 
@@ -1080,4 +1082,4 @@ Not accepted in Phase 17:
 7. Member-targeted no-retry and partition-targeted pre-acceptance retry are both enforced.
 8. Phase 17 tests pass and the full repository stays green.
 
-*Plan v2.2 - updated 2026-03-05 | Scope: Phase 17 Tier 1 only | Contract: immediate, non-durable, non-scheduled distributed executor | Canonical queue: `plans/TYPESCRIPT_PORT_PLAN.md` Master Todo | Deferred: durable executor + scheduled executor (Phase 18+)*
+*Plan v2.3 - updated 2026-03-08 | Scope: Phase 17 Tier 1 only | Contract: immediate, non-durable distributed executor | Canonical queue: `plans/TYPESCRIPT_PORT_PLAN.md` Master Todo | Deferred: durable executor (v2) | Scheduled executor: delivered in Phase 22*

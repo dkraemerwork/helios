@@ -3,7 +3,7 @@
  *
  * Tests: getExecutorService(name) returns cached proxy, config applied by name,
  * executor registered in node engine, shutdown drains executor, named executors
- * coexist, scheduled executor stub is deterministic.
+ * coexist, scheduled executor returns a working proxy.
  */
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';

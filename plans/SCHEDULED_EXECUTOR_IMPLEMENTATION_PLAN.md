@@ -4,23 +4,22 @@
 
 This plan defines the full Helios implementation path for `IScheduledExecutorService`.
 
-Today Helios ships only the immediate distributed executor (`IExecutorService`). Scheduled
-execution is still deferred and the current `getScheduledExecutorService()` surface is an
-explicit stub. This file turns that deferment into an executable roadmap.
+This plan defined the full implementation path for `IScheduledExecutorService`, delivered in
+Phase 22. The scheduled executor is now production-ready with partition-owned durable scheduling,
+fixed-rate periodic tasks, member-owned scheduling, full client parity, and migration/recovery.
 
 Primary parity target: mirror Hazelcast's scheduled-executor product model and behavioral contract
 from `helios-1`, while implementing it with Helios-native TypeScript runtime pieces.
 
-## Current Reality
+## Implementation Status
 
-- `src/instance/impl/HeliosInstanceImpl.ts` exposes `getScheduledExecutorService()` only as a
-  deterministic deferred-feature error.
-- `plans/DISTRIBUTED_EXECUTOR_PLAN.md` and `plans/V1_TYPESCRIPT_PORT_PLAN.md` explicitly defer
-  scheduled execution after the current immediate executor tier.
-- The current executor runtime is useful but intentionally incomplete for scheduling: it provides
-  task registration, remote routing, worker execution, cancellation, and result envelopes, but no
-  durable schedule state, no timer wheel / trigger engine, and no migration-aware scheduled-task
-  ownership model.
+- `src/instance/impl/HeliosInstanceImpl.ts` exposes `getScheduledExecutorService()` as a real
+  `ScheduledExecutorServiceProxy` backed by `ScheduledExecutorContainerService`.
+- `src/client/proxy/ClientScheduledExecutorProxy.ts` provides the client-side proxy with full
+  parity for scheduling, handler reacquisition, and lifecycle.
+- The scheduled executor builds on the Phase 17 executor runtime (task registration, remote
+  routing, worker execution, cancellation, result envelopes) and adds durable schedule state,
+  a timer-coordinated trigger engine, and migration-aware scheduled-task ownership.
 
 ## Scope
 
