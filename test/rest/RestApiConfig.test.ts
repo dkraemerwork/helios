@@ -6,16 +6,17 @@ import { describe, expect, it } from 'bun:test';
 // ─── RestEndpointGroup ────────────────────────────────────────────────────────
 
 describe('RestEndpointGroup', () => {
-    it('has exactly 4 groups', () => {
+    it('has exactly 5 groups', () => {
         const values = Object.values(RestEndpointGroup);
-        expect(values.length).toBe(4);
+        expect(values.length).toBe(5);
     });
 
-    it('contains HEALTH_CHECK, CLUSTER_READ, CLUSTER_WRITE, DATA', () => {
+    it('contains HEALTH_CHECK, CLUSTER_READ, CLUSTER_WRITE, DATA, MONITOR', () => {
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.HEALTH_CHECK);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.CLUSTER_READ);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.CLUSTER_WRITE);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.DATA);
+        expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.MONITOR);
     });
 });
 

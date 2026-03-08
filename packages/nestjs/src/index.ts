@@ -68,6 +68,10 @@ export {
 } from './context/NestAware';
 export { NestManagedContext } from './context/NestManagedContext';
 
+// ── Monitor ────────────────────────────────────────────────────────────────
+export { HeliosMonitorModule } from './monitor/HeliosMonitorModule';
+export { HeliosMonitorService } from './monitor/HeliosMonitorService';
+
 // ── Health (@nestjs/terminus) ──────────────────────────────────────────────
 export { HeliosHealthIndicator } from './health/HeliosHealthIndicator';
 export { HeliosHealthModule } from './health/HeliosHealthModule';

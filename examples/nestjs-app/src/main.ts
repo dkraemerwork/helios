@@ -172,9 +172,17 @@ if (dynamoEndpoints && dynamoEndpoints.length > 0) {
   config.addMapConfig(dynamoMapConfig);
 }
 
+// ── Enable monitoring dashboard ───────────────────────────────────────────────
+
+// Opt-in: enable the monitoring subsystem with 2-second sampling.
+// Dashboard will be served at http://localhost:8080/helios/monitor
+config.getMonitorConfig().setEnabled(true);
+config.getNetworkConfig().getRestApiConfig().setEnabled(true);
+
 // ── Start Helios + Blitz (embedded NATS) ──────────────────────────────────────
 
 const heliosInstance = await Helios.newInstance(config);
+console.log("  Monitoring dashboard: http://localhost:8080/helios/monitor");
 
 console.log("\n  Starting embedded NATS server (Blitz)...");
 const blitzService = await BlitzService.start({ embedded: {} });

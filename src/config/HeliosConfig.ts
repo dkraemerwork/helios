@@ -7,6 +7,7 @@
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { MonitorConfig } from "@zenystx/helios-core/config/MonitorConfig";
 import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig";
@@ -26,6 +27,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _ringbufferConfigs = new Map<string, RingbufferConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
+  private readonly _monitorConfig = new MonitorConfig();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
   private _configOrigin: string | null = null;
 
@@ -51,6 +53,14 @@ export class HeliosConfig implements InstanceConfig {
    */
   getNetworkConfig(): NetworkConfig {
     return this._network;
+  }
+
+  /**
+   * Returns the monitoring configuration.
+   * Monitoring is opt-in: call `getMonitorConfig().setEnabled(true)` to activate.
+   */
+  getMonitorConfig(): MonitorConfig {
+    return this._monitorConfig;
   }
 
   /**

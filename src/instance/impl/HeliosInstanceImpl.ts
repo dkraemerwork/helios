@@ -78,6 +78,7 @@ import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
 import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
 import { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
+import { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
 import { ClusterReadHandler } from "@zenystx/helios-core/rest/handler/ClusterReadHandler";
 import { ClusterWriteHandler } from "@zenystx/helios-core/rest/handler/ClusterWriteHandler";
 import type {
@@ -87,6 +88,11 @@ import type {
 } from "@zenystx/helios-core/rest/handler/DataHandler";
 import { DataHandler } from "@zenystx/helios-core/rest/handler/DataHandler";
 import { HealthCheckHandler } from "@zenystx/helios-core/rest/handler/HealthCheckHandler";
+import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
+import { MetricsRegistry } from "@zenystx/helios-core/monitor/MetricsRegistry";
+import { MetricsSampler } from "@zenystx/helios-core/monitor/MetricsSampler";
+import type { MonitorStateProvider } from "@zenystx/helios-core/monitor/MonitorStateProvider";
+import type { BlitzMetrics, MemberPartitionInfo, ObjectInventory, ThreadPoolMetrics, TransportMetrics } from "@zenystx/helios-core/monitor/MetricsSample";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
@@ -289,6 +295,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Current log level (mutable via REST CLUSTER_WRITE). */
   private _logLevel: string = "INFO";
 
+  /** Metrics registry — non-null when monitoring is enabled. */
+  private _metricsRegistry: MetricsRegistry | null = null;
+
+  /** Metrics sampler — non-null when monitoring is enabled. */
+  private _metricsSampler: MetricsSampler | null = null;
+
   /** Built-in REST server — non-null when REST API is configured. */
   private readonly _restServer: HeliosRestServer;
 
@@ -392,6 +404,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     this._restServer.start();
 
+    // Initialize monitoring subsystem if configured
+    this._initMonitor();
+
     // Start client protocol server if configured
     this._startClientProtocolServer();
   }
@@ -454,7 +469,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._transport,
       this._ss,
     );
-    this._clusterCoordinator.bootstrap();
+    if (!multicast.isEnabled()) {
+      this._clusterCoordinator.bootstrap();
+    }
     this._cluster = this._clusterCoordinator.getCluster();
     const internalPartitionService = this._clusterCoordinator.getInternalPartitionService();
     internalPartitionService.setReplicaManager(this._replicaManager);
@@ -529,7 +546,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
               },
             });
 
-            transport.send(targetMemberId, {
+            const sent = transport.send(targetMemberId, {
               type: 'OPERATION',
               callId,
               partitionId: op.partitionId,
@@ -537,6 +554,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
               payload,
               senderId: coordinator.getLocalMemberId(),
             });
+
+            if (!sent) {
+              // Channel backpressure or peer disconnected — fail fast instead
+              // of waiting for the 10s timeout
+              pendingResponses.delete(callId);
+              reject(new Error(`Send failed (backpressure or peer disconnected, callId=${callId})`));
+              return;
+            }
 
             // Timeout after 10 seconds
             setTimeout(() => {
@@ -655,8 +680,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
    * Once discovered, connects via TCP to the master using the existing join protocol.
    */
   private _startMulticastDiscovery(multicastConfig: import('@zenystx/helios-core/config/MulticastConfig').MulticastConfig): void {
-    this._multicastService = MulticastService.create(multicastConfig);
-    if (this._multicastService === null) return;
+    const multicastService = MulticastService.create(multicastConfig);
+    if (multicastService === null) return;
+    this._multicastService = multicastService;
 
     this._multicastService.start();
 
@@ -673,23 +699,24 @@ export class HeliosInstanceImpl implements HeliosInstance {
       version: { major: 1, minor: 0, patch: 0 },
     });
 
-    // Perform async multicast discovery
-    void this._multicastJoiner.join().then((result) => {
+    void (async () => {
+      await multicastService.waitForReady();
+      if (!this._running) return;
+
+      const result = await this._multicastJoiner!.join();
       if (!this._running) return;
 
       if (result.masterFound && result.masterAddress !== null) {
-        // Master discovered — connect via TCP
         this._multicastJoiner?.setJoined();
         this._transport?.connectToPeer(
           result.masterAddress.host,
           result.masterAddress.port,
         ).catch(() => {});
       } else {
-        // No master found — this node becomes master
         this._multicastJoiner?.setAsMaster();
         this._clusterCoordinator?.bootstrap();
       }
-    });
+    })();
   }
 
   /** Pending remote operation responses (callId → resolver). */
@@ -1622,6 +1649,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._multicastService = null;
     this._transport?.shutdown();
     this._transport = null;
+    this._metricsSampler?.stop();
     this._restServer.stop();
   }
 
@@ -2121,5 +2149,119 @@ export class HeliosInstanceImpl implements HeliosInstance {
     throw new Error(
       "ScheduledExecutorService is not supported in this version (deferred to v2)",
     );
+  }
+
+  // ── Monitoring subsystem ─────────────────────────────────────────────────
+
+  /** Returns the MetricsRegistry, or null if monitoring is disabled. */
+  getMetricsRegistry(): MetricsRegistry | null {
+    return this._metricsRegistry;
+  }
+
+  private _initMonitor(): void {
+    const monitorConfig = this._config.getMonitorConfig();
+    if (!monitorConfig.isEnabled()) return;
+
+    // Enable the MONITOR REST endpoint group automatically when monitoring is enabled
+    this._config.getNetworkConfig().getRestApiConfig()
+      .enableGroups(RestEndpointGroup.MONITOR);
+
+    this._metricsRegistry = new MetricsRegistry(monitorConfig);
+    this._metricsSampler = new MetricsSampler(monitorConfig, this._createMonitorStateProvider(), this._metricsRegistry);
+
+    // Register the monitor REST handler
+    const monitorHandler = new MonitorHandler(monitorConfig, this._metricsRegistry, this._createMonitorStateProvider());
+    this._restServer.registerHandler('/helios/monitor', (req) => monitorHandler.handle(req));
+
+    // Start sampling
+    this._metricsSampler.start();
+  }
+
+  private _createMonitorStateProvider(): MonitorStateProvider {
+    return {
+      getInstanceName: () => this.getName(),
+      getNodeState: () => String(this.getNodeState()),
+      getClusterState: () => this.getClusterState(),
+      isClusterSafe: () => this.isClusterSafe(),
+      getClusterSize: () => this.getClusterSize(),
+      getMemberVersion: () => this.getMemberVersion(),
+      getPartitionCount: () => this.getPartitionCount(),
+      getTransportMetrics: (): TransportMetrics => this.getTransportStats(),
+      getObjectInventory: (): ObjectInventory => this.getKnownDistributedObjectNames(),
+      getMemberPartitionInfo: () => this._buildMemberPartitionInfo(),
+      getThreadPoolMetrics: () => this._getThreadPoolMetrics(),
+      getBlitzMetrics: () => this._getBlitzMetrics(),
+    };
+  }
+
+  private _buildMemberPartitionInfo(): MemberPartitionInfo[] {
+    const members = this.getCluster().getMembers();
+    const masterAddress = this.getClusterMasterAddress();
+    const localMember = this.getCluster().getLocalMember();
+    const localAddress = `${localMember.getAddress().getHost()}:${localMember.getAddress().getPort()}`;
+
+    const result: MemberPartitionInfo[] = [];
+
+    for (const member of members) {
+      const address = `${member.getAddress().getHost()}:${member.getAddress().getPort()}`;
+      let primaryPartitions = 0;
+      let backupPartitions = 0;
+
+      const partitionCount = this.getPartitionCount();
+      for (let pid = 0; pid < partitionCount; pid++) {
+        if (this.getPartitionOwnerId(pid) === member.getUuid()) {
+          primaryPartitions++;
+        }
+        if (this.getPartitionBackupIds(pid).includes(member.getUuid())) {
+          backupPartitions++;
+        }
+      }
+
+      result.push({
+        uuid: member.getUuid(),
+        address,
+        isMaster: address === masterAddress,
+        isLocal: address === localAddress,
+        primaryPartitions,
+        backupPartitions,
+      });
+    }
+
+    return result;
+  }
+
+  private _getThreadPoolMetrics(): ThreadPoolMetrics {
+    let scatterPoolActive = 0;
+    let scatterPoolSize = 0;
+
+    for (const [name, exec] of this._executors) {
+      try {
+        const stats = exec.getLocalExecutorStats();
+        scatterPoolActive += stats.activeWorkers;
+      } catch {
+        // Executor may not support stats
+      }
+      const executorConfig = this._config.getExecutorConfig(name);
+      if (executorConfig.getExecutionBackend() === 'scatter') {
+        scatterPoolSize += executorConfig.getPoolSize();
+      }
+    }
+
+    return { scatterPoolActive, scatterPoolSize };
+  }
+
+  private _getBlitzMetrics(): BlitzMetrics | null {
+    const manager = this.getBlitzLifecycleManager();
+    if (manager === null) return null;
+
+    const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
+
+    return {
+      clusterSize: 1,
+      isReady: this.isBlitzReady(),
+      readinessState: manager.getReadinessState(),
+      runningPipelines: 0,
+      jetStreamReady: blitzService?.jsm !== undefined,
+    };
   }
 }

@@ -93,11 +93,8 @@ export class HeliosClusterCoordinator {
   bootstrap(): void {
     const joinConfig = this._config.getNetworkConfig().getJoin();
     const configuredPeers = joinConfig.getTcpIpConfig().getMembers();
-    const multicastEnabled = joinConfig.getMulticastConfig().isEnabled();
 
-    // If using TCP-IP with no configured peers, or if explicitly called
-    // after multicast discovery determines this node should be master
-    if (configuredPeers.length === 0 || multicastEnabled) {
+    if (configuredPeers.length === 0) {
       this._joinManager.setThisMemberAsMaster();
       this._recomputePartitions();
       this._syncBlitzCoordinatorState();

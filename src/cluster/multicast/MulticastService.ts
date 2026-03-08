@@ -110,6 +110,8 @@ export class MulticastService {
     private readonly _multicastPort: number;
     private readonly _trustedInterfaces: ReadonlySet<string>;
     private _running = false;
+    private _readyResolve: (() => void) | null = null;
+    private readonly _readyPromise: Promise<void>;
 
     private constructor(
         socket: dgram.Socket,
@@ -121,6 +123,9 @@ export class MulticastService {
         this._multicastGroup = multicastGroup;
         this._multicastPort = multicastPort;
         this._trustedInterfaces = trustedInterfaces;
+        this._readyPromise = new Promise<void>((resolve) => {
+            this._readyResolve = resolve;
+        });
     }
 
     /**
@@ -143,6 +148,8 @@ export class MulticastService {
             reuseAddr: true,
         });
 
+        const service = new MulticastService(socket, group, port, trustedInterfaces);
+
         socket.bind(port, () => {
             socket.setMulticastTTL(ttl);
             socket.addMembership(group);
@@ -158,9 +165,10 @@ export class MulticastService {
             } catch {
                 // Some platforms don't support setting buffer sizes
             }
+
+            service._readyResolve?.();
         });
 
-        const service = new MulticastService(socket, group, port, trustedInterfaces);
         return service;
     }
 
@@ -200,6 +208,8 @@ export class MulticastService {
             } catch {
                 // Some platforms don't support setting buffer sizes
             }
+
+            service._readyResolve?.();
         });
 
         return service;
@@ -317,5 +327,13 @@ export class MulticastService {
      */
     getMulticastPort(): number {
         return this._multicastPort;
+    }
+
+    /**
+     * Returns a promise that resolves when the socket is bound and ready.
+     * Must be awaited before calling send() to ensure addMembership() has completed.
+     */
+    waitForReady(): Promise<void> {
+        return this._readyPromise;
     }
 }

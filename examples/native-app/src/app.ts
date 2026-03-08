@@ -1036,7 +1036,10 @@ async function main() {
     .setEnabled(true)
     .setPort(options.restPort)
     .disableAllGroups()
-    .enableGroups(...options.restGroups);
+    .enableGroups(...options.restGroups, RestEndpointGroup.MONITOR);
+
+  // Enable the monitoring dashboard at /helios/monitor
+  config.getMonitorConfig().setEnabled(true);
 
   for (const peer of options.peers) {
     config.getNetworkConfig().getJoin().getTcpIpConfig().addMember(peer);
@@ -1050,6 +1053,7 @@ async function main() {
 
   const instance = (await Helios.newInstance(config)) as HeliosInstanceImpl;
   const restPort = instance.getRestServer().getBoundPort();
+  console.log(`[${options.name}] monitoring dashboard: http://localhost:${restPort}/helios/monitor`);
 
   /* --- Start embedded NATS node (forms cluster with other nodes) --- */
 

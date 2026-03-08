@@ -17,13 +17,21 @@ import type { MetricsRegistry } from '@zenystx/helios-core/monitor/MetricsRegist
 import { renderMonitorDashboard } from '@zenystx/helios-core/monitor/MonitorDashboard';
 import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+/** CORS headers — required for multi-node dashboards where the browser connects to nodes on different ports. */
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+const JSON_HEADERS = { 'Content-Type': 'application/json', ...CORS_HEADERS };
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 const SSE_HEADERS = {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no',
+    ...CORS_HEADERS,
 };
 
 export class MonitorHandler {
@@ -34,6 +42,11 @@ export class MonitorHandler {
     ) {}
 
     handle(req: Request): Response {
+        // Handle CORS preflight for cross-port multi-node dashboard requests
+        if (req.method === 'OPTIONS') {
+            return new Response(null, { status: 204, headers: CORS_HEADERS });
+        }
+
         const path = new URL(req.url).pathname;
 
         if (path === '/helios/monitor' || path === '/helios/monitor/') {

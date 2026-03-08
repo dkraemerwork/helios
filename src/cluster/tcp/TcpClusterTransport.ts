@@ -139,10 +139,16 @@ export class TcpClusterTransport {
 
     // ── Targeted send ─────────────────────────────────────────────────────
 
-    /** Send a message to a specific peer by node ID. */
-    send(peerId: string, msg: ClusterMessage): void {
+    /**
+     * Send a message to a specific peer by node ID.
+     * @returns `true` if the message was accepted by the channel, `false` if the
+     *   peer is unknown or the channel's outbound buffer rejected the write
+     *   (backpressure).
+     */
+    send(peerId: string, msg: ClusterMessage): boolean {
         const ch = this._peers.get(peerId);
-        if (ch) this._sendMsg(ch, msg);
+        if (!ch) return false;
+        return this._sendMsg(ch, msg);
     }
 
     /** Disconnect a specific peer by node ID. */
@@ -185,12 +191,12 @@ export class TcpClusterTransport {
         }
     }
 
-    private _sendMsg(ch: EventloopChannel, msg: ClusterMessage): void {
+    private _sendMsg(ch: EventloopChannel, msg: ClusterMessage): boolean {
         const payload = this._strategy.serialize(msg);
         const frame = Buffer.allocUnsafe(4 + payload.length);
         frame.writeUInt32BE(payload.length, 0);
         payload.copy(frame, 4);
-        ch.write(frame);
+        return ch.write(frame);
     }
 
     private _onConnect(ch: EventloopChannel): void {
