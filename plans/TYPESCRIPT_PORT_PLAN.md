@@ -1077,7 +1077,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
 - [x] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
 - [x] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
-- [ ] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
+- [x] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
 - [ ] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
 - [ ] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
 - [ ] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
@@ -1219,12 +1219,12 @@ Depends on: Block 23.0 (JobStatus, JobConfig).
 **Goal:** Build the user-facing job handle and the IMap-stored job record.
 
 **TODO — Block 23.8**:
-- [ ] Create `src/job/JobRecord.ts`: IMap-stored job state with id, name, status, config, pipelineDescriptor, submittedAt, participatingMembers, lastSnapshotId, failureReason, lightJob flag
-- [ ] Create `src/job/BlitzJob.ts`: user-facing handle with `getStatus()`, `join()`, `cancel()`, `suspend()`, `resume()`, `restart()`, `exportSnapshot()`, `getMetrics()`, `addStatusListener()`, `getSubmissionTime()` — delegates to coordinator for cluster operations
-- [ ] Implement status listener notification on every state transition
-- [ ] Implement `join()` as a Promise that resolves on terminal status (COMPLETED, FAILED, CANCELLED)
-- [ ] Tests: status transitions fire listeners, join resolves on completion, join resolves on failure, join resolves on cancel, getStatus returns current state, addStatusListener returns unsubscribe function
-- [ ] Run a verification task that proves `BlitzJob` delegates to real coordinator for cluster operations, status listeners fire on actual state transitions, `join()` resolves from real terminal states, and no `BlitzJob` method is a throw-stub or deferred placeholder: `bun test test/blitz/job/BlitzJobTest.test.ts` green
+- [x] Create `src/job/JobRecord.ts`: IMap-stored job state with id, name, status, config, pipelineDescriptor, submittedAt, participatingMembers, lastSnapshotId, failureReason, lightJob flag
+- [x] Create `src/job/BlitzJob.ts`: user-facing handle with `getStatus()`, `join()`, `cancel()`, `suspend()`, `resume()`, `restart()`, `exportSnapshot()`, `getMetrics()`, `addStatusListener()`, `getSubmissionTime()` — delegates to coordinator for cluster operations
+- [x] Implement status listener notification on every state transition
+- [x] Implement `join()` as a Promise that resolves on terminal status (COMPLETED, FAILED, CANCELLED)
+- [x] Tests: status transitions fire listeners, join resolves on completion, join resolves on failure, join resolves on cancel, getStatus returns current state, addStatusListener returns unsubscribe function
+- [x] Run a verification task that proves `BlitzJob` delegates to real coordinator for cluster operations, status listeners fire on actual state transitions, `join()` resolves from real terminal states, and no `BlitzJob` method is a throw-stub or deferred placeholder: `bun test test/blitz/job/BlitzJobTest.test.ts` green
 
 ---
 
