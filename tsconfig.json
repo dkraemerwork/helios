@@ -29,7 +29,8 @@
     // All path aliases use explicit relative prefixes below.
     "paths": {
       "@zenystx/helios-core": ["./src/index.ts"],
-      "@zenystx/helios-core/*": ["./src/*"]
+      "@zenystx/helios-core/*": ["./src/*"],
+      "@zenystx/helios-blitz/*": ["./packages/blitz/src/*"]
     },
 
     "outDir": "dist",

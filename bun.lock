@@ -5,6 +5,7 @@
     "": {
       "name": "hazelcast-ts-port",
       "dependencies": {
+        "@nats-io/kv": "^3.3.1",
         "@zenystx/helios-core": "^1.0.0",
         "@zenystx/scatterjs": "0.1.0",
       },

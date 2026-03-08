@@ -1071,7 +1071,7 @@ Depends on: Block 22.15 (stats).
 - [ ] **Phase 22 checkpoint** — All scheduled executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; scheduled executor config wiring, partition-owned and member-owned scheduling, fixed-rate periodic engine, migration/recovery/anti-entropy, client parity, stats/metrics are all exercised and production-ready within the defined scope; `StatefulTask` is documented as a known parity gap for the first release; no `IScheduledExecutorService` or `IScheduledFuture` method is a throw-stub, deferred placeholder, or unwired passthrough; `getScheduledExecutorService(name)` returns a real proxy; every operation routes through `OperationService`; no public API returns hardcoded zeros or fake data; docs/examples/exports/test-support only claim behavior that is actually wired
 - [x] **Block 23.0** — Foundation types + `JobConfig` + `JobStatus` + `PipelineDescriptor` — ~16 tests
 - [x] **Block 23.1** — `AsyncChannel` + `LatencyTracker` engine primitives — ~18 tests
-- [ ] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
+- [x] **Block 23.2** — `SnapshotStore` + NATS KV snapshot persistence — ~14 tests
 - [ ] **Block 23.3** — Processor implementations: Source, Sink, Operator — ~20 tests
 - [ ] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
 - [ ] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
@@ -1131,9 +1131,9 @@ Depends on: Block 23.0 (types).
 **Goal:** Build the snapshot storage layer backed by NATS KV.
 
 **TODO — Block 23.2**:
-- [ ] Create `src/job/snapshot/SnapshotStore.ts`: NATS KV bucket `__blitz.snapshots.{jobId}`, with `saveProcessorState()`, `loadProcessorState()`, `commitSnapshot()`, `getLatestSnapshotId()`, `pruneSnapshots()`, `destroy()` — keyed by `{snapshotId}.{vertexName}.{processorIndex}`
-- [ ] Tests: save/load round-trip, commit marks snapshot, latest returns most recent committed, prune keeps last N, destroy removes bucket
-- [ ] Run a verification task that proves `SnapshotStore` persists to real NATS KV (not in-memory fake), save/load round-trips real processor state, commit/prune/destroy are wired end to end, and no store method is a stub: `bun test test/blitz/job/snapshot/SnapshotStoreTest.test.ts` green (embedded NATS)
+- [x] Create `src/job/snapshot/SnapshotStore.ts`: NATS KV bucket `__blitz.snapshots.{jobId}`, with `saveProcessorState()`, `loadProcessorState()`, `commitSnapshot()`, `getLatestSnapshotId()`, `pruneSnapshots()`, `destroy()` — keyed by `{snapshotId}.{vertexName}.{processorIndex}`
+- [x] Tests: save/load round-trip, commit marks snapshot, latest returns most recent committed, prune keeps last N, destroy removes bucket
+- [x] Run a verification task that proves `SnapshotStore` persists to real NATS KV (not in-memory fake), save/load round-trips real processor state, commit/prune/destroy are wired end to end, and no store method is a stub: `bun test test/blitz/job/snapshot/SnapshotStoreTest.test.ts` green (embedded NATS)
 
 ---
 
