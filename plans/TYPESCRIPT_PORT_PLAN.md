@@ -961,14 +961,14 @@ src/client/proxy/
 ```
 
 **TODO — Block 22.14**:
-- [ ] Create `ClientScheduledExecutorProxy` implementing `IScheduledExecutorService`
-- [ ] Client protocol messages for: submit-to-partition, submit-to-member, cancel, dispose, get-state, get-scheduled-future, get-all-scheduled-futures, shutdown
-- [ ] Reuse `OperationWireCodec` patterns for scheduled executor protocol encoding/decoding
-- [ ] Handler reacquisition across client reconnect: client can call `getScheduledFuture(handler)` after disconnect/reconnect
-- [ ] Stale/disposed error propagation: `StaleTaskException` from server surfaces correctly on client
-- [ ] Full parity: schedule, cancel, dispose, stats, history access all work from client
-- [ ] Tests: client schedule creates task, client cancel works, client dispose works, handler reacquisition after reconnect, stale error propagation, client/server parity for all API methods
-- [ ] Run a verification task that proves the client proxy routes through real binary protocol, handler reacquisition survives reconnect, `StaleTaskException` propagates correctly, and no client API method is a throw-stub or deferred implementation: `bun test test/scheduledexecutor/client/ClientScheduledExecutorProxyTest.test.ts` green
+- [x] Create `ClientScheduledExecutorProxy` implementing `IScheduledExecutorService`
+- [x] Client protocol messages for: submit-to-partition, submit-to-member, cancel, dispose, get-state, get-scheduled-future, get-all-scheduled-futures, shutdown
+- [x] Reuse `OperationWireCodec` patterns for scheduled executor protocol encoding/decoding
+- [x] Handler reacquisition across client reconnect: client can call `getScheduledFuture(handler)` after disconnect/reconnect
+- [x] Stale/disposed error propagation: `StaleTaskException` from server surfaces correctly on client
+- [x] Full parity: schedule, cancel, dispose, stats, history access all work from client
+- [x] Tests: client schedule creates task, client cancel works, client dispose works, handler reacquisition after reconnect, stale error propagation, client/server parity for all API methods
+- [x] Run a verification task that proves the client proxy routes through real binary protocol, handler reacquisition survives reconnect, `StaleTaskException` propagates correctly, and no client API method is a throw-stub or deferred implementation: `bun test test/scheduledexecutor/client/ClientScheduledExecutorProxyTest.test.ts` green
 
 ---
 
@@ -1062,7 +1062,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
 - [x] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests
 - [x] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
-- [ ] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
+- [x] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
 - [ ] **Block 22.15** — Stats + metrics + diagnostics (`ScheduledTaskStatistics` parity, pending/started/completed/cancelled/failed counters, scheduler-lag metrics, active-schedule gauge, pool health, admin visibility hooks, documented `StatefulTask` parity gap for first release) — ~12 tests
 - [ ] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests
 - [ ] **Phase 22 checkpoint** — All scheduled executor tests green, existing tests unbroken, `bun test` at root — 0 fail, 0 error; scheduled executor config wiring, partition-owned and member-owned scheduling, fixed-rate periodic engine, migration/recovery/anti-entropy, client parity, stats/metrics are all exercised and production-ready within the defined scope; `StatefulTask` is documented as a known parity gap for the first release; no `IScheduledExecutorService` or `IScheduledFuture` method is a throw-stub, deferred placeholder, or unwired passthrough; `getScheduledExecutorService(name)` returns a real proxy; every operation routes through `OperationService`; no public API returns hardcoded zeros or fake data; docs/examples/exports/test-support only claim behavior that is actually wired
