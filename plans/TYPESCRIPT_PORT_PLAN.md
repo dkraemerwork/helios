@@ -1079,7 +1079,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
 - [x] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
 - [x] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
-- [ ] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
+- [x] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
 - [ ] **Block 23.11** — `MetricsCollector` + cross-member metrics aggregation — ~12 tests
 - [ ] **Block 23.12** — `BlitzService` integration + `BlitzEvent` + exports + NestJS bridge — ~16 tests
 - [ ] **Block 23.INT** — End-to-end Blitz Job Supervision acceptance — ~24 tests
@@ -1251,21 +1251,21 @@ Depends on: Block 23.6 (executor), Block 23.8 (BlitzJob, JobRecord), Block 23.9 
 **Goal:** Build the master-side job coordinator that manages the full Jet-parity job lifecycle.
 
 **TODO — Block 23.10**:
-- [ ] Create `src/job/BlitzJobCoordinator.ts`: runs on master with Helios fencing pattern `(masterMemberId, memberListVersion, fenceToken)`
-- [ ] Implement `submitJob()`: create JobRecord → store in IMap → STARTING → compute ExecutionPlan → send START_EXECUTION to all members → wait for EXECUTION_READY → RUNNING → start SnapshotCoordinator
-- [ ] Implement `cancelJob()`: validate fence → STOP_EXECUTION(cancel) → CANCELLED → cleanup
-- [ ] Implement `suspendJob()`: SUSPENDED_EXPORTING_SNAPSHOT → final snapshot → STOP_EXECUTION(suspend) → SUSPENDED
-- [ ] Implement `resumeJob()`: NOT_RUNNING → STARTING → restore from snapshot → new ExecutionPlan → START_EXECUTION → RUNNING
-- [ ] Implement `restartJob()`: same as resume but from RESTARTING state
-- [ ] Implement `onMemberLost()`: autoScaling → RESTARTING + restart; !autoScaling + suspendOnFailure → SUSPENDED; else → FAILED
-- [ ] Implement `onMemberJoined()`: autoScaling → debounced restart (scaleUpDelayMillis)
-- [ ] Implement `getJob()`, `getJobByName()`, `getJobs()` from IMap
-- [ ] Implement `onDemotion()`: cancel snapshot coordinators, clear authority; jobs continue on members
-- [ ] Implement `onPromotion()`: read JobRecords from IMap, resume coordination for RUNNING/RESTARTING jobs
-- [ ] Implement split-brain protection: job only runs if alive members >= ceil(total/2)
-- [ ] Implement light job path: skip coordinator, run locally, no IMap storage
-- [ ] Tests: full submit lifecycle, cancel/suspend/resume/restart transitions, member loss failover, member join auto-scale with debounce, job lookup by id and name, demotion/promotion handoff, split-brain protection, light job no-coordination path
-- [ ] Run a verification task that proves the coordinator uses Helios fencing pattern for all authoritative operations, all Jet-parity lifecycle transitions are real, member loss/join triggers real failover/auto-scaling, IMap stores real JobRecords, and no coordinator method is a stub or mock: `bun test test/blitz/job/BlitzJobCoordinatorTest.test.ts` green
+- [x] Create `src/job/BlitzJobCoordinator.ts`: runs on master with Helios fencing pattern `(masterMemberId, memberListVersion, fenceToken)`
+- [x] Implement `submitJob()`: create JobRecord → store in IMap → STARTING → compute ExecutionPlan → send START_EXECUTION to all members → wait for EXECUTION_READY → RUNNING → start SnapshotCoordinator
+- [x] Implement `cancelJob()`: validate fence → STOP_EXECUTION(cancel) → CANCELLED → cleanup
+- [x] Implement `suspendJob()`: SUSPENDED_EXPORTING_SNAPSHOT → final snapshot → STOP_EXECUTION(suspend) → SUSPENDED
+- [x] Implement `resumeJob()`: NOT_RUNNING → STARTING → restore from snapshot → new ExecutionPlan → START_EXECUTION → RUNNING
+- [x] Implement `restartJob()`: same as resume but from RESTARTING state
+- [x] Implement `onMemberLost()`: autoScaling → RESTARTING + restart; !autoScaling + suspendOnFailure → SUSPENDED; else → FAILED
+- [x] Implement `onMemberJoined()`: autoScaling → debounced restart (scaleUpDelayMillis)
+- [x] Implement `getJob()`, `getJobByName()`, `getJobs()` from IMap
+- [x] Implement `onDemotion()`: cancel snapshot coordinators, clear authority; jobs continue on members
+- [x] Implement `onPromotion()`: read JobRecords from IMap, resume coordination for RUNNING/RESTARTING jobs
+- [x] Implement split-brain protection: job only runs if alive members >= ceil(total/2)
+- [x] Implement light job path: skip coordinator, run locally, no IMap storage
+- [x] Tests: full submit lifecycle, cancel/suspend/resume/restart transitions, member loss failover, member join auto-scale with debounce, job lookup by id and name, demotion/promotion handoff, split-brain protection, light job no-coordination path
+- [x] Run a verification task that proves the coordinator uses Helios fencing pattern for all authoritative operations, all Jet-parity lifecycle transitions are real, member loss/join triggers real failover/auto-scaling, IMap stores real JobRecords, and no coordinator method is a stub or mock: `bun test test/blitz/job/BlitzJobCoordinatorTest.test.ts` green
 
 ---
 
