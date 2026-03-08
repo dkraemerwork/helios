@@ -17,12 +17,14 @@
  * send()/disconnectPeer()/onMessage, membership-driven connection management.
  */
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
+import { ScatterSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/ScatterSerializationStrategy';
 import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
 
 export class TcpClusterTransport {
     private readonly _nodeId: string;
     private readonly _strategy: SerializationStrategy;
+    private readonly _scatterStrategy: ScatterSerializationStrategy;
     private _server: EventloopServer | null = null;
 
     /**
@@ -57,6 +59,7 @@ export class TcpClusterTransport {
     constructor(nodeId: string, strategy?: SerializationStrategy) {
         this._nodeId = nodeId;
         this._strategy = strategy ?? new JsonSerializationStrategy();
+        this._scatterStrategy = new ScatterSerializationStrategy({ poolSize: 4 });
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -100,6 +103,7 @@ export class TcpClusterTransport {
         this._buffers.clear();
         this._server?.stop(true);
         this._server = null;
+        this._scatterStrategy.destroy();
     }
 
     // ── Peer info ─────────────────────────────────────────────────────────
@@ -149,6 +153,23 @@ export class TcpClusterTransport {
         const ch = this._peers.get(peerId);
         if (!ch) return false;
         return this._sendMsg(ch, msg);
+    }
+
+    /**
+     * Send a message asynchronously, offloading JSON.stringify to a scatter
+     * worker thread. Use for high-throughput OPERATION messages where
+     * serialization cost would block the event loop.
+     *
+     * @returns `true` if the message was accepted, `false` if peer is unknown.
+     */
+    async sendAsync(peerId: string, msg: ClusterMessage): Promise<boolean> {
+        const ch = this._peers.get(peerId);
+        if (!ch) return false;
+        const payload = await this._scatterStrategy.serializeAsync(msg);
+        const frame = Buffer.allocUnsafe(4 + payload.length);
+        frame.writeUInt32BE(payload.length, 0);
+        payload.copy(frame, 4);
+        return ch.write(frame);
     }
 
     /** Disconnect a specific peer by node ID. */
@@ -228,11 +249,27 @@ export class TcpClusterTransport {
             const msgBytes = buf.subarray(4, 4 + msgLen);
             buf = buf.subarray(4 + msgLen);
 
-            try {
-                const msg = this._strategy.deserialize(msgBytes);
-                this._handleMsg(ch, msg);
-            } catch {
-                // Malformed frame — discard and continue
+            // Peek at the frame to detect OPERATION/OPERATION_RESPONSE messages —
+            // these are high-volume and benefit from worker-thread deserialization.
+            // Other messages (HELLO, JOIN, HEARTBEAT) use the sync fast path.
+            const frameStr = msgBytes.toString('utf8');
+            const isHotPath = frameStr.includes('"OPERATION"') || frameStr.includes('"OPERATION_RESPONSE"');
+
+            if (isHotPath) {
+                // Offload deserialization to scatter worker — fire-and-forget
+                // Copy the bytes since msgBytes may be a subarray view that gets
+                // overwritten on the next _onData call.
+                const frameBuffer = Buffer.from(msgBytes);
+                void this._scatterStrategy.deserializeAsync(frameBuffer)
+                    .then((msg) => this._handleMsg(ch, msg))
+                    .catch(() => { /* malformed frame — discard */ });
+            } else {
+                try {
+                    const msg = this._strategy.deserialize(msgBytes);
+                    this._handleMsg(ch, msg);
+                } catch {
+                    // Malformed frame — discard and continue
+                }
             }
         }
 

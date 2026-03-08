@@ -776,13 +776,13 @@ src/scheduledexecutor/impl/
 ```
 
 **TODO — Block 22.5**:
-- [ ] Create `ScheduledExecutorServiceProxy` implementing `IScheduledExecutorService`, routing all API methods through the container service
-- [ ] Handler-based future reacquisition: `getScheduledFuture(handler)` creates a new `IScheduledFuture` proxy from the handler's encoded partition/member + task name
-- [ ] `getAllScheduledFutures()` fan-out across all partitions and member bin
-- [ ] Wire `getScheduledExecutorService(name)` in `HeliosInstanceImpl` — remove the deferred-feature error throw
-- [ ] Lifecycle integration: register with `NodeEngine`, graceful shutdown hook
-- [ ] Tests: proxy routes to correct partition, handler reacquisition works, getAllScheduledFutures returns all, instance wiring resolves proxy, shutdown cleans up
-- [ ] Run a verification task that proves `getScheduledExecutorService(name)` returns a real proxy (no deferred-feature throw), all proxy API methods route to the container service, handler reacquisition is end to end, and lifecycle cleanup is wired: `bun test test/scheduledexecutor/impl/ScheduledExecutorServiceProxyTest.test.ts` green
+- [x] Create `ScheduledExecutorServiceProxy` implementing `IScheduledExecutorService`, routing all API methods through the container service
+- [x] Handler-based future reacquisition: `getScheduledFuture(handler)` creates a new `IScheduledFuture` proxy from the handler's encoded partition/member + task name
+- [x] `getAllScheduledFutures()` fan-out across all partitions and member bin
+- [x] Wire `getScheduledExecutorService(name)` in `HeliosInstanceImpl` — remove the deferred-feature error throw
+- [x] Lifecycle integration: register with `NodeEngine`, graceful shutdown hook
+- [x] Tests: proxy routes to correct partition, handler reacquisition works, getAllScheduledFutures returns all, instance wiring resolves proxy, shutdown cleans up
+- [x] Run a verification task that proves `getScheduledExecutorService(name)` returns a real proxy (no deferred-feature throw), all proxy API methods route to the container service, handler reacquisition is end to end, and lifecycle cleanup is wired: `bun test test/scheduledexecutor/impl/ScheduledExecutorServiceProxyTest.test.ts` green
 
 ---
 
@@ -1053,7 +1053,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.2** — `ScheduledTaskDescriptor` + state model + `ScheduledTaskStore` (task record with `taskName`, `handlerId`, `executorName`, `taskType`, `scheduleKind`, `ownerKind`, `ownerEpoch`, `version`, `attemptId`, state enum `scheduled`/`running`/`done`/`cancelled`/`disposed`/`suspended`, run history entries with timing/outcome/attempt/epoch metadata, oldest-entry eviction, named-task `fail-if-exists` duplicate policy, unnamed stable task ID generation) — ~18 tests
 - [x] **Block 22.3** — `ScheduledExecutorContainerService` + local one-shot execution (partition-local task store management, one-shot delayed task scheduling via timer coordinator, dispatch into existing `ExecutorContainerService`, result envelope capture, wall-clock + monotonic hybrid timing, task state transitions on completion) — ~16 tests
 - [x] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
-- [ ] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
+- [x] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
 - [ ] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
 - [ ] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
 - [ ] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests

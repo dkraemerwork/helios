@@ -52,6 +52,9 @@ import { ExecutorRejectedExecutionException } from "@zenystx/helios-core/executo
 import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import { ExecutorContainerService } from "@zenystx/helios-core/executor/impl/ExecutorContainerService";
 import { ExecutorServiceProxy } from "@zenystx/helios-core/executor/impl/ExecutorServiceProxy";
+import type { IScheduledExecutorService } from "@zenystx/helios-core/scheduledexecutor/IScheduledExecutorService";
+import { ScheduledExecutorServiceProxy } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorServiceProxy";
+import { ScheduledExecutorContainerService as ScheduledContainerService } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorContainerService";
 import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/InlineExecutionBackend";
 import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/ScatterExecutionBackend";
 import { TaskTypeRegistry } from "@zenystx/helios-core/executor/impl/TaskTypeRegistry";
@@ -247,6 +250,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   >();
   private readonly _executors = new Map<string, ExecutorServiceProxy>();
   private readonly _executorContainers = new Map<string, ExecutorContainerService>();
+  private readonly _scheduledExecutors = new Map<string, ScheduledExecutorServiceProxy>();
+  private readonly _scheduledExecutorContainers = new Map<string, ScheduledContainerService>();
   private _knownExecutorMemberIds = new Set<string>();
 
   /** TCP transport — non-null when TCP-IP or multicast join is enabled. */
@@ -546,21 +551,23 @@ export class HeliosInstanceImpl implements HeliosInstance {
               },
             });
 
-            const sent = transport.send(targetMemberId, {
+            const operationMsg: import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage = {
               type: 'OPERATION',
               callId,
               partitionId: op.partitionId,
               operationType,
               payload,
               senderId: coordinator.getLocalMemberId(),
-            });
+            };
 
-            if (!sent) {
-              // Peer disconnected or channel closed — fail fast
-              pendingResponses.delete(callId);
-              reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
-              return;
-            }
+            // Use async send to offload JSON.stringify to a scatter worker thread
+            void transport.sendAsync(targetMemberId, operationMsg).then((sent) => {
+              if (!sent) {
+                // Peer disconnected or channel closed — fail fast
+                pendingResponses.delete(callId);
+                reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
+              }
+            });
 
             // Timeout after 10 seconds
             setTimeout(() => {
@@ -748,10 +755,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
         errorMsg = e instanceof Error ? e.message : String(e);
       }
 
-      // Find who sent this and reply
+      // Find who sent this and reply — use async send to offload response
+      // serialization to a scatter worker thread
       const senderMemberId = this._findSenderForOperation(message);
       if (senderMemberId !== null && this._transport !== null) {
-        this._transport.send(senderMemberId, {
+        void this._transport.sendAsync(senderMemberId, {
           type: 'OPERATION_RESPONSE',
           callId,
           payload: encodeResponsePayload(responseValue),
@@ -1610,6 +1618,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     this._executors.clear();
     this._executorContainers.clear();
+    // Shut down all scheduled executor containers + proxies
+    for (const [name, schedProxy] of Array.from(this._scheduledExecutors.entries())) {
+      const schedContainer = this._scheduledExecutorContainers.get(name);
+      if (schedContainer) schedContainer.shutdown().catch(() => {});
+      schedProxy.shutdown().catch(() => {});
+    }
+    this._scheduledExecutors.clear();
+    this._scheduledExecutorContainers.clear();
     for (const topic of Array.from(this._topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
     for (const rm of Array.from(this._replicatedMaps.values())) rm.destroy();
@@ -2144,10 +2160,35 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
   }
 
-  getScheduledExecutorService(_name?: string): never {
-    throw new Error(
-      "ScheduledExecutorService is not supported in this version (deferred to v2)",
-    );
+  getScheduledExecutorService(name: string): IScheduledExecutorService {
+    if (!this._running) {
+      throw new ExecutorRejectedExecutionException('HeliosInstance is shut down');
+    }
+    let proxy = this._scheduledExecutors.get(name);
+    if (!proxy) {
+      const config = this._config.getScheduledExecutorConfig(name);
+      const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
+
+      // Create and register container service
+      const container = new ScheduledContainerService(partitionCount);
+      container.init();
+      container.createDistributedObject(name, config);
+      this._nodeEngine.registerService(
+        `helios:scheduledExecutor:container:${name}`,
+        container,
+      );
+      this._scheduledExecutorContainers.set(name, container);
+
+      proxy = new ScheduledExecutorServiceProxy(name, container, config, partitionCount);
+
+      // Register shutdown hook
+      this.registerShutdownHook(async () => {
+        await container.shutdown();
+        await proxy!.shutdown();
+      });
+      this._scheduledExecutors.set(name, proxy);
+    }
+    return proxy;
   }
 
   // ── Monitoring subsystem ─────────────────────────────────────────────────

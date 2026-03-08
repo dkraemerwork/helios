@@ -383,10 +383,16 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
         let operationMsgSeen = false;
         const transport = (b as any)._transport;
-        const origSendMsg = transport._sendMsg.bind(transport);
-        transport._sendMsg = (ch: any, msg: any) => {
+        // Spy on both sync send and async send paths to detect OPERATION messages
+        const origSend = transport.send.bind(transport);
+        transport.send = (peerId: string, msg: any) => {
             if (msg.type === 'OPERATION') operationMsgSeen = true;
-            return origSendMsg(ch, msg);
+            return origSend(peerId, msg);
+        };
+        const origSendAsync = transport.sendAsync.bind(transport);
+        transport.sendAsync = async (peerId: string, msg: any) => {
+            if (msg.type === 'OPERATION') operationMsgSeen = true;
+            return origSendAsync(peerId, msg);
         };
 
         // Find a key owned by A so B must route remotely
