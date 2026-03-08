@@ -6,10 +6,14 @@
  * interface (JSON default, swappable).
  */
 import type { ClusterMessage } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
+import { BinarySerializationStrategy } from "@zenystx/helios-core/cluster/tcp/BinarySerializationStrategy";
 import {
   type SerializationStrategy,
   JsonSerializationStrategy,
 } from "@zenystx/helios-core/cluster/tcp/SerializationStrategy";
+import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
+import { serializeOperation } from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
+import { SetOperation } from "@zenystx/helios-core/map/impl/operation/SetOperation";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { afterEach, describe, expect, it } from "bun:test";
 
@@ -157,12 +161,22 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
     });
 
     it("serializes and deserializes OperationMsg and OperationResponseMsg", () => {
+      const encoded = serializeOperation(
+        new SetOperation(
+          "test",
+          new HeapData(Buffer.from([1, 2, 3, 4, 5, 6, 7, 8])),
+          new HeapData(Buffer.from([9, 10, 11, 12, 13, 14, 15, 16])),
+          -1,
+          -1,
+        ),
+      );
       const op: ClusterMessage = {
         type: "OPERATION",
         callId: 42,
         partitionId: 13,
-        operationType: "MAP_PUT",
-        payload: { mapName: "test", key: "k", value: "v" },
+        factoryId: encoded.factoryId,
+        classId: encoded.classId,
+        payload: encoded.payload,
         senderId: "node-1",
       };
       const resp: ClusterMessage = {
@@ -176,13 +190,23 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
     });
 
     it("serializes and deserializes BackupMsg and BackupAckMsg", () => {
+      const encoded = serializeOperation(
+        new SetOperation(
+          "test",
+          new HeapData(Buffer.from([1, 2, 3, 4, 5, 6, 7, 8])),
+          new HeapData(Buffer.from([9, 10, 11, 12, 13, 14, 15, 16])),
+          -1,
+          -1,
+        ),
+      );
       const backup: ClusterMessage = {
         type: "BACKUP",
         callId: 99,
         partitionId: 7,
         replicaIndex: 1,
-        operationType: "MAP_PUT",
-        payload: { mapName: "test", key: "k", value: "v" },
+        factoryId: encoded.factoryId,
+        classId: encoded.classId,
+        payload: encoded.payload,
       };
       const ack: ClusterMessage = {
         type: "BACKUP_ACK",
@@ -315,7 +339,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
   describe("stateful frame decoder", () => {
     it("reassembles a frame split across multiple chunks", () => {
       const transport = createTransport("nodeA");
-      const strategy = new JsonSerializationStrategy();
+      const strategy = new BinarySerializationStrategy();
       const received: ClusterMessage[] = [];
       transport.onMessage = (msg) => received.push(msg);
 
@@ -349,7 +373,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
 
     it("decodes multiple complete frames from one chunk", () => {
       const transport = createTransport("nodeA");
-      const strategy = new JsonSerializationStrategy();
+      const strategy = new BinarySerializationStrategy();
       const received: ClusterMessage[] = [];
       transport.onMessage = (msg) => received.push(msg);
 
@@ -391,7 +415,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
 
     it("grows the decoder buffer for oversized frames", () => {
       const transport = createTransport("nodeA");
-      const strategy = new JsonSerializationStrategy();
+      const strategy = new BinarySerializationStrategy();
       const received: ClusterMessage[] = [];
       transport.onMessage = (msg) => received.push(msg);
 
@@ -404,13 +428,23 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
 
       (transport as any)._onConnect(channel);
 
-      const largeValue = "x".repeat(80_000);
+      const largeValue = Buffer.alloc(80_000, 7);
+      const encoded = serializeOperation(
+        new SetOperation(
+          "big",
+          new HeapData(Buffer.from([1, 2, 3, 4, 5, 6, 7, 8])),
+          new HeapData(largeValue),
+          -1,
+          -1,
+        ),
+      );
       const frame = encodeFrame(strategy, {
         type: "OPERATION",
         callId: 99,
         partitionId: 7,
-        operationType: "MAP_PUT",
-        payload: { mapName: "big", key: "k", value: largeValue },
+        factoryId: encoded.factoryId,
+        classId: encoded.classId,
+        payload: encoded.payload,
         senderId: "nodeB",
       });
 
@@ -422,12 +456,10 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         callId: 99,
         partitionId: 7,
         senderId: "nodeB",
+        factoryId: encoded.factoryId,
+        classId: encoded.classId,
       });
-      expect((received[0] as Extract<ClusterMessage, { type: "OPERATION" }>).payload).toEqual({
-        mapName: "big",
-        key: "k",
-        value: largeValue,
-      });
+      expect((received[0] as Extract<ClusterMessage, { type: "OPERATION" }>).payload).toEqual(encoded.payload);
     });
   });
 });

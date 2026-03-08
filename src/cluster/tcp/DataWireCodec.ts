@@ -2,7 +2,7 @@ import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
 
 export interface EncodedData {
-  readonly bytes: string;
+  readonly bytes: Buffer;
 }
 
 export function encodeData(data: Data): EncodedData {
@@ -10,9 +10,9 @@ export function encodeData(data: Data): EncodedData {
   if (bytes === null) {
     throw new Error("Cannot encode null Data");
   }
-  return { bytes: bytes.toString("base64") };
+  return { bytes };
 }
 
 export function decodeData(encoded: EncodedData): Data {
-  return new HeapData(Buffer.from(encoded.bytes, "base64"));
+  return new HeapData(Buffer.from(encoded.bytes));
 }

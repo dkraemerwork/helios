@@ -1,12 +1,5 @@
-/**
- * Block 16.A5 — SerializationStrategy interface for TCP cluster protocol.
- *
- * Allows swapping the wire encoding (JSON, MessagePack, CBOR) without
- * touching transport logic.
- *
- * v1 (default): JsonSerializationStrategy — human-readable, wire-compatible.
- * v2 (future):  MessagePack/CBOR — compact binary, production-grade throughput.
- */
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 
 export interface SerializationStrategy {
@@ -16,17 +9,47 @@ export interface SerializationStrategy {
 
 const JSON_TEXT_ENCODER = new TextEncoder();
 const JSON_TEXT_DECODER = new TextDecoder();
+const BUFFER_MARKER = '__heliosBuffer';
+const DATA_MARKER = '__heliosData';
 
-/**
- * Default JSON-based serialization strategy.
- * Human-readable, suitable for development and testing.
- */
 export class JsonSerializationStrategy implements SerializationStrategy {
     serialize(message: ClusterMessage): Uint8Array {
-        return JSON_TEXT_ENCODER.encode(JSON.stringify(message));
+        return JSON_TEXT_ENCODER.encode(JSON.stringify(message, jsonReplacer));
     }
 
     deserialize(buffer: Uint8Array): ClusterMessage {
-        return JSON.parse(JSON_TEXT_DECODER.decode(buffer)) as ClusterMessage;
+        return JSON.parse(JSON_TEXT_DECODER.decode(buffer), jsonReviver) as ClusterMessage;
     }
+}
+
+function jsonReplacer(_key: string, value: unknown): unknown {
+    if (Buffer.isBuffer(value)) {
+        return { [BUFFER_MARKER]: value.toString('base64') };
+    }
+    if (isData(value)) {
+        const bytes = value.toByteArray();
+        return { [DATA_MARKER]: bytes === null ? null : bytes.toString('base64') };
+    }
+    return value;
+}
+
+function jsonReviver(_key: string, value: unknown): unknown {
+    if (value !== null && typeof value === 'object') {
+        if ((value as { type?: string }).type === 'Buffer' && Array.isArray((value as { data?: unknown[] }).data)) {
+            return Buffer.from((value as { data: number[] }).data);
+        }
+        if (BUFFER_MARKER in value) {
+            const encoded = (value as Record<string, string>)[BUFFER_MARKER];
+            return Buffer.from(encoded, 'base64');
+        }
+        if (DATA_MARKER in value) {
+            const encoded = (value as Record<string, string | null>)[DATA_MARKER];
+            return encoded === null ? null : new HeapData(Buffer.from(encoded, 'base64'));
+        }
+    }
+    return value;
+}
+
+function isData(value: unknown): value is Data {
+    return value !== null && typeof value === 'object' && typeof (value as Data).toByteArray === 'function';
 }

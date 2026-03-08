@@ -17,6 +17,7 @@
  * send()/disconnectPeer()/onMessage, membership-driven connection management.
  */
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
+import { BinarySerializationStrategy } from '@zenystx/helios-core/cluster/tcp/BinarySerializationStrategy';
 import { ScatterSerializationStrategy } from '@zenystx/helios-core/cluster/tcp/ScatterSerializationStrategy';
 import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
@@ -66,7 +67,7 @@ export class TcpClusterTransport {
 
     constructor(nodeId: string, strategy?: SerializationStrategy) {
         this._nodeId = nodeId;
-        this._strategy = strategy ?? new JsonSerializationStrategy();
+        this._strategy = strategy ?? new BinarySerializationStrategy();
         this._scatterStrategy = new ScatterSerializationStrategy({ poolSize: 4 });
     }
 
@@ -173,11 +174,7 @@ export class TcpClusterTransport {
     async sendAsync(peerId: string, msg: ClusterMessage): Promise<boolean> {
         const ch = this._peers.get(peerId);
         if (!ch) return false;
-        const payload = await this._scatterStrategy.serializeAsync(msg);
-        const frame = Buffer.allocUnsafe(4 + payload.length);
-        frame.writeUInt32BE(payload.length, 0);
-        frame.set(payload, 4);
-        return ch.write(frame);
+        return this._sendMsg(ch, msg);
     }
 
     /** Disconnect a specific peer by node ID. */

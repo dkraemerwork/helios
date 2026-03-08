@@ -119,8 +119,9 @@ export interface OperationMsg {
   readonly type: "OPERATION";
   readonly callId: number;
   readonly partitionId: number;
-  readonly operationType: string;
-  readonly payload: unknown;
+  readonly factoryId: number;
+  readonly classId: number;
+  readonly payload: Buffer;
   /** Node ID of the sender for response routing. */
   readonly senderId: string;
 }
@@ -139,8 +140,9 @@ export interface BackupMsg {
   readonly callId: number;
   readonly partitionId: number;
   readonly replicaIndex: number;
-  readonly operationType: string;
-  readonly payload: unknown;
+  readonly factoryId: number;
+  readonly classId: number;
+  readonly payload: Buffer;
 }
 
 /** Sync backup acknowledgement (Phase D). */

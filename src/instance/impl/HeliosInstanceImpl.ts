@@ -102,9 +102,7 @@ import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/C
 import type { PartitionService } from "@zenystx/helios-core/spi/PartitionService";
 import { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
 import {
-  decodeResponsePayload,
   deserializeOperation,
-  encodeResponsePayload,
   serializeOperation,
 } from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
 import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
@@ -545,7 +543,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         localAddress,
         remoteSend: async (op, target) => {
           const callId = callIdCounter++;
-          const { operationType, payload } = serializeOperation(op);
+          const { factoryId, classId, payload } = serializeOperation(op);
           const targetMemberId = this._findMemberIdByAddress(target);
           if (targetMemberId === null) {
             throw new Error(`No member found for address ${target.getHost()}:${target.getPort()}`);
@@ -568,7 +566,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
               type: 'OPERATION',
               callId,
               partitionId: op.partitionId,
-              operationType,
+              factoryId,
+              classId,
               payload,
               senderId: coordinator.getLocalMemberId(),
             });
@@ -734,8 +733,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Handle an incoming OPERATION message: execute locally and send response. */
   private _handleRemoteOperation(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION' }>): void {
-    const { callId, partitionId, operationType, payload } = message;
-    const op = deserializeOperation(operationType, payload as any);
+    const { callId, partitionId, factoryId, classId, payload } = message;
+    const op = deserializeOperation(factoryId, classId, payload);
     op.partitionId = partitionId;
     op.setNodeEngine(this._nodeEngine);
 
@@ -759,12 +758,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
       // Find who sent this and reply
       const senderMemberId = this._findSenderForOperation(message);
       if (senderMemberId !== null && this._transport !== null) {
-        this._transport.send(senderMemberId, {
-          type: 'OPERATION_RESPONSE',
-          callId,
-          payload: encodeResponsePayload(responseValue),
-          error: errorMsg,
-        });
+          this._transport.send(senderMemberId, {
+            type: 'OPERATION_RESPONSE',
+            callId,
+            payload: responseValue,
+            error: errorMsg,
+          });
       }
     })();
   }
@@ -777,7 +776,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (message.error !== null) {
       pending.reject(new Error(message.error));
     } else {
-      pending.resolve(decodeResponsePayload(message.payload));
+      pending.resolve(message.payload);
     }
   }
 

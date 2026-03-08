@@ -1,16 +1,13 @@
-/**
- * Block 21.1 — Wire codec for serializing/deserializing map operations
- * for remote execution via OPERATION/OPERATION_RESPONSE cluster messages.
- *
- * Each operation type has a unique string identifier and a payload format
- * that carries the operation's constructor arguments.
- */
+import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult';
 import { CancellationOperation } from '@zenystx/helios-core/executor/impl/CancellationOperation';
 import { ExecuteCallableOperation } from '@zenystx/helios-core/executor/impl/ExecuteCallableOperation';
 import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation';
 import { ShutdownOperation } from '@zenystx/helios-core/executor/impl/ShutdownOperation';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { BIG_ENDIAN, ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
+import { IdentifiedDataSerializableRegistry } from '@zenystx/helios-core/internal/serialization/IdentifiedDataSerializableRegistry';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { ClearOperation } from '@zenystx/helios-core/map/impl/operation/ClearOperation';
 import { DeleteOperation } from '@zenystx/helios-core/map/impl/operation/DeleteOperation';
 import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
@@ -23,256 +20,299 @@ import { RemoveOperation } from '@zenystx/helios-core/map/impl/operation/RemoveO
 import { SetOperation } from '@zenystx/helios-core/map/impl/operation/SetOperation';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
-type WirePayload = Record<string, unknown>;
+const IDS_FLAG = 0x01;
 
-const DATA_MARKER = '__data';
+const RESPONSE_KIND_VOID = 0;
+const RESPONSE_KIND_DATA = 1;
+const RESPONSE_KIND_BOOLEAN = 2;
+const RESPONSE_KIND_NUMBER = 3;
+const RESPONSE_KIND_STRING = 4;
+const RESPONSE_KIND_DATA_ARRAY = 5;
+const RESPONSE_KIND_EXECUTOR_RESULT = 6;
+const RESPONSE_KIND_ERROR = 7;
 
-function encodeData(data: Data): string {
-    const bytes = data.toByteArray();
-    if (bytes === null) throw new Error('Cannot encode null Data');
-    return bytes.toString('base64');
+export const MAP_OPERATION_FACTORY_ID = 1;
+export const EXECUTOR_OPERATION_FACTORY_ID = 2;
+
+const operationRegistry = new IdentifiedDataSerializableRegistry<Operation>();
+
+type MapWireOperation = {
+    readonly mapName: string;
+    readonly _key: Data;
+    readonly _value?: Data;
+    readonly _ttl?: number;
+    readonly _maxIdle?: number;
+};
+
+function writeMapName(out: ByteArrayObjectDataOutput, op: { readonly mapName: string }): void {
+    out.writeString(op.mapName);
 }
 
-function decodeData(encoded: string): Data {
-    return new HeapData(Buffer.from(encoded, 'base64'));
+function writeKeyOnly(out: ByteArrayObjectDataOutput, op: MapWireOperation): void {
+    out.writeString(op.mapName);
+    out.writeData(op._key);
 }
 
-/** Serialize a response value for the wire. */
-export function encodeResponsePayload(value: unknown): unknown {
-    if (value === null || value === undefined) return null;
-    if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
-        return value;
-    }
-    if (value !== null && typeof value === 'object' && typeof (value as Data).toByteArray === 'function') {
-        return { [DATA_MARKER]: encodeData(value as Data) };
-    }
-    if (Array.isArray(value)) {
-        return value.map((entry) => encodeResponsePayload(entry));
-    }
-    if (typeof value === 'object') {
-        return Object.fromEntries(
-            Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, encodeResponsePayload(entry)]),
-        );
-    }
-    return value;
+function writeKeyValue(out: ByteArrayObjectDataOutput, op: MapWireOperation): void {
+    out.writeString(op.mapName);
+    out.writeData(op._key);
+    out.writeData(op._value ?? null);
+    out.writeLong(BigInt(op._ttl ?? -1));
+    out.writeLong(BigInt(op._maxIdle ?? -1));
 }
 
-/** Deserialize a response value from the wire. */
-export function decodeResponsePayload(value: unknown): unknown {
-    if (value === null || value === undefined) return null;
-    if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
-        return value;
-    }
-    if (Array.isArray(value)) {
-        return value.map((entry) => decodeResponsePayload(entry));
-    }
-    if (typeof value === 'object' && value !== null && DATA_MARKER in value) {
-        return decodeData((value as { [DATA_MARKER]: string })[DATA_MARKER]);
-    }
-    if (typeof value === 'object') {
-        return Object.fromEntries(
-            Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, decodeResponsePayload(entry)]),
-        );
-    }
-    return value;
+function registerOperations(): void {
+    operationRegistry.register(PutOperation, MAP_OPERATION_FACTORY_ID, 1, (out, op) => writeKeyValue(out, op as unknown as MapWireOperation), (inp) =>
+        new PutOperation(readRequiredString(inp), readRequiredData(inp), readRequiredData(inp), readLongAsNumber(inp), readLongAsNumber(inp)));
+    operationRegistry.register(GetOperation, MAP_OPERATION_FACTORY_ID, 2, (out, op) => writeKeyOnly(out, op as unknown as MapWireOperation), (inp) =>
+        new GetOperation(readRequiredString(inp), readRequiredData(inp)));
+    operationRegistry.register(RemoveOperation, MAP_OPERATION_FACTORY_ID, 3, (out, op) => writeKeyOnly(out, op as unknown as MapWireOperation), (inp) =>
+        new RemoveOperation(readRequiredString(inp), readRequiredData(inp)));
+    operationRegistry.register(DeleteOperation, MAP_OPERATION_FACTORY_ID, 4, (out, op) => writeKeyOnly(out, op as unknown as MapWireOperation), (inp) =>
+        new DeleteOperation(readRequiredString(inp), readRequiredData(inp)));
+    operationRegistry.register(SetOperation, MAP_OPERATION_FACTORY_ID, 5, (out, op) => writeKeyValue(out, op as unknown as MapWireOperation), (inp) =>
+        new SetOperation(readRequiredString(inp), readRequiredData(inp), readRequiredData(inp), readLongAsNumber(inp), readLongAsNumber(inp)));
+    operationRegistry.register(PutIfAbsentOperation, MAP_OPERATION_FACTORY_ID, 6, (out, op) => writeKeyValue(out, op as unknown as MapWireOperation), (inp) =>
+        new PutIfAbsentOperation(readRequiredString(inp), readRequiredData(inp), readRequiredData(inp), readLongAsNumber(inp), readLongAsNumber(inp)));
+    operationRegistry.register(ClearOperation, MAP_OPERATION_FACTORY_ID, 7, (out, op) => writeMapName(out, op as unknown as { mapName: string }), (inp) =>
+        new ClearOperation(readRequiredString(inp)));
+    operationRegistry.register(ExternalStoreClearOperation, MAP_OPERATION_FACTORY_ID, 8, (out, op) => writeMapName(out, op as unknown as { mapName: string }), (inp) =>
+        new ExternalStoreClearOperation(readRequiredString(inp)));
+    operationRegistry.register(PutBackupOperation, MAP_OPERATION_FACTORY_ID, 9, (out, op) => writeKeyValue(out, op as unknown as MapWireOperation), (inp) =>
+        new PutBackupOperation(readRequiredString(inp), readRequiredData(inp), readRequiredData(inp), readLongAsNumber(inp), readLongAsNumber(inp)));
+    operationRegistry.register(RemoveBackupOperation, MAP_OPERATION_FACTORY_ID, 10, (out, op) => writeKeyOnly(out, op as unknown as MapWireOperation), (inp) =>
+        new RemoveBackupOperation(readRequiredString(inp), readRequiredData(inp)));
+
+    operationRegistry.register(ExecuteCallableOperation, EXECUTOR_OPERATION_FACTORY_ID, 1, (out, op) => {
+        out.writeString(op.descriptor.taskUuid);
+        out.writeString(op.descriptor.executorName);
+        out.writeString(op.descriptor.taskType);
+        out.writeString(op.descriptor.registrationFingerprint);
+        out.writeByteArray(op.descriptor.inputData);
+        out.writeString(op.descriptor.submitterMemberUuid);
+        out.writeLong(BigInt(op.descriptor.timeoutMillis));
+    }, (inp) => new ExecuteCallableOperation({
+        taskUuid: readRequiredString(inp),
+        executorName: readRequiredString(inp),
+        taskType: readRequiredString(inp),
+        registrationFingerprint: readRequiredString(inp),
+        inputData: inp.readByteArray() ?? Buffer.alloc(0),
+        submitterMemberUuid: readRequiredString(inp),
+        timeoutMillis: readLongAsNumber(inp),
+    }));
+
+    operationRegistry.register(MemberCallableOperation, EXECUTOR_OPERATION_FACTORY_ID, 2, (out, op) => {
+        out.writeString(op.descriptor.taskUuid);
+        out.writeString(op.descriptor.executorName);
+        out.writeString(op.descriptor.taskType);
+        out.writeString(op.descriptor.registrationFingerprint);
+        out.writeByteArray(op.descriptor.inputData);
+        out.writeString(op.descriptor.submitterMemberUuid);
+        out.writeLong(BigInt(op.descriptor.timeoutMillis));
+        out.writeString(op.targetMemberUuid);
+    }, (inp) => new MemberCallableOperation({
+        taskUuid: readRequiredString(inp),
+        executorName: readRequiredString(inp),
+        taskType: readRequiredString(inp),
+        registrationFingerprint: readRequiredString(inp),
+        inputData: inp.readByteArray() ?? Buffer.alloc(0),
+        submitterMemberUuid: readRequiredString(inp),
+        timeoutMillis: readLongAsNumber(inp),
+    }, readRequiredString(inp)));
+
+    operationRegistry.register(CancellationOperation, EXECUTOR_OPERATION_FACTORY_ID, 3, (out, op) => {
+        out.writeString(op.executorName);
+        out.writeString(op.taskUuid);
+    }, (inp) => new CancellationOperation(readRequiredString(inp), readRequiredString(inp)));
+
+    operationRegistry.register(ShutdownOperation, EXECUTOR_OPERATION_FACTORY_ID, 4, (out, op) => {
+        out.writeString(op.executorName);
+    }, (inp) => new ShutdownOperation(readRequiredString(inp)));
 }
 
-function encodeBuffer(value: Buffer): string {
-    return value.toString('base64');
+registerOperations();
+
+export function serializeOperation(op: Operation): { factoryId: number; classId: number; payload: Buffer } {
+    const out = new ByteArrayObjectDataOutput(128, null, BIG_ENDIAN);
+    const { factoryId, classId } = operationRegistry.encode(out, op);
+    return {
+        factoryId,
+        classId,
+        payload: out.toByteArray(),
+    };
 }
 
-function decodeBuffer(value: string): Buffer {
-    return Buffer.from(value, 'base64');
+export function deserializeOperation(factoryId: number, classId: number, payload: Buffer): Operation {
+    const inp = new ByteArrayObjectDataInput(payload, null as never, BIG_ENDIAN);
+    return operationRegistry.decode(factoryId, classId, inp);
 }
 
-function stringField(payload: WirePayload, key: string): string {
-    const value = payload[key];
-    if (typeof value !== 'string') {
-        throw new Error(`Expected string field "${key}" in operation payload`);
+export function writeOperationPayload(out: ByteArrayObjectDataOutput, op: Operation): { factoryId: number; classId: number } {
+    out.writeByte(IDS_FLAG);
+    const ids = operationRegistry.getIds(op);
+    out.writeShort(ids.factoryId);
+    out.writeShort(ids.classId);
+    operationRegistry.encode(out, op);
+    return ids;
+}
+
+export function readOperationPayload(inp: ByteArrayObjectDataInput): Operation {
+    const idsFlag = inp.readUnsignedByte();
+    if ((idsFlag & IDS_FLAG) === 0) {
+        throw new Error('Unsupported operation payload without IDS flag');
     }
-    return value;
+    return operationRegistry.decode(inp.readUnsignedShort(), inp.readUnsignedShort(), inp);
 }
 
-function numberField(payload: WirePayload, key: string, defaultValue: number): number {
-    const value = payload[key];
+export function encodeResponsePayload(value: unknown): { kind: number; payload: Buffer } {
+    const out = new ByteArrayObjectDataOutput(128, null, BIG_ENDIAN);
+    const kind = writeResponsePayload(out, value);
+    return { kind, payload: out.toByteArray() };
+}
+
+export function decodeResponsePayload(kind: number, payload: Buffer): unknown {
+    const inp = new ByteArrayObjectDataInput(payload, null as never, BIG_ENDIAN);
+    return readResponsePayload(kind, inp);
+}
+
+export function writeResponsePayload(out: ByteArrayObjectDataOutput, value: unknown): number {
+    if (value === null || value === undefined) {
+        return RESPONSE_KIND_VOID;
+    }
+    if (isData(value)) {
+        out.writeData(value);
+        return RESPONSE_KIND_DATA;
+    }
+    if (typeof value === 'boolean') {
+        out.writeBoolean(value);
+        return RESPONSE_KIND_BOOLEAN;
+    }
     if (typeof value === 'number') {
-        return value;
+        out.writeLong(BigInt(value));
+        return RESPONSE_KIND_NUMBER;
+    }
+    if (typeof value === 'string') {
+        out.writeString(value);
+        return RESPONSE_KIND_STRING;
+    }
+    if (Array.isArray(value) && value.every((entry) => isData(entry))) {
+        out.writeInt(value.length);
+        for (const entry of value) {
+            out.writeData(entry);
+        }
+        return RESPONSE_KIND_DATA_ARRAY;
+    }
+    if (isExecutorOperationResult(value)) {
+        out.writeString(value.taskUuid);
+        out.writeString(value.status);
+        out.writeString(value.originMemberUuid);
+        out.writeData(value.resultData);
+        out.writeString(value.errorName);
+        out.writeString(value.errorMessage);
+        return RESPONSE_KIND_EXECUTOR_RESULT;
+    }
+    if (value instanceof Error) {
+        out.writeString(value.name);
+        out.writeString(value.message);
+        out.writeString(value.stack ?? null);
+        return RESPONSE_KIND_ERROR;
+    }
+    throw new Error(`Unsupported operation response payload: ${describeValue(value)}`);
+}
+
+export function readResponsePayload(kind: number, inp: ByteArrayObjectDataInput): unknown {
+    switch (kind) {
+        case RESPONSE_KIND_VOID:
+            return null;
+        case RESPONSE_KIND_DATA:
+            return inp.readData();
+        case RESPONSE_KIND_BOOLEAN:
+            return inp.readBoolean();
+        case RESPONSE_KIND_NUMBER:
+            return Number(inp.readLong());
+        case RESPONSE_KIND_STRING:
+            return inp.readString();
+        case RESPONSE_KIND_DATA_ARRAY: {
+            const length = inp.readInt();
+            const values: Data[] = new Array(length);
+            for (let index = 0; index < length; index++) {
+                values[index] = readRequiredData(inp);
+            }
+            return values;
+        }
+        case RESPONSE_KIND_EXECUTOR_RESULT:
+            return {
+                taskUuid: readRequiredString(inp),
+                status: readRequiredString(inp) as ExecutorOperationResult['status'],
+                originMemberUuid: readRequiredString(inp),
+                resultData: inp.readData(),
+                errorName: inp.readString(),
+                errorMessage: inp.readString(),
+            } satisfies ExecutorOperationResult;
+        case RESPONSE_KIND_ERROR:
+            return new Error(readRequiredString(inp));
+        default:
+            throw new Error(`Unknown operation response kind: ${kind}`);
+    }
+}
+
+function isData(value: unknown): value is Data {
+    return value !== null && typeof value === 'object' && typeof (value as Data).toByteArray === 'function';
+}
+
+function isExecutorOperationResult(value: unknown): value is ExecutorOperationResult {
+    return value !== null
+        && typeof value === 'object'
+        && typeof (value as ExecutorOperationResult).taskUuid === 'string'
+        && typeof (value as ExecutorOperationResult).status === 'string'
+        && typeof (value as ExecutorOperationResult).originMemberUuid === 'string'
+        && 'resultData' in (value as ExecutorOperationResult);
+}
+
+function readRequiredString(inp: ByteArrayObjectDataInput): string {
+    const value = inp.readString();
+    if (value === null) {
+        throw new Error('Expected string value');
+    }
+    return value;
+}
+
+function readRequiredData(inp: ByteArrayObjectDataInput): Data {
+    const value = inp.readData();
+    if (value === null) {
+        throw new Error('Expected data value');
+    }
+    return value;
+}
+
+function readLongAsNumber(inp: ByteArrayObjectDataInput): number {
+    return Number(inp.readLong());
+}
+
+function describeValue(value: unknown): string {
+    if (value === null) {
+        return 'null';
     }
     if (value === undefined) {
-        return defaultValue;
+        return 'undefined';
     }
-    throw new Error(`Expected numeric field "${key}" in operation payload`);
+    if (Buffer.isBuffer(value)) {
+        return 'Buffer';
+    }
+    if (typeof value === 'object') {
+        return (value as object).constructor.name;
+    }
+    return typeof value;
 }
 
-/** Serialize an operation to a wire-friendly payload. */
-export function serializeOperation(op: Operation): { operationType: string; payload: WirePayload } {
-    if (op instanceof PutOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_PUT_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key), value: encodeData(o._value), ttl: o._ttl, maxIdle: o._maxIdle },
-        };
+export function encodeData(data: Data): Buffer {
+    const bytes = data.toByteArray();
+    if (bytes === null) {
+        throw new Error('Cannot encode null Data');
     }
-    if (op instanceof GetOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_GET_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key) },
-        };
-    }
-    if (op instanceof RemoveOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_REMOVE_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key) },
-        };
-    }
-    if (op instanceof DeleteOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_DELETE_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key) },
-        };
-    }
-    if (op instanceof SetOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_SET_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key), value: encodeData(o._value), ttl: o._ttl, maxIdle: o._maxIdle },
-        };
-    }
-    if (op instanceof PutIfAbsentOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_PUT_IF_ABSENT_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key), value: encodeData(o._value), ttl: o._ttl, maxIdle: o._maxIdle },
-        };
-    }
-    if (op instanceof ClearOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_CLEAR_OP',
-            payload: { mapName: o.mapName },
-        };
-    }
-    if (op instanceof ExternalStoreClearOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_EXTERNAL_CLEAR_OP',
-            payload: { mapName: o.mapName },
-        };
-    }
-    if (op instanceof PutBackupOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_PUT_BACKUP_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key), value: encodeData(o._value), ttl: o._ttl, maxIdle: o._maxIdle },
-        };
-    }
-    if (op instanceof RemoveBackupOperation) {
-        const o = op as any;
-        return {
-            operationType: 'MAP_REMOVE_BACKUP_OP',
-            payload: { mapName: o.mapName, key: encodeData(o._key) },
-        };
-    }
-    if (op instanceof MemberCallableOperation) {
-        return {
-            operationType: 'EXECUTOR_MEMBER_CALLABLE_OP',
-            payload: {
-                taskUuid: op.descriptor.taskUuid,
-                executorName: op.descriptor.executorName,
-                taskType: op.descriptor.taskType,
-                registrationFingerprint: op.descriptor.registrationFingerprint,
-                inputData: encodeBuffer(op.descriptor.inputData),
-                submitterMemberUuid: op.descriptor.submitterMemberUuid,
-                timeoutMillis: op.descriptor.timeoutMillis,
-                targetMemberUuid: op.targetMemberUuid,
-            },
-        };
-    }
-    if (op instanceof ExecuteCallableOperation) {
-        return {
-            operationType: 'EXECUTOR_CALLABLE_OP',
-            payload: {
-                taskUuid: op.descriptor.taskUuid,
-                executorName: op.descriptor.executorName,
-                taskType: op.descriptor.taskType,
-                registrationFingerprint: op.descriptor.registrationFingerprint,
-                inputData: encodeBuffer(op.descriptor.inputData),
-                submitterMemberUuid: op.descriptor.submitterMemberUuid,
-                timeoutMillis: op.descriptor.timeoutMillis,
-            },
-        };
-    }
-    if (op instanceof CancellationOperation) {
-        return {
-            operationType: 'EXECUTOR_CANCEL_OP',
-            payload: {
-                executorName: op.executorName,
-                taskUuid: op.taskUuid,
-            },
-        };
-    }
-    if (op instanceof ShutdownOperation) {
-        return {
-            operationType: 'EXECUTOR_SHUTDOWN_OP',
-            payload: {
-                executorName: op.executorName,
-            },
-        };
-    }
-    throw new Error(`Unsupported operation type for wire serialization: ${op.constructor.name}`);
+    return Buffer.from(bytes);
 }
 
-/** Deserialize an operation from wire payload. */
-export function deserializeOperation(operationType: string, payload: WirePayload): Operation {
-    switch (operationType) {
-        case 'MAP_PUT_OP':
-            return new PutOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')), decodeData(stringField(payload, 'value')), numberField(payload, 'ttl', -1), numberField(payload, 'maxIdle', -1));
-        case 'MAP_GET_OP':
-            return new GetOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')));
-        case 'MAP_REMOVE_OP':
-            return new RemoveOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')));
-        case 'MAP_DELETE_OP':
-            return new DeleteOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')));
-        case 'MAP_SET_OP':
-            return new SetOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')), decodeData(stringField(payload, 'value')), numberField(payload, 'ttl', -1), numberField(payload, 'maxIdle', -1));
-        case 'MAP_PUT_IF_ABSENT_OP':
-            return new PutIfAbsentOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')), decodeData(stringField(payload, 'value')), numberField(payload, 'ttl', -1), numberField(payload, 'maxIdle', -1));
-        case 'MAP_CLEAR_OP':
-            return new ClearOperation(stringField(payload, 'mapName'));
-        case 'MAP_EXTERNAL_CLEAR_OP':
-            return new ExternalStoreClearOperation(stringField(payload, 'mapName'));
-        case 'MAP_PUT_BACKUP_OP':
-            return new PutBackupOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')), decodeData(stringField(payload, 'value')), numberField(payload, 'ttl', -1), numberField(payload, 'maxIdle', -1));
-        case 'MAP_REMOVE_BACKUP_OP':
-            return new RemoveBackupOperation(stringField(payload, 'mapName'), decodeData(stringField(payload, 'key')));
-        case 'EXECUTOR_CALLABLE_OP':
-            return new ExecuteCallableOperation({
-                taskUuid: String(payload.taskUuid),
-                executorName: String(payload.executorName),
-                taskType: String(payload.taskType),
-                registrationFingerprint: String(payload.registrationFingerprint),
-                inputData: decodeBuffer(String(payload.inputData)),
-                submitterMemberUuid: String(payload.submitterMemberUuid),
-                timeoutMillis: Number(payload.timeoutMillis),
-            });
-        case 'EXECUTOR_MEMBER_CALLABLE_OP':
-            return new MemberCallableOperation({
-                taskUuid: String(payload.taskUuid),
-                executorName: String(payload.executorName),
-                taskType: String(payload.taskType),
-                registrationFingerprint: String(payload.registrationFingerprint),
-                inputData: decodeBuffer(String(payload.inputData)),
-                submitterMemberUuid: String(payload.submitterMemberUuid),
-                timeoutMillis: Number(payload.timeoutMillis),
-            }, String(payload.targetMemberUuid));
-        case 'EXECUTOR_CANCEL_OP':
-            return new CancellationOperation(String(payload.executorName), String(payload.taskUuid));
-        case 'EXECUTOR_SHUTDOWN_OP':
-            return new ShutdownOperation(String(payload.executorName));
-        default:
-            throw new Error(`Unknown operation type: ${operationType}`);
-    }
+export function decodeData(encoded: Buffer): Data {
+    return new HeapData(Buffer.from(encoded));
 }
