@@ -12,6 +12,7 @@ import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig";
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
+import { ScheduledExecutorConfig } from "@zenystx/helios-core/config/ScheduledExecutorConfig";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry";
@@ -25,6 +26,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _executorConfigs = new Map<string, ExecutorConfig>();
   private readonly _reliableTopicConfigs = new Map<string, ReliableTopicConfig>();
   private readonly _ringbufferConfigs = new Map<string, RingbufferConfig>();
+  private readonly _scheduledExecutorConfigs = new Map<string, ScheduledExecutorConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
   private readonly _monitorConfig = new MonitorConfig();
@@ -157,6 +159,23 @@ export class HeliosConfig implements InstanceConfig {
 
   getExecutorConfigs(): ReadonlyMap<string, ExecutorConfig> {
     return this._executorConfigs;
+  }
+
+  addScheduledExecutorConfig(config: ScheduledExecutorConfig): this {
+    this._scheduledExecutorConfigs.set(config.getName(), config);
+    return this;
+  }
+
+  getScheduledExecutorConfig(name: string): ScheduledExecutorConfig {
+    return this._scheduledExecutorConfigs.get(name) ?? new ScheduledExecutorConfig(name);
+  }
+
+  findScheduledExecutorConfig(name: string): ScheduledExecutorConfig | null {
+    return this._scheduledExecutorConfigs.get(name) ?? null;
+  }
+
+  getScheduledExecutorConfigs(): ReadonlyMap<string, ScheduledExecutorConfig> {
+    return this._scheduledExecutorConfigs;
   }
 
   getBlitzConfig(): HeliosBlitzRuntimeConfig | null {

@@ -293,7 +293,12 @@ async function mapWorkload(
   signal: AbortSignal,
 ): Promise<void> {
   let seq = 0;
+  let backoffMs = 0;
   while (!signal.aborted) {
+    if (backoffMs > 0) {
+      await Bun.sleep(backoffMs);
+      backoffMs = 0;
+    }
     const key = `k-${seq++ % 10_000}`;
     try {
       const op = Math.random();
@@ -307,13 +312,12 @@ async function mapWorkload(
         await stressMap.delete(key);
         stats.mapDeletes++;
       }
-    } catch (e) {
+    } catch {
       if (signal.aborted) return;
       stats.mapErrors++;
-      if (stats.mapErrors <= 3) console.error(`[map-err] ${e instanceof Error ? e.message : e}`);
+      // Backpressure — brief pause to let TCP drain
+      backoffMs = 1;
     }
-    // Yield every 8 ops to let the event loop process TCP responses
-    if (seq % 8 === 0) await Bun.sleep(0);
   }
 }
 
@@ -566,10 +570,22 @@ async function main(): Promise<void> {
   }
 
   const memberCount = client.instance.getCluster().getMembers().length;
-  console.log(`[boot] client joined cluster: ${memberCount} members visible`);
+  const transportStats = client.instance.getTransportStats();
+  console.log(`[boot] client joined cluster: ${memberCount} members visible, ${transportStats.peerCount} TCP peers, ${transportStats.openChannels} channels`);
   if (memberCount < 4) {
     console.warn("[boot] WARNING: cluster did not reach 4 members — continuing anyway");
   }
+
+  // Log partition distribution
+  let localPartitions = 0;
+  let remotePartitions = 0;
+  const localMemberId = client.instance.getName();
+  for (let p = 0; p < 271; p++) {
+    const ownerId = client.instance.getPartitionOwnerId(p);
+    if (ownerId === localMemberId) localPartitions++;
+    else remotePartitions++;
+  }
+  console.log(`[boot] partitions: ${localPartitions} local, ${remotePartitions} remote`);
 
   console.log(`
 \x1b[1;33m  ┌──────────────────────────────────────────────────────────────┐
