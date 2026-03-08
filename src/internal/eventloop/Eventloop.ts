@@ -22,7 +22,14 @@
 
 // ─── minimal socket interface ─────────────────────────────────────────────────
 
-/** Only the write/end surface of a Bun TCP socket that EventloopChannel needs. */
+/**
+ * Only the write/end surface of a Bun TCP socket that EventloopChannel needs.
+ *
+ * Bun's `socket.write()` returns the number of bytes written. If the return
+ * value equals the input length, the data was fully flushed to the kernel
+ * buffer and `drain` will NOT fire. If less than the input length, the socket
+ * is congested and `drain` will fire when space becomes available.
+ */
 interface SocketWriter {
     write(data: Buffer | string): number;
     end(data?: Buffer | string): void;
@@ -109,17 +116,23 @@ export class EventloopChannel {
             return true;
         }
 
-        // Try direct write if under the outbound limit, or if the frame itself
-        // is larger than the limit (oversized frames go straight to the socket —
-        // Bun handles kernel-level buffering)
+        // Try direct write
         if (this._pendingBytes + data.length <= this._maxOutbound || data.length > this._maxOutbound) {
-            this._pendingBytes += data.length;
-            this._socket.write(data);
+            const written = this._socket.write(data);
             this._bytesWritten += data.length;
+
+            if (written >= data.length) {
+                // Fully flushed to kernel buffer — drain won't fire, so don't
+                // accumulate pending bytes (prevents phantom backpressure)
+            } else {
+                // Partially written — socket is congested. Track pending bytes;
+                // drain will fire when space becomes available.
+                this._pendingBytes += data.length;
+            }
             return true;
         }
 
-        // Socket buffer full — queue the frame for drain-based flush
+        // Outbound limit hit — queue the frame for drain-based flush
         this._writeQueue.push(data);
         this._bytesWritten += data.length;
         return true;
@@ -159,6 +172,9 @@ export class EventloopChannel {
         this._flushQueue();
     }
 
+    /** Current pending bytes awaiting drain. For diagnostics. */
+    pendingBytes(): number { return this._pendingBytes; }
+
     /** @internal */
     _markClosed(): void {
         this._closed = true;
@@ -176,22 +192,20 @@ export class EventloopChannel {
         while (this._writeQueue.length > 0) {
             const frame = this._writeQueue[0];
 
-            // Oversized frame: always write it — the OS socket buffer will accept
-            // what it can and Bun will drain the rest internally
-            if (frame.length > this._maxOutbound) {
+            // Oversized frame or within budget — write it
+            if (frame.length > this._maxOutbound || this._pendingBytes + frame.length <= this._maxOutbound) {
                 this._writeQueue.shift();
-                this._pendingBytes += frame.length;
-                this._socket.write(frame);
+                const written = this._socket.write(frame);
+                if (written < frame.length) {
+                    // Socket congested — track pending, drain will fire
+                    this._pendingBytes += frame.length;
+                }
+                // If fully written, don't accumulate pending
                 continue;
             }
 
-            if (this._pendingBytes + frame.length > this._maxOutbound) {
-                // Would overflow — stop flushing, wait for next drain
-                break;
-            }
-            this._writeQueue.shift();
-            this._pendingBytes += frame.length;
-            this._socket.write(frame);
+            // Would overflow — stop flushing, wait for next drain
+            break;
         }
     }
 }

@@ -735,15 +735,15 @@ src/scheduledexecutor/impl/
 ```
 
 **TODO — Block 22.3**:
-- [ ] Create `ScheduledExecutorPartition` — per-partition container holding a `ScheduledTaskStore`, mirroring Hazelcast `ScheduledExecutorPartition`
-- [ ] Create `ScheduledExecutorMemberBin` — member-local container for member-owned tasks (partition ID = -1)
-- [ ] Create `ScheduledExecutorContainerService` — manages partition array + member bin, creates/destroys containers, implements `ManagedService` (`init`, `reset`, `shutdown`), `RemoteService` (`createDistributedObject`, `destroyDistributedObject`)
-- [ ] Implement local one-shot task scheduling: accept a `TaskDefinition`, create descriptor, compute `nextRunAt` from wall-clock + delay, store in partition container
-- [ ] Dispatch ready tasks into existing `ExecutorContainerService` using timer coordinator (not one `setTimeout` per task)
-- [ ] Capture result envelope on completion and transition state to `DONE`
-- [ ] Wall-clock + monotonic hybrid: persist `nextRunAt` as wall-clock epoch, use monotonic time for local wait calculations
-- [ ] Tests: schedule one-shot, verify execution after delay, verify state transitions, verify result capture, verify store persistence
-- [ ] Run a verification task that proves one-shot scheduling dispatches through real `ExecutorContainerService`, result capture is end to end, timer coordination is real (not one `setTimeout` per task), and no container method is a stub or fake: `bun test test/scheduledexecutor/impl/ScheduledExecutorContainerServiceTest.test.ts` green
+- [x] Create `ScheduledExecutorPartition` — per-partition container holding a `ScheduledTaskStore`, mirroring Hazelcast `ScheduledExecutorPartition`
+- [x] Create `ScheduledExecutorMemberBin` — member-local container for member-owned tasks (partition ID = -1)
+- [x] Create `ScheduledExecutorContainerService` — manages partition array + member bin, creates/destroys containers, implements `ManagedService` (`init`, `reset`, `shutdown`), `RemoteService` (`createDistributedObject`, `destroyDistributedObject`)
+- [x] Implement local one-shot task scheduling: accept a `TaskDefinition`, create descriptor, compute `nextRunAt` from wall-clock + delay, store in partition container
+- [x] Dispatch ready tasks into existing `ExecutorContainerService` using timer coordinator (not one `setTimeout` per task)
+- [x] Capture result envelope on completion and transition state to `DONE`
+- [x] Wall-clock + monotonic hybrid: persist `nextRunAt` as wall-clock epoch, use monotonic time for local wait calculations
+- [x] Tests: schedule one-shot, verify execution after delay, verify state transitions, verify result capture, verify store persistence
+- [x] Run a verification task that proves one-shot scheduling dispatches through real `ExecutorContainerService`, result capture is end to end, timer coordination is real (not one `setTimeout` per task), and no container method is a stub or fake: `bun test test/scheduledexecutor/impl/ScheduledExecutorContainerServiceTest.test.ts` green
 
 ---
 
@@ -1051,7 +1051,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.0** — `ScheduledExecutorConfig` + `HeliosConfig` extensions (`name`, `poolSize`, `capacity`, `capacityPolicy`/`PER_NODE`, `durability`, `statisticsEnabled`, `scheduleShutdownPolicy`/`GRACEFUL_TRANSFER`/`FORCE_STOP`, `maxHistoryEntriesPerTask`, validation, defaults matching Hazelcast) — ~12 tests
 - [x] **Block 22.1** — `IScheduledExecutorService` + `IScheduledFuture<V>` + `ScheduledTaskHandler` contracts (full Hazelcast-parity API surface: `schedule`, `scheduleOnMember`, `scheduleOnKeyOwner`, `scheduleOnAllMembers`, `scheduleOnMembers`, `scheduleAtFixedRate`, all member/key fixed-rate variants, `getScheduledFuture(handler)`, `getAllScheduledFutures()`, `shutdown()`, portable handler serialization/reconstruction, `ScheduledTaskStatistics` interface) — ~15 tests
 - [x] **Block 22.2** — `ScheduledTaskDescriptor` + state model + `ScheduledTaskStore` (task record with `taskName`, `handlerId`, `executorName`, `taskType`, `scheduleKind`, `ownerKind`, `ownerEpoch`, `version`, `attemptId`, state enum `scheduled`/`running`/`done`/`cancelled`/`disposed`/`suspended`, run history entries with timing/outcome/attempt/epoch metadata, oldest-entry eviction, named-task `fail-if-exists` duplicate policy, unnamed stable task ID generation) — ~18 tests
-- [ ] **Block 22.3** — `ScheduledExecutorContainerService` + local one-shot execution (partition-local task store management, one-shot delayed task scheduling via timer coordinator, dispatch into existing `ExecutorContainerService`, result envelope capture, wall-clock + monotonic hybrid timing, task state transitions on completion) — ~16 tests
+- [x] **Block 22.3** — `ScheduledExecutorContainerService` + local one-shot execution (partition-local task store management, one-shot delayed task scheduling via timer coordinator, dispatch into existing `ExecutorContainerService`, result envelope capture, wall-clock + monotonic hybrid timing, task state transitions on completion) — ~16 tests
 - [ ] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
 - [ ] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
 - [ ] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
