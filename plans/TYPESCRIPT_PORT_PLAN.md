@@ -938,14 +938,14 @@ Depends on: Block 22.12 (crash recovery).
 **Goal:** Add member-targeted and member-fanout scheduling matching Hazelcast semantics.
 
 **TODO — Block 22.13**:
-- [ ] `scheduleOnMember(...)`: create task descriptor with `ownerKind=MEMBER`, metadata anchored by hashed task ID in partitioned store, target member UUID in record
-- [ ] Member-lifecycle-bound semantics: if the target member leaves, its member-owned tasks are lost (not transparently migrated), matching Hazelcast
-- [ ] `scheduleOnAllMembers(...)`: create one scheduled future per cluster member, return `Map<Member, IScheduledFuture>`
-- [ ] `scheduleOnMembers(...)`: create one scheduled future per specified member
-- [ ] All member fixed-rate variants: `scheduleOnMemberAtFixedRate`, `scheduleOnAllMembersAtFixedRate`, `scheduleOnMembersAtFixedRate`
-- [ ] Member bin container (`partitionId = -1`) manages member-owned task execution
-- [ ] Tests: member-targeted task executes on correct member, member departure loses task, all-members fanout creates correct count, member fixed-rate works
-- [ ] Run a verification task that proves member-owned scheduling routes to real members, member-departure task loss is Hazelcast-parity, fanout creates real per-member futures, and no member-owned path is a stub or falls back to partition-owned behavior: `bun test test/scheduledexecutor/impl/MemberOwnedSchedulingTest.test.ts` green
+- [x] `scheduleOnMember(...)`: create task descriptor with `ownerKind=MEMBER`, metadata anchored by hashed task ID in partitioned store, target member UUID in record
+- [x] Member-lifecycle-bound semantics: if the target member leaves, its member-owned tasks are lost (not transparently migrated), matching Hazelcast
+- [x] `scheduleOnAllMembers(...)`: create one scheduled future per cluster member, return `Map<Member, IScheduledFuture>`
+- [x] `scheduleOnMembers(...)`: create one scheduled future per specified member
+- [x] All member fixed-rate variants: `scheduleOnMemberAtFixedRate`, `scheduleOnAllMembersAtFixedRate`, `scheduleOnMembersAtFixedRate`
+- [x] Member bin container (`partitionId = -1`) manages member-owned task execution
+- [x] Tests: member-targeted task executes on correct member, member departure loses task, all-members fanout creates correct count, member fixed-rate works
+- [x] Run a verification task that proves member-owned scheduling routes to real members, member-departure task loss is Hazelcast-parity, fanout creates real per-member futures, and no member-owned path is a stub or falls back to partition-owned behavior: `bun test test/scheduledexecutor/impl/MemberOwnedSchedulingTest.test.ts` green
 
 ---
 
@@ -1061,7 +1061,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests
 - [x] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
 - [x] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests
-- [ ] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
+- [x] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
 - [ ] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
 - [ ] **Block 22.15** — Stats + metrics + diagnostics (`ScheduledTaskStatistics` parity, pending/started/completed/cancelled/failed counters, scheduler-lag metrics, active-schedule gauge, pool health, admin visibility hooks, documented `StatefulTask` parity gap for first release) — ~12 tests
 - [ ] **Block 22.INT** — End-to-end rollout acceptance (config → schedule one-shot → result, config → schedule fixed-rate → verify cadence, cancel/dispose lifecycle, handler reacquisition after restart, partition migration preserves schedules, member crash recovery with at-least-once replay, member-owned task loss on departure, client/server parity E2E, shutdown transfer, full regression) — ~20 tests

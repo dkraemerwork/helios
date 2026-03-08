@@ -4,6 +4,9 @@
  * Routes all operations (cancel, dispose, isDone, isCancelled, get, getDelay, getStats)
  * through the container service using the handler's partition/member assignment.
  *
+ * Member-owned futures check for member-loss before every access (Hazelcast parity:
+ * ScheduledFutureProxy.checkAccessibleOwner()).
+ *
  * Hazelcast parity: com.hazelcast.scheduledexecutor.impl.ScheduledFutureProxy
  */
 
@@ -27,6 +30,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async getStats(): Promise<ScheduledTaskStatistics> {
+        this._checkAccessibleOwner();
         const descriptor = this._containerService.getTaskDescriptor(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
@@ -47,6 +51,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async dispose(): Promise<void> {
+        this._checkAccessibleOwner();
         this._containerService.disposeTask(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
@@ -55,6 +60,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async cancel(_mayInterruptIfRunning: boolean): Promise<boolean> {
+        this._checkAccessibleOwner();
         return this._containerService.cancelTask(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
@@ -63,6 +69,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async isDone(): Promise<boolean> {
+        this._checkAccessibleOwner();
         const descriptor = this._containerService.getTaskDescriptor(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
@@ -73,6 +80,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async isCancelled(): Promise<boolean> {
+        this._checkAccessibleOwner();
         const descriptor = this._containerService.getTaskDescriptor(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
@@ -82,6 +90,7 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async get(): Promise<V> {
+        this._checkAccessibleOwner();
         const descriptor = this._containerService.getTaskDescriptor(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
@@ -97,11 +106,29 @@ export class ScheduledFutureProxy<V> implements IScheduledFuture<V> {
     }
 
     async getDelay(): Promise<number> {
+        this._checkAccessibleOwner();
         const descriptor = this._containerService.getTaskDescriptor(
             this._handler.getSchedulerName(),
             this._handler.getTaskName(),
             this._handler.getPartitionId(),
         );
         return Math.max(0, descriptor.nextRunAt - Date.now());
+    }
+
+    /**
+     * Validate that the owning member/partition is still accessible.
+     * For member-owned tasks, throws if the member has departed.
+     *
+     * Hazelcast parity: ScheduledFutureProxy.checkAccessibleOwner()
+     */
+    private _checkAccessibleOwner(): void {
+        if (this._handler.isAssignedToMember()) {
+            const memberUuid = this._handler.getMemberUuid()!;
+            if (this._containerService.isMemberRemoved(memberUuid)) {
+                throw new Error(
+                    `Member with UUID: ${memberUuid}, holding this scheduled task is not part of this cluster.`,
+                );
+            }
+        }
     }
 }

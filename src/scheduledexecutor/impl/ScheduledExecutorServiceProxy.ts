@@ -5,6 +5,10 @@
  * creates {@link ScheduledFutureProxy} instances for result handling,
  * and supports handler-based future reacquisition.
  *
+ * Member-owned scheduling uses the member bin (partitionId=-1) and creates
+ * handlers with the target member's UUID. Member-departure permanently loses
+ * member-owned tasks (Hazelcast parity).
+ *
  * Hazelcast parity: com.hazelcast.scheduledexecutor.impl.ScheduledExecutorServiceProxy
  */
 
@@ -26,6 +30,7 @@ export class ScheduledExecutorServiceProxy implements IScheduledExecutorService 
     private readonly _partitionCount: number;
     private _shutdown = false;
     private _nextPartition = 0;
+    private _clusterMembers: Member[] = [];
 
     constructor(
         name: string,
@@ -47,6 +52,14 @@ export class ScheduledExecutorServiceProxy implements IScheduledExecutorService 
         return this._shutdown;
     }
 
+    /**
+     * Set the current cluster member list for fanout operations
+     * (scheduleOnAllMembers, scheduleOnAllMembersAtFixedRate).
+     */
+    setClusterMembers(members: Member[]): void {
+        this._clusterMembers = members;
+    }
+
     // ── One-shot scheduling ─────────────────────────────────────────────
 
     async schedule<V>(task: TaskCallable<V>, delayMs: number): Promise<IScheduledFuture<V>> {
@@ -59,14 +72,13 @@ export class ScheduledExecutorServiceProxy implements IScheduledExecutorService 
         return new ScheduledFutureProxy<V>(handler, this._containerService);
     }
 
-    async scheduleOnMember<V>(task: TaskCallable<V>, _member: Member, delayMs: number): Promise<IScheduledFuture<V>> {
+    async scheduleOnMember<V>(task: TaskCallable<V>, member: Member, delayMs: number): Promise<IScheduledFuture<V>> {
         this._checkNotShutdown();
-        // For local single-node, member-targeted scheduling routes to a partition
-        const partitionId = this._nextPartitionId();
+        const memberUuid = member.getUuid();
         const definition = this._buildDefinition(task, delayMs, 0, 'SINGLE_RUN');
-        const descriptor = this._containerService.scheduleOnPartition(this._name, definition, partitionId);
+        const descriptor = this._containerService.scheduleOnMember(this._name, definition, memberUuid);
 
-        const handler = ScheduledTaskHandler.ofPartition(this._name, descriptor.taskName, partitionId);
+        const handler = ScheduledTaskHandler.ofMember(this._name, descriptor.taskName, memberUuid);
         return new ScheduledFutureProxy<V>(handler, this._containerService);
     }
 
@@ -82,11 +94,12 @@ export class ScheduledExecutorServiceProxy implements IScheduledExecutorService 
 
     async scheduleOnAllMembers<V>(task: TaskCallable<V>, delayMs: number): Promise<Map<Member, IScheduledFuture<V>>> {
         this._checkNotShutdown();
-        // Single-node: schedule once, return single-member map
-        const future = await this.schedule(task, delayMs);
         const result = new Map<Member, IScheduledFuture<V>>();
-        // In single-node mode we don't have a real member reference; future blocks will wire this
-        return result.size === 0 ? new Map([[{} as Member, future]]) : result;
+        for (const member of this._clusterMembers) {
+            const future = await this.scheduleOnMember(task, member, delayMs);
+            result.set(member, future);
+        }
+        return result;
     }
 
     async scheduleOnMembers<V>(task: TaskCallable<V>, members: Iterable<Member>, delayMs: number): Promise<Map<Member, IScheduledFuture<V>>> {
@@ -111,13 +124,13 @@ export class ScheduledExecutorServiceProxy implements IScheduledExecutorService 
         return new ScheduledFutureProxy<void>(handler, this._containerService);
     }
 
-    async scheduleOnMemberAtFixedRate(task: TaskCallable<void>, _member: Member, initialDelayMs: number, periodMs: number): Promise<IScheduledFuture<void>> {
+    async scheduleOnMemberAtFixedRate(task: TaskCallable<void>, member: Member, initialDelayMs: number, periodMs: number): Promise<IScheduledFuture<void>> {
         this._checkNotShutdown();
-        const partitionId = this._nextPartitionId();
+        const memberUuid = member.getUuid();
         const definition = this._buildDefinition(task, initialDelayMs, periodMs, 'AT_FIXED_RATE');
-        const descriptor = this._containerService.scheduleOnPartition(this._name, definition, partitionId);
+        const descriptor = this._containerService.scheduleOnMember(this._name, definition, memberUuid);
 
-        const handler = ScheduledTaskHandler.ofPartition(this._name, descriptor.taskName, partitionId);
+        const handler = ScheduledTaskHandler.ofMember(this._name, descriptor.taskName, memberUuid);
         return new ScheduledFutureProxy<void>(handler, this._containerService);
     }
 
@@ -133,8 +146,12 @@ export class ScheduledExecutorServiceProxy implements IScheduledExecutorService 
 
     async scheduleOnAllMembersAtFixedRate(task: TaskCallable<void>, initialDelayMs: number, periodMs: number): Promise<Map<Member, IScheduledFuture<void>>> {
         this._checkNotShutdown();
-        const future = await this.scheduleAtFixedRate(task, initialDelayMs, periodMs);
-        return new Map([[{} as Member, future]]);
+        const result = new Map<Member, IScheduledFuture<void>>();
+        for (const member of this._clusterMembers) {
+            const future = await this.scheduleOnMemberAtFixedRate(task, member, initialDelayMs, periodMs);
+            result.set(member, future);
+        }
+        return result;
     }
 
     async scheduleOnMembersAtFixedRate(task: TaskCallable<void>, members: Iterable<Member>, initialDelayMs: number, periodMs: number): Promise<Map<Member, IScheduledFuture<void>>> {

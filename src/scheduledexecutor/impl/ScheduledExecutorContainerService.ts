@@ -136,6 +136,27 @@ export class ScheduledExecutorContainerService {
         return this._configs;
     }
 
+    /**
+     * Set of member UUIDs that have been removed from the cluster.
+     * Used by ScheduledFutureProxy to detect member-loss.
+     */
+    private readonly _removedMembers = new Set<string>();
+
+    /**
+     * Notify that a member has left the cluster.
+     * All member-owned tasks for that member become inaccessible (Hazelcast parity).
+     */
+    notifyMemberRemoved(memberUuid: string): void {
+        this._removedMembers.add(memberUuid);
+    }
+
+    /**
+     * Check if a member has been removed from the cluster.
+     */
+    isMemberRemoved(memberUuid: string): boolean {
+        return this._removedMembers.has(memberUuid);
+    }
+
     // --- One-shot scheduling ---
 
     /**
@@ -180,6 +201,51 @@ export class ScheduledExecutorContainerService {
         return descriptor;
     }
 
+    /**
+     * Schedule a task on a specific member (member-owned, partition ID = -1).
+     *
+     * Member-owned tasks have durability=0 (no backup replication)
+     * and are permanently lost when the target member departs.
+     *
+     * Hazelcast parity: ScheduledExecutorServiceProxy.submitOnMemberSync()
+     */
+    scheduleOnMember(
+        executorName: string,
+        definition: TaskDefinition,
+        memberUuid: string,
+    ): ScheduledTaskDescriptor {
+        if (this._shutdown) {
+            throw new ExecutorRejectedExecutionException('ScheduledExecutorContainerService is shut down');
+        }
+
+        const config = this._configs.get(executorName);
+        const maxHistory = config?.getMaxHistoryEntriesPerTask() ?? 100;
+
+        const now = Date.now();
+        const nextRunAt = now + definition.delay;
+
+        const descriptor = new ScheduledTaskDescriptor({
+            taskName: definition.name,
+            handlerId: randomUUID(),
+            executorName,
+            taskType: definition.command,
+            scheduleKind: definition.type === 'SINGLE_RUN' ? 'ONE_SHOT' : 'FIXED_RATE',
+            ownerKind: 'MEMBER',
+            partitionId: -1,
+            memberUuid,
+            initialDelayMillis: definition.delay,
+            periodMillis: definition.period,
+            nextRunAt,
+            durabilityReplicaCount: 0, // Member-owned: no replication
+            maxHistoryEntries: maxHistory,
+        });
+
+        const store = this._memberBin.getOrCreateContainer(executorName);
+        store.schedule(descriptor);
+
+        return descriptor;
+    }
+
     // --- Lifecycle: cancel / dispose / getTaskDescriptor ---
 
     /**
@@ -190,7 +256,7 @@ export class ScheduledExecutorContainerService {
      * @throws StaleTaskException if the task has been disposed.
      */
     cancelTask(executorName: string, taskName: string, partitionId: number): boolean {
-        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        const store = this._getStore(executorName, partitionId);
         const descriptor = store.get(taskName);
 
         if (!descriptor) {
@@ -214,7 +280,7 @@ export class ScheduledExecutorContainerService {
      * @throws StaleTaskException if the task has already been disposed (not found in store).
      */
     disposeTask(executorName: string, taskName: string, partitionId: number): void {
-        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        const store = this._getStore(executorName, partitionId);
         const descriptor = store.get(taskName);
 
         if (!descriptor) {
@@ -231,7 +297,7 @@ export class ScheduledExecutorContainerService {
      * Get a task descriptor by name. Throws StaleTaskException if disposed (not in store).
      */
     getTaskDescriptor(executorName: string, taskName: string, partitionId: number): ScheduledTaskDescriptor {
-        const store = this._partitions[partitionId]!.getOrCreateContainer(executorName);
+        const store = this._getStore(executorName, partitionId);
         const descriptor = store.get(taskName);
 
         if (!descriptor) {
@@ -443,7 +509,18 @@ export class ScheduledExecutorContainerService {
     }
 
     /**
-     * Scan all partition stores and dispatch any tasks whose nextRunAt <= now.
+     * Resolve the task store for the given executor and partition/member-bin.
+     * partitionId === -1 routes to the member bin.
+     */
+    private _getStore(executorName: string, partitionId: number) {
+        if (partitionId === -1) {
+            return this._memberBin.getOrCreateContainer(executorName);
+        }
+        return this._partitions[partitionId]!.getOrCreateContainer(executorName);
+    }
+
+    /**
+     * Scan all partition stores and member bin, dispatch any tasks whose nextRunAt <= now.
      * This is the core dispatch loop — a single timer drives all task firings.
      */
     private _dispatchReadyTasks(): void {
@@ -459,6 +536,19 @@ export class ScheduledExecutorContainerService {
                     ) {
                         this._executeTask(descriptor);
                     }
+                }
+            }
+        }
+
+        // Dispatch member-bin tasks (member-owned, partitionId=-1)
+        for (const [executorName] of this._configs) {
+            const store = this._memberBin.getOrCreateContainer(executorName);
+            for (const descriptor of store.getAll()) {
+                if (
+                    descriptor.state === ScheduledTaskState.SCHEDULED &&
+                    descriptor.nextRunAt <= now
+                ) {
+                    this._executeTask(descriptor);
                 }
             }
         }
