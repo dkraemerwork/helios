@@ -12,22 +12,9 @@
  * OperationService with owner-routed partition dispatch (no legacy
  * MAP_PUT/MAP_REMOVE/MAP_CLEAR broadcast).
  */
-import { MapClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapClearCodec";
-import { MapContainsKeyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapContainsKeyCodec";
-import { MapDeleteCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapDeleteCodec";
-import { MapGetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec";
-import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
-import { MapRemoveCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapRemoveCodec";
-import { MapSetCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSetCodec";
-import { MapSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapSizeCodec";
-import { QueueClearCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueClearCodec";
-import { QueueOfferCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueOfferCodec";
-import { QueuePeekCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePeekCodec";
-import { QueuePollCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueuePollCodec";
-import { QueueSizeCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueSizeCodec";
 import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
-import { TopicPublishCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicPublishCodec";
-import { TopicRemoveMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicRemoveMessageListenerCodec";
+import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
+import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
 import { Address } from "@zenystx/helios-core/cluster/Address";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import { LocalCluster } from "@zenystx/helios-core/cluster/impl/LocalCluster";
@@ -41,6 +28,10 @@ import type { ISet } from "@zenystx/helios-core/collection/ISet";
 import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
 import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
 import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
+import { DistributedListService } from "@zenystx/helios-core/collection/impl/list/DistributedListService";
+import { ListProxyImpl } from "@zenystx/helios-core/collection/impl/list/ListProxyImpl";
+import { DistributedSetService } from "@zenystx/helios-core/collection/impl/set/DistributedSetService";
+import { SetProxyImpl } from "@zenystx/helios-core/collection/impl/set/SetProxyImpl";
 import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
 import { QueueProxyImpl } from "@zenystx/helios-core/collection/impl/queue/QueueProxyImpl";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
@@ -59,16 +50,19 @@ import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/Inlin
 import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/ScatterExecutionBackend";
 import { TaskTypeRegistry } from "@zenystx/helios-core/executor/impl/TaskTypeRegistry";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
-import { PendingResponseEntryPool, type PendingResponseEntry } from "@zenystx/helios-core/instance/impl/PendingResponseEntryPool";
+import { InvocationMonitor } from "@zenystx/helios-core/instance/impl/InvocationMonitor";
+import { PendingResponseEntryPool } from "@zenystx/helios-core/instance/impl/PendingResponseEntryPool";
 import { BlitzReadinessState, HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
+import { NearCacheInvalidationManager } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationManager";
 import { PartitionReplicaManager } from "@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager";
 import { PartitionBackupReplicaAntiEntropyOp } from "@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp";
-import { PartitionReplicaSyncResponse } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse";
+import { chunkNamespaceStates } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest";
+import { PartitionReplicaSyncChunkAssembler, PartitionReplicaSyncResponse } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import { SerializationConfig } from "@zenystx/helios-core/internal/serialization/impl/SerializationConfig";
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
@@ -79,8 +73,13 @@ import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import { NearCachedIMapWrapper } from "@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper";
 import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
 import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
+import { DistributedMultiMapService } from "@zenystx/helios-core/multimap/impl/DistributedMultiMapService";
+import { MultiMapProxyImpl } from "@zenystx/helios-core/multimap/impl/MultiMapProxyImpl";
 import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
 import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
+import { DistributedReplicatedMapService } from "@zenystx/helios-core/replicatedmap/impl/DistributedReplicatedMapService";
+import { ReplicatedMapProxyImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapProxyImpl";
+import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
 import { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
 import { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
 import { ClusterReadHandler } from "@zenystx/helios-core/rest/handler/ClusterReadHandler";
@@ -93,10 +92,16 @@ import type {
 import { DataHandler } from "@zenystx/helios-core/rest/handler/DataHandler";
 import { HealthCheckHandler } from "@zenystx/helios-core/rest/handler/HealthCheckHandler";
 import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
+import { MetricsHandler } from "@zenystx/helios-core/rest/handler/MetricsHandler";
 import { MetricsRegistry } from "@zenystx/helios-core/monitor/MetricsRegistry";
 import { MetricsSampler } from "@zenystx/helios-core/monitor/MetricsSampler";
+import { HealthMonitor } from "@zenystx/helios-core/monitor/HealthMonitor";
+import { globalMetrics } from "@zenystx/helios-core/monitor/HazelcastMetrics";
+import { globalResourceLimiter } from "@zenystx/helios-core/monitor/ResourceLimiter";
 import type { MonitorStateProvider } from "@zenystx/helios-core/monitor/MonitorStateProvider";
-import type { BlitzMetrics, MemberPartitionInfo, ObjectInventory, ThreadPoolMetrics, TransportMetrics } from "@zenystx/helios-core/monitor/MetricsSample";
+import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitionInfo, MigrationMetrics, ObjectInventory, OperationMetrics, ThreadPoolMetrics, TransportMetrics } from "@zenystx/helios-core/monitor/MetricsSample";
+import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
+import { MigrationQueue } from "@zenystx/helios-core/internal/partition/impl/MigrationQueue";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
@@ -106,7 +111,11 @@ import {
   deserializeOperation,
   serializeOperation,
 } from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
+import { isBackupAwareOperation } from "@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation";
+import { BackpressureRegulator, OverloadError } from "@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator";
+import type { BackpressureStats } from "@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator";
 import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
+import { RetryableException } from "@zenystx/helios-core/spi/impl/operationservice/RetryableException";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 import type { Message } from "@zenystx/helios-core/topic/Message";
 import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
@@ -121,7 +130,11 @@ const TOPIC_SERVICE_NAME = "hz:impl:topicService";
 const RELIABLE_TOPIC_SERVICE_NAME = "hz:impl:reliableTopicService";
 const EXECUTOR_SERVICE_NAME = "hz:impl:executorService";
 const REMOTE_OPERATION_TIMEOUT_MS = 10_000;
+const REMOTE_BACKUP_ACK_TIMEOUT_MS = 1_500;
 const INVOCATION_SWEEP_INTERVAL_MS = 1_000;
+const REMOTE_PEER_CONNECT_TIMEOUT_MS = 500;
+const REMOTE_PEER_CONNECT_POLL_MS = 10;
+const RECOVERY_SYNC_CHUNK_MAX_BYTES = 256 * 1024;
 
 type BlitzServerManagerLike = {
   shutdown(): Promise<void>;
@@ -132,6 +145,9 @@ type BlitzServiceLike = {
   shutdown(): Promise<void>;
   readonly isClosed: boolean;
   readonly jsm?: { getAccountInfo(): Promise<unknown> };
+  getRunningJobCount?(): number;
+  getClusterSize?(): number;
+  getJobCounters?(): { submitted: number; completedSuccessfully: number; completedWithFailure: number; executionStarted: number };
 };
 
 type BlitzRuntimeHandle = {
@@ -225,10 +241,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _cluster: Cluster;
   private _clusterCoordinator: HeliosClusterCoordinator | null = null;
   private _distributedQueueService: DistributedQueueService | null = null;
+  private _distributedListService: DistributedListService | null = null;
+  private _distributedSetService: DistributedSetService | null = null;
+  private _distributedMultiMapService: DistributedMultiMapService | null = null;
+  private _distributedReplicatedMapService: DistributedReplicatedMapService | null = null;
+  private _distributedCacheService: DistributedCacheService | null = null;
   private _distributedTopicService: DistributedTopicService | null = null;
   private _reliableTopicService: ReliableTopicService;
   private _ringbufferService!: RingbufferService;
   private readonly _replicaManager = new PartitionReplicaManager(271, 20);
+  private readonly _recoverySyncAssemblies = new Map<string, PartitionReplicaSyncChunkAssembler>();
 
   // Per-name data-structure caches (same name → same instance)
   private readonly _maps = new Map<string, MapProxy<unknown, unknown>>();
@@ -237,17 +259,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
     NearCachedIMapWrapper<unknown, unknown>
   >();
   private readonly _queues = new Map<string, IQueue<unknown>>();
-  private readonly _lists = new Map<string, ListImpl<unknown>>();
-  private readonly _sets = new Map<string, SetImpl<unknown>>();
+  private readonly _lists = new Map<string, ListProxyImpl<unknown> | ListImpl<unknown>>();
+  private readonly _sets = new Map<string, SetProxyImpl<unknown> | SetImpl<unknown>>();
   private readonly _topics = new Map<string, ITopic<unknown>>();
   private readonly _reliableTopics = new Map<string, ITopic<unknown>>();
   private readonly _multiMaps = new Map<
     string,
-    MultiMapImpl<unknown, unknown>
+    MultiMapProxyImpl<unknown, unknown> | MultiMapImpl<unknown, unknown>
   >();
   private readonly _replicatedMaps = new Map<
     string,
-    ReplicatedMapImpl<unknown, unknown>
+    ReplicatedMapProxyImpl<unknown, unknown> | ReplicatedMapImpl<unknown, unknown>
   >();
   private readonly _executors = new Map<string, ExecutorServiceProxy>();
   private readonly _executorContainers = new Map<string, ExecutorContainerService>();
@@ -307,11 +329,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Metrics sampler — non-null when monitoring is enabled. */
   private _metricsSampler: MetricsSampler | null = null;
 
+  /** Health monitor — non-null when monitoring is enabled and level != OFF. */
+  private _healthMonitor: HealthMonitor | null = null;
+
   /** Built-in REST server — non-null when REST API is configured. */
   private readonly _restServer: HeliosRestServer;
 
   /** Near-cache manager — creates/manages near-caches per map name. */
   private readonly _nearCacheManager: DefaultNearCacheManager;
+
+  /** Near-cache invalidation manager — pushes invalidation events to subscribed client sessions. */
+  private readonly _nearCacheInvalidationManager: NearCacheInvalidationManager;
 
   /** Production serialization service — shared by NodeEngine and NearCacheManager. */
   private readonly _ss: SerializationServiceImpl;
@@ -332,7 +360,23 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionTopicListeners = new Map<string, Set<string>>();
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
+  private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
+  private readonly _localBackupAckWaiters = new Map<number, {
+    pendingMemberIds: Set<string>;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timeoutHandle: ReturnType<typeof setTimeout>;
+  }>();
   private _invocationSweepHandle: ReturnType<typeof setInterval> | null = null;
+
+  /** Remote invocation backpressure regulator — non-null when clustering is enabled. */
+  private _backpressureRegulator: BackpressureRegulator | null = null;
+
+  /** Migration manager — non-null when clustering is enabled. */
+  private _migrationManager: MigrationManager | null = null;
+
+  /** Operation service impl — reference kept for metrics access. */
+  private _operationServiceImpl: OperationServiceImpl | null = null;
 
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
@@ -347,6 +391,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Near-cache manager — shares the same serialization service as the node engine
     this._nearCacheManager = new DefaultNearCacheManager(this._ss);
+
+    // Near-cache invalidation manager — pushes invalidation events to subscribed clients
+    this._nearCacheInvalidationManager = new NearCacheInvalidationManager();
 
     // Validate reliable-topic configs: backing ringbuffer must have backupCount >= 1
     this._validateReliableTopicConfigs();
@@ -464,6 +511,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
       // Register all MapStoreConfigs so operations can trigger lazy init (Block 21.2)
       this._registerMapStoreConfigs();
+      // Capture the internally created OperationServiceImpl for metrics collection
+      this._operationServiceImpl = this._nodeEngine.getOperationService() as OperationServiceImpl;
       return;
     }
 
@@ -492,6 +541,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const internalPartitionService = this._clusterCoordinator.getInternalPartitionService();
     internalPartitionService.setReplicaManager(this._replicaManager);
     internalPartitionService.setLocalMemberUuid(this._clusterCoordinator.getLocalMemberId());
+
+    // Create the MigrationManager sharing the same PartitionStateManager as the partition service.
+    this._migrationManager = new MigrationManager(
+      internalPartitionService.getPartitionStateManager(),
+      new MigrationQueue(),
+    );
     internalPartitionService.setAntiEntropyDispatcher((targetUuid, op) => {
       this._dispatchAntiEntropy(targetUuid, op);
     });
@@ -500,6 +555,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._clusterCoordinator.onMembershipChanged(() => {
       this._rebuildAddressToMemberIdCache();
       this._handleExecutorMembershipChange();
+    });
+    this._clusterCoordinator.onMemberRemoved((memberId) => {
+      queueMicrotask(() => {
+        this._invocationMonitor.failInvocationsForMember(memberId);
+        this._failLocalBackupAckWaitersForMember(memberId);
+      });
     });
 
     // Build a partition service adapter that delegates to the coordinator
@@ -533,36 +594,60 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Build a routing-mode OperationService with remoteSend wired to transport
     const transport = this._transport;
-    const pendingResponses = new Map<number, PendingResponseEntry>();
-    this._pendingResponses = pendingResponses;
     this._startInvocationSweeper();
 
+    // Create backpressure regulator for remote invocation admission control
+    const backpressureConfig = this._config.getBackpressureConfig();
+    const partitionCount = 271;
+    this._backpressureRegulator = new BackpressureRegulator(backpressureConfig, partitionCount);
+
     let callIdCounter = 1;
+    const regulator = this._backpressureRegulator;
     const operationService = new OperationServiceImpl(
       null as unknown as NodeEngineImpl, // will be set below via back-reference
       {
         localMode: false,
         localAddress,
+        afterLocalRun: async (op) => {
+          const backupMemberIds = await this._dispatchBackupsForOperation(op, coordinator.getLocalMemberId());
+          await this._awaitLocalBackupAcks(Number(op.getCallId()), backupMemberIds);
+        },
         remoteSend: async (op, target) => {
+          // Backpressure admission: acquire a slot before sending.
+          // tryAcquire() returns synchronously when space is available,
+          // or a Promise when at capacity (waits up to backoffTimeout).
+          const acquired = regulator.tryAcquire();
+          // acquired is either a number (call ID from regulator) or a Promise<number>.
+          // We use the regulator's call ID for tracking, but the actual wire callId
+          // is assigned from our own counter for monitor registration.
+          if (acquired instanceof Promise) {
+            await acquired;
+          }
+
           const callId = callIdCounter++;
           const { factoryId, classId, payload } = serializeOperation(op);
           const targetMemberId = this._findMemberIdByAddress(target);
           if (targetMemberId === null) {
+            regulator.release();
             throw new Error(`No member found for address ${target.getHost()}:${target.getPort()}`);
           }
 
           return new Promise<void>((resolve, reject) => {
-            const pendingEntry = this._pendingResponseEntryPool.take(
-              (value: unknown) => {
+            this._invocationMonitor.register({
+              callId,
+              resolve: (value: unknown) => {
+                regulator.release();
                 op.sendResponse(value);
                 resolve();
               },
-              (error: Error) => {
+              reject: (error: Error) => {
+                regulator.release();
                 reject(error);
               },
-              REMOTE_OPERATION_TIMEOUT_MS,
-            );
-            pendingResponses.set(callId, pendingEntry);
+              targetMemberId,
+              timeoutMs: REMOTE_OPERATION_TIMEOUT_MS,
+              backupAckTimeoutMs: REMOTE_BACKUP_ACK_TIMEOUT_MS,
+            });
 
             const sent = transport.send(targetMemberId, {
               type: 'OPERATION',
@@ -575,10 +660,24 @@ export class HeliosInstanceImpl implements HeliosInstance {
             });
 
             if (!sent) {
-              // Peer disconnected or channel closed — fail fast
-              const pending = this._takePendingResponse(callId);
-              this._getPendingResponseEntryPool().release(pending);
-              reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
+              void (async () => {
+                const connected = await this._ensureRemotePeerConnected(targetMemberId, target);
+                if (connected && transport.send(targetMemberId, {
+                  type: 'OPERATION',
+                  callId,
+                  partitionId: op.partitionId,
+                  factoryId,
+                  classId,
+                  payload,
+                  senderId: coordinator.getLocalMemberId(),
+                })) {
+                  return;
+                }
+                this._invocationMonitor.failInvocation(
+                  callId,
+                  new RetryableException(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`),
+                );
+              })();
               return;
             }
 
@@ -596,6 +695,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Back-patch the operation service's node engine reference
     (operationService as any)._nodeEngine = this._nodeEngine;
+
+    // Keep a typed reference for metrics collection
+    this._operationServiceImpl = operationService;
 
     this._mapService.setNodeEngine(this._nodeEngine);
     this._nodeEngine.registerService(MapService.SERVICE_NAME, this._mapService);
@@ -628,6 +730,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._handleOperationResponse(message);
         return;
       }
+      if (message.type === 'BACKUP_ACK') {
+        this._handleBackupAck(message);
+        return;
+      }
+      if (message.type === 'BACKUP') {
+        this._handleBackup(message);
+        return;
+      }
       if (message.type === 'RECOVERY_ANTI_ENTROPY') {
         this._handleRecoveryAntiEntropy(message);
         return;
@@ -650,6 +760,21 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (this._reliableTopicService?.handleMessage(message) === true) {
         return;
       }
+      if (this._distributedListService?.handleMessage(message) === true) {
+        return;
+      }
+      if (this._distributedSetService?.handleMessage(message) === true) {
+        return;
+      }
+      if (this._distributedMultiMapService?.handleMessage(message) === true) {
+        return;
+      }
+      if (this._distributedReplicatedMapService?.handleMessage(message) === true) {
+        return;
+      }
+      if (this._distributedCacheService?.handleMessage(message) === true) {
+        return;
+      }
       this._distributedTopicService?.handleMessage(message);
     };
 
@@ -661,6 +786,37 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._transport.onRemoteClear = () => {};
 
     this._distributedQueueService = new DistributedQueueService(
+      this._name,
+      this._config,
+      this._ss,
+      this._transport,
+      this._clusterCoordinator,
+    );
+    this._distributedListService = new DistributedListService(
+      this._name,
+      this._config,
+      this._transport,
+      this._clusterCoordinator,
+    );
+    this._distributedSetService = new DistributedSetService(
+      this._name,
+      this._config,
+      this._transport,
+      this._clusterCoordinator,
+    );
+    this._distributedMultiMapService = new DistributedMultiMapService(
+      this._name,
+      this._config,
+      this._transport,
+      this._clusterCoordinator,
+    );
+    this._distributedReplicatedMapService = new DistributedReplicatedMapService(
+      this._name,
+      this._config,
+      this._transport,
+      this._clusterCoordinator,
+    );
+    this._distributedCacheService = new DistributedCacheService(
       this._name,
       this._config,
       this._ss,
@@ -731,19 +887,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
     })();
   }
 
-  /** Pending remote operation responses (callId → resolver). */
-  private _pendingResponses: Map<number, PendingResponseEntry> | null = null;
-
   /** Handle an incoming OPERATION message: execute locally and send response. */
   private _handleRemoteOperation(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION' }>): void {
     const { callId, partitionId, factoryId, classId, payload } = message;
     const op = deserializeOperation(factoryId, classId, payload);
+    const senderMemberId = this._findSenderForOperation(message);
     op.partitionId = partitionId;
+    op.setCallId(BigInt(callId));
     op.setNodeEngine(this._nodeEngine);
 
     void (async () => {
       let responseValue: unknown = undefined;
       let errorMsg: string | null = null;
+      let backupMemberIds: string[] = [];
 
       op.setResponseHandler({
         sendResponse: (_op, response) => {
@@ -754,16 +910,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
       try {
         await op.beforeRun();
         await op.run();
+        backupMemberIds = await this._dispatchBackupsForOperation(op, senderMemberId ?? null);
       } catch (e) {
         errorMsg = e instanceof Error ? e.message : String(e);
       }
-
-      // Find who sent this and reply
-      const senderMemberId = this._findSenderForOperation(message);
       if (senderMemberId !== null && this._transport !== null) {
           this._transport.send(senderMemberId, {
             type: 'OPERATION_RESPONSE',
             callId,
+            backupAcks: errorMsg === null ? backupMemberIds.length : 0,
+            backupMemberIds: errorMsg === null ? backupMemberIds : [],
             payload: responseValue,
             error: errorMsg,
           });
@@ -773,14 +929,131 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Handle an incoming OPERATION_RESPONSE message. */
   private _handleOperationResponse(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'OPERATION_RESPONSE' }>): void {
-    const pending = this._takePendingResponse(message.callId);
-    if (pending === undefined) return;
-    if (message.error !== null) {
-      pending.reject?.(new Error(message.error));
-    } else {
-      pending.resolve?.(message.payload);
+    this._invocationMonitor.handleResponse(message);
+  }
+
+  private _handleBackupAck(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'BACKUP_ACK' }>): void {
+    const waiter = this._localBackupAckWaiters.get(message.callId);
+    if (waiter !== undefined) {
+      waiter.pendingMemberIds.delete(message.senderId);
+      if (waiter.pendingMemberIds.size === 0) {
+        clearTimeout(waiter.timeoutHandle);
+        this._localBackupAckWaiters.delete(message.callId);
+        waiter.resolve();
+      }
+      return;
     }
-    this._getPendingResponseEntryPool().release(pending);
+    this._invocationMonitor.handleBackupAck(message);
+  }
+
+  private _handleBackup(message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'BACKUP' }>): void {
+    const op = deserializeOperation(message.factoryId, message.classId, message.payload);
+    op.partitionId = message.partitionId;
+    op.setReplicaIndex(message.replicaIndex);
+    op.setNodeEngine(this._nodeEngine);
+
+    void (async () => {
+      const partition = this._clusterCoordinator?.getInternalPartitionService().getPartition(message.partitionId);
+      const localMemberId = this._clusterCoordinator?.getLocalMemberId() ?? null;
+      const expectedReplica = partition?.getReplica(message.replicaIndex) ?? null;
+      if (expectedReplica === null || expectedReplica.uuid() !== localMemberId) {
+        return;
+      }
+
+      const replicaVersions = message.replicaVersions.map((value) => BigInt(value));
+      if (this._replicaManager.isPartitionReplicaVersionStale(message.partitionId, replicaVersions, message.replicaIndex)) {
+        return;
+      }
+
+      try {
+        await op.beforeRun();
+        await op.run();
+        this._replicaManager.updatePartitionReplicaVersions(message.partitionId, replicaVersions, message.replicaIndex);
+      } catch {
+        return;
+      }
+
+      if (!message.sync || localMemberId === null) {
+        return;
+      }
+
+      if (message.callerId === localMemberId) {
+        this._invocationMonitor.handleBackupAck({
+          callId: message.callId,
+          senderId: localMemberId,
+        });
+        return;
+      }
+
+      if (this._transport === null) {
+        return;
+      }
+
+      this._transport.send(message.callerId, {
+        type: 'BACKUP_ACK',
+        callId: message.callId,
+        senderId: localMemberId,
+      });
+    })();
+  }
+
+  private async _dispatchBackupsForOperation(
+    op: import('@zenystx/helios-core/spi/impl/operationservice/Operation').Operation,
+    callerMemberId: string | null,
+  ): Promise<string[]> {
+    if (
+      !isBackupAwareOperation(op)
+      || !op.shouldBackup()
+      || this._clusterCoordinator === null
+      || this._transport === null
+      || callerMemberId === null
+    ) {
+      return [];
+    }
+
+    const requestedSync = op.getSyncBackupCount();
+    const requestedAsync = op.getAsyncBackupCount();
+    const requestedTotal = requestedSync + requestedAsync;
+    const clusterSize = this._clusterCoordinator.getCluster().getMembers().length;
+    const totalBackups = Math.min(requestedTotal, Math.max(0, clusterSize - 1));
+    if (totalBackups === 0) {
+      return [];
+    }
+
+    const backupIds = this._clusterCoordinator.getBackupIds(op.partitionId, totalBackups);
+    if (backupIds.length === 0) {
+      return [];
+    }
+
+    const syncBackups = Math.min(requestedSync, backupIds.length);
+    const replicaVersions = this._replicaManager.incrementPartitionReplicaVersions(op.partitionId, backupIds.length);
+    const sentSyncBackupIds: string[] = [];
+
+    for (const [index, backupId] of backupIds.entries()) {
+      const replicaIndex = index + 1;
+      const backupOp = op.getBackupOperation();
+      backupOp.partitionId = op.partitionId;
+      backupOp.setReplicaIndex(replicaIndex);
+      const { factoryId, classId, payload } = serializeOperation(backupOp);
+      const sent = this._transport.send(backupId, {
+        type: 'BACKUP',
+        callId: Number(op.getCallId()),
+        partitionId: op.partitionId,
+        replicaIndex,
+        senderId: this._clusterCoordinator.getLocalMemberId(),
+        callerId: callerMemberId,
+        sync: replicaIndex <= syncBackups,
+        replicaVersions: replicaVersions.map((value) => value.toString()),
+        factoryId,
+        classId,
+        payload,
+      });
+      if (sent && replicaIndex <= syncBackups) {
+        sentSyncBackupIds.push(backupId);
+      }
+    }
+
+    return sentSyncBackupIds;
   }
 
   private _dispatchAntiEntropy(
@@ -821,17 +1094,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (!result.syncTriggered) {
       return;
     }
-    const acquired = this._replicaManager.tryAcquireReplicaSyncPermits(1);
-    if (acquired === 0) {
-      return;
-    }
     const ownerId = this.getPartitionOwnerId(message.partitionId);
     if (ownerId === null) {
-      this._replicaManager.releaseReplicaSyncPermits(1);
+      return;
+    }
+    const syncId = this._clusterCoordinator?.getInternalPartitionService().tryRegisterSyncRequest(
+      message.partitionId,
+      message.replicaIndex,
+      ownerId,
+      result.dirtyNamespaces,
+    );
+    if (syncId === null || syncId === undefined) {
       return;
     }
     this._transport?.send(ownerId, {
       type: 'RECOVERY_SYNC_REQUEST',
+      requestId: syncId,
       requesterId: this._clusterCoordinator!.getLocalMemberId(),
       partitionId: message.partitionId,
       replicaIndex: message.replicaIndex,
@@ -846,6 +1124,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       message.partitionId,
       message.dirtyNamespaces,
     );
+    const chunks = chunkNamespaceStates(namespaceStates, RECOVERY_SYNC_CHUNK_MAX_BYTES);
     const namespaceVersions = Object.fromEntries(
       message.dirtyNamespaces.map((namespace) => [
         namespace,
@@ -854,35 +1133,61 @@ export class HeliosInstanceImpl implements HeliosInstance {
           .map((value) => value.toString()),
       ]),
     );
-    this._transport?.send(message.requesterId, {
-      type: 'RECOVERY_SYNC_RESPONSE',
-      partitionId: message.partitionId,
-      replicaIndex: message.replicaIndex,
-      versions: this._replicaManager
-        .getPartitionReplicaVersions(message.partitionId)
-        .map((value) => value.toString()),
-      namespaceVersions,
-      namespaceStates: namespaceStates.map((state) => ({
-        namespace: state.namespace,
-        estimatedSizeBytes: state.estimatedSizeBytes,
-        entries: state.entries.map(([key, value]) => [encodeData(key), encodeData(value)] as const),
-      })),
-    });
+    const versions = this._replicaManager
+      .getPartitionReplicaVersions(message.partitionId)
+      .map((value) => value.toString());
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+      const chunk = chunks[chunkIndex]!;
+      this._transport?.send(message.requesterId, {
+        type: 'RECOVERY_SYNC_RESPONSE',
+        requestId: message.requestId,
+        partitionId: message.partitionId,
+        replicaIndex: message.replicaIndex,
+        chunkIndex,
+        chunkCount: chunks.length,
+        versions,
+        namespaceVersions,
+        namespaceStates: chunk.map((state) => ({
+          namespace: state.namespace,
+          estimatedSizeBytes: state.estimatedSizeBytes,
+          entries: state.entries.map(([key, value]) => [encodeData(key), encodeData(value)] as const),
+        })),
+      });
+    }
   }
 
   private _handleRecoverySyncResponse(
     message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'RECOVERY_SYNC_RESPONSE' }>,
   ): void {
+    const internalPartitionService = this._clusterCoordinator?.getInternalPartitionService();
+    if (internalPartitionService === null || internalPartitionService === undefined) {
+      return;
+    }
+    if (!internalPartitionService.acceptSyncResponseChunk(message.requestId, message.chunkIndex, message.chunkCount)) {
+      this._recoverySyncAssemblies.delete(message.requestId);
+      return;
+    }
+
     const namespaceStates = message.namespaceStates.map((state) => ({
       namespace: state.namespace,
       estimatedSizeBytes: state.estimatedSizeBytes,
       entries: state.entries.map(([key, value]) => [decodeData(key), decodeData(value)] as const),
     }));
-    this._mapService.applyReplicaSyncState(message.partitionId, namespaceStates);
-    new PartitionReplicaSyncResponse(
+    const assembler = this._recoverySyncAssemblies.get(message.requestId)
+      ?? new PartitionReplicaSyncChunkAssembler();
+    this._recoverySyncAssemblies.set(message.requestId, assembler);
+    if (!assembler.acceptChunk(message.chunkIndex, message.chunkCount, namespaceStates)) {
+      this._recoverySyncAssemblies.delete(message.requestId);
+      return;
+    }
+    if (!assembler.isComplete()) {
+      return;
+    }
+
+    const response = new PartitionReplicaSyncResponse(
       message.partitionId,
       message.replicaIndex,
-      namespaceStates,
+      assembler.buildNamespaceStates(),
       message.versions.map((value) => BigInt(value)),
       new Map(
         Object.entries(message.namespaceVersions).map(([namespace, versions]) => [
@@ -890,10 +1195,23 @@ export class HeliosInstanceImpl implements HeliosInstance {
           versions.map((value) => BigInt(value)),
         ]),
       ),
-    ).apply(
-      this._mapService.getOrCreatePartitionContainer(message.partitionId),
-      this._replicaManager,
     );
+    if (!internalPartitionService.completeSyncRequest(message.requestId, response.versions)) {
+      this._recoverySyncAssemblies.delete(message.requestId);
+      return;
+    }
+
+    try {
+      response.apply(
+        this._mapService.getOrCreatePartitionContainer(message.partitionId),
+        this._replicaManager,
+      );
+    } catch (error) {
+      this._replicaManager.releaseReplicaSyncPermits(1);
+      throw error;
+    } finally {
+      this._recoverySyncAssemblies.delete(message.requestId);
+    }
   }
 
   /** Extract the sender member ID from an OPERATION message. */
@@ -918,34 +1236,87 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._invocationSweepHandle = null;
   }
 
-  private _sweepPendingResponses(now: number = Date.now()): void {
-    if (this._pendingResponses === null) {
-      return;
+  private _awaitLocalBackupAcks(callId: number, backupMemberIds: readonly string[]): Promise<void> {
+    if (backupMemberIds.length === 0) {
+      return Promise.resolve();
     }
-    for (const [callId, pending] of this._pendingResponses) {
-      if (now - pending.createdAt < pending.timeoutMs) {
+
+    return new Promise<void>((resolve, reject) => {
+      const timeoutHandle = setTimeout(() => {
+        const waiter = this._localBackupAckWaiters.get(callId);
+        if (waiter === undefined) {
+          return;
+        }
+        this._localBackupAckWaiters.delete(callId);
+        reject(new Error(
+          `Backup ack timed out (callId=${callId}, required=${backupMemberIds.length}, received=${backupMemberIds.length - waiter.pendingMemberIds.size})`,
+        ));
+      }, REMOTE_BACKUP_ACK_TIMEOUT_MS);
+
+      this._localBackupAckWaiters.set(callId, {
+        pendingMemberIds: new Set(backupMemberIds),
+        resolve,
+        reject,
+        timeoutHandle,
+      });
+    });
+  }
+
+  private _failLocalBackupAckWaitersForMember(memberId: string): void {
+    for (const [callId, waiter] of this._localBackupAckWaiters) {
+      if (!waiter.pendingMemberIds.has(memberId)) {
         continue;
       }
-      this._takePendingResponse(callId);
-      pending.reject?.(new Error(`Operation timed out (callId=${callId})`));
-      this._getPendingResponseEntryPool().release(pending);
+      clearTimeout(waiter.timeoutHandle);
+      this._localBackupAckWaiters.delete(callId);
+      waiter.reject(new Error(`Backup member ${memberId} left before acknowledgement completed (callId=${callId})`));
     }
   }
 
-  private _getPendingResponseEntryPool(): PendingResponseEntryPool {
-    if (this._pendingResponseEntryPool === undefined) {
-      this._pendingResponseEntryPool = new PendingResponseEntryPool();
-    }
-    return this._pendingResponseEntryPool;
+  private _sweepPendingResponses(now: number = Date.now()): void {
+    this._invocationMonitor.sweep(now);
+    this._sweepReplicaSyncRequests(now);
   }
 
-  private _takePendingResponse(callId: number): PendingResponseEntry | undefined {
-    const pending = this._pendingResponses?.get(callId);
-    if (pending === undefined || this._pendingResponses === null) {
-      return undefined;
+  private _sweepReplicaSyncRequests(now: number): void {
+    const internalPartitionService = this._clusterCoordinator?.getInternalPartitionService();
+    if (internalPartitionService === null || internalPartitionService === undefined) {
+      return;
     }
-    this._pendingResponses.delete(callId);
-    return pending;
+
+    const retryableRequests = internalPartitionService.expireTimedOutSyncRequests(now);
+    for (const requestId of this._recoverySyncAssemblies.keys()) {
+      if (internalPartitionService.getSyncRequestInfo(requestId) === null) {
+        this._recoverySyncAssemblies.delete(requestId);
+      }
+    }
+    for (const request of retryableRequests) {
+      const ownerId = this.getPartitionOwnerId(request.partitionId);
+      if (ownerId === null) {
+        continue;
+      }
+
+      const retriedSyncId = internalPartitionService.tryRegisterSyncRequest(
+        request.partitionId,
+        request.replicaIndex,
+        ownerId,
+        request.dirtyNamespaces,
+        now,
+        request.retryCount + 1,
+      );
+      if (retriedSyncId === null || retriedSyncId === undefined) {
+        continue;
+      }
+
+      this._transport?.send(ownerId, {
+        type: 'RECOVERY_SYNC_REQUEST',
+        requestId: retriedSyncId,
+        requesterId: this._clusterCoordinator!.getLocalMemberId(),
+        partitionId: request.partitionId,
+        replicaIndex: request.replicaIndex,
+        dirtyNamespaces: [...request.dirtyNamespaces],
+      });
+    }
   }
 
   private _addressKey(address: Address): string {
@@ -965,6 +1336,28 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Find the member ID for a given address. */
   private _findMemberIdByAddress(target: Address): string | null {
     return this._addressToMemberId.get(this._addressKey(target)) ?? null;
+  }
+
+  private async _ensureRemotePeerConnected(
+    memberId: string,
+    target: Address,
+    timeoutMs: number = REMOTE_PEER_CONNECT_TIMEOUT_MS,
+  ): Promise<boolean> {
+    if (this._transport === null) {
+      return false;
+    }
+    if (this._transport.hasPeer(memberId)) {
+      return true;
+    }
+    this._transport.connectToPeer(target.getHost(), target.getPort()).catch(() => {});
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this._transport.hasPeer(memberId)) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, REMOTE_PEER_CONNECT_POLL_MS));
+    }
+    return this._transport.hasPeer(memberId);
   }
 
   private _initBlitzLifecycle(): void {
@@ -1288,7 +1681,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const localMember = this._cluster.getLocalMember();
     this._clientProtocolServer = new ClientProtocolServer({
-      clusterName: this._name,
+      clusterName: this._config.getClusterName(),
       port: clientPort,
       memberUuid: localMember.getUuid(),
       clusterId: this.getClusterId() ?? crypto.randomUUID(),
@@ -1312,131 +1705,461 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _registerClientProtocolHandlers(): void {
     const srv = this._clientProtocolServer!;
     const ps = this._nodeEngine.getPartitionService();
+    const partitionCount = this.getPartitionCount();
 
-    // ── Map handlers ──────────────────────────────────────────────────────
-    srv.registerHandler(MapPutCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapPutCodec.decodeRequest(msg);
-      const pid = ps.getPartitionId(req.key);
-      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
-      const prev = store.put(req.key, req.value, Number(req.ttl), -1);
-      return MapPutCodec.encodeResponse(prev);
-    });
+    // ── Map adapter ───────────────────────────────────────────────────────
+    const mapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').MapServiceOperations = {
+      put: async (name, key, value, _threadId, ttl) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        return store.put(key, value, Number(ttl), -1);
+      },
+      get: async (name, key, _threadId) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        return store.get(key);
+      },
+      remove: async (name, key, _threadId) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        return store.remove(key);
+      },
+      size: async (name) => {
+        let total = 0;
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (store) total += store.size();
+        }
+        return total;
+      },
+      containsKey: async (name, key, _threadId) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        return store.containsKey(key);
+      },
+      containsValue: async (name, value) => {
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (store?.containsValue(value)) return true;
+        }
+        return false;
+      },
+      clear: async (name) => {
+        for (let i = 0; i < partitionCount; i++) {
+          this._mapService.getRecordStore(name, i)?.clear();
+        }
+      },
+      delete: async (name, key, _threadId) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        store.remove(key);
+      },
+      set: async (name, key, value, _threadId, ttl) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        store.put(key, value, Number(ttl), -1);
+      },
+      getAll: async (name, keys) => {
+        const result: Array<[import('@zenystx/helios-core/internal/serialization/Data').Data, import('@zenystx/helios-core/internal/serialization/Data').Data]> = [];
+        for (const key of keys) {
+          const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+          const val = store.get(key);
+          if (val !== null) result.push([key, val]);
+        }
+        return result;
+      },
+      putAll: async (name, entries) => {
+        for (const [key, value] of entries) {
+          const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+          store.put(key, value, -1, -1);
+        }
+      },
+      putIfAbsent: async (name, key, value, _threadId, ttl) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        return store.putIfAbsent(key, value, Number(ttl), -1);
+      },
+      replace: async (_name, _key, _value, _threadId) => { throw new Error('not implemented'); },
+      replaceIfSame: async (_name, _key, _oldValue, _newValue, _threadId) => { throw new Error('not implemented'); },
+      removeIfSame: async (_name, _key, _value, _threadId) => { throw new Error('not implemented'); },
+      getEntryView: async (_name, _key, _threadId) => { throw new Error('not implemented'); },
+      evict: async (_name, _key, _threadId) => { throw new Error('not implemented'); },
+      evictAll: async (_name) => { throw new Error('not implemented'); },
+      flush: async (_name) => { /* no-op: no write-behind in this impl */ },
+      keySet: async (name) => {
+        const keys: import('@zenystx/helios-core/internal/serialization/Data').Data[] = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (store) for (const [k] of store.entries()) keys.push(k);
+        }
+        return keys;
+      },
+      values: async (name) => {
+        const vals: import('@zenystx/helios-core/internal/serialization/Data').Data[] = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (store) for (const [, v] of store.entries()) vals.push(v);
+        }
+        return vals;
+      },
+      entrySet: async (name) => {
+        const result: Array<[import('@zenystx/helios-core/internal/serialization/Data').Data, import('@zenystx/helios-core/internal/serialization/Data').Data]> = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (store) for (const entry of store.entries()) result.push([entry[0], entry[1]]);
+        }
+        return result;
+      },
+      tryPut: async (_name, _key, _value, _threadId, _timeout) => { throw new Error('not implemented'); },
+      lock: async (_name, _key, _threadId, _ttl, _referenceId) => { throw new Error('not implemented'); },
+      unlock: async (_name, _key, _threadId, _referenceId) => { throw new Error('not implemented'); },
+      tryLock: async (_name, _key, _threadId, _lease, _timeout, _referenceId) => { throw new Error('not implemented'); },
+      isLocked: async (_name, _key) => { throw new Error('not implemented'); },
+      forceUnlock: async (_name, _key, _referenceId) => { throw new Error('not implemented'); },
+      addEntryListener: async (_name, _flags, _localOnly, _session) => { throw new Error('not implemented'); },
+      removeEntryListener: async (_registrationId, _session) => { throw new Error('not implemented'); },
+      removeInterceptor: async (_name, _id) => { throw new Error('not implemented'); },
+      executeOnKey: async (_name, _key, _entryProcessor, _threadId) => { throw new Error('not implemented'); },
+      executeOnAllKeys: async (_name, _entryProcessor) => { throw new Error('not implemented'); },
+      executeWithPredicate: async (_name, _entryProcessor, _predicate) => { throw new Error('not implemented'); },
+      executeOnKeys: async (_name, _keys, _entryProcessor) => { throw new Error('not implemented'); },
+      setTtl: async (_name, _key, _ttl) => { throw new Error('not implemented'); },
+    };
 
-    srv.registerHandler(MapGetCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapGetCodec.decodeRequest(msg);
-      const pid = ps.getPartitionId(req.key);
-      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
-      const val = store.get(req.key);
-      return MapGetCodec.encodeResponse(val);
-    });
+    // ── Queue adapter ─────────────────────────────────────────────────────
+    const queueOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').QueueServiceOperations = {
+      offer: async (name, value, timeoutMs) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.offer(name, value, Number(timeoutMs));
+      },
+      poll: async (name, timeoutMs) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.poll(name, Number(timeoutMs));
+      },
+      peek: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.peek(name);
+      },
+      size: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.size(name);
+      },
+      clear: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.clear(name);
+      },
+      isEmpty: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.isEmpty(name);
+      },
+      contains: async (name, value) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.contains(name, value);
+      },
+      containsAll: async (name, values) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.containsAll(name, values);
+      },
+      addAll: async (name, values) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.addAll(name, values);
+      },
+      removeAll: async (name, values) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.removeAll(name, values);
+      },
+      retainAll: async (name, values) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.retainAll(name, values);
+      },
+      drain: async (name, maxElements) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.drain(name, maxElements);
+      },
+      iterator: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.toArray(name);
+      },
+      remainingCapacity: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.remainingCapacity(name);
+      },
+      take: async (name) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.poll(name, 0);
+      },
+      put: async (name, value) => {
+        this._ensureQueueService();
+        await this._distributedQueueService!.offer(name, value, 0);
+      },
+      addItemListener: async (_name, _includeValue, _session) => { throw new Error('not implemented'); },
+      removeItemListener: async (_registrationId, _session) => { throw new Error('not implemented'); },
+    };
 
-    srv.registerHandler(MapRemoveCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapRemoveCodec.decodeRequest(msg);
-      const pid = ps.getPartitionId(req.key);
-      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
-      const prev = store.remove(req.key);
-      return MapRemoveCodec.encodeResponse(prev);
-    });
+    // ── Topic adapter ─────────────────────────────────────────────────────
+    const topicOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').TopicServiceOperations = {
+      publish: async (name, message) => {
+        this._ensureTopicService();
+        return this._distributedTopicService!.publish(name, message);
+      },
+      publishAll: async (name, messages) => {
+        this._ensureTopicService();
+        for (const msg of messages) {
+          await this._distributedTopicService!.publish(name, msg);
+        }
+      },
+      addMessageListener: async (name, correlationId, session) =>
+        this._registerClientTopicListener(name, correlationId, session),
+      removeMessageListener: async (registrationId, session) =>
+        this._removeClientTopicListener(session.getSessionId(), registrationId),
+    };
 
-    srv.registerHandler(MapSizeCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapSizeCodec.decodeRequest(msg);
-      let total = 0;
-      const partitionCount = this.getPartitionCount();
-      for (let i = 0; i < partitionCount; i++) {
-        const store = this._mapService.getRecordStore(req.name, i);
-        if (store) total += store.size();
-      }
-      return MapSizeCodec.encodeResponse(total);
-    });
+    // ── No-op adapters for unimplemented services ─────────────────────────
+    const notImplemented = (): never => { throw new Error('not implemented'); };
 
-    srv.registerHandler(MapContainsKeyCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapContainsKeyCodec.decodeRequest(msg);
-      const pid = ps.getPartitionId(req.key);
-      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
-      return MapContainsKeyCodec.encodeResponse(store.containsKey(req.key));
-    });
+    const listOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ListServiceOperations = {
+      add: async () => notImplemented(),
+      addWithIndex: async () => notImplemented(),
+      get: async () => notImplemented(),
+      set: async () => notImplemented(),
+      remove: async () => notImplemented(),
+      removeWithIndex: async () => notImplemented(),
+      size: async () => notImplemented(),
+      contains: async () => notImplemented(),
+      containsAll: async () => notImplemented(),
+      addAll: async () => notImplemented(),
+      addAllWithIndex: async () => notImplemented(),
+      clear: async () => notImplemented(),
+      indexOf: async () => notImplemented(),
+      lastIndexOf: async () => notImplemented(),
+      iterator: async () => notImplemented(),
+      subList: async () => notImplemented(),
+      addItemListener: async () => notImplemented(),
+      removeItemListener: async () => notImplemented(),
+      isEmpty: async () => notImplemented(),
+      removeAll: async () => notImplemented(),
+      retainAll: async () => notImplemented(),
+    };
 
-    srv.registerHandler(MapClearCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapClearCodec.decodeRequest(msg);
-      const partitionCount = this.getPartitionCount();
-      for (let i = 0; i < partitionCount; i++) {
-        const store = this._mapService.getRecordStore(req.name, i);
-        if (store) store.clear();
-      }
-      return MapClearCodec.encodeResponse();
-    });
+    const setOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SetServiceOperations = {
+      add: async () => notImplemented(),
+      remove: async () => notImplemented(),
+      size: async () => notImplemented(),
+      contains: async () => notImplemented(),
+      containsAll: async () => notImplemented(),
+      addAll: async () => notImplemented(),
+      removeAll: async () => notImplemented(),
+      retainAll: async () => notImplemented(),
+      clear: async () => notImplemented(),
+      iterator: async () => notImplemented(),
+      isEmpty: async () => notImplemented(),
+      addItemListener: async () => notImplemented(),
+      removeItemListener: async () => notImplemented(),
+    };
 
-    srv.registerHandler(MapDeleteCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapDeleteCodec.decodeRequest(msg);
-      const pid = ps.getPartitionId(req.key);
-      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
-      store.remove(req.key);
-      return MapDeleteCodec.encodeResponse();
-    });
+    const multiMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').MultiMapServiceOperations = {
+      put: async () => notImplemented(),
+      get: async () => notImplemented(),
+      remove: async () => notImplemented(),
+      removeEntry: async () => notImplemented(),
+      size: async () => notImplemented(),
+      containsKey: async () => notImplemented(),
+      containsValue: async () => notImplemented(),
+      containsEntry: async () => notImplemented(),
+      clear: async () => notImplemented(),
+      keySet: async () => notImplemented(),
+      values: async () => notImplemented(),
+      entrySet: async () => notImplemented(),
+      valueCount: async () => notImplemented(),
+      lock: async () => notImplemented(),
+      unlock: async () => notImplemented(),
+      tryLock: async () => notImplemented(),
+      isLocked: async () => notImplemented(),
+      forceUnlock: async () => notImplemented(),
+      addEntryListener: async () => notImplemented(),
+      removeEntryListener: async () => notImplemented(),
+      putAll: async () => notImplemented(),
+    };
 
-    srv.registerHandler(MapSetCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = MapSetCodec.decodeRequest(msg);
-      const pid = ps.getPartitionId(req.key);
-      const store = this._mapService.getOrCreateRecordStore(req.name, pid);
-      store.put(req.key, req.value, Number(req.ttl), -1);
-      return MapSetCodec.encodeResponse();
-    });
+    const replicatedMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ReplicatedMapServiceOperations = {
+      put: async () => notImplemented(),
+      get: async () => notImplemented(),
+      remove: async () => notImplemented(),
+      size: async () => notImplemented(),
+      containsKey: async () => notImplemented(),
+      containsValue: async () => notImplemented(),
+      clear: async () => notImplemented(),
+      keySet: async () => notImplemented(),
+      values: async () => notImplemented(),
+      entrySet: async () => notImplemented(),
+      putAll: async () => notImplemented(),
+      isEmpty: async () => notImplemented(),
+      addEntryListener: async () => notImplemented(),
+      removeEntryListener: async () => notImplemented(),
+      addEntryListenerWithKey: async () => notImplemented(),
+      addEntryListenerWithPredicate: async () => notImplemented(),
+      addEntryListenerWithKeyAndPredicate: async () => notImplemented(),
+    };
 
-    // ── Queue handlers ────────────────────────────────────────────────────
-    srv.registerHandler(QueueOfferCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = QueueOfferCodec.decodeRequest(msg);
-      this._ensureQueueService();
-      const result = await this._distributedQueueService!.offer(req.name, req.value, Number(req.timeoutMs));
-      return QueueOfferCodec.encodeResponse(result);
-    });
+    const ringbufferOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').RingbufferServiceOperations = {
+      capacity: async () => notImplemented(),
+      size: async () => notImplemented(),
+      tailSequence: async () => notImplemented(),
+      headSequence: async () => notImplemented(),
+      remainingCapacity: async () => notImplemented(),
+      add: async () => notImplemented(),
+      addAll: async () => notImplemented(),
+      readOne: async () => notImplemented(),
+      readMany: async () => notImplemented(),
+    };
 
-    srv.registerHandler(QueuePollCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = QueuePollCodec.decodeRequest(msg);
-      this._ensureQueueService();
-      const result = await this._distributedQueueService!.poll(req.name, Number(req.timeoutMs));
-      return QueuePollCodec.encodeResponse(result);
-    });
+    const cacheOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CacheServiceOperations = {
+      get: async () => notImplemented(),
+      put: async () => notImplemented(),
+      remove: async () => notImplemented(),
+      size: async () => notImplemented(),
+      clear: async () => notImplemented(),
+      containsKey: async () => notImplemented(),
+      getAndPut: async () => notImplemented(),
+      getAndRemove: async () => notImplemented(),
+      putIfAbsent: async () => notImplemented(),
+      replace: async () => notImplemented(),
+      getAll: async () => notImplemented(),
+      putAll: async () => notImplemented(),
+      removeAll: async () => notImplemented(),
+      destroy: async () => notImplemented(),
+      addInvalidationListener: async () => notImplemented(),
+      removeInvalidationListener: async () => notImplemented(),
+    };
 
-    srv.registerHandler(QueuePeekCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = QueuePeekCodec.decodeRequest(msg);
-      this._ensureQueueService();
-      const result = await this._distributedQueueService!.peek(req.name);
-      return QueuePeekCodec.encodeResponse(result);
-    });
+    const transactionOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').TransactionServiceOperations = {
+      create: async () => notImplemented(),
+      commit: async () => notImplemented(),
+      rollback: async () => notImplemented(),
+      mapGet: async () => notImplemented(),
+      mapPut: async () => notImplemented(),
+      mapSet: async () => notImplemented(),
+      mapPutIfAbsent: async () => notImplemented(),
+      mapRemove: async () => notImplemented(),
+      mapDelete: async () => notImplemented(),
+      mapKeySet: async () => notImplemented(),
+      mapValues: async () => notImplemented(),
+      queueOffer: async () => notImplemented(),
+      queuePoll: async () => notImplemented(),
+      queuePeek: async () => notImplemented(),
+      queueSize: async () => notImplemented(),
+      listAdd: async () => notImplemented(),
+      listRemove: async () => notImplemented(),
+      listSize: async () => notImplemented(),
+      listGet: async () => notImplemented(),
+      listSet: async () => notImplemented(),
+      setAdd: async () => notImplemented(),
+      setRemove: async () => notImplemented(),
+      multimapPut: async () => notImplemented(),
+      multimapRemove: async () => notImplemented(),
+      multimapGet: async () => notImplemented(),
+      multimapValueCount: async () => notImplemented(),
+    };
 
-    srv.registerHandler(QueueSizeCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = QueueSizeCodec.decodeRequest(msg);
-      this._ensureQueueService();
-      const result = await this._distributedQueueService!.size(req.name);
-      return QueueSizeCodec.encodeResponse(result);
-    });
+    const sqlOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlServiceOperations = {
+      execute: async () => notImplemented(),
+      fetch: async () => notImplemented(),
+      close: async () => notImplemented(),
+    };
 
-    srv.registerHandler(QueueClearCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = QueueClearCodec.decodeRequest(msg);
-      this._ensureQueueService();
-      await this._distributedQueueService!.clear(req.name);
-      return QueueClearCodec.encodeResponse();
-    });
+    const executorOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ExecutorServiceOperations = {
+      shutdown: async () => notImplemented(),
+      isShutdown: async () => notImplemented(),
+      cancelOnPartition: async () => notImplemented(),
+      cancelOnMember: async () => notImplemented(),
+      submitToPartition: async () => notImplemented(),
+      submitToMember: async () => notImplemented(),
+    };
 
-    // ── Topic handler ─────────────────────────────────────────────────────
-    srv.registerHandler(TopicPublishCodec.REQUEST_MESSAGE_TYPE, async (msg) => {
-      const req = TopicPublishCodec.decodeRequest(msg);
-      this._ensureTopicService();
-      await this._distributedTopicService!.publish(req.name, req.message);
-      return TopicPublishCodec.encodeResponse();
-    });
+    const atomicLongOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicLongOperations = {
+      get: async () => notImplemented(),
+      set: async () => notImplemented(),
+      getAndSet: async () => notImplemented(),
+      addAndGet: async () => notImplemented(),
+      getAndAdd: async () => notImplemented(),
+      compareAndSet: async () => notImplemented(),
+      incrementAndGet: async () => notImplemented(),
+      getAndIncrement: async () => notImplemented(),
+      decrementAndGet: async () => notImplemented(),
+      getAndDecrement: async () => notImplemented(),
+      apply: async () => notImplemented(),
+      alter: async () => notImplemented(),
+      alterAndGet: async () => notImplemented(),
+      getAndAlter: async () => notImplemented(),
+    };
 
-    srv.registerHandler(TopicAddMessageListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
-      const req = TopicAddMessageListenerCodec.decodeRequest(msg);
-      const registrationId = this._registerClientTopicListener(req.name, msg.getCorrelationId(), session);
-      return TopicAddMessageListenerCodec.encodeResponse(registrationId);
-    });
+    const atomicRefOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicRefOperations = {
+      get: async () => notImplemented(),
+      set: async () => notImplemented(),
+      compareAndSet: async () => notImplemented(),
+      isNull: async () => notImplemented(),
+      clear: async () => notImplemented(),
+      contains: async () => notImplemented(),
+      apply: async () => notImplemented(),
+      alter: async () => notImplemented(),
+      alterAndGet: async () => notImplemented(),
+      getAndAlter: async () => notImplemented(),
+    };
 
-    srv.registerHandler(TopicRemoveMessageListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
-      const req = TopicRemoveMessageListenerCodec.decodeRequest(msg);
-      return TopicRemoveMessageListenerCodec.encodeResponse(
-        this._removeClientTopicListener(session.getSessionId(), req.registrationId),
-      );
+    const countDownLatchOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CountDownLatchOperations = {
+      trySetCount: async () => notImplemented(),
+      await: async () => notImplemented(),
+      countDown: async () => notImplemented(),
+      getCount: async () => notImplemented(),
+      getRound: async () => notImplemented(),
+    };
+
+    const semaphoreOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SemaphoreOperations = {
+      init: async () => notImplemented(),
+      acquire: async () => notImplemented(),
+      release: async () => notImplemented(),
+      drain: async () => notImplemented(),
+      change: async () => notImplemented(),
+      availablePermits: async () => notImplemented(),
+      tryAcquire: async () => notImplemented(),
+    };
+
+    const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
+      newIdBatch: async () => notImplemented(),
+    };
+
+    const pnCounterOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').PnCounterOperations = {
+      get: async () => notImplemented(),
+      add: async () => notImplemented(),
+      getConfiguredReplicaCount: async () => notImplemented(),
+    };
+
+    const cardinalityOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CardinalityEstimatorOperations = {
+      add: async () => notImplemented(),
+      estimate: async () => notImplemented(),
+    };
+
+    // ── TopologyPublisher ─────────────────────────────────────────────────
+    const topologyPublisher = new TopologyPublisher(srv.getSessionRegistry());
+
+    // ── Wire all handlers ─────────────────────────────────────────────────
+    registerAllHandlers({
+      dispatcher: srv.getDispatcher(),
+      topologyPublisher,
+      map: mapOps,
+      queue: queueOps,
+      topic: topicOps,
+      list: listOps,
+      set: setOps,
+      multiMap: multiMapOps,
+      replicatedMap: replicatedMapOps,
+      ringbuffer: ringbufferOps,
+      cache: cacheOps,
+      transaction: transactionOps,
+      sql: sqlOps,
+      executor: executorOps,
+      atomicLong: atomicLongOps,
+      atomicRef: atomicRefOps,
+      countDownLatch: countDownLatchOps,
+      semaphore: semaphoreOps,
+      flakeIdGenerator: flakeIdOps,
+      pnCounter: pnCounterOps,
+      cardinalityEstimator: cardinalityOps,
+      invalidationManager: this._nearCacheInvalidationManager,
+      sessionRegistry: srv.getSessionRegistry(),
     });
   }
 
@@ -1666,6 +2389,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._running = false;
     this._blitzAuthorityEpoch += 1;
     this._stopInvocationSweeper();
+    this._backpressureRegulator?.rejectAll(new Error('Helios instance shutting down'));
+    this._backpressureRegulator?.reset();
+    for (const [callId, waiter] of this._localBackupAckWaiters) {
+      clearTimeout(waiter.timeoutHandle);
+      waiter.reject(new Error(`Helios instance shutting down (callId=${callId})`));
+    }
+    this._localBackupAckWaiters.clear();
+    queueMicrotask(() => {
+      this._invocationMonitor.reset(new Error('Helios instance shutting down'));
+    });
+    this._recoverySyncAssemblies.clear();
     // Shut down all executor containers + proxies (fire-and-forget the promises)
     for (const [name, exec] of Array.from(this._executors.entries())) {
       const container = this._executorContainers.get(name)
@@ -1685,6 +2419,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._scheduledExecutorContainers.clear();
     for (const topic of Array.from(this._topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
+    this._distributedReplicatedMapService?.shutdown();
     for (const rm of Array.from(this._replicatedMaps.values())) rm.destroy();
     this._nearCachedMaps.clear();
     this._nearCacheManager.destroyAllNearCaches();
@@ -1722,6 +2457,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._transport?.shutdown();
     this._transport = null;
     this._metricsSampler?.stop();
+    this._healthMonitor?.stop();
     this._restServer.stop();
   }
 
@@ -1808,6 +2544,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   getInstanceName(): string {
     return this._name;
+  }
+
+  getMigrationQueueSize(): number {
+    return this._migrationManager?.getStats().migrationQueueSize ?? 0;
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -1923,6 +2663,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
   }
 
+  /**
+   * Returns the backpressure regulator's observable stats, or null if backpressure
+   * is not active (single-node mode). Useful for monitoring and diagnostics.
+   */
+  getBackpressureStats(): BackpressureStats | null {
+    return this._backpressureRegulator?.getStats() ?? null;
+  }
+
+  /**
+   * Returns the backpressure regulator instance, or null if not in clustered mode.
+   * @internal — used for testing and diagnostics.
+   */
+  getBackpressureRegulator(): BackpressureRegulator | null {
+    return this._backpressureRegulator;
+  }
+
   getKnownDistributedObjectNames(): {
     maps: string[];
     queues: string[];
@@ -2023,7 +2779,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getList<E>(name: string): IList<E> {
     let list = this._lists.get(name);
     if (!list) {
-      list = new ListImpl<unknown>();
+      list =
+        this._distributedListService === null
+          ? new ListImpl<unknown>()
+          : new ListProxyImpl<unknown>(name, this._distributedListService, this._ss);
       this._lists.set(name, list);
     }
     return list as IList<E>;
@@ -2032,7 +2791,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getSet<E>(name: string): ISet<E> {
     let set = this._sets.get(name);
     if (!set) {
-      set = new SetImpl<unknown>();
+      set =
+        this._distributedSetService === null
+          ? new SetImpl<unknown>()
+          : new SetProxyImpl<unknown>(name, this._distributedSetService, this._ss);
       this._sets.set(name, set);
     }
     return set as ISet<E>;
@@ -2084,7 +2846,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getMultiMap<K, V>(name: string): MultiMap<K, V> {
     let mmap = this._multiMaps.get(name);
     if (!mmap) {
-      mmap = new MultiMapImpl<unknown, unknown>();
+      mmap =
+        this._distributedMultiMapService === null
+          ? new MultiMapImpl<unknown, unknown>()
+          : new MultiMapProxyImpl<unknown, unknown>(
+              name,
+              this._distributedMultiMapService,
+              this._ss,
+            );
       this._multiMaps.set(name, mmap);
     }
     return mmap as MultiMap<K, V>;
@@ -2093,10 +2862,31 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getReplicatedMap<K, V>(name: string): ReplicatedMap<K, V> {
     let rm = this._replicatedMaps.get(name);
     if (!rm) {
-      rm = new ReplicatedMapImpl<unknown, unknown>(name);
+      rm =
+        this._distributedReplicatedMapService === null
+          ? new ReplicatedMapImpl<unknown, unknown>(name)
+          : new ReplicatedMapProxyImpl<unknown, unknown>(
+              name,
+              this._distributedReplicatedMapService,
+              this._ss,
+            );
       this._replicatedMaps.set(name, rm);
     }
     return rm as ReplicatedMap<K, V>;
+  }
+
+  /** Get (or create) a distributed cache by name. */
+  getCache<K, V>(name: string): DistributedCacheService {
+    if (this._distributedCacheService === null) {
+      this._distributedCacheService = new DistributedCacheService(
+        this._name,
+        this._config,
+        this._ss,
+        null,
+        null,
+      );
+    }
+    return this._distributedCacheService;
   }
 
   getExecutorService(name: string): IExecutorService {
@@ -2255,6 +3045,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return this._metricsRegistry;
   }
 
+  /** Returns a MonitorStateProvider bound to this instance, or null if monitoring is disabled. */
+  getMonitorStateProvider(): MonitorStateProvider | null {
+    if (this._metricsRegistry === null) return null;
+    return this._createMonitorStateProvider();
+  }
+
   private _initMonitor(): void {
     const monitorConfig = this._config.getMonitorConfig();
     if (!monitorConfig.isEnabled()) return;
@@ -2263,12 +3059,21 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._config.getNetworkConfig().getRestApiConfig()
       .enableGroups(RestEndpointGroup.MONITOR);
 
+    const stateProvider = this._createMonitorStateProvider();
     this._metricsRegistry = new MetricsRegistry(monitorConfig);
-    this._metricsSampler = new MetricsSampler(monitorConfig, this._createMonitorStateProvider(), this._metricsRegistry);
+    this._metricsSampler = new MetricsSampler(monitorConfig, stateProvider, this._metricsRegistry);
 
     // Register the monitor REST handler
-    const monitorHandler = new MonitorHandler(monitorConfig, this._metricsRegistry, this._createMonitorStateProvider());
+    const monitorHandler = new MonitorHandler(monitorConfig, this._metricsRegistry, stateProvider);
     this._restServer.registerHandler('/helios/monitor', (req) => monitorHandler.handle(req));
+
+    // Register the /helios/metrics REST handler (JSON + Prometheus text)
+    const metricsHandler = new MetricsHandler(globalMetrics, this._metricsRegistry, globalResourceLimiter);
+    this._restServer.registerHandler('/helios/metrics', (req) => metricsHandler.handle(req));
+
+    // Create and start the health monitor (subscribes to registry sample events)
+    this._healthMonitor = new HealthMonitor(monitorConfig, this._metricsRegistry, stateProvider);
+    this._healthMonitor.start();
 
     // Start sampling
     this._metricsSampler.start();
@@ -2287,7 +3092,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
       getObjectInventory: (): ObjectInventory => this.getKnownDistributedObjectNames(),
       getMemberPartitionInfo: () => this._buildMemberPartitionInfo(),
       getThreadPoolMetrics: () => this._getThreadPoolMetrics(),
+      getMigrationMetrics: (): MigrationMetrics => this._getMigrationMetrics(),
+      getOperationMetrics: (): OperationMetrics => this._getOperationMetrics(),
+      getInvocationMetrics: (): InvocationMetrics => this._getInvocationMetrics(),
       getBlitzMetrics: () => this._getBlitzMetrics(),
+      getJobCounterMetrics: (): JobCounterMetrics | null => this._getJobCounterMetrics(),
     };
   }
 
@@ -2347,6 +3156,45 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return { scatterPoolActive, scatterPoolSize };
   }
 
+  private _getMigrationMetrics(): MigrationMetrics {
+    const stats = this._migrationManager?.getStats();
+    return {
+      migrationQueueSize: stats?.migrationQueueSize ?? 0,
+      activeMigrations: stats?.activeMigrations ?? 0,
+      completedMigrations: stats?.completedMigrations ?? 0,
+    };
+  }
+
+  private _getOperationMetrics(): OperationMetrics {
+    const stats = this._operationServiceImpl?.getStats();
+    return {
+      queueSize: stats?.queueSize ?? 0,
+      runningCount: stats?.runningCount ?? 0,
+      completedCount: stats?.completedCount ?? 0,
+    };
+  }
+
+  /**
+   * Invocation capacity — mirrors Hazelcast's maxAllowedInvocations configuration.
+   * Hazelcast defaults to partitionCount × 100 + genericQueueCapacity; we use a
+   * conservative constant that matches the BackpressureRegulator's practical limit.
+   */
+  private static readonly _MAX_CONCURRENT_INVOCATIONS = 100_000;
+
+  private _getInvocationMetrics(): InvocationMetrics {
+    const pendingCount = this._invocationMonitor.activeCount();
+    const maxConcurrent = HeliosInstanceImpl._MAX_CONCURRENT_INVOCATIONS;
+    const usedPercentage = Math.round((pendingCount / maxConcurrent) * 10_000) / 100;
+    const stats = this._invocationMonitor.getStats();
+    return {
+      pendingCount,
+      maxConcurrent,
+      usedPercentage,
+      timeoutFailures: stats.timeoutFailures,
+      memberLeftFailures: stats.memberLeftFailures,
+    };
+  }
+
   private _getBlitzMetrics(): BlitzMetrics | null {
     const manager = this.getBlitzLifecycleManager();
     if (manager === null) return null;
@@ -2354,11 +3202,24 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
 
     return {
-      clusterSize: 1,
+      clusterSize: blitzService?.getClusterSize?.() ?? 1,
       isReady: this.isBlitzReady(),
       readinessState: manager.getReadinessState(),
-      runningPipelines: 0,
+      runningPipelines: blitzService?.getRunningJobCount?.() ?? 0,
       jetStreamReady: blitzService?.jsm !== undefined,
+      jobCounters: this._getJobCounterMetrics(),
+    };
+  }
+
+  private _getJobCounterMetrics(): JobCounterMetrics | null {
+    const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
+    const counters = blitzService?.getJobCounters?.();
+    if (counters === undefined) return null;
+    return {
+      submitted: counters.submitted,
+      completedSuccessfully: counters.completedSuccessfully,
+      completedWithFailure: counters.completedWithFailure,
+      executionStarted: counters.executionStarted,
     };
   }
 }

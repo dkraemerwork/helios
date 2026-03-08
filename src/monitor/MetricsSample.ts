@@ -99,6 +99,57 @@ export interface ThreadPoolMetrics {
     scatterPoolSize: number;
 }
 
+/** Partition migration metrics. */
+export interface MigrationMetrics {
+    /** Number of pending migrations waiting in the queue. */
+    migrationQueueSize: number;
+    /** Number of migrations currently executing (0 or 1 in single-threaded runtime). */
+    activeMigrations: number;
+    /** Total migrations completed since the instance started. */
+    completedMigrations: number;
+}
+
+/** Operation execution metrics — mirrors Hazelcast's operation.queueSize / runningCount / completedCount. */
+export interface OperationMetrics {
+    /** Number of operations currently pending in the invocation registry (queued + running). */
+    queueSize: number;
+    /** Number of operations actively executing (local run() in flight). */
+    runningCount: number;
+    /** Total operations completed since the instance started. */
+    completedCount: number;
+}
+
+/**
+ * Invocation metrics — mirrors Hazelcast HealthMonitor's pending invocation tracking.
+ *
+ * Hazelcast alerts when pendingCount > 1000 or usedPercentage > 70%.
+ * Helios replicates this parity check in MetricsSampler.
+ */
+export interface InvocationMetrics {
+    /** Number of active (pending) invocations waiting for a response. */
+    pendingCount: number;
+    /** Configured maximum concurrent invocations capacity. */
+    maxConcurrent: number;
+    /** Percentage of capacity currently consumed (pendingCount / maxConcurrent × 100). */
+    usedPercentage: number;
+    /** Cumulative timeout failures since the instance started. */
+    timeoutFailures: number;
+    /** Cumulative member-left failures since the instance started. */
+    memberLeftFailures: number;
+}
+
+/** Cluster-wide monotonic job lifecycle counters (Hazelcast Jet MetricNames parity). */
+export interface JobCounterMetrics {
+    /** Total jobs submitted since coordinator creation. Mirrors MetricNames.JOBS_SUBMITTED. */
+    submitted: number;
+    /** Total jobs that completed successfully. Mirrors MetricNames.JOBS_COMPLETED_SUCCESSFULLY. */
+    completedSuccessfully: number;
+    /** Total jobs that failed. Mirrors MetricNames.JOBS_COMPLETED_WITH_FAILURE. */
+    completedWithFailure: number;
+    /** Total times a job execution started (each RUNNING transition). */
+    executionStarted: number;
+}
+
 /** Blitz (NATS) metrics — present only when Blitz is active. */
 export interface BlitzMetrics {
     /** Number of NATS cluster nodes. */
@@ -111,6 +162,8 @@ export interface BlitzMetrics {
     runningPipelines: number;
     /** Whether JetStream is available. */
     jetStreamReady: boolean;
+    /** Cluster-wide job lifecycle counters. Null when no job coordinator is active. */
+    jobCounters: JobCounterMetrics | null;
 }
 
 /** A single point-in-time metrics snapshot. */
@@ -136,8 +189,17 @@ export interface MetricsSample {
     /** Thread pool info. */
     threads: ThreadPoolMetrics;
 
+    /** Partition migration metrics. */
+    migration: MigrationMetrics;
+
+    /** Operation queue metrics. */
+    operation: OperationMetrics;
+
     /** Blitz metrics (null if Blitz is not active). */
     blitz: BlitzMetrics | null;
+
+    /** Invocation (pending remote call) metrics. */
+    invocation: InvocationMetrics;
 }
 
 /** Full monitor payload sent to the dashboard. */
@@ -174,4 +236,10 @@ export interface MonitorPayload {
 
     /** Latest sample (convenience). */
     latest: MetricsSample | null;
+
+    /** Current migration queue size (live, for K8s readiness and health checks). */
+    migrationQueueSize: number;
+
+    /** Current operation queue size (live snapshot from OperationService). */
+    operationQueueSize: number;
 }

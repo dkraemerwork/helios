@@ -29,6 +29,10 @@ export class MetricsCollector {
       latencyP99Max: number;
       latencyMaxMax: number;
       memberCount: number;
+      distributedItemsIn: number;
+      distributedItemsOut: number;
+      distributedBytesIn: number;
+      distributedBytesOut: number;
     }>();
 
     for (const metrics of memberMetrics.values()) {
@@ -44,6 +48,10 @@ export class MetricsCollector {
             latencyP99Max: 0,
             latencyMaxMax: 0,
             memberCount: 0,
+            distributedItemsIn: 0,
+            distributedItemsOut: 0,
+            distributedBytesIn: 0,
+            distributedBytesOut: 0,
           };
           vertexAccumulators.set(vm.name, acc);
         }
@@ -55,12 +63,20 @@ export class MetricsCollector {
         acc.latencyP99Max = Math.max(acc.latencyP99Max, vm.latencyP99Ms);
         acc.latencyMaxMax = Math.max(acc.latencyMaxMax, vm.latencyMaxMs);
         acc.memberCount++;
+        acc.distributedItemsIn += vm.distributedItemsIn;
+        acc.distributedItemsOut += vm.distributedItemsOut;
+        acc.distributedBytesIn += vm.distributedBytesIn;
+        acc.distributedBytesOut += vm.distributedBytesOut;
       }
     }
 
     const vertices = new Map<string, VertexMetrics>();
     let totalIn = 0;
     let totalOut = 0;
+    let totalDistributedItemsIn = 0;
+    let totalDistributedItemsOut = 0;
+    let totalDistributedBytesIn = 0;
+    let totalDistributedBytesOut = 0;
 
     for (const [name, acc] of vertexAccumulators) {
       const merged: VertexMetrics = {
@@ -72,6 +88,10 @@ export class MetricsCollector {
         latencyP50Ms: acc.memberCount > 0 ? Math.round(acc.latencyP50Sum / acc.memberCount) : 0,
         latencyP99Ms: acc.latencyP99Max,
         latencyMaxMs: acc.latencyMaxMax,
+        distributedItemsIn: acc.distributedItemsIn,
+        distributedItemsOut: acc.distributedItemsOut,
+        distributedBytesIn: acc.distributedBytesIn,
+        distributedBytesOut: acc.distributedBytesOut,
       };
       vertices.set(name, merged);
 
@@ -83,11 +103,20 @@ export class MetricsCollector {
       if (acc.type === 'sink') {
         totalOut += acc.itemsIn;
       }
+
+      totalDistributedItemsIn += acc.distributedItemsIn;
+      totalDistributedItemsOut += acc.distributedItemsOut;
+      totalDistributedBytesIn += acc.distributedBytesIn;
+      totalDistributedBytesOut += acc.distributedBytesOut;
     }
 
     return {
       totalIn,
       totalOut,
+      totalDistributedItemsIn,
+      totalDistributedItemsOut,
+      totalDistributedBytesIn,
+      totalDistributedBytesOut,
       vertices,
       snapshots: snapshotMetrics,
       collectedAt: Date.now(),

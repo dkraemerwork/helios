@@ -75,6 +75,8 @@ export class MetricsRegistry {
      * Combines the time-series samples with cluster state from the provider.
      */
     buildPayload(provider: MonitorStateProvider): MonitorPayload {
+        const migrationMetrics = provider.getMigrationMetrics();
+        const operationMetrics = provider.getOperationMetrics();
         return {
             instanceName: provider.getInstanceName(),
             nodeState: provider.getNodeState(),
@@ -87,6 +89,8 @@ export class MetricsRegistry {
             objects: provider.getObjectInventory(),
             samples: [...this._samples],
             latest: this.getLatest(),
+            migrationQueueSize: migrationMetrics.migrationQueueSize,
+            operationQueueSize: operationMetrics.queueSize,
         };
     }
 

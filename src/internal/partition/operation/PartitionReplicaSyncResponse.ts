@@ -28,6 +28,68 @@ export interface SyncApplyOptions {
 
 const DEFAULT_MAX_SINGLE_SYNC_SIZE_BYTES = 50_000_000;
 
+export class PartitionReplicaSyncChunkAssembler {
+    private _chunkCount: number | null = null;
+    private readonly _chunks = new Map<number, readonly ReplicationNamespaceState[]>();
+
+    acceptChunk(
+        chunkIndex: number,
+        chunkCount: number,
+        namespaceStates: readonly ReplicationNamespaceState[],
+    ): boolean {
+        if (chunkCount <= 0 || chunkIndex < 0 || chunkIndex >= chunkCount) {
+            return false;
+        }
+        if (this._chunkCount !== null && this._chunkCount !== chunkCount) {
+            return false;
+        }
+        if (this._chunks.has(chunkIndex)) {
+            return false;
+        }
+
+        this._chunkCount = chunkCount;
+        this._chunks.set(chunkIndex, namespaceStates);
+        return true;
+    }
+
+    isComplete(): boolean {
+        return this._chunkCount !== null && this._chunks.size === this._chunkCount;
+    }
+
+    buildNamespaceStates(): ReplicationNamespaceState[] {
+        if (!this.isComplete() || this._chunkCount === null) {
+            throw new Error('Replica sync chunks are incomplete');
+        }
+
+        const merged = new Map<string, { entries: Array<readonly [Data, Data]>; estimatedSizeBytes: number }>();
+        for (let chunkIndex = 0; chunkIndex < this._chunkCount; chunkIndex++) {
+            const chunk = this._chunks.get(chunkIndex);
+            if (chunk === undefined) {
+                throw new Error(`Missing replica sync chunk ${chunkIndex}`);
+            }
+            for (const state of chunk) {
+                const existing = merged.get(state.namespace);
+                if (existing === undefined) {
+                    merged.set(state.namespace, {
+                        entries: [...state.entries],
+                        estimatedSizeBytes: state.estimatedSizeBytes,
+                    });
+                    continue;
+                }
+
+                existing.entries.push(...state.entries);
+                existing.estimatedSizeBytes += state.estimatedSizeBytes;
+            }
+        }
+
+        return [...merged.entries()].map(([namespace, state]) => ({
+            namespace,
+            entries: state.entries,
+            estimatedSizeBytes: state.estimatedSizeBytes,
+        }));
+    }
+}
+
 export class PartitionReplicaSyncResponse {
     readonly partitionId: number;
     readonly replicaIndex: number;

@@ -12,6 +12,7 @@
     "docker:down": "docker compose -f docker-compose.yml down --remove-orphans",
     "docker:logs": "docker compose -f docker-compose.yml logs -f",
     "stress": "bun run src/stress-test.ts",
+    "benchmark": "bun run src/stress-test.ts --mode benchmark",
     "test": "bun test",
     "demo": "bash demo.sh"
   },

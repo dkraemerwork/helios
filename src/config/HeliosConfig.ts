@@ -4,22 +4,25 @@
  * Holds the instance name and any per-map configurations.
  * Use HeliosConfig as the entry point when constructing a HeliosInstanceImpl.
  */
-import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
-import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig";
-import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
-import { MonitorConfig } from "@zenystx/helios-core/config/MonitorConfig";
-import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
-import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
-import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig";
-import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
-import { ScheduledExecutorConfig } from "@zenystx/helios-core/config/ScheduledExecutorConfig";
-import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
-import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
-import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry";
-import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
+import { BackpressureConfig } from "@zenystx/helios-core/config/BackpressureConfig.js";
+import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig.js";
+import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig.js";
+import { DEFAULT_CLUSTER_NAME } from "@zenystx/helios-core/config/HazelcastDefaults.js";
+import { MapConfig } from "@zenystx/helios-core/config/MapConfig.js";
+import { MonitorConfig } from "@zenystx/helios-core/config/MonitorConfig.js";
+import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig.js";
+import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig.js";
+import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig.js";
+import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig.js";
+import { ScheduledExecutorConfig } from "@zenystx/helios-core/config/ScheduledExecutorConfig.js";
+import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig.js";
+import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig.js";
+import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry.js";
+import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory.js";
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;
+  private _clusterName: string = DEFAULT_CLUSTER_NAME;
   private readonly _mapConfigs = new Map<string, MapConfig>();
   private readonly _queueConfigs = new Map<string, QueueConfig>();
   private readonly _topicConfigs = new Map<string, TopicConfig>();
@@ -30,6 +33,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _network: NetworkConfig = new NetworkConfig();
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
   private readonly _monitorConfig = new MonitorConfig();
+  private readonly _backpressureConfig = new BackpressureConfig();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
   private _configOrigin: string | null = null;
 
@@ -51,6 +55,24 @@ export class HeliosConfig implements InstanceConfig {
   }
 
   /**
+   * Returns the cluster group name used for member discovery.
+   * Defaults to {@code "dev"} — the Hazelcast OSS default.
+   *
+   * @source {@code com.hazelcast.config.Config.DEFAULT_CLUSTER_NAME}
+   */
+  getClusterName(): string {
+    return this._clusterName;
+  }
+
+  setClusterName(clusterName: string): this {
+    if (!clusterName || clusterName.trim() === "") {
+      throw new Error("clusterName must be a non-empty string");
+    }
+    this._clusterName = clusterName;
+    return this;
+  }
+
+  /**
    * Returns the network configuration (port, join strategy, etc.).
    */
   getNetworkConfig(): NetworkConfig {
@@ -63,6 +85,14 @@ export class HeliosConfig implements InstanceConfig {
    */
   getMonitorConfig(): MonitorConfig {
     return this._monitorConfig;
+  }
+
+  /**
+   * Returns the backpressure configuration for remote invocation admission control.
+   * Backpressure is enabled by default; call `getBackpressureConfig().setEnabled(false)` to disable.
+   */
+  getBackpressureConfig(): BackpressureConfig {
+    return this._backpressureConfig;
   }
 
   /**

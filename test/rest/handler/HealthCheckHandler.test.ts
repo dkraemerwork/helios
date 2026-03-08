@@ -26,6 +26,7 @@ const ACTIVE_STATE = {
     getClusterSize: () => 1,
     getMemberVersion: () => '1.0.0',
     getInstanceName: () => 'helios-node-1',
+    getMigrationQueueSize: () => 0,
 };
 
 function makeServer(state = ACTIVE_STATE): { port: number } {
@@ -60,6 +61,7 @@ describe('HealthCheckHandler — /hazelcast/health', () => {
             clusterSize: 1,
             memberVersion: '1.0.0',
             instanceName: 'helios-node-1',
+            migrationQueueSize: 0,
         });
     });
 

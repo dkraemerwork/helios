@@ -24,6 +24,10 @@ function makeVertex(name: string, type: 'source' | 'operator' | 'sink', override
     latencyP50Ms: 0,
     latencyP99Ms: 0,
     latencyMaxMs: 0,
+    distributedItemsIn: 0,
+    distributedItemsOut: 0,
+    distributedBytesIn: 0,
+    distributedBytesOut: 0,
     ...overrides,
   };
 }

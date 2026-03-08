@@ -3,9 +3,9 @@
  */
 import { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
-import { PartitionReplicaSyncRequest, collectNamespaceStates } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest';
+import { DEFAULT_MAX_SYNC_CHUNK_SIZE_BYTES, PartitionReplicaSyncRequest, chunkNamespaceStates, collectNamespaceStates } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest';
 import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
-import { PartitionReplicaSyncResponse } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
+import { PartitionReplicaSyncChunkAssembler, PartitionReplicaSyncResponse } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
@@ -332,5 +332,67 @@ describe('collectNamespaceStates (on primary)', () => {
 
         const states = collectNamespaceStates(container);
         expect(states[0].estimatedSizeBytes).toBe(24); // 12 + 12
+    });
+});
+
+describe('chunkNamespaceStates', () => {
+    test('splits a large namespace across multiple chunks', () => {
+        const states: ReplicationNamespaceState[] = [{
+            namespace: 'bigMap',
+            entries: [
+                [makeData(1), makeData(10)],
+                [makeData(2), makeData(20)],
+                [makeData(3), makeData(30)],
+            ],
+            estimatedSizeBytes: 72,
+        }];
+
+        const chunks = chunkNamespaceStates(states, 48);
+
+        expect(chunks).toHaveLength(2);
+        expect(chunks[0]).toHaveLength(1);
+        expect(chunks[1]).toHaveLength(1);
+        expect(chunks[0]![0]!.namespace).toBe('bigMap');
+        expect(chunks[1]![0]!.namespace).toBe('bigMap');
+        expect(chunks[0]![0]!.entries).toHaveLength(2);
+        expect(chunks[1]![0]!.entries).toHaveLength(1);
+    });
+
+    test('preserves an empty authoritative namespace as a single chunk', () => {
+        const chunks = chunkNamespaceStates([
+            { namespace: 'emptyMap', entries: [], estimatedSizeBytes: 0 },
+        ]);
+
+        expect(chunks).toEqual([[{ namespace: 'emptyMap', entries: [], estimatedSizeBytes: 0 }]]);
+    });
+
+    test('uses the production default chunk size when omitted', () => {
+        const chunks = chunkNamespaceStates([
+            { namespace: 'ns', entries: [], estimatedSizeBytes: DEFAULT_MAX_SYNC_CHUNK_SIZE_BYTES + 1 },
+        ]);
+
+        expect(chunks).toHaveLength(1);
+    });
+});
+
+describe('PartitionReplicaSyncChunkAssembler', () => {
+    test('reassembles split namespace fragments in chunk order', () => {
+        const assembler = new PartitionReplicaSyncChunkAssembler();
+
+        expect(assembler.acceptChunk(1, 2, [{ namespace: 'mapA', entries: [[makeData(2), makeData(20)]], estimatedSizeBytes: 24 }])).toBe(true);
+        expect(assembler.acceptChunk(0, 2, [{ namespace: 'mapA', entries: [[makeData(1), makeData(10)]], estimatedSizeBytes: 24 }])).toBe(true);
+        expect(assembler.isComplete()).toBe(true);
+
+        const states = assembler.buildNamespaceStates();
+        expect(states).toHaveLength(1);
+        expect(states[0]!.entries).toHaveLength(2);
+        expect(states[0]!.estimatedSizeBytes).toBe(48);
+    });
+
+    test('rejects duplicate chunks', () => {
+        const assembler = new PartitionReplicaSyncChunkAssembler();
+
+        expect(assembler.acceptChunk(0, 1, [])).toBe(true);
+        expect(assembler.acceptChunk(0, 1, [])).toBe(false);
     });
 });

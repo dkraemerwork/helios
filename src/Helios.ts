@@ -34,7 +34,7 @@ export class Helios {
 
         if (typeof configOrFile === 'string') {
             config = await loadConfig(configOrFile);
-        } else if (configOrFile instanceof HeliosConfig) {
+        } else if (Helios._isHeliosConfig(configOrFile)) {
             config = configOrFile;
         } else {
             config = new HeliosConfig();
@@ -70,5 +70,26 @@ export class Helios {
      */
     static getInstanceByName(name: string): HeliosInstanceImpl | null {
         return Helios._instances.get(name) ?? null;
+    }
+
+    /**
+     * Duck-type check for HeliosConfig.
+     *
+     * When the runtime loads `.ts` source files (via tsconfig paths) alongside
+     * compiled `.js` dist files, the same class may exist as two distinct
+     * module-scoped objects.  This makes `instanceof` fail even though the
+     * objects are structurally identical.  A duck-type check avoids the
+     * dual-module identity problem.
+     */
+    private static _isHeliosConfig(value: unknown): value is HeliosConfig {
+        if (value instanceof HeliosConfig) return true;
+        if (value == null || typeof value !== 'object') return false;
+        const v = value as Record<string, unknown>;
+        return (
+            typeof v['getName'] === 'function' &&
+            typeof v['getNetworkConfig'] === 'function' &&
+            typeof v['getClusterName'] === 'function' &&
+            v.constructor?.name === 'HeliosConfig'
+        );
     }
 }

@@ -26,6 +26,7 @@ import type { SerializationService } from "@zenystx/helios-core/internal/seriali
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 type MembershipListener = () => void;
+type MemberRemovedListener = (memberId: string) => void;
 interface BlitzCoordinatorListener {
   onAuthorityChanged?(state: {
     masterMemberId: string | null;
@@ -53,6 +54,7 @@ export class HeliosClusterCoordinator {
   private readonly _joinManager: ClusterJoinManager;
   private readonly _partitionService = new InternalPartitionServiceImpl();
   private readonly _membershipListeners: MembershipListener[] = [];
+  private readonly _memberRemovedListeners: MemberRemovedListener[] = [];
   private readonly _blitzCoordinatorListeners: BlitzCoordinatorListener[] = [];
   private readonly _joinRequestedPeers = new Set<string>();
   private readonly _connectedPeers = new Set<string>();
@@ -170,6 +172,10 @@ export class HeliosClusterCoordinator {
 
   onMembershipChanged(listener: MembershipListener): void {
     this._membershipListeners.push(listener);
+  }
+
+  onMemberRemoved(listener: MemberRemovedListener): void {
+    this._memberRemovedListeners.push(listener);
   }
 
   onBlitzCoordinatorEvent(listener: BlitzCoordinatorListener): void {
@@ -455,6 +461,7 @@ export class HeliosClusterCoordinator {
     }
 
     this._syncBlitzCoordinatorState();
+    this._notifyMemberRemoved(memberId);
     this._notifyMembershipChanged();
   }
 
@@ -695,6 +702,12 @@ export class HeliosClusterCoordinator {
   private _notifyMembershipChanged(): void {
     for (const listener of this._membershipListeners) {
       listener();
+    }
+  }
+
+  private _notifyMemberRemoved(memberId: string): void {
+    for (const listener of this._memberRemovedListeners) {
+      listener(memberId);
     }
   }
 

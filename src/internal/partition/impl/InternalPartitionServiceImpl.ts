@@ -63,9 +63,17 @@ export interface SyncRequestInfo {
     partitionId: number;
     replicaIndex: number;
     targetUuid: string;
+    dirtyNamespaces: readonly string[];
     timeoutMs: number;
     retryCount: number;
     epoch: number;
+    createdAt: number;
+    deadlineAt: number;
+}
+
+interface SyncRequestState extends SyncRequestInfo {
+    expectedChunkCount: number | null;
+    receivedChunkIndexes: Set<number>;
 }
 
 /** Anti-entropy configuration. */
@@ -124,7 +132,7 @@ export class InternalPartitionServiceImpl {
     /** Map-scoped partition-lost listeners: registrationId → { mapName, listener }. */
     private readonly _mapPartitionLostListeners = new Map<string, { mapName: string; listener: MapPartitionLostListener }>();
     /** Pending replica sync requests keyed by sync ID. */
-    private readonly _pendingSyncRequests = new Map<string, SyncRequestInfo>();
+    private readonly _pendingSyncRequests = new Map<string, SyncRequestState>();
     /** Fenced rejoining member UUIDs. */
     private readonly _rejoinFences = new Set<string>();
     /** Current sync session epoch — incremented on ownership changes to invalidate stale syncs. */
@@ -334,6 +342,7 @@ export class InternalPartitionServiceImpl {
 
         // Step 7: Increment sync epoch
         this._syncEpoch++;
+        this._discardObsoleteSyncRequests();
         this._metrics.refillBacklog = refillTargets.length;
 
         this._stateManager.updateStamp();
@@ -411,46 +420,167 @@ export class InternalPartitionServiceImpl {
     cancelReplicaSyncRequestsTo(memberUuid: string): void {
         for (const [id, info] of this._pendingSyncRequests) {
             if (info.targetUuid === memberUuid) {
-                this._pendingSyncRequests.delete(id);
+                this._removeSyncRequest(id, true);
             }
         }
     }
 
     getPendingSyncRequests(): SyncRequestInfo[] {
-        return [...this._pendingSyncRequests.values()];
+        return [...this._pendingSyncRequests.values()].map((info) => ({
+            id: info.id,
+            partitionId: info.partitionId,
+            replicaIndex: info.replicaIndex,
+            targetUuid: info.targetUuid,
+            dirtyNamespaces: [...info.dirtyNamespaces],
+            timeoutMs: info.timeoutMs,
+            retryCount: info.retryCount,
+            epoch: info.epoch,
+            createdAt: info.createdAt,
+            deadlineAt: info.deadlineAt,
+        }));
     }
 
-    registerSyncRequest(partitionId: number, replicaIndex: number, targetUuid: string): string {
+    registerSyncRequest(
+        partitionId: number,
+        replicaIndex: number,
+        targetUuid: string,
+        dirtyNamespaces: readonly string[] = [],
+        now: number = Date.now(),
+        retryCount: number = 0,
+    ): string {
+        const syncId = this.tryRegisterSyncRequest(partitionId, replicaIndex, targetUuid, dirtyNamespaces, now, retryCount);
+        if (syncId === null) {
+            throw new Error('No replica sync permits available');
+        }
+        return syncId;
+    }
+
+    tryRegisterSyncRequest(
+        partitionId: number,
+        replicaIndex: number,
+        targetUuid: string,
+        dirtyNamespaces: readonly string[] = [],
+        now: number = Date.now(),
+        retryCount: number = 0,
+    ): string | null {
+        if (this._replicaManager !== null && this._replicaManager.tryAcquireReplicaSyncPermits(1) === 0) {
+            return null;
+        }
+
         const id = crypto.randomUUID();
         this._pendingSyncRequests.set(id, {
             id,
             partitionId,
             replicaIndex,
             targetUuid,
+            dirtyNamespaces: [...dirtyNamespaces],
             timeoutMs: this._recoveryConfig.syncTimeoutMs,
-            retryCount: 0,
+            retryCount,
             epoch: this._syncEpoch,
+            createdAt: now,
+            deadlineAt: now + this._recoveryConfig.syncTimeoutMs,
+            expectedChunkCount: null,
+            receivedChunkIndexes: new Set<number>(),
         });
         return id;
     }
 
     getSyncRequestInfo(syncId: string): SyncRequestInfo | null {
-        return this._pendingSyncRequests.get(syncId) ?? null;
+        const info = this._pendingSyncRequests.get(syncId);
+        if (info === undefined) {
+            return null;
+        }
+        return {
+            id: info.id,
+            partitionId: info.partitionId,
+            replicaIndex: info.replicaIndex,
+            targetUuid: info.targetUuid,
+            dirtyNamespaces: [...info.dirtyNamespaces],
+            timeoutMs: info.timeoutMs,
+            retryCount: info.retryCount,
+            epoch: info.epoch,
+            createdAt: info.createdAt,
+            deadlineAt: info.deadlineAt,
+        };
+    }
+
+    acceptSyncResponseChunk(syncId: string, chunkIndex: number, chunkCount: number): boolean {
+        const info = this._pendingSyncRequests.get(syncId);
+        if (!info) {
+            this._metrics.staleResponseRejects++;
+            return false;
+        }
+
+        if (info.epoch !== this._syncEpoch || chunkCount <= 0 || chunkIndex < 0 || chunkIndex >= chunkCount) {
+            this._removeSyncRequest(syncId, true);
+            this._metrics.staleResponseRejects++;
+            return false;
+        }
+
+        if (info.expectedChunkCount !== null && info.expectedChunkCount !== chunkCount) {
+            this._removeSyncRequest(syncId, true);
+            this._metrics.staleResponseRejects++;
+            return false;
+        }
+
+        if (info.receivedChunkIndexes.has(chunkIndex)) {
+            this._metrics.staleResponseRejects++;
+            return false;
+        }
+
+        info.expectedChunkCount = chunkCount;
+        info.receivedChunkIndexes.add(chunkIndex);
+        return true;
     }
 
     completeSyncRequest(syncId: string, _versions: bigint[]): boolean {
         const info = this._pendingSyncRequests.get(syncId);
-        if (!info) return false;
-
-        // Reject stale: epoch must match current
-        if (info.epoch !== this._syncEpoch) {
-            this._pendingSyncRequests.delete(syncId);
+        if (!info) {
             this._metrics.staleResponseRejects++;
+            return false;
+        }
+
+        if (info.epoch !== this._syncEpoch) {
+            this._removeSyncRequest(syncId, true);
+            this._metrics.staleResponseRejects++;
+            return false;
+        }
+
+        if (info.expectedChunkCount !== null && info.receivedChunkIndexes.size !== info.expectedChunkCount) {
             return false;
         }
 
         this._pendingSyncRequests.delete(syncId);
         return true;
+    }
+
+    expireTimedOutSyncRequests(now: number = Date.now()): SyncRequestInfo[] {
+        const retryable: SyncRequestInfo[] = [];
+        for (const [syncId, info] of this._pendingSyncRequests) {
+            if (info.deadlineAt > now) {
+                continue;
+            }
+
+            this._removeSyncRequest(syncId, true);
+            this._metrics.syncTimeouts++;
+            if (info.retryCount < this._recoveryConfig.syncRetryLimit) {
+                this._metrics.syncRetries++;
+                retryable.push({
+                    id: info.id,
+                    partitionId: info.partitionId,
+                    replicaIndex: info.replicaIndex,
+                    targetUuid: info.targetUuid,
+                    dirtyNamespaces: [...info.dirtyNamespaces],
+                    timeoutMs: info.timeoutMs,
+                    retryCount: info.retryCount,
+                    epoch: info.epoch,
+                    createdAt: info.createdAt,
+                    deadlineAt: info.deadlineAt,
+                });
+            }
+        }
+
+        return retryable;
     }
 
     // ── Snapshot management (R2/R4 stale-rejoin fencing) ────────
@@ -584,13 +714,13 @@ export class InternalPartitionServiceImpl {
 
     shutdown(): void {
         this.stopAntiEntropy();
-        this._pendingSyncRequests.clear();
+        this._clearPendingSyncRequests();
         this._rejoinFences.clear();
     }
 
     onDemotion(): void {
         this.stopAntiEntropy();
-        this._pendingSyncRequests.clear();
+        this._clearPendingSyncRequests();
         this._syncEpoch++;
     }
 
@@ -671,6 +801,11 @@ export class InternalPartitionServiceImpl {
         return this._migrationAwareServices;
     }
 
+    /** Returns the partition state manager, for wiring a MigrationManager that shares state. */
+    getPartitionStateManager(): PartitionStateManager {
+        return this._stateManager;
+    }
+
     applyCompletedMigrations(migrations: readonly MigrationInfo[]): boolean {
         for (const migration of migrations) {
             const partitionId = migration.getPartitionId();
@@ -744,5 +879,32 @@ export class InternalPartitionServiceImpl {
             partition.setReplicas(newAssignment[i]);
         }
         this._stateManager.updateStamp();
+    }
+
+    private _clearPendingSyncRequests(): void {
+        for (const syncId of [...this._pendingSyncRequests.keys()]) {
+            this._removeSyncRequest(syncId, true);
+        }
+    }
+
+    private _removeSyncRequest(syncId: string, releasePermit: boolean): SyncRequestState | null {
+        const info = this._pendingSyncRequests.get(syncId);
+        if (info === undefined) {
+            return null;
+        }
+
+        this._pendingSyncRequests.delete(syncId);
+        if (releasePermit) {
+            this._replicaManager?.releaseReplicaSyncPermits(1);
+        }
+        return info;
+    }
+
+    private _discardObsoleteSyncRequests(): void {
+        for (const [syncId, info] of this._pendingSyncRequests) {
+            if (info.epoch !== this._syncEpoch) {
+                this._removeSyncRequest(syncId, true);
+            }
+        }
     }
 }

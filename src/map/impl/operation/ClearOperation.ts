@@ -5,8 +5,11 @@
  * External store cleanup is handled by MapProxy after all ClearOperations complete.
  */
 import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
+import { ClearBackupOperation } from '@zenystx/helios-core/map/impl/operation/ClearBackupOperation';
+import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
+import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 
-export class ClearOperation extends MapOperation {
+export class ClearOperation extends MapOperation implements BackupAwareOperation {
     constructor(mapName: string) {
         super(mapName);
     }
@@ -18,5 +21,13 @@ export class ClearOperation extends MapOperation {
             this.recordNamespaceMutation();
         }
         this.sendResponse(undefined);
+    }
+
+    shouldBackup(): boolean { return true; }
+    getSyncBackupCount(): number { return 1; }
+    getAsyncBackupCount(): number { return 0; }
+
+    getBackupOperation(): Operation {
+        return new ClearBackupOperation(this.mapName);
     }
 }

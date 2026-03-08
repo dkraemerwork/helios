@@ -21,6 +21,16 @@ export interface MigrationManagerOptions {
     maxParallelMigrations?: number;
 }
 
+/** Point-in-time snapshot of migration queue statistics. */
+export interface MigrationStats {
+    /** Number of pending migrations waiting in the queue. */
+    migrationQueueSize: number;
+    /** Number of migrations currently being executed (0 or 1 in single-threaded runtime). */
+    activeMigrations: number;
+    /** Total number of migrations completed since this manager was created. */
+    completedMigrations: number;
+}
+
 /**
  * Manages migration lifecycle — planning and remote execution.
  */
@@ -30,6 +40,7 @@ export class MigrationManager {
     private readonly _planner: MigrationPlanner;
     private readonly _maxParallelMigrations: number;
     private _paused: boolean;
+    private _completedMigrations = 0;
 
     constructor(stateManager: PartitionStateManager, migrationQueue: MigrationQueue, options?: MigrationManagerOptions) {
         this._stateManager = stateManager;
@@ -119,6 +130,7 @@ export class MigrationManager {
         while (task !== null) {
             task.run();
             this._migrationQueue.afterTaskCompletion(task);
+            this._completedMigrations++;
             task = this._migrationQueue.poll();
         }
     }
@@ -133,6 +145,15 @@ export class MigrationManager {
 
     isMigrationPaused(): boolean {
         return this._paused;
+    }
+
+    /** Returns a point-in-time snapshot of migration queue statistics. */
+    getStats(): MigrationStats {
+        return {
+            migrationQueueSize: this._migrationQueue.migrationTaskCount(),
+            activeMigrations: this._migrationQueue.hasMigrationTasks() ? 1 : 0,
+            completedMigrations: this._completedMigrations,
+        };
     }
 
     /**

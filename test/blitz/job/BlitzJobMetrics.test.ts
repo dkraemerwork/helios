@@ -16,6 +16,10 @@ describe('BlitzJobMetrics', () => {
       latencyP50Ms: 1.2,
       latencyP99Ms: 5.8,
       latencyMaxMs: 12.0,
+      distributedItemsIn: 0,
+      distributedItemsOut: 0,
+      distributedBytesIn: 0,
+      distributedBytesOut: 0,
     };
 
     const snapshotMetrics: SnapshotMetrics = {
@@ -28,6 +32,10 @@ describe('BlitzJobMetrics', () => {
     const metrics: BlitzJobMetrics = {
       totalIn: 1000,
       totalOut: 950,
+      totalDistributedItemsIn: 0,
+      totalDistributedItemsOut: 0,
+      totalDistributedBytesIn: 0,
+      totalDistributedBytesOut: 0,
       vertices: new Map([['source-1', vertexMetrics]]),
       snapshots: snapshotMetrics,
       collectedAt: Date.now(),
@@ -51,6 +59,10 @@ describe('BlitzJobMetrics', () => {
         latencyP50Ms: 0,
         latencyP99Ms: 0,
         latencyMaxMs: 0,
+        distributedItemsIn: 0,
+        distributedItemsOut: 0,
+        distributedBytesIn: 0,
+        distributedBytesOut: 0,
       };
       expect(m.type).toBe(t);
     }

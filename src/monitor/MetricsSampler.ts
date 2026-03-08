@@ -14,8 +14,9 @@
 
 import type { MonitorConfig } from '@zenystx/helios-core/config/MonitorConfig';
 import type { MetricsRegistry } from '@zenystx/helios-core/monitor/MetricsRegistry';
-import type { CpuMetrics, EventLoopMetrics, GcMetrics, MemoryMetrics, MetricsSample } from '@zenystx/helios-core/monitor/MetricsSample';
+import type { CpuMetrics, EventLoopMetrics, GcMetrics, InvocationMetrics, MemoryMetrics, MetricsSample, MigrationMetrics, OperationMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
 import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
+import { HeliosLoggers } from '@zenystx/helios-core/monitor/StructuredLogger';
 
 /**
  * Event loop delay histogram — Bun exposes `performance.eventLoopUtilization()`
@@ -162,7 +163,23 @@ export class MetricsSampler {
         // Cluster state via provider
         const transport = this._provider.getTransportMetrics();
         const threads = this._provider.getThreadPoolMetrics();
+        const migration: MigrationMetrics = this._provider.getMigrationMetrics();
+        const operation: OperationMetrics = this._provider.getOperationMetrics();
+        const invocation: InvocationMetrics = this._provider.getInvocationMetrics();
         const blitz = this._provider.getBlitzMetrics();
+
+        // Hazelcast HealthMonitor parity: warn when pending invocations exceed thresholds.
+        // Hazelcast alerts at > 70% of capacity OR absolute count > 1000.
+        if (invocation.usedPercentage > 70 || invocation.pendingCount > 1000) {
+            HeliosLoggers.invocation.warn('Pending invocations exceed health threshold', {
+                event: 'invocation.health.threshold',
+                pendingCount: invocation.pendingCount,
+                maxConcurrent: invocation.maxConcurrent,
+                usedPercentage: invocation.usedPercentage,
+                timeoutFailures: invocation.timeoutFailures,
+                memberLeftFailures: invocation.memberLeftFailures,
+            });
+        }
 
         const sample: MetricsSample = {
             timestamp,
@@ -172,6 +189,9 @@ export class MetricsSampler {
             gc,
             transport,
             threads,
+            migration,
+            operation,
+            invocation,
             blitz,
         };
 

@@ -4,22 +4,26 @@
  * Port of {@code com.hazelcast.client.impl.connection.tcp.TcpClientConnectionManager}.
  * Owns all active connections, bootstrap/auth flow, heartbeat, and reconnect.
  */
-import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
-import { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection";
-import { WaitStrategy } from "@zenystx/helios-core/client/connection/WaitStrategy";
-import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
-import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
-import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import type { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
-import type { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService";
-import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
+import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig.js";
+import { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection.js";
+import { WaitStrategy } from "@zenystx/helios-core/client/connection/WaitStrategy.js";
+import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus.js";
+import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage.js";
+import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader.js";
+import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec.js";
+import type { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService.js";
+import type { ClientListenerService } from "@zenystx/helios-core/client/spi/ClientListenerService.js";
+import type { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService.js";
+import {
+    DEFAULT_HEARTBEAT_INTERVAL_MS,
+    DEFAULT_PORT,
+} from "@zenystx/helios-core/config/HazelcastDefaults.js";
 import {
     Eventloop,
     type EventloopChannel,
-} from "@zenystx/helios-core/internal/eventloop/Eventloop";
-import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
-import type { Credentials } from "@zenystx/helios-core/security/Credentials";
+} from "@zenystx/helios-core/internal/eventloop/Eventloop.js";
+import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer.js";
+import type { Credentials } from "@zenystx/helios-core/security/Credentials.js";
 
 export enum ClientState {
     INITIAL = "INITIAL",
@@ -34,6 +38,7 @@ export class ClientConnectionManager {
     private readonly _activeConnections = new Map<string, ClientConnection>();
     private _state: ClientState = ClientState.INITIAL;
     private _clusterId: string | null = null;
+    private _disconnectCause: Error | null = null;
     private _alive = false;
 
     private _clusterService: ClientClusterService | null = null;
@@ -77,7 +82,7 @@ export class ClientConnectionManager {
     async connectToCluster(): Promise<void> {
         const addresses = this._resolveAddresses();
         if (addresses.length === 0) {
-            addresses.push({ host: "127.0.0.1", port: 5701 });
+            addresses.push({ host: "127.0.0.1", port: DEFAULT_PORT });
         }
 
         const retryConfig = this._config.getConnectionStrategyConfig().getConnectionRetryConfig();
@@ -98,6 +103,7 @@ export class ClientConnectionManager {
                     this._activeConnections.set(conn.getMemberUuid()!, conn);
                     const hadDisconnectedState = this._state === ClientState.DISCONNECTED_FROM_CLUSTER;
                     this._state = ClientState.INITIALIZED_ON_CLUSTER;
+                    this._disconnectCause = null;
 
                     // Start heartbeat
                     this._startHeartbeat();
@@ -166,6 +172,9 @@ export class ClientConnectionManager {
         }
 
         if (this._state === ClientState.DISCONNECTED_FROM_CLUSTER) {
+            if (this._disconnectCause !== null) {
+                throw this._disconnectCause;
+            }
             throw new Error("Client is disconnected from the cluster");
         }
     }
@@ -197,7 +206,7 @@ export class ClientConnectionManager {
                     port: parseInt(addr.slice(idx + 1), 10),
                 });
             } else {
-                result.push({ host: addr, port: 5701 });
+                result.push({ host: addr, port: DEFAULT_PORT });
             }
         }
         return result;
@@ -242,6 +251,13 @@ export class ClientConnectionManager {
                 throw new Error("Authentication failed: credentials rejected by cluster");
             }
             throw new Error(`Authentication failed with status: ${authResp.status}`);
+        }
+
+        try {
+            this._validateClusterIdentity(authResp.clusterId);
+        } catch (err) {
+            conn.close();
+            throw err;
         }
 
         conn.setMemberUuid(authResp.memberUuid!);
@@ -319,6 +335,24 @@ export class ClientConnectionManager {
         return null;
     }
 
+    private _validateClusterIdentity(clusterId: string | null): void {
+        if (this._clusterId === null) {
+            return;
+        }
+
+        if (clusterId === null) {
+            throw new Error(
+                `Reconnect rejected: cluster identity missing; expected cluster ${this._clusterId}`,
+            );
+        }
+
+        if (clusterId !== this._clusterId) {
+            throw new Error(
+                `Reconnect rejected: cluster identity mismatch; expected ${this._clusterId} but received ${clusterId}`,
+            );
+        }
+    }
+
     private _onData(ch: EventloopChannel, data: Buffer): void {
         const state = this._channelReaders.get(ch);
         if (!state) return;
@@ -384,6 +418,7 @@ export class ClientConnectionManager {
 
             if (this._activeConnections.size === 0 && this._alive) {
                 this._state = ClientState.DISCONNECTED_FROM_CLUSTER;
+                this._disconnectCause = null;
                 this._scheduleReconnect();
             }
         }
@@ -392,13 +427,13 @@ export class ClientConnectionManager {
     private _startHeartbeat(): void {
         if (this._heartbeatTimer !== null) return;
         this._heartbeatTimer = setInterval(() => {
-            // Heartbeat check — just verify connections are alive
+            // Heartbeat check — verify connections are alive
             for (const [uuid, conn] of this._activeConnections) {
                 if (!conn.isAlive()) {
                     this._activeConnections.delete(uuid);
                 }
             }
-        }, 10_000);
+        }, DEFAULT_HEARTBEAT_INTERVAL_MS);
     }
 
     private _isCredentialError(err: any): boolean {
@@ -417,7 +452,10 @@ export class ClientConnectionManager {
         if (reconnectMode === "OFF") {
             return;
         }
-        this._reconnectPromise = this.connectToCluster().catch(() => {
+        this._reconnectPromise = this.connectToCluster().catch((err) => {
+            this._disconnectCause = err instanceof Error
+                ? err
+                : new Error(String(err));
             this._reconnectPromise = null;
         });
     }

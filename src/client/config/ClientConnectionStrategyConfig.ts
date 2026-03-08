@@ -3,13 +3,17 @@
  *
  * Controls async-start, reconnect mode, and retry behavior.
  */
-import { ConnectionRetryConfig } from "@zenystx/helios-core/client/config/ConnectionRetryConfig";
+import { ConnectionRetryConfig } from "@zenystx/helios-core/client/config/ConnectionRetryConfig.js";
+import {
+  DEFAULT_ASYNC_START,
+  DEFAULT_RECONNECT_MODE,
+} from "@zenystx/helios-core/config/HazelcastDefaults.js";
 
 export type ReconnectMode = "OFF" | "ON" | "ASYNC";
 
 export class ClientConnectionStrategyConfig {
-  private _asyncStart: boolean = false;
-  private _reconnectMode: ReconnectMode = "ON";
+  private _asyncStart: boolean = DEFAULT_ASYNC_START;
+  private _reconnectMode: ReconnectMode = DEFAULT_RECONNECT_MODE;
   private readonly _connectionRetryConfig: ConnectionRetryConfig = new ConnectionRetryConfig();
 
   isAsyncStart(): boolean {

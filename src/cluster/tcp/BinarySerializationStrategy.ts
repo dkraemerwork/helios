@@ -4,7 +4,11 @@ import type {
     BlitzTopologyResponseMsg,
     ClusterMessage,
     FinalizeJoinMsg,
+    ListResponseMsg,
+    ListStateSyncMsg,
     MembersUpdateMsg,
+    MultiMapResponseMsg,
+    MultiMapStateSyncMsg,
     OperationMsg,
     PartitionStateMsg,
     QueueEventMsg,
@@ -13,6 +17,9 @@ import type {
     RecoverySyncResponseMsg,
     ReliableTopicBackupMsg,
     ReliableTopicMessageMsg,
+    ReplicatedMapStateSyncMsg,
+    SetResponseMsg,
+    SetStateSyncMsg,
     WireMemberInfo,
     WirePartitionReplica,
 } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
@@ -71,6 +78,23 @@ const MESSAGE_TYPE_TO_ID = {
     BLITZ_TOPOLOGY_REQUEST: 36,
     BLITZ_TOPOLOGY_RESPONSE: 37,
     BLITZ_TOPOLOGY_ANNOUNCE: 38,
+    LIST_REQUEST: 39,
+    LIST_RESPONSE: 40,
+    LIST_STATE_SYNC: 41,
+    LIST_STATE_ACK: 42,
+    SET_REQUEST: 43,
+    SET_RESPONSE: 44,
+    SET_STATE_SYNC: 45,
+    SET_STATE_ACK: 46,
+    MULTIMAP_REQUEST: 47,
+    MULTIMAP_RESPONSE: 48,
+    MULTIMAP_STATE_SYNC: 49,
+    MULTIMAP_STATE_ACK: 50,
+    REPLICATED_MAP_PUT: 51,
+    REPLICATED_MAP_REMOVE: 52,
+    REPLICATED_MAP_CLEAR: 53,
+    REPLICATED_MAP_STATE_SYNC: 54,
+    REPLICATED_MAP_STATE_ACK: 55,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -178,6 +202,8 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return;
             case 'OPERATION_RESPONSE': {
                 out.writeLong(BigInt(message.callId));
+                out.writeInt(message.backupAcks);
+                out.writeStringArray(message.backupMemberIds);
                 const encoded = encodeResponsePayload(message.payload);
                 out.writeByte(message.error !== null ? 7 : encoded.kind);
                 if (message.error !== null) {
@@ -194,6 +220,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return;
             case 'BACKUP_ACK':
                 out.writeLong(BigInt(message.callId));
+                out.writeString(message.senderId);
                 return;
             case 'RECOVERY_ANTI_ENTROPY':
                 out.writeString(message.senderId);
@@ -203,6 +230,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 writeStringArrayMap(out, message.namespaceVersions);
                 return;
             case 'RECOVERY_SYNC_REQUEST':
+                out.writeString(message.requestId);
                 out.writeString(message.requesterId);
                 out.writeInt(message.partitionId);
                 out.writeInt(message.replicaIndex);
@@ -293,6 +321,93 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.masterMemberId);
                 out.writeString(message.fenceToken);
                 return;
+            case 'LIST_REQUEST':
+                out.writeString(message.requestId);
+                out.writeString(message.sourceNodeId);
+                out.writeString(message.listName);
+                out.writeString(message.operation);
+                out.writeInt(message.index ?? -1);
+                out.writeInt(message.fromIndex ?? -1);
+                out.writeInt(message.toIndex ?? -1);
+                writeOptionalEncodedData(out, message.data ?? null);
+                writeEncodedDataArray(out, message.dataList ?? null);
+                return;
+            case 'LIST_RESPONSE':
+                writeListResponse(out, message);
+                return;
+            case 'LIST_STATE_SYNC':
+                writeListStateSync(out, message);
+                return;
+            case 'LIST_STATE_ACK':
+                out.writeString(message.requestId);
+                out.writeString(message.listName);
+                out.writeLong(BigInt(message.version));
+                return;
+            case 'SET_REQUEST':
+                out.writeString(message.requestId);
+                out.writeString(message.sourceNodeId);
+                out.writeString(message.setName);
+                out.writeString(message.operation);
+                writeOptionalEncodedData(out, message.data ?? null);
+                writeEncodedDataArray(out, message.dataList ?? null);
+                return;
+            case 'SET_RESPONSE':
+                writeSetResponse(out, message);
+                return;
+            case 'SET_STATE_SYNC':
+                writeSetStateSync(out, message);
+                return;
+            case 'SET_STATE_ACK':
+                out.writeString(message.requestId);
+                out.writeString(message.setName);
+                out.writeLong(BigInt(message.version));
+                return;
+            case 'MULTIMAP_REQUEST':
+                out.writeString(message.requestId);
+                out.writeString(message.sourceNodeId);
+                out.writeString(message.mapName);
+                out.writeString(message.operation);
+                writeOptionalEncodedData(out, message.keyData ?? null);
+                writeOptionalEncodedData(out, message.valueData ?? null);
+                writeEncodedDataArray(out, message.dataList ?? null);
+                return;
+            case 'MULTIMAP_RESPONSE':
+                writeMultiMapResponse(out, message);
+                return;
+            case 'MULTIMAP_STATE_SYNC':
+                writeMultiMapStateSync(out, message);
+                return;
+            case 'MULTIMAP_STATE_ACK':
+                out.writeString(message.requestId);
+                out.writeString(message.mapName);
+                out.writeLong(BigInt(message.version));
+                return;
+            case 'REPLICATED_MAP_PUT':
+                out.writeString(message.mapName);
+                out.writeLong(BigInt(message.version));
+                out.writeString(message.sourceNodeId);
+                writeEncodedData(out, message.keyData);
+                writeEncodedData(out, message.valueData);
+                return;
+            case 'REPLICATED_MAP_REMOVE':
+                out.writeString(message.mapName);
+                out.writeLong(BigInt(message.version));
+                out.writeString(message.sourceNodeId);
+                writeEncodedData(out, message.keyData);
+                return;
+            case 'REPLICATED_MAP_CLEAR':
+                out.writeString(message.mapName);
+                out.writeLong(BigInt(message.version));
+                out.writeString(message.sourceNodeId);
+                return;
+            case 'REPLICATED_MAP_STATE_SYNC':
+                writeReplicatedMapStateSync(out, message);
+                return;
+            case 'REPLICATED_MAP_STATE_ACK':
+                out.writeString(message.requestId);
+                out.writeString(message.mapName);
+                out.writeLong(BigInt(message.version));
+                return;
         }
     }
 
@@ -341,16 +456,27 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 };
             case 'OPERATION_RESPONSE': {
                 const callId = Number(inp.readLong());
+                const backupAcks = inp.readInt();
+                const backupMemberIds = inp.readStringArray() ?? [];
                 const kind = inp.readUnsignedByte();
                 if (kind === 7) {
                     inp.readString();
                     const message = inp.readString();
                     inp.readString();
-                    return { type: 'OPERATION_RESPONSE', callId, payload: null, error: message ?? 'Unknown remote error' };
+                    return {
+                        type: 'OPERATION_RESPONSE',
+                        callId,
+                        backupAcks,
+                        backupMemberIds,
+                        payload: null,
+                        error: message ?? 'Unknown remote error',
+                    };
                 }
                 return {
                     type: 'OPERATION_RESPONSE',
                     callId,
+                    backupAcks,
+                    backupMemberIds,
                     payload: decodeResponsePayload(kind, inp.readByteArray() ?? Buffer.alloc(0)),
                     error: null,
                 };
@@ -361,12 +487,16 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     callId: Number(inp.readLong()),
                     partitionId,
                     replicaIndex: inp.readInt(),
+                    senderId: readRequiredString(inp),
+                    callerId: readRequiredString(inp),
+                    sync: inp.readBoolean(),
+                    replicaVersions: readLongStringArray(inp),
                     factoryId: inp.readUnsignedShort(),
                     classId: inp.readUnsignedShort(),
                     payload: inp.readByteArray() ?? Buffer.alloc(0),
                 };
             case 'BACKUP_ACK':
-                return { type: 'BACKUP_ACK', callId: Number(inp.readLong()) };
+                return { type: 'BACKUP_ACK', callId: Number(inp.readLong()), senderId: readRequiredString(inp) };
             case 'RECOVERY_ANTI_ENTROPY':
                 return {
                     type: 'RECOVERY_ANTI_ENTROPY',
@@ -379,6 +509,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
             case 'RECOVERY_SYNC_REQUEST':
                 return {
                     type: 'RECOVERY_SYNC_REQUEST',
+                    requestId: readRequiredString(inp),
                     requesterId: readRequiredString(inp),
                     partitionId: inp.readInt(),
                     replicaIndex: inp.readInt(),
@@ -434,6 +565,76 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return readBlitzTopologyResponse(inp);
             case 'BLITZ_TOPOLOGY_ANNOUNCE':
                 return { type: 'BLITZ_TOPOLOGY_ANNOUNCE', memberListVersion: inp.readInt(), routes: inp.readStringArray() ?? [], masterMemberId: readRequiredString(inp), fenceToken: readRequiredString(inp) };
+            case 'LIST_REQUEST': {
+                const requestId = readRequiredString(inp);
+                const sourceNodeId = readRequiredString(inp);
+                const listName = readRequiredString(inp);
+                const operation = readRequiredString(inp);
+                const index = readIntMinusOneAsUndefined(inp);
+                const fromIndex = readIntMinusOneAsUndefined(inp);
+                const toIndex = readIntMinusOneAsUndefined(inp);
+                const data = readOptionalEncodedData(inp) ?? undefined;
+                const dataList = readEncodedDataArray(inp) ?? undefined;
+                return { type: 'LIST_REQUEST', requestId, sourceNodeId, listName, operation, ...(index !== undefined ? { index } : {}), ...(fromIndex !== undefined ? { fromIndex } : {}), ...(toIndex !== undefined ? { toIndex } : {}), ...(data !== undefined ? { data } : {}), ...(dataList !== undefined ? { dataList } : {}) };
+            }
+            case 'LIST_RESPONSE':
+                return readListResponse(inp);
+            case 'LIST_STATE_SYNC':
+                return readListStateSync(inp);
+            case 'LIST_STATE_ACK':
+                return { type: 'LIST_STATE_ACK', requestId: readRequiredString(inp), listName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'SET_REQUEST': {
+                const requestId = readRequiredString(inp);
+                const sourceNodeId = readRequiredString(inp);
+                const setName = readRequiredString(inp);
+                const operation = readRequiredString(inp);
+                const data = readOptionalEncodedData(inp) ?? undefined;
+                const dataList = readEncodedDataArray(inp) ?? undefined;
+                return { type: 'SET_REQUEST', requestId, sourceNodeId, setName, operation, ...(data !== undefined ? { data } : {}), ...(dataList !== undefined ? { dataList } : {}) };
+            }
+            case 'SET_RESPONSE':
+                return readSetResponse(inp);
+            case 'SET_STATE_SYNC':
+                return readSetStateSync(inp);
+            case 'SET_STATE_ACK':
+                return { type: 'SET_STATE_ACK', requestId: readRequiredString(inp), setName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'MULTIMAP_REQUEST': {
+                const requestId = readRequiredString(inp);
+                const sourceNodeId = readRequiredString(inp);
+                const mapName = readRequiredString(inp);
+                const operation = readRequiredString(inp);
+                const keyData = readOptionalEncodedData(inp) ?? undefined;
+                const valueData = readOptionalEncodedData(inp) ?? undefined;
+                const dataList = readEncodedDataArray(inp) ?? undefined;
+                return { type: 'MULTIMAP_REQUEST', requestId, sourceNodeId, mapName, operation, ...(keyData !== undefined ? { keyData } : {}), ...(valueData !== undefined ? { valueData } : {}), ...(dataList !== undefined ? { dataList } : {}) };
+            }
+            case 'MULTIMAP_RESPONSE':
+                return readMultiMapResponse(inp);
+            case 'MULTIMAP_STATE_SYNC':
+                return readMultiMapStateSync(inp);
+            case 'MULTIMAP_STATE_ACK':
+                return { type: 'MULTIMAP_STATE_ACK', requestId: readRequiredString(inp), mapName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'REPLICATED_MAP_PUT': {
+                const mapName = readRequiredString(inp);
+                const version = Number(inp.readLong());
+                const sourceNodeId = readRequiredString(inp);
+                const keyData = readEncodedData(inp);
+                const valueData = readEncodedData(inp);
+                return { type: 'REPLICATED_MAP_PUT', mapName, version, sourceNodeId, keyData, valueData };
+            }
+            case 'REPLICATED_MAP_REMOVE': {
+                const mapName = readRequiredString(inp);
+                const version = Number(inp.readLong());
+                const sourceNodeId = readRequiredString(inp);
+                const keyData = readEncodedData(inp);
+                return { type: 'REPLICATED_MAP_REMOVE', mapName, version, sourceNodeId, keyData };
+            }
+            case 'REPLICATED_MAP_CLEAR':
+                return { type: 'REPLICATED_MAP_CLEAR', mapName: readRequiredString(inp), version: Number(inp.readLong()), sourceNodeId: readRequiredString(inp) };
+            case 'REPLICATED_MAP_STATE_SYNC':
+                return readReplicatedMapStateSync(inp);
+            case 'REPLICATED_MAP_STATE_ACK':
+                return { type: 'REPLICATED_MAP_STATE_ACK', requestId: readRequiredString(inp), mapName: readRequiredString(inp), version: Number(inp.readLong()) };
         }
     }
 
@@ -553,14 +754,21 @@ function writeOperationMessage(out: ByteArrayObjectDataOutput, message: Operatio
 function writeBackupMessage(out: ByteArrayObjectDataOutput, message: BackupMsg): void {
     out.writeLong(BigInt(message.callId));
     out.writeInt(message.replicaIndex);
+    out.writeString(message.senderId);
+    out.writeString(message.callerId);
+    out.writeBoolean(message.sync);
+    writeLongStringArray(out, message.replicaVersions);
     out.writeShort(message.factoryId);
     out.writeShort(message.classId);
     out.writeByteArray(message.payload);
 }
 
 function writeRecoverySyncResponse(out: ByteArrayObjectDataOutput, message: RecoverySyncResponseMsg): void {
+    out.writeString(message.requestId);
     out.writeInt(message.partitionId);
     out.writeInt(message.replicaIndex);
+    out.writeInt(message.chunkIndex);
+    out.writeInt(message.chunkCount);
     writeLongStringArray(out, message.versions);
     writeStringArrayMap(out, message.namespaceVersions);
     out.writeInt(message.namespaceStates.length);
@@ -576,8 +784,11 @@ function writeRecoverySyncResponse(out: ByteArrayObjectDataOutput, message: Reco
 }
 
 function readRecoverySyncResponse(inp: ByteArrayObjectDataInput): RecoverySyncResponseMsg {
+    const requestId = readRequiredString(inp);
     const partitionId = inp.readInt();
     const replicaIndex = inp.readInt();
+    const chunkIndex = inp.readInt();
+    const chunkCount = inp.readInt();
     const versions = readLongStringArray(inp);
     const namespaceVersions = readStringArrayMap(inp);
     const namespaceStateCount = inp.readInt();
@@ -594,8 +805,11 @@ function readRecoverySyncResponse(inp: ByteArrayObjectDataInput): RecoverySyncRe
     }
     return {
         type: 'RECOVERY_SYNC_RESPONSE',
+        requestId,
         partitionId,
         replicaIndex,
+        chunkIndex,
+        chunkCount,
         versions,
         namespaceVersions,
         namespaceStates,
@@ -973,4 +1187,217 @@ function readIntMinusOneAsUndefined(inp: ByteArrayObjectDataInput): number | und
 function readMinusOneAsNull(inp: ByteArrayObjectDataInput): number | null {
     const value = Number(inp.readLong());
     return value === -1 ? null : value;
+}
+
+// ── List helpers ──────────────────────────────────────────────────────
+
+function writeListResponse(out: ByteArrayObjectDataOutput, message: ListResponseMsg): void {
+    out.writeString(message.requestId);
+    out.writeBoolean(message.success);
+    out.writeString(message.resultType);
+    out.writeBoolean(message.booleanResult ?? false);
+    out.writeLong(BigInt(message.numberResult ?? 0));
+    writeOptionalEncodedData(out, message.data ?? null);
+    writeEncodedDataArray(out, message.dataList ?? null);
+    out.writeString(message.error ?? null);
+}
+
+function readListResponse(inp: ByteArrayObjectDataInput): ListResponseMsg {
+    const requestId = readRequiredString(inp);
+    const success = inp.readBoolean();
+    const resultType = readRequiredString(inp) as ListResponseMsg['resultType'];
+    const booleanResult = inp.readBoolean();
+    const numberResult = Number(inp.readLong());
+    const data = readOptionalEncodedData(inp) ?? undefined;
+    const dataList = readEncodedDataArray(inp) ?? undefined;
+    const error = inp.readString() ?? undefined;
+    return {
+        type: 'LIST_RESPONSE',
+        requestId,
+        success,
+        resultType,
+        ...(resultType === 'boolean' ? { booleanResult } : {}),
+        ...(resultType === 'number' ? { numberResult } : {}),
+        ...(resultType === 'data' && data !== undefined ? { data } : {}),
+        ...(resultType === 'data-array' && dataList !== undefined ? { dataList } : {}),
+        ...(error !== undefined ? { error } : {}),
+    };
+}
+
+function writeListStateSync(out: ByteArrayObjectDataOutput, message: ListStateSyncMsg): void {
+    out.writeString(message.requestId);
+    out.writeString(message.sourceNodeId);
+    out.writeString(message.listName);
+    out.writeLong(BigInt(message.version));
+    writeEncodedDataArray(out, message.items);
+}
+
+function readListStateSync(inp: ByteArrayObjectDataInput): ListStateSyncMsg {
+    return {
+        type: 'LIST_STATE_SYNC',
+        requestId: inp.readString(),
+        sourceNodeId: readRequiredString(inp),
+        listName: readRequiredString(inp),
+        version: Number(inp.readLong()),
+        items: readEncodedDataArray(inp) ?? [],
+    };
+}
+
+// ── Set helpers ───────────────────────────────────────────────────────
+
+function writeSetResponse(out: ByteArrayObjectDataOutput, message: SetResponseMsg): void {
+    out.writeString(message.requestId);
+    out.writeBoolean(message.success);
+    out.writeString(message.resultType);
+    out.writeBoolean(message.booleanResult ?? false);
+    out.writeLong(BigInt(message.numberResult ?? 0));
+    writeEncodedDataArray(out, message.dataList ?? null);
+    out.writeString(message.error ?? null);
+}
+
+function readSetResponse(inp: ByteArrayObjectDataInput): SetResponseMsg {
+    const requestId = readRequiredString(inp);
+    const success = inp.readBoolean();
+    const resultType = readRequiredString(inp) as SetResponseMsg['resultType'];
+    const booleanResult = inp.readBoolean();
+    const numberResult = Number(inp.readLong());
+    const dataList = readEncodedDataArray(inp) ?? undefined;
+    const error = inp.readString() ?? undefined;
+    return {
+        type: 'SET_RESPONSE',
+        requestId,
+        success,
+        resultType,
+        ...(resultType === 'boolean' ? { booleanResult } : {}),
+        ...(resultType === 'number' ? { numberResult } : {}),
+        ...(resultType === 'data-array' && dataList !== undefined ? { dataList } : {}),
+        ...(error !== undefined ? { error } : {}),
+    };
+}
+
+function writeSetStateSync(out: ByteArrayObjectDataOutput, message: SetStateSyncMsg): void {
+    out.writeString(message.requestId);
+    out.writeString(message.sourceNodeId);
+    out.writeString(message.setName);
+    out.writeLong(BigInt(message.version));
+    writeEncodedDataArray(out, message.items);
+}
+
+function readSetStateSync(inp: ByteArrayObjectDataInput): SetStateSyncMsg {
+    return {
+        type: 'SET_STATE_SYNC',
+        requestId: inp.readString(),
+        sourceNodeId: readRequiredString(inp),
+        setName: readRequiredString(inp),
+        version: Number(inp.readLong()),
+        items: readEncodedDataArray(inp) ?? [],
+    };
+}
+
+// ── MultiMap helpers ──────────────────────────────────────────────────
+
+function writeMultiMapResponse(out: ByteArrayObjectDataOutput, message: MultiMapResponseMsg): void {
+    out.writeString(message.requestId);
+    out.writeBoolean(message.success);
+    out.writeString(message.resultType);
+    out.writeBoolean(message.booleanResult ?? false);
+    out.writeLong(BigInt(message.numberResult ?? 0));
+    writeEncodedDataArray(out, message.dataList ?? null);
+    // entry-set: array of [EncodedData, EncodedData] pairs
+    const entrySet = message.entrySet ?? null;
+    if (entrySet === null) {
+        out.writeInt(-1);
+    } else {
+        out.writeInt(entrySet.length);
+        for (const [k, v] of entrySet) {
+            writeEncodedData(out, k);
+            writeEncodedData(out, v);
+        }
+    }
+    out.writeString(message.error ?? null);
+}
+
+function readMultiMapResponse(inp: ByteArrayObjectDataInput): MultiMapResponseMsg {
+    const requestId = readRequiredString(inp);
+    const success = inp.readBoolean();
+    const resultType = readRequiredString(inp) as MultiMapResponseMsg['resultType'];
+    const booleanResult = inp.readBoolean();
+    const numberResult = Number(inp.readLong());
+    const dataList = readEncodedDataArray(inp) ?? undefined;
+    const entrySetCount = inp.readInt();
+    let entrySet: Array<[import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData, import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData]> | undefined;
+    if (entrySetCount !== -1) {
+        entrySet = new Array(entrySetCount);
+        for (let i = 0; i < entrySetCount; i++) {
+            entrySet[i] = [readEncodedData(inp), readEncodedData(inp)];
+        }
+    }
+    const error = inp.readString() ?? undefined;
+    return {
+        type: 'MULTIMAP_RESPONSE',
+        requestId,
+        success,
+        resultType,
+        ...(resultType === 'boolean' ? { booleanResult } : {}),
+        ...(resultType === 'number' ? { numberResult } : {}),
+        ...(resultType === 'data-array' && dataList !== undefined ? { dataList } : {}),
+        ...(resultType === 'entry-set' && entrySet !== undefined ? { entrySet } : {}),
+        ...(error !== undefined ? { error } : {}),
+    };
+}
+
+function writeMultiMapStateSync(out: ByteArrayObjectDataOutput, message: MultiMapStateSyncMsg): void {
+    out.writeString(message.requestId);
+    out.writeString(message.sourceNodeId);
+    out.writeString(message.mapName);
+    out.writeLong(BigInt(message.version));
+    out.writeString(message.valueCollectionType);
+    out.writeInt(message.entries.length);
+    for (const [key, values] of message.entries) {
+        writeEncodedData(out, key);
+        writeEncodedDataArray(out, values);
+    }
+}
+
+function readMultiMapStateSync(inp: ByteArrayObjectDataInput): MultiMapStateSyncMsg {
+    const requestId = inp.readString();
+    const sourceNodeId = readRequiredString(inp);
+    const mapName = readRequiredString(inp);
+    const version = Number(inp.readLong());
+    const valueCollectionType = readRequiredString(inp) as 'SET' | 'LIST';
+    const entryCount = inp.readInt();
+    const entries: Array<[import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData, import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData[]]> = new Array(entryCount);
+    for (let i = 0; i < entryCount; i++) {
+        const key = readEncodedData(inp);
+        const values = readEncodedDataArray(inp) ?? [];
+        entries[i] = [key, values];
+    }
+    return { type: 'MULTIMAP_STATE_SYNC', requestId, sourceNodeId, mapName, version, valueCollectionType, entries };
+}
+
+// ── ReplicatedMap helpers ─────────────────────────────────────────────
+
+function writeReplicatedMapStateSync(out: ByteArrayObjectDataOutput, message: ReplicatedMapStateSyncMsg): void {
+    out.writeString(message.requestId);
+    out.writeString(message.sourceNodeId);
+    out.writeString(message.mapName);
+    out.writeLong(BigInt(message.version));
+    out.writeInt(message.entries.length);
+    for (const [key, value] of message.entries) {
+        writeEncodedData(out, key);
+        writeEncodedData(out, value);
+    }
+}
+
+function readReplicatedMapStateSync(inp: ByteArrayObjectDataInput): ReplicatedMapStateSyncMsg {
+    const requestId = inp.readString();
+    const sourceNodeId = readRequiredString(inp);
+    const mapName = readRequiredString(inp);
+    const version = Number(inp.readLong());
+    const entryCount = inp.readInt();
+    const entries: Array<[import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData, import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData]> = new Array(entryCount);
+    for (let i = 0; i < entryCount; i++) {
+        entries[i] = [readEncodedData(inp), readEncodedData(inp)];
+    }
+    return { type: 'REPLICATED_MAP_STATE_SYNC', requestId, sourceNodeId, mapName, version, entries };
 }

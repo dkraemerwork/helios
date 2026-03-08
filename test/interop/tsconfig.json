@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+
+    "strict": true,
+    "esModuleInterop": true,
+    // skipLibCheck covers all .d.ts files (node_modules, dist, etc.)
+    // This avoids picking up errors in scatterjs / Helios internal declarations.
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "noEmit": true,
+
+    // bun-types covers bun:test, the Bun global, and Node-compatible APIs.
+    "types": ["bun"],
+
+    // Path aliases resolve @zenystx/helios-core to the compiled dist so that
+    // type-checking only pulls in .d.ts files (covered by skipLibCheck) instead
+    // of raw .ts source that drags in scatterjs / Bun-specific errors.
+    //
+    // IMPORTANT: Bun resolves these at runtime via the root tsconfig.json paths
+    // (which point to src/). The dist paths here are only for tsc --noEmit.
+    "paths": {
+      "@zenystx/helios-core": ["../../dist/src/index.d.ts"],
+      "@zenystx/helios-core/*": ["../../dist/src/*"]
+    }
+  },
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
+}

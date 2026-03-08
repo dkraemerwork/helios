@@ -1,6 +1,11 @@
+import {
+  DEFAULT_QUEUE_BACKUP_COUNT,
+  DEFAULT_QUEUE_MAX_SIZE,
+} from '@zenystx/helios-core/config/HazelcastDefaults.js';
+
 export class QueueConfig {
-  static readonly DEFAULT_MAX_SIZE = 0;
-  static readonly DEFAULT_BACKUP_COUNT = 1;
+  static readonly DEFAULT_MAX_SIZE = DEFAULT_QUEUE_MAX_SIZE;
+  static readonly DEFAULT_BACKUP_COUNT = DEFAULT_QUEUE_BACKUP_COUNT;
   static readonly DEFAULT_ASYNC_BACKUP_COUNT = 0;
   static readonly DEFAULT_EMPTY_QUEUE_TTL_SECONDS = 0;
 

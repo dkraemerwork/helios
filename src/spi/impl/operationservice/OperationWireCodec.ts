@@ -10,6 +10,7 @@ import { IdentifiedDataSerializableRegistry } from '@zenystx/helios-core/interna
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
 import { ClearOperation } from '@zenystx/helios-core/map/impl/operation/ClearOperation';
+import { ClearBackupOperation } from '@zenystx/helios-core/map/impl/operation/ClearBackupOperation';
 import { DeleteOperation } from '@zenystx/helios-core/map/impl/operation/DeleteOperation';
 import { ExternalStoreClearOperation } from '@zenystx/helios-core/map/impl/operation/ExternalStoreClearOperation';
 import { GetOperation } from '@zenystx/helios-core/map/impl/operation/GetOperation';
@@ -83,6 +84,8 @@ function registerOperations(): void {
         new PutBackupOperation(readRequiredString(inp), readRequiredData(inp), readRequiredData(inp), readLongAsNumber(inp), readLongAsNumber(inp)));
     operationRegistry.register(RemoveBackupOperation, MAP_OPERATION_FACTORY_ID, 10, (out, op) => writeKeyOnly(out, op as unknown as MapWireOperation), (inp) =>
         new RemoveBackupOperation(readRequiredString(inp), readRequiredData(inp)));
+    operationRegistry.register(ClearBackupOperation, MAP_OPERATION_FACTORY_ID, 11, (out, op) => writeMapName(out, op as unknown as { mapName: string }), (inp) =>
+        new ClearBackupOperation(readRequiredString(inp)));
 
     operationRegistry.register(ExecuteCallableOperation, EXECUTOR_OPERATION_FACTORY_ID, 1, (out, op) => {
         out.writeString(op.descriptor.taskUuid);

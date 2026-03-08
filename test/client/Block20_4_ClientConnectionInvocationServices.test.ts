@@ -241,6 +241,104 @@ describe("ClientConnectionManager", () => {
 
         await mgr.shutdown();
     });
+
+    test("reconnect rejects a different cluster identity loudly and keeps the original cluster id", async () => {
+        const { ClientConnectionManager } = await import(
+            "@zenystx/helios-core/client/connection/ClientConnectionManager"
+        );
+        const { ClientConfig } = await import(
+            "@zenystx/helios-core/client/config"
+        );
+
+        const initialServer = new ClientProtocolServer({
+            clusterName: "dev",
+            clusterId: "11111111-1111-1111-1111-111111111111",
+            port: 0,
+            host: "127.0.0.1",
+        });
+        await initialServer.start();
+
+        const config = new ClientConfig();
+        config.getNetworkConfig().addAddress(`127.0.0.1:${initialServer.getPort()}`);
+        config.getConnectionStrategyConfig().getConnectionRetryConfig()
+            .setClusterConnectTimeoutMillis(750);
+
+        const mgr = new ClientConnectionManager(config);
+        await mgr.start();
+        await mgr.connectToCluster();
+
+        const reconnectPort = initialServer.getPort();
+        expect(mgr.getClusterId()).toBe("11111111-1111-1111-1111-111111111111");
+
+        mgr.getRandomConnection()?.close();
+        await initialServer.shutdown();
+        await Bun.sleep(100);
+
+        const wrongClusterServer = new ClientProtocolServer({
+            clusterName: "dev",
+            clusterId: "22222222-2222-2222-2222-222222222222",
+            port: reconnectPort,
+            host: "127.0.0.1",
+        });
+        await wrongClusterServer.start();
+
+        try {
+            await expect(mgr.connectToCluster()).rejects.toThrow(/cluster identity mismatch/i);
+            expect(mgr.getClusterId()).toBe("11111111-1111-1111-1111-111111111111");
+        } finally {
+            await mgr.shutdown();
+            await wrongClusterServer.shutdown();
+        }
+    });
+
+    test("reconnect keeps working when the cluster identity matches", async () => {
+        const { ClientConnectionManager } = await import(
+            "@zenystx/helios-core/client/connection/ClientConnectionManager"
+        );
+        const { ClientConfig } = await import(
+            "@zenystx/helios-core/client/config"
+        );
+
+        const clusterId = "33333333-3333-3333-3333-333333333333";
+        const initialServer = new ClientProtocolServer({
+            clusterName: "dev",
+            clusterId,
+            port: 0,
+            host: "127.0.0.1",
+        });
+        await initialServer.start();
+
+        const config = new ClientConfig();
+        config.getNetworkConfig().addAddress(`127.0.0.1:${initialServer.getPort()}`);
+        config.getConnectionStrategyConfig().getConnectionRetryConfig()
+            .setClusterConnectTimeoutMillis(750);
+
+        const mgr = new ClientConnectionManager(config);
+        await mgr.start();
+        await mgr.connectToCluster();
+
+        const reconnectPort = initialServer.getPort();
+        mgr.getRandomConnection()?.close();
+        await initialServer.shutdown();
+        await Bun.sleep(100);
+
+        const replacementServer = new ClientProtocolServer({
+            clusterName: "dev",
+            clusterId,
+            port: reconnectPort,
+            host: "127.0.0.1",
+        });
+        await replacementServer.start();
+
+        try {
+            await mgr.connectToCluster();
+            expect(mgr.getClusterId()).toBe(clusterId);
+            expect(mgr.getActiveConnections().length).toBeGreaterThan(0);
+        } finally {
+            await mgr.shutdown();
+            await replacementServer.shutdown();
+        }
+    });
 });
 
 // ── ClientInvocation tests ─────────────────────────────────────────────────

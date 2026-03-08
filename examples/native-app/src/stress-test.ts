@@ -33,6 +33,7 @@ import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/Heli
 import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import type { IMap } from "@zenystx/helios-core/map/IMap";
 import { resolve } from "path";
+import { runBenchmarkFromCli, shouldRunBenchmark } from "./benchmark-runner";
 
 /* ================================================================== */
 /*  CLI                                                               */
@@ -86,6 +87,7 @@ Helios Cluster Stress Test (Subprocess Orchestrator)
 
 Usage:
   bun run src/stress-test.ts [options]
+  bun run src/stress-test.ts --mode benchmark [benchmark options]
 
 Options:
   --duration <seconds>              Test duration (default: 60)
@@ -93,6 +95,7 @@ Options:
   --executor-concurrency <n>        Concurrent scatter executor task loops (default: 8)
   --near-cache-concurrency <n>      Concurrent near-cache read loops (default: 20)
   --cross-node-concurrency <n>      Concurrent cross-node partition ops (default: 20)
+  --mode benchmark                  Run scenario-based benchmark mode instead of mixed stress mode
   --help                            Show this help
 
 Monitor the cluster at:
@@ -509,6 +512,11 @@ function printStats(stats: Stats, elapsedSec: number, executor: IExecutorService
 /* ================================================================== */
 
 async function main(): Promise<void> {
+  if (shouldRunBenchmark(process.argv.slice(2))) {
+    await runBenchmarkFromCli();
+    return;
+  }
+
   const opts = parseArgs();
   const totalLoops = opts.mapConcurrency + opts.nearCacheConcurrency
     + opts.crossNodeConcurrency + opts.executorConcurrency;
@@ -592,7 +600,7 @@ async function main(): Promise<void> {
   // Seed in small batches to avoid overwhelming the cluster during formation
   for (let batch = 0; batch < 5; batch++) {
     const seedPromises: Promise<void>[] = [];
-    for (let i = batch * 100; i < (batch + 1) * 100; i++) {
+    for (let i = batch * 1000; i < (batch + 1) * 100; i++) {
       seedPromises.push(
         client.stressMap.set(`k-${i}`, i).catch(() => {}),
         client.nearCacheMap.set(`nc-${i}`, i).catch(() => {}),

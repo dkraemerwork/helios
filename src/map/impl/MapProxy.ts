@@ -279,7 +279,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
     size(): number {
         let total = 0;
         const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
+        const localAddress = this._nodeEngine.getLocalAddress();
         for (let i = 0; i < partitionCount; i++) {
+            const owner = this._nodeEngine.getPartitionService().getPartitionOwner(i);
+            if (owner !== null && !owner.equals(localAddress)) {
+                continue;
+            }
             const store = this._containerService.getRecordStore(this._name, i);
             if (store !== null) total += store.size();
         }

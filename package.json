@@ -10,7 +10,8 @@
     "packages/s3",
     "packages/mongodb",
     "packages/turso",
-    "packages/dynamodb"
+    "packages/dynamodb",
+    "test/interop"
   ],
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -63,6 +64,9 @@
     "test:mapstore:clustered:proof": "bun test test/cluster/tcp/ClusteredMapStoreProofTest.test.ts --timeout 30000",
     "test:mapstore:clustered:multiprocess": "bun test test/cluster/tcp/Block21_4_MultiProcessMapStoreProof.test.ts --timeout 60000",
     "test:mapstore:clustered:mongodb": "bun test packages/mongodb/test/MongoClusteredMapStore.test.ts --timeout 30000",
+    "test:interop": "./test/interop/run-interop.sh",
+    "test:interop:map": "./test/interop/run-interop.sh map",
+    "test:interop:connection": "./test/interop/run-interop.sh connection",
     "convert": "bun run scripts/convert-java-tests.ts",
     "prepack": "bun run build",
     "prepublishOnly": "bun run build"

@@ -24,7 +24,10 @@ interface NodeOptions {
   name: string;
   tcpPort: number;
   restPort: number;
+  clientPort: number;
   peers: string[];
+  enableRest: boolean;
+  enableMonitor: boolean;
 }
 
 function parseArgs(): NodeOptions {
@@ -33,7 +36,10 @@ function parseArgs(): NodeOptions {
     name: "stress-node",
     tcpPort: 15701,
     restPort: 18081,
+    clientPort: -1,
     peers: [],
+    enableRest: true,
+    enableMonitor: true,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -52,8 +58,20 @@ function parseArgs(): NodeOptions {
         opts.restPort = parseInt(next ?? "", 10) || opts.restPort;
         i++;
         break;
+      case "--client-port":
+        opts.clientPort = parseInt(next ?? "", 10);
+        i++;
+        break;
       case "--peer":
         if (next) opts.peers.push(next);
+        i++;
+        break;
+      case "--enable-rest":
+        opts.enableRest = (next ?? "true") === "true";
+        i++;
+        break;
+      case "--enable-monitor":
+        opts.enableMonitor = (next ?? "true") === "true";
         i++;
         break;
     }
@@ -74,19 +92,24 @@ async function main(): Promise<void> {
     .getTcpIpConfig()
     .setEnabled(true);
 
+  config.getNetworkConfig().setClientProtocolPort(opts.clientPort);
+
   for (const peer of opts.peers) {
     tcpIp.addMember(peer);
   }
 
   config.getNetworkConfig()
     .getRestApiConfig()
-    .setEnabled(true)
-    .setPort(opts.restPort)
-    .enableAllGroups();
+    .setEnabled(opts.enableRest)
+    .setPort(opts.restPort);
+  if (opts.enableRest) {
+    config.getNetworkConfig().getRestApiConfig().enableAllGroups();
+  }
 
-  config.getMonitorConfig().setEnabled(true);
+  config.getMonitorConfig().setEnabled(opts.enableMonitor);
 
   config.addMapConfig(new MapConfig("stress-map"));
+  config.addMapConfig(new MapConfig("bench-map"));
 
   const ncMapConfig = new MapConfig("near-cache-map");
   ncMapConfig.setNearCacheConfig(new NearCacheConfig());
@@ -127,8 +150,10 @@ async function main(): Promise<void> {
   instance.getMap("near-cache-map");
   instance.getMap("hot-map");
   instance.getMap("cold-map");
+  instance.getMap("bench-map");
 
   console.log(`[${opts.name}] started on tcp=${opts.tcpPort}, rest=${opts.restPort}`);
+  console.log(`[${opts.name}] client-protocol=${instance.getClientProtocolPort()}`);
   console.log("HELIOS_NODE_READY");
 
   const shutdown = () => {

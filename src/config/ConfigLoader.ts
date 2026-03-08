@@ -113,6 +113,11 @@ export function parseRawConfig(raw: unknown, configOrigin?: string): HeliosConfi
         parseNetworkConfig(obj['network'] as Record<string, unknown>, config);
     }
 
+    // --- backpressure config ---
+    if ('backpressure' in obj && obj['backpressure'] !== null && typeof obj['backpressure'] === 'object') {
+        parseBackpressureConfig(obj['backpressure'] as Record<string, unknown>, config);
+    }
+
     // --- blitz config ---
     if ('blitz' in obj && obj['blitz'] !== null && typeof obj['blitz'] === 'object') {
         config.setBlitzConfig(obj['blitz'] as HeliosBlitzRuntimeConfig);
@@ -410,5 +415,37 @@ function parseJoinConfig(raw: Record<string, unknown>, config: HeliosConfig): vo
                 }
             }
         }
+    }
+}
+
+// ── Backpressure config parsing ───────────────────────────────────────────
+
+function parseBackpressureConfig(raw: Record<string, unknown>, config: HeliosConfig): void {
+    const bpConfig = config.getBackpressureConfig();
+
+    if (typeof raw['enabled'] === 'boolean') {
+        bpConfig.setEnabled(raw['enabled'] as boolean);
+    }
+    if (typeof raw['max-concurrent-invocations-per-partition'] === 'number') {
+        bpConfig.setMaxConcurrentInvocationsPerPartition(
+            raw['max-concurrent-invocations-per-partition'] as number,
+        );
+    }
+    if (typeof raw['maxConcurrentInvocationsPerPartition'] === 'number') {
+        bpConfig.setMaxConcurrentInvocationsPerPartition(
+            raw['maxConcurrentInvocationsPerPartition'] as number,
+        );
+    }
+    if (typeof raw['backoff-timeout-ms'] === 'number') {
+        bpConfig.setBackoffTimeoutMs(raw['backoff-timeout-ms'] as number);
+    }
+    if (typeof raw['backoffTimeoutMs'] === 'number') {
+        bpConfig.setBackoffTimeoutMs(raw['backoffTimeoutMs'] as number);
+    }
+    if (typeof raw['sync-window'] === 'number') {
+        bpConfig.setSyncWindow(raw['sync-window'] as number);
+    }
+    if (typeof raw['syncWindow'] === 'number') {
+        bpConfig.setSyncWindow(raw['syncWindow'] as number);
     }
 }

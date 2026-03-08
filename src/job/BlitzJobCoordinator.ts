@@ -37,6 +37,18 @@ interface PendingMetricsRequest {
   timeoutTimer: ReturnType<typeof setTimeout>;
 }
 
+/** Cluster-wide monotonic job lifecycle counters. */
+export interface JobCounters {
+  /** Total jobs submitted (distributed + light) since the coordinator was created. */
+  submitted: number;
+  /** Total jobs that reached COMPLETED status. */
+  completedSuccessfully: number;
+  /** Total jobs that reached FAILED status. */
+  completedWithFailure: number;
+  /** Total times a job transitioned to RUNNING (execution started). */
+  executionStarted: number;
+}
+
 /**
  * BlitzJobCoordinator — master-side coordinator managing the full Jet-parity job lifecycle.
  *
@@ -62,6 +74,12 @@ export class BlitzJobCoordinator {
   // Light jobs — local-only, no IMap
   private readonly _lightJobs = new Map<string, BlitzJob>();
   private readonly _lightJobStatuses = new Map<string, JobStatus>();
+
+  // ── Cluster-wide lifecycle counters (Hazelcast Jet MetricNames parity) ──
+  private _jobsSubmitted = 0;
+  private _jobsCompletedSuccessfully = 0;
+  private _jobsCompletedWithFailure = 0;
+  private _executionsStarted = 0;
 
   constructor(
     imap: IMap<string, JobRecord>,
@@ -98,6 +116,7 @@ export class BlitzJobCoordinator {
       }
     }
 
+    this._jobsSubmitted++;
     const jobId = crypto.randomUUID();
     const record = new JobRecord({
       id: jobId,
@@ -387,13 +406,48 @@ export class BlitzJobCoordinator {
     }
   }
 
+  // ── Metrics ─────────────────────────────────────────────
+
+  /**
+   * Returns the total number of jobs currently in RUNNING status,
+   * across both regular (distributed) and light (local-only) jobs.
+   */
+  getRunningJobCount(): number {
+    let count = 0;
+    for (const status of this._jobStatuses.values()) {
+      if (status === JobStatus.RUNNING) count++;
+    }
+    for (const status of this._lightJobStatuses.values()) {
+      if (status === JobStatus.RUNNING) count++;
+    }
+    return count;
+  }
+
+  /**
+   * Returns cluster-wide monotonic job lifecycle counters.
+   *
+   * Mirrors Hazelcast Jet MetricNames.JOBS_SUBMITTED,
+   * JOBS_COMPLETED_SUCCESSFULLY, JOBS_COMPLETED_WITH_FAILURE,
+   * and an executionStarted counter (tracks each RUNNING transition).
+   */
+  getJobCounters(): JobCounters {
+    return {
+      submitted: this._jobsSubmitted,
+      completedSuccessfully: this._jobsCompletedSuccessfully,
+      completedWithFailure: this._jobsCompletedWithFailure,
+      executionStarted: this._executionsStarted,
+    };
+  }
+
   // ── Light Job ───────────────────────────────────────────
 
   async submitLightJob(pipeline: PipelineDescriptor, config: ResolvedJobConfig): Promise<BlitzJob> {
+    this._jobsSubmitted++;
     const jobId = crypto.randomUUID();
     const status = JobStatus.RUNNING;
 
     this._lightJobStatuses.set(jobId, status);
+    this._executionsStarted++;
 
     // Start execution locally on this member only
     const plan = computeExecutionPlan(jobId, pipeline, [this._executor.memberId], {
@@ -442,6 +496,17 @@ export class BlitzJobCoordinator {
     const updated = record.withStatus(newStatus);
     await this._imap.set(jobId, updated);
     this._jobStatuses.set(jobId, newStatus);
+    this._trackStatusTransition(newStatus);
+  }
+
+  private _trackStatusTransition(newStatus: JobStatus): void {
+    if (newStatus === JobStatus.RUNNING) {
+      this._executionsStarted++;
+    } else if (newStatus === JobStatus.COMPLETED) {
+      this._jobsCompletedSuccessfully++;
+    } else if (newStatus === JobStatus.FAILED) {
+      this._jobsCompletedWithFailure++;
+    }
   }
 
   private async _startJobExecution(jobId: string, record: JobRecord): Promise<void> {

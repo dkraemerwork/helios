@@ -20,6 +20,7 @@ export interface OperationServiceImplOptions {
     localAddress?: Address;
     maxConcurrentInvocations?: number;
     invocationTryCount?: number;
+    afterLocalRun?: (op: Operation) => Promise<void>;
     /**
      * Optional remote send hook for non-local target invocations.
      * When provided, operations targeting non-local members are dispatched
@@ -28,20 +29,33 @@ export interface OperationServiceImplOptions {
     remoteSend?: (op: Operation, target: Address) => Promise<void>;
 }
 
+export interface OperationStats {
+    /** Number of operations currently registered in the invocation registry (queued + running). */
+    queueSize: number;
+    /** Number of operations whose run() is currently in flight (local executions in progress). */
+    runningCount: number;
+    /** Total number of operations completed since this service was created. */
+    completedCount: number;
+}
+
 export class OperationServiceImpl implements OperationService {
     private readonly _nodeEngine: NodeEngine;
     private readonly _localMode: boolean;
     private readonly _localAddress: Address | null;
     private readonly _registry: InvocationRegistry;
     private readonly _invocationTryCount: number;
+    private readonly _afterLocalRun: ((op: Operation) => Promise<void>) | null;
     private readonly _remoteSend: ((op: Operation, target: Address) => Promise<void>) | null;
     private _callIdCounter = 1n;
+    private _runningCount = 0;
+    private _completedCount = 0;
 
     constructor(nodeEngine: NodeEngine, options?: OperationServiceImplOptions) {
         this._nodeEngine = nodeEngine;
         this._localMode = options?.localMode ?? true;
         this._localAddress = options?.localAddress ?? null;
         this._invocationTryCount = options?.invocationTryCount ?? 250;
+        this._afterLocalRun = options?.afterLocalRun ?? null;
         this._remoteSend = options?.remoteSend ?? null;
         this._registry = new InvocationRegistry(
             options?.maxConcurrentInvocations ?? 100_000,
@@ -65,8 +79,14 @@ export class OperationServiceImpl implements OperationService {
      */
     async run(op: Operation): Promise<void> {
         this._prepareOperation(op);
-        await op.beforeRun();
-        await op.run();
+        this._runningCount++;
+        try {
+            await op.beforeRun();
+            await op.run();
+        } finally {
+            this._runningCount--;
+            this._completedCount++;
+        }
     }
 
     /**
@@ -80,6 +100,15 @@ export class OperationServiceImpl implements OperationService {
                 console.error('[OperationServiceImpl] Unhandled exception in execute():', e);
             }
         })();
+    }
+
+    /** Returns a point-in-time snapshot of operation queue statistics. */
+    getStats(): OperationStats {
+        return {
+            queueSize: this._registry.size,
+            runningCount: this._runningCount,
+            completedCount: this._completedCount,
+        };
     }
 
     /**
@@ -250,11 +279,35 @@ export class OperationServiceImpl implements OperationService {
                 }
 
                 await op.beforeRun();
-                await op.run();
+                this._runningCount++;
+                try {
+                    if (this._afterLocalRun !== null) {
+                        let responseSent = false;
+                        let responseValue: unknown = undefined;
+                        op.setResponseHandler({
+                            sendResponse: (_op: Operation, response: unknown) => {
+                                responseSent = true;
+                                responseValue = response;
+                            },
+                        });
+                        await op.run();
+                        await this._afterLocalRun(op);
+                        this._completedCount++;
+                        if (!invocation.future.isDone()) {
+                            invocation.notifyNormalResponse(responseSent ? responseValue : undefined, 0);
+                        }
+                        return;
+                    }
 
-                // Auto-complete if the operation didn't call sendResponse
-                if (!invocation.future.isDone()) {
-                    invocation.notifyNormalResponse(undefined, 0);
+                    await op.run();
+                    this._completedCount++;
+
+                    // Auto-complete if the operation didn't call sendResponse
+                    if (!invocation.future.isDone()) {
+                        invocation.notifyNormalResponse(undefined, 0);
+                    }
+                } finally {
+                    this._runningCount--;
                 }
             } catch (e) {
                 if (invocation.future.isDone()) return;
@@ -306,9 +359,11 @@ export class OperationServiceImpl implements OperationService {
         });
 
         void (async () => {
+            this._runningCount++;
             try {
                 await op.beforeRun();
                 await op.run();
+                this._completedCount++;
                 if (!future.isDone()) {
                     future.complete(undefined as unknown as T);
                 }
@@ -316,6 +371,8 @@ export class OperationServiceImpl implements OperationService {
                 if (!future.isDone()) {
                     future.completeExceptionally(e);
                 }
+            } finally {
+                this._runningCount--;
             }
         })();
 

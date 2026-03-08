@@ -1,20 +1,30 @@
-import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig';
-import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy';
-import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
-import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
-import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
-import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig.js';
+import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy.js';
+import {
+    DEFAULT_MAP_ASYNC_BACKUP_COUNT,
+    DEFAULT_MAP_BACKUP_COUNT,
+    DEFAULT_MAP_EVICTION_POLICY,
+    DEFAULT_MAP_MAX_IDLE_SECONDS,
+    DEFAULT_MAP_MAX_SIZE,
+    DEFAULT_MAP_MAX_SIZE_POLICY,
+    DEFAULT_MAP_TTL_SECONDS,
+} from '@zenystx/helios-core/config/HazelcastDefaults.js';
+import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig.js';
+import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat.js';
+import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig.js';
+import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy.js';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig.js';
 
 export class MapConfig {
     static readonly MIN_BACKUP_COUNT = 0;
-    static readonly DEFAULT_BACKUP_COUNT = 1;
+    static readonly DEFAULT_BACKUP_COUNT = DEFAULT_MAP_BACKUP_COUNT;
     static readonly MAX_BACKUP_COUNT = 6;
     static readonly DISABLED_TTL_SECONDS = 0;
-    static readonly DEFAULT_TTL_SECONDS = 0;
-    static readonly DEFAULT_MAX_IDLE_SECONDS = 0;
+    static readonly DEFAULT_TTL_SECONDS = DEFAULT_MAP_TTL_SECONDS;
+    static readonly DEFAULT_MAX_IDLE_SECONDS = DEFAULT_MAP_MAX_IDLE_SECONDS;
     static readonly DEFAULT_IN_MEMORY_FORMAT = InMemoryFormat.BINARY;
-    static readonly DEFAULT_MAX_SIZE = Number.MAX_SAFE_INTEGER;
+    /** Integer.MAX_VALUE — matches Hazelcast Java default exactly. */
+    static readonly DEFAULT_MAX_SIZE = DEFAULT_MAP_MAX_SIZE;
     static readonly DEFAULT_MAX_SIZE_POLICY = MaxSizePolicy.PER_NODE;
     static readonly DEFAULT_EVICTION_POLICY = EvictionPolicy.NONE;
     static readonly DEFAULT_STATISTICS_ENABLED = true;
@@ -22,7 +32,7 @@ export class MapConfig {
 
     private _name: string | null = null;
     private _backupCount: number = MapConfig.DEFAULT_BACKUP_COUNT;
-    private _asyncBackupCount: number = 0;
+    private _asyncBackupCount: number = DEFAULT_MAP_ASYNC_BACKUP_COUNT;
     private _timeToLiveSeconds: number = MapConfig.DEFAULT_TTL_SECONDS;
     private _maxIdleSeconds: number = MapConfig.DEFAULT_MAX_IDLE_SECONDS;
     private _inMemoryFormat: InMemoryFormat = MapConfig.DEFAULT_IN_MEMORY_FORMAT;

@@ -186,6 +186,8 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
       const resp: ClusterMessage = {
         type: "OPERATION_RESPONSE",
         callId: 42,
+        backupAcks: 1,
+        backupMemberIds: ["node-2"],
         payload: { result: "old-value" },
         error: null,
       };
@@ -208,6 +210,10 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         callId: 99,
         partitionId: 7,
         replicaIndex: 1,
+        senderId: "node-2",
+        callerId: "node-1",
+        sync: true,
+        replicaVersions: ["0", "1"],
         factoryId: encoded.factoryId,
         classId: encoded.classId,
         payload: encoded.payload,
@@ -215,6 +221,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
       const ack: ClusterMessage = {
         type: "BACKUP_ACK",
         callId: 99,
+        senderId: "node-2",
       };
       expect(strategy.deserialize(strategy.serialize(backup))).toEqual(backup);
       expect(strategy.deserialize(strategy.serialize(ack))).toEqual(ack);

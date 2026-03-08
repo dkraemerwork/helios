@@ -6,7 +6,7 @@
  * to remain decoupled and independently testable.
  */
 
-import type { BlitzMetrics, MemberPartitionInfo, ObjectInventory, ThreadPoolMetrics, TransportMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
+import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitionInfo, MigrationMetrics, ObjectInventory, OperationMetrics, ThreadPoolMetrics, TransportMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
 
 export interface MonitorStateProvider {
     /** Instance name. */
@@ -47,4 +47,30 @@ export interface MonitorStateProvider {
      * Implementations should check for Blitz runtime presence dynamically.
      */
     getBlitzMetrics(): BlitzMetrics | null;
+
+    /**
+     * Cluster-wide job lifecycle counters, or null if no Blitz job coordinator is active.
+     * Mirrors Hazelcast Jet MetricNames.JOBS_SUBMITTED / COMPLETED_SUCCESSFULLY / COMPLETED_WITH_FAILURE.
+     */
+    getJobCounterMetrics(): JobCounterMetrics | null;
+
+    /**
+     * Partition migration queue metrics — live snapshot from MigrationManager.
+     * Always returns a valid object; queue size is 0 when clustering is disabled.
+     */
+    getMigrationMetrics(): MigrationMetrics;
+
+    /**
+     * Operation execution metrics — live snapshot from OperationService.
+     * Mirrors Hazelcast's operation.queueSize / runningCount / completedCount.
+     * Always returns a valid object; all counters are 0 when no operations have run.
+     */
+    getOperationMetrics(): OperationMetrics;
+
+    /**
+     * Invocation metrics — live snapshot from InvocationMonitor.
+     * Mirrors Hazelcast HealthMonitor's pending invocation checks.
+     * Always returns a valid object; counts are 0 when no remote invocations are active.
+     */
+    getInvocationMetrics(): InvocationMetrics;
 }

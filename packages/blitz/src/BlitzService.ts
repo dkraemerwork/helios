@@ -177,6 +177,21 @@ export class BlitzService {
     }
 
     /**
+     * Returns the number of nodes in the connected NATS cluster.
+     *
+     * Reads from `nc.info.connect_urls`, which the NATS server populates with
+     * the URLs of all *other* known cluster members. Adding 1 for the currently
+     * connected server gives the total cluster size.
+     *
+     * Returns 1 when connected to a standalone (single-node) NATS server, as
+     * `connect_urls` is absent or empty in that case.
+     */
+    getClusterSize(): number {
+        const urls = this.nc.info?.connect_urls;
+        return (urls?.length ?? 0) + 1;
+    }
+
+    /**
      * Returns true if the JetStream manager has been initialized.
      * When false, JetStream operations are not yet available (cluster may still
      * be electing a Raft leader). Use `waitForJetStream()` to block until ready.
@@ -314,6 +329,24 @@ export class BlitzService {
      */
     isRunning(name: string): boolean {
         return this._runningPipelines.has(name);
+    }
+
+    /**
+     * Returns the number of jobs currently in RUNNING status.
+     *
+     * In cluster mode, delegates to the coordinator which tracks both regular
+     * and light job statuses. In standalone mode, counts jobs in the local
+     * jobs map that have RUNNING status.
+     */
+    getRunningJobCount(): number {
+        if (this._coordinator !== null) {
+            return this._coordinator.getRunningJobCount();
+        }
+        let count = 0;
+        for (const job of this._jobs.values()) {
+            if (job.getStatus() === JobStatus.RUNNING) count++;
+        }
+        return count;
     }
 
     // ── Job API ──────────────────────────────────────────────

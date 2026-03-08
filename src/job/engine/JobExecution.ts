@@ -8,6 +8,8 @@ import type { ProcessorItem } from './ProcessorItem.js';
 import { SourceProcessor } from './SourceProcessor.js';
 import { SinkProcessor } from './SinkProcessor.js';
 import { OperatorProcessor } from './OperatorProcessor.js';
+import type { DistributedEdgeSender } from './DistributedEdgeSender.js';
+import type { DistributedEdgeReceiver } from './DistributedEdgeReceiver.js';
 
 export interface OperatorFnEntry {
   readonly fn: (value: unknown) => unknown;
@@ -35,6 +37,10 @@ interface VertexRuntime {
   readonly outbox?: AsyncChannel<ProcessorItem>;
   itemsIn: number;
   itemsOut: number;
+  /** Distributed senders attached to this vertex's outgoing distributed edges. */
+  distributedSenders: DistributedEdgeSender[];
+  /** Distributed receivers attached to this vertex's incoming distributed edges. */
+  distributedReceivers: DistributedEdgeReceiver[];
 }
 
 /**
@@ -116,6 +122,8 @@ export class JobExecution {
             outbox,
             itemsIn: 0,
             itemsOut: 0,
+            distributedSenders: [],
+            distributedReceivers: [],
           });
           promises.push(promise);
           break;
@@ -156,6 +164,8 @@ export class JobExecution {
             outbox,
             itemsIn: 0,
             itemsOut: 0,
+            distributedSenders: [],
+            distributedReceivers: [],
           });
           promises.push(promise);
           break;
@@ -187,6 +197,8 @@ export class JobExecution {
             sinkProcessor: sinkProc,
             itemsIn: 0,
             itemsOut: 0,
+            distributedSenders: [],
+            distributedReceivers: [],
           });
           promises.push(promise);
           break;
@@ -231,13 +243,40 @@ export class JobExecution {
   }
 
   /**
+   * Attach a DistributedEdgeSender to a vertex so its counters appear in getMetrics().
+   * Call this after start() for each distributed outgoing edge on the vertex.
+   */
+  attachDistributedSender(vertexName: string, sender: DistributedEdgeSender): void {
+    const vr = this.vertexRuntimes.find(r => r.name === vertexName);
+    if (vr) {
+      vr.distributedSenders.push(sender);
+    }
+  }
+
+  /**
+   * Attach a DistributedEdgeReceiver to a vertex so its counters appear in getMetrics().
+   * Call this after start() for each distributed incoming edge on the vertex.
+   */
+  attachDistributedReceiver(vertexName: string, receiver: DistributedEdgeReceiver): void {
+    const vr = this.vertexRuntimes.find(r => r.name === vertexName);
+    if (vr) {
+      vr.distributedReceivers.push(receiver);
+    }
+  }
+
+  /**
    * Collect per-vertex metrics from the running execution.
-   * Reads actual item counts from processors and queue sizes from channels.
+   * Reads actual item counts from processors, queue sizes from channels,
+   * and distributed traffic counters from any attached distributed edge components.
    */
   getMetrics(): VertexMetrics[] {
     return this.vertexRuntimes.map(vr => {
       let itemsIn = 0;
       let itemsOut = 0;
+
+      let latencyP50Ms = 0;
+      let latencyP99Ms = 0;
+      let latencyMaxMs = 0;
 
       if (vr.sourceProcessor) {
         // Sources have no inbox — itemsIn is 0, itemsOut = items emitted
@@ -247,9 +286,28 @@ export class JobExecution {
         const processed = (vr.operatorProcessor as any).itemsProcessed ?? 0;
         itemsIn = processed;
         itemsOut = processed;
+        const latency = vr.operatorProcessor.getLatencyMetrics();
+        latencyP50Ms = latency.latencyP50Ms;
+        latencyP99Ms = latency.latencyP99Ms;
+        latencyMaxMs = latency.latencyMaxMs;
       } else if (vr.sinkProcessor) {
         // Sinks: itemsIn = items written, no outbox
         itemsIn = (vr.sinkProcessor as any).itemsWritten ?? 0;
+      }
+
+      // Aggregate distributed traffic from all attached senders/receivers
+      let distributedItemsOut = 0;
+      let distributedBytesOut = 0;
+      for (const sender of vr.distributedSenders) {
+        distributedItemsOut += sender.itemsOut;
+        distributedBytesOut += sender.bytesOut;
+      }
+
+      let distributedItemsIn = 0;
+      let distributedBytesIn = 0;
+      for (const receiver of vr.distributedReceivers) {
+        distributedItemsIn += receiver.itemsIn;
+        distributedBytesIn += receiver.bytesIn;
       }
 
       return {
@@ -258,9 +316,13 @@ export class JobExecution {
         itemsIn,
         itemsOut,
         queueSize: vr.outbox?.size ?? 0,
-        latencyP50Ms: 0,
-        latencyP99Ms: 0,
-        latencyMaxMs: 0,
+        latencyP50Ms,
+        latencyP99Ms,
+        latencyMaxMs,
+        distributedItemsIn,
+        distributedItemsOut,
+        distributedBytesIn,
+        distributedBytesOut,
       };
     });
   }

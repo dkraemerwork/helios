@@ -52,7 +52,7 @@ export interface EventloopCallbacks {
     onDrain?: (channel: EventloopChannel) => void;
 }
 
-/** Configuration for outbound buffering limits. */
+/** Configuration for outbound buffering limits and optional TLS. */
 export interface EventloopOptions {
     /**
      * Maximum number of bytes that may be pending (written to socket but not yet
@@ -61,6 +61,19 @@ export interface EventloopOptions {
      * Default: 256 KiB.
      */
     maxOutboundBytes?: number;
+
+    /**
+     * Optional TLS configuration passed directly to `Bun.listen()`.
+     * When set, the server socket is started in TLS mode.
+     * Use {@link TlsConfig#toBunTlsOptions} to produce a compatible object.
+     */
+    tls?: {
+        cert: string;
+        key: string;
+        ca?: string;
+        requestCert?: boolean;
+        rejectUnauthorized?: boolean;
+    };
 }
 
 const DEFAULT_MAX_OUTBOUND = 4 * 1024 * 1024;
@@ -329,6 +342,7 @@ export class Eventloop {
         const listener = Bun.listen<SocketData>({
             hostname,
             port,
+            ...(opts?.tls !== undefined ? { tls: opts.tls } : {}),
             socket: {
                 open(socket) {
                     const ch = new EventloopChannel(socket as unknown as SocketWriter, maxOutbound);

@@ -37,6 +37,8 @@ export class DistributedEdgeReceiver {
     private _jsConsumer: ConsumerMessages | null = null;
     private _running = false;
     private _loopPromises: Promise<void>[] = [];
+    private _itemsIn = 0;
+    private _bytesIn = 0;
 
     constructor(config: DistributedEdgeReceiverConfig) {
         this._nc = config.nc;
@@ -48,6 +50,14 @@ export class DistributedEdgeReceiver {
 
     get isJetStream(): boolean {
         return this._isJetStream;
+    }
+
+    get itemsIn(): number {
+        return this._itemsIn;
+    }
+
+    get bytesIn(): number {
+        return this._bytesIn;
     }
 
     async start(): Promise<void> {
@@ -87,8 +97,11 @@ export class DistributedEdgeReceiver {
                 for await (const msg of sub) {
                     if (!this._running) break;
 
+                    const byteLength = msg.data.byteLength;
                     const item = this._decodeMessage(msg.data, msg.headers);
                     await this._inbox.send(item);
+                    this._itemsIn++;
+                    this._bytesIn += byteLength;
                 }
             })();
             this._loopPromises.push(loop);
@@ -126,9 +139,12 @@ export class DistributedEdgeReceiver {
             for await (const msg of messages) {
                 if (!this._running) break;
 
+                const byteLength = msg.data.byteLength;
                 const item = this._decodeMessage(msg.data, msg.headers);
                 await this._inbox.send(item);
                 msg.ack();
+                this._itemsIn++;
+                this._bytesIn += byteLength;
             }
         })();
         this._loopPromises.push(loop);

@@ -3,12 +3,20 @@
  *
  * Exponential-backoff retry configuration for the Helios remote client.
  */
+import {
+  DEFAULT_CLUSTER_CONNECT_TIMEOUT_MS,
+  DEFAULT_RETRY_INITIAL_BACKOFF_MS,
+  DEFAULT_RETRY_JITTER,
+  DEFAULT_RETRY_MAX_BACKOFF_MS,
+  DEFAULT_RETRY_MULTIPLIER,
+} from "@zenystx/helios-core/config/HazelcastDefaults.js";
+
 export class ConnectionRetryConfig {
-  private _initialBackoffMillis: number = 1000;
-  private _maxBackoffMillis: number = 30000;
-  private _multiplier: number = 1.05;
-  private _clusterConnectTimeoutMillis: number = -1;
-  private _jitter: number = 0;
+  private _initialBackoffMillis: number = DEFAULT_RETRY_INITIAL_BACKOFF_MS;
+  private _maxBackoffMillis: number = DEFAULT_RETRY_MAX_BACKOFF_MS;
+  private _multiplier: number = DEFAULT_RETRY_MULTIPLIER;
+  private _clusterConnectTimeoutMillis: number = DEFAULT_CLUSTER_CONNECT_TIMEOUT_MS;
+  private _jitter: number = DEFAULT_RETRY_JITTER;
 
   getInitialBackoffMillis(): number {
     return this._initialBackoffMillis;

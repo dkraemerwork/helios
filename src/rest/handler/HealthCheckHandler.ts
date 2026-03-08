@@ -13,6 +13,7 @@ export interface HealthCheckState {
     getClusterSize(): number;
     getMemberVersion(): string;
     getInstanceName(): string;
+    getMigrationQueueSize(): number;
 }
 
 /**
@@ -67,6 +68,7 @@ export class HealthCheckHandler {
             clusterSize: this._state.getClusterSize(),
             memberVersion: this._state.getMemberVersion(),
             instanceName: this._state.getInstanceName(),
+            migrationQueueSize: this._state.getMigrationQueueSize(),
         });
     }
 

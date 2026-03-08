@@ -1,5 +1,6 @@
 import type { AsyncChannel } from './AsyncChannel.js';
 import type { ProcessorItem } from './ProcessorItem.js';
+import { LatencyTracker } from '../metrics/LatencyTracker.js';
 
 const ABORTED = Symbol('aborted');
 
@@ -30,6 +31,7 @@ export class OperatorProcessor {
   private readonly processorIndex: number;
 
   private itemsProcessed = 0;
+  private readonly latencyTracker = new LatencyTracker(1024);
 
   constructor(
     fn: (value: unknown) => unknown,
@@ -80,6 +82,7 @@ export class OperatorProcessor {
                 timestamp: item.timestamp,
               });
             }
+            this.latencyTracker.record(Date.now() - item.timestamp);
             this.itemsProcessed++;
             break;
           }
@@ -98,6 +101,14 @@ export class OperatorProcessor {
       if (signal.aborted) return;
       throw err;
     }
+  }
+
+  getLatencyMetrics(): { latencyP50Ms: number; latencyP99Ms: number; latencyMaxMs: number } {
+    return {
+      latencyP50Ms: this.latencyTracker.getP50(),
+      latencyP99Ms: this.latencyTracker.getP99(),
+      latencyMaxMs: this.latencyTracker.getMax(),
+    };
   }
 
   getSnapshotState(): unknown {

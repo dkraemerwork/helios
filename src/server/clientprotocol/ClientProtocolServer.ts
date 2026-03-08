@@ -26,6 +26,9 @@ import {
 } from "@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher";
 import { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
 import { ClientSessionRegistry } from "@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry";
+import { AuthGuard } from "@zenystx/helios-core/server/clientprotocol/AuthGuard";
+import type { TlsConfig } from "@zenystx/helios-core/server/clientprotocol/TlsConfig";
+import type { AuthAuditListener } from "@zenystx/helios-core/server/clientprotocol/AuthGuard";
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 /** Options for ClientProtocolServer construction. */
@@ -46,9 +49,21 @@ export interface ClientProtocolServerOptions {
         username: string;
         password: string;
     } | null;
+    /** Optional TLS configuration.  If omitted the server listens in plain TCP. */
+    tls?: TlsConfig;
+    /** Optional audit listener for authentication events. */
+    auditListener?: AuthAuditListener;
 }
 
 let sessionCounter = 0;
+
+type SessionClosePolicy = "close" | "respond-then-close";
+
+const CLIENT_PROTOCOL_CLOSE_POLICY = Object.freeze({
+    authenticationFailure: "respond-then-close",
+    authenticationRequired: "close",
+    protocolViolation: "close",
+} satisfies Record<string, SessionClosePolicy>);
 
 export class ClientProtocolServer {
     private readonly _clusterName: string;
@@ -61,18 +76,33 @@ export class ClientProtocolServer {
     private readonly _heartbeatTimeoutMs: number;
     private readonly _heartbeatIntervalMs: number;
     private readonly _auth: { username: string; password: string } | null;
+    private readonly _tls: TlsConfig | undefined;
 
     private readonly _registry: ClientSessionRegistry;
     private readonly _dispatcher: ClientMessageDispatcher;
+    private readonly _authGuard: AuthGuard;
 
     private _server: EventloopServer | null = null;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _running = false;
 
-    /** Per-channel receive state. */
+    /**
+     * Per-channel receive state.
+     *
+     * `protocolHeaderReceived` tracks whether the 3-byte binary protocol
+     * version header ("CP2") has been consumed.  The official hazelcast-client
+     * sends this header immediately after TCP connect, before the first
+     * ClientMessage frame.
+     */
     private readonly _channelState = new Map<
         EventloopChannel,
-        { reader: ClientMessageReader; session: ClientSession; buffer: Buffer }
+        {
+            reader: ClientMessageReader;
+            session: ClientSession;
+            buffer: Buffer;
+            processing: boolean;
+            protocolHeaderReceived: boolean;
+        }
     >();
 
     private _onMapPut: ((name: string, key: Buffer, value: Buffer) => Buffer | null) | null;
@@ -90,9 +120,15 @@ export class ClientProtocolServer {
         this._heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 10_000;
         this._onMapPut = opts.onMapPut ?? null;
         this._auth = opts.auth ?? null;
+        this._tls = opts.tls;
 
         this._registry = new ClientSessionRegistry();
         this._dispatcher = new ClientMessageDispatcher();
+        this._authGuard = new AuthGuard({
+            clusterName: opts.clusterName,
+            credentials: opts.auth ?? null,
+            auditListener: opts.auditListener,
+        });
 
         // Register built-in handlers
         this._registerAuthHandler();
@@ -102,11 +138,16 @@ export class ClientProtocolServer {
     }
 
     async start(): Promise<void> {
-        this._server = Eventloop.listen(this._port, this._host, {
-            onConnect: (ch) => this._onConnect(ch),
-            onData: (ch, data) => this._onData(ch, data),
-            onClose: (ch) => this._onClose(ch),
-        });
+        this._server = Eventloop.listen(
+            this._port,
+            this._host,
+            {
+                onConnect: (ch) => this._onConnect(ch),
+                onData: (ch, data) => this._onData(ch, data),
+                onClose: (ch) => this._onClose(ch),
+            },
+            this._tls !== undefined ? { tls: this._tls.toBunTlsOptions() } : undefined,
+        );
         this._running = true;
 
         // Start heartbeat monitor
@@ -143,6 +184,10 @@ export class ClientProtocolServer {
         return this._dispatcher;
     }
 
+    getAuthGuard(): AuthGuard {
+        return this._authGuard;
+    }
+
     isRunning(): boolean {
         return this._running;
     }
@@ -175,6 +220,8 @@ export class ClientProtocolServer {
             reader: new ClientMessageReader(),
             session,
             buffer: Buffer.alloc(0),
+            processing: false,
+            protocolHeaderReceived: false,
         });
     }
 
@@ -187,32 +234,65 @@ export class ClientProtocolServer {
             ? Buffer.concat([state.buffer, data])
             : Buffer.from(data);
 
-        // Try to read complete messages
-        this._processBuffer(ch, state);
+        if (!state.processing) {
+            this._processBuffer(ch, state).catch(() => {});
+        }
     }
 
-    private _processBuffer(
-        _ch: EventloopChannel,
-        state: { reader: ClientMessageReader; session: ClientSession; buffer: Buffer },
-    ): void {
-        while (state.buffer.length > 0) {
-            const bb = ByteBuffer.wrap(state.buffer);
-            const complete = state.reader.readFrom(bb, true);
-            if (complete) {
-                const msg = state.reader.getClientMessage();
-                state.reader.reset();
-                // Consume bytes that were read
-                const consumed = bb.position();
-                state.buffer = state.buffer.subarray(consumed);
-                // Handle message
-                this._handleMessage(msg, state.session).catch(() => {});
-            } else {
-                // Partial message — keep buffer for next data event
-                const consumed = bb.position();
-                if (consumed > 0) {
-                    state.buffer = state.buffer.subarray(consumed);
+    private async _processBuffer(
+        ch: EventloopChannel,
+        state: {
+            reader: ClientMessageReader;
+            session: ClientSession;
+            buffer: Buffer;
+            processing: boolean;
+            protocolHeaderReceived: boolean;
+        },
+    ): Promise<void> {
+        state.processing = true;
+        try {
+            // Strip the 3-byte binary protocol version header ("CP2") that the
+            // official hazelcast-client sends before the first ClientMessage.
+            if (!state.protocolHeaderReceived) {
+                if (state.buffer.length < 3) {
+                    state.processing = false;
+                    return;
                 }
-                break;
+                // Skip the header regardless of content — clients always send
+                // exactly 3 bytes for the protocol version.
+                state.buffer = state.buffer.subarray(3);
+                state.protocolHeaderReceived = true;
+            }
+
+            while (state.buffer.length > 0 && !ch.isClosed()) {
+                const bb = ByteBuffer.wrap(state.buffer);
+                const complete = state.reader.readFrom(bb, true);
+                if (complete) {
+                    const msg = state.reader.getClientMessage();
+                    state.reader.reset();
+                    const consumed = bb.position();
+                    state.buffer = state.buffer.subarray(consumed);
+                    const shouldContinue = await this._handleMessage(msg, state.session);
+                    if (!shouldContinue || ch.isClosed()) {
+                        state.buffer = Buffer.alloc(0);
+                        state.reader.reset();
+                        break;
+                    }
+                } else {
+                    const consumed = bb.position();
+                    if (consumed > 0) {
+                        state.buffer = state.buffer.subarray(consumed);
+                    }
+                    break;
+                }
+            }
+        } finally {
+            const latestState = this._channelState.get(ch);
+            if (latestState) {
+                latestState.processing = false;
+                if (latestState.buffer.length > 0 && !ch.isClosed()) {
+                    this._processBuffer(ch, latestState).catch(() => {});
+                }
             }
         }
     }
@@ -232,15 +312,36 @@ export class ClientProtocolServer {
     private async _handleMessage(
         msg: ClientMessage,
         session: ClientSession,
-    ): Promise<void> {
+    ): Promise<boolean> {
         session.recordActivity();
 
-        const response = await this._dispatcher.dispatch(msg, session);
-        if (response !== null) {
-            // Copy correlation ID from request to response
-            response.setCorrelationId(msg.getCorrelationId());
-            session.sendMessage(response);
+        const { response, closeAfterSend, closeImmediately } =
+            await this._authGuard.guardedDispatch(msg, session, this._dispatcher, this._registry);
+
+        if (closeImmediately) {
+            session.destroy();
+            return false;
         }
+
+        if (response !== null) {
+            if (this._isAuthenticationFailureResponse(msg, response)) {
+                response.setCorrelationId(msg.getCorrelationId());
+                this._applyClosePolicy(
+                    session,
+                    CLIENT_PROTOCOL_CLOSE_POLICY.authenticationFailure,
+                    response,
+                );
+                return false;
+            }
+            this._sendResponse(msg, response, session);
+        }
+
+        if (closeAfterSend) {
+            session.destroy();
+            return false;
+        }
+
+        return true;
     }
 
     // ── heartbeat monitor ───────────────────────────────────────────────────
@@ -265,46 +366,30 @@ export class ClientProtocolServer {
     // ── built-in handlers ───────────────────────────────────────────────────
 
     private _registerAuthHandler(): void {
+        this._dispatcher.allowBeforeAuthentication(
+            ClientAuthenticationCodec.REQUEST_MESSAGE_TYPE,
+        );
         this._dispatcher.register(
             ClientAuthenticationCodec.REQUEST_MESSAGE_TYPE,
             async (msg, session) => {
-                const req = ClientAuthenticationCodec.decodeRequest(msg);
-
-                // Validate cluster name
-                if (req.clusterName !== this._clusterName) {
-                    return ClientAuthenticationCodec.encodeResponse(
-                        AuthenticationStatus.CREDENTIALS_FAILED.getId(),
-                        null,
-                        null,
-                        this._serializationVersion,
-                        "1.0.0",
-                        this._partitionCount,
-                        this._clusterId,
-                        false,
-                        null,
-                        null,
-                        [],
-                    );
+                if (session.isAuthenticated()) {
+                    return this._encodeAuthenticationNotAllowedResponse();
                 }
 
-                if (this._auth !== null) {
-                    const username = req.username ?? null;
-                    const password = req.password ?? null;
-                    if (username !== this._auth.username || password !== this._auth.password) {
-                        return ClientAuthenticationCodec.encodeResponse(
-                            AuthenticationStatus.CREDENTIALS_FAILED.getId(),
-                            null,
-                            null,
-                            this._serializationVersion,
-                            "1.0.0",
-                            this._partitionCount,
-                            this._clusterId,
-                            false,
-                            null,
-                            null,
-                            [],
-                        );
-                    }
+                const req = ClientAuthenticationCodec.decodeRequest(msg);
+
+                // Validate cluster name and credentials via the AuthGuard
+                const credCheck = this._authGuard.validateCredentials({
+                    clusterName: req.clusterName,
+                    username: req.username ?? null,
+                    password: req.password ?? null,
+                });
+                if (!credCheck.ok) {
+                    this._authGuard.auditAuthFailure(
+                        session.getSessionId(),
+                        credCheck.auditKind,
+                    );
+                    return this._encodeAuthenticationFailureResponse();
                 }
 
                 // Authenticate
@@ -315,6 +400,7 @@ export class ClientProtocolServer {
                     req.clientHazelcastVersion,
                 );
                 this._registry.register(session);
+                this._authGuard.auditAuthSuccess(session);
 
                 const memberAddress = new Address(this._host, this.getPort());
                 const memberInfo = new MemberInfo(
@@ -339,6 +425,65 @@ export class ClientProtocolServer {
                     [memberInfo],
                 );
             },
+        );
+    }
+
+    private _sendResponse(
+        request: ClientMessage,
+        response: ClientMessage,
+        session: ClientSession,
+    ): void {
+        response.setCorrelationId(request.getCorrelationId());
+        session.sendMessage(response);
+    }
+
+    private _applyClosePolicy(
+        session: ClientSession,
+        policy: SessionClosePolicy,
+        response: ClientMessage | null = null,
+    ): void {
+        if (policy === "respond-then-close" && response !== null) {
+            session.sendMessage(response);
+        }
+        session.destroy();
+    }
+
+    private _isAuthenticationFailureResponse(
+        request: ClientMessage,
+        response: ClientMessage,
+    ): boolean {
+        if (request.getMessageType() !== ClientAuthenticationCodec.REQUEST_MESSAGE_TYPE) {
+            return false;
+        }
+        return ClientAuthenticationCodec.decodeResponse(response).status
+            !== AuthenticationStatus.AUTHENTICATED.getId();
+    }
+
+    private _encodeAuthenticationFailureResponse(): ClientMessage {
+        return this._encodeAuthenticationStatusResponse(
+            AuthenticationStatus.CREDENTIALS_FAILED.getId(),
+        );
+    }
+
+    private _encodeAuthenticationNotAllowedResponse(): ClientMessage {
+        return this._encodeAuthenticationStatusResponse(
+            AuthenticationStatus.NOT_ALLOWED_IN_CLUSTER.getId(),
+        );
+    }
+
+    private _encodeAuthenticationStatusResponse(status: number): ClientMessage {
+        return ClientAuthenticationCodec.encodeResponse(
+            status,
+            null,
+            null,
+            this._serializationVersion,
+            "1.0.0",
+            this._partitionCount,
+            this._clusterId,
+            false,
+            null,
+            null,
+            [],
         );
     }
 

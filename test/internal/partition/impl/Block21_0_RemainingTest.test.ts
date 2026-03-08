@@ -361,6 +361,38 @@ describe('Diverged backup payload repair proof', () => {
         const newSyncId = service.registerSyncRequest(0, 1, memberC.getUuid());
         expect(service.completeSyncRequest(newSyncId, [0n])).toBe(true);
     });
+
+    test('duplicate chunk response is rejected without completing sync', () => {
+        const service = new InternalPartitionServiceImpl(PARTITION_COUNT);
+        const memberA = makeMember('127.0.0.1', 5701, 'a');
+        const syncId = service.registerSyncRequest(0, 1, memberA.getUuid(), ['mapA']);
+
+        expect(service.acceptSyncResponseChunk(syncId, 0, 2)).toBe(true);
+        expect(service.acceptSyncResponseChunk(syncId, 0, 2)).toBe(false);
+        expect(service.completeSyncRequest(syncId, [0n])).toBe(false);
+        expect(service.getRecoveryMetrics().staleResponseRejects).toBeGreaterThan(0);
+    });
+
+    test('timed out sync requests are cleaned up and returned for retry', () => {
+        const service = new InternalPartitionServiceImpl(PARTITION_COUNT);
+        const memberA = makeMember('127.0.0.1', 5701, 'a');
+        const replicaManager = new PartitionReplicaManager(PARTITION_COUNT, 1);
+        service.setReplicaManager(replicaManager);
+        const now = 10_000;
+        const syncId = service.registerSyncRequest(2, 1, memberA.getUuid(), ['mapA'], now);
+
+        expect(replicaManager.availableReplicaSyncPermits()).toBe(0);
+
+        const retryable = service.expireTimedOutSyncRequests(now + service.getRecoveryConfig().syncTimeoutMs + 1);
+
+        expect(retryable).toHaveLength(1);
+        expect(retryable[0]!.id).toBe(syncId);
+        expect(retryable[0]!.dirtyNamespaces).toEqual(['mapA']);
+        expect(service.getSyncRequestInfo(syncId)).toBeNull();
+        expect(replicaManager.availableReplicaSyncPermits()).toBe(1);
+        expect(service.getRecoveryMetrics().syncTimeouts).toBeGreaterThan(0);
+        expect(service.getRecoveryMetrics().syncRetries).toBeGreaterThan(0);
+    });
 });
 
 // ══════════════════════════════════════════════════════════════════

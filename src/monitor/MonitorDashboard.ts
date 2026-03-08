@@ -881,6 +881,80 @@ export function renderMonitorDashboard(): string {
           <span class="stat-value" id="s-scatter-size">—</span>
           <span class="stat-unit">size</span>
         </div>
+        <!-- Migration -->
+        <div class="stat-cell">
+          <span class="stat-label">Migration Queue</span>
+          <span class="stat-value amber" id="s-migration-queue">—</span>
+          <span class="stat-unit">pending</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Active Migrations</span>
+          <span class="stat-value" id="s-migration-active">—</span>
+          <span class="stat-unit">running</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Completed Migrations</span>
+          <span class="stat-value emerald" id="s-migration-completed">—</span>
+          <span class="stat-unit">total</span>
+        </div>
+        <!-- Operations -->
+        <div class="stat-cell">
+          <span class="stat-label">Op Queue Size</span>
+          <span class="stat-value amber" id="s-op-queue">—</span>
+          <span class="stat-unit">pending</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Op Running</span>
+          <span class="stat-value cyan" id="s-op-running">—</span>
+          <span class="stat-unit">in flight</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Op Completed</span>
+          <span class="stat-value emerald" id="s-op-completed">—</span>
+          <span class="stat-unit">total</span>
+        </div>
+        <!-- Invocations -->
+        <div class="stat-cell">
+          <span class="stat-label">Pending Invocations</span>
+          <span class="stat-value amber" id="s-inv-pending">—</span>
+          <span class="stat-unit">active</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Invocation Capacity</span>
+          <span class="stat-value" id="s-inv-pct">—</span>
+          <span class="stat-unit">% used</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Inv Timeouts</span>
+          <span class="stat-value red" id="s-inv-timeouts">—</span>
+          <span class="stat-unit">failures</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Inv Member Left</span>
+          <span class="stat-value red" id="s-inv-memberleft">—</span>
+          <span class="stat-unit">failures</span>
+        </div>
+        <!-- Job Lifecycle Counters (Hazelcast Jet MetricNames parity) -->
+        <div class="stat-cell" id="s-jobs-section-submitted" style="display:none">
+          <span class="stat-label">Jobs Submitted</span>
+          <span class="stat-value blue" id="s-jobs-submitted">—</span>
+          <span class="stat-unit">total</span>
+        </div>
+        <div class="stat-cell" id="s-jobs-section-started" style="display:none">
+          <span class="stat-label">Executions Started</span>
+          <span class="stat-value cyan" id="s-jobs-started">—</span>
+          <span class="stat-unit">total</span>
+        </div>
+        <div class="stat-cell" id="s-jobs-section-success" style="display:none">
+          <span class="stat-label">Jobs Succeeded</span>
+          <span class="stat-value emerald" id="s-jobs-success">—</span>
+          <span class="stat-unit">total</span>
+        </div>
+        <div class="stat-cell" id="s-jobs-section-failed" style="display:none">
+          <span class="stat-label">Jobs Failed</span>
+          <span class="stat-value red" id="s-jobs-failed">—</span>
+          <span class="stat-unit">total</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1311,6 +1385,31 @@ export function renderMonitorDashboard(): string {
     setText('s-scatter-active', String(s.threads.scatterPoolActive));
     setText('s-scatter-size', String(s.threads.scatterPoolSize));
 
+    if (s.migration) {
+      setText('s-migration-queue', fmtNum(s.migration.migrationQueueSize));
+      setText('s-migration-active', String(s.migration.activeMigrations));
+      setText('s-migration-completed', fmtNum(s.migration.completedMigrations));
+    }
+
+    if (s.operation) {
+      setText('s-op-queue', fmtNum(s.operation.queueSize));
+      setText('s-op-running', String(s.operation.runningCount));
+      setText('s-op-completed', fmtNum(s.operation.completedCount));
+    }
+
+    if (s.invocation) {
+      setText('s-inv-pending', fmtNum(s.invocation.pendingCount));
+      setText('s-inv-pct', fmt(s.invocation.usedPercentage, 2));
+      setText('s-inv-timeouts', fmtNum(s.invocation.timeoutFailures));
+      setText('s-inv-memberleft', fmtNum(s.invocation.memberLeftFailures));
+      // Mirror Hazelcast HealthMonitor warning thresholds visually
+      const invPctEl = el('s-inv-pct');
+      const invPendingEl = el('s-inv-pending');
+      const isWarn = s.invocation.usedPercentage > 70 || s.invocation.pendingCount > 1000;
+      if (invPctEl) invPctEl.className = 'stat-value' + (isWarn ? ' red' : ' emerald');
+      if (invPendingEl) invPendingEl.className = 'stat-value' + (isWarn ? ' red' : ' amber');
+    }
+
     if (s.blitz) {
       const section = el('blitz-section');
       if (section) section.style.display = '';
@@ -1319,6 +1418,20 @@ export function renderMonitorDashboard(): string {
       setText('blitz-pipelines', String(s.blitz.runningPipelines));
       setText('blitz-jetstream', s.blitz.jetStreamReady ? 'Ready' : 'Not ready');
       setText('blitz-state-meta', s.blitz.isReady ? 'ready' : 'not ready');
+
+      // Job lifecycle counters — show cells only when job coordinator is active
+      const jc = s.blitz.jobCounters;
+      const jobCellIds = ['s-jobs-section-submitted', 's-jobs-section-started', 's-jobs-section-success', 's-jobs-section-failed'];
+      jobCellIds.forEach(function(id) {
+        const node = el(id);
+        if (node) node.style.display = jc ? '' : 'none';
+      });
+      if (jc) {
+        setText('s-jobs-submitted', fmtNum(jc.submitted));
+        setText('s-jobs-started', fmtNum(jc.executionStarted));
+        setText('s-jobs-success', fmtNum(jc.completedSuccessfully));
+        setText('s-jobs-failed', fmtNum(jc.completedWithFailure));
+      }
     }
   }
 
@@ -1352,6 +1465,20 @@ export function renderMonitorDashboard(): string {
       { label: 'Peers', unit: '', getValue: function(s) { return String(s.transport.peerCount); } },
       { label: 'Scatter Active', unit: '', getValue: function(s) { return String(s.threads.scatterPoolActive); } },
       { label: 'Scatter Pool', unit: '', getValue: function(s) { return String(s.threads.scatterPoolSize); } },
+      { label: 'Migration Queue', unit: '', getValue: function(s) { return s.migration ? fmtNum(s.migration.migrationQueueSize) : '—'; } },
+      { label: 'Active Migrations', unit: '', getValue: function(s) { return s.migration ? String(s.migration.activeMigrations) : '—'; } },
+      { label: 'Completed Migrations', unit: '', getValue: function(s) { return s.migration ? fmtNum(s.migration.completedMigrations) : '—'; } },
+      { label: 'Op Queue Size', unit: '', getValue: function(s) { return s.operation ? fmtNum(s.operation.queueSize) : '—'; } },
+      { label: 'Op Running', unit: '', getValue: function(s) { return s.operation ? String(s.operation.runningCount) : '—'; } },
+      { label: 'Op Completed', unit: '', getValue: function(s) { return s.operation ? fmtNum(s.operation.completedCount) : '—'; } },
+      { label: 'Pending Invocations', unit: '', getValue: function(s) { return s.invocation ? fmtNum(s.invocation.pendingCount) : '—'; } },
+      { label: 'Invocation Capacity %', unit: '%', getValue: function(s) { return s.invocation ? fmt(s.invocation.usedPercentage, 2) : '—'; } },
+      { label: 'Inv Timeouts', unit: '', getValue: function(s) { return s.invocation ? fmtNum(s.invocation.timeoutFailures) : '—'; } },
+      { label: 'Inv Member Left', unit: '', getValue: function(s) { return s.invocation ? fmtNum(s.invocation.memberLeftFailures) : '—'; } },
+      { label: 'Jobs Submitted', unit: '', getValue: function(s) { return s.blitz && s.blitz.jobCounters ? fmtNum(s.blitz.jobCounters.submitted) : '—'; } },
+      { label: 'Executions Started', unit: '', getValue: function(s) { return s.blitz && s.blitz.jobCounters ? fmtNum(s.blitz.jobCounters.executionStarted) : '—'; } },
+      { label: 'Jobs Succeeded', unit: '', getValue: function(s) { return s.blitz && s.blitz.jobCounters ? fmtNum(s.blitz.jobCounters.completedSuccessfully) : '—'; } },
+      { label: 'Jobs Failed', unit: '', getValue: function(s) { return s.blitz && s.blitz.jobCounters ? fmtNum(s.blitz.jobCounters.completedWithFailure) : '—'; } },
     ];
 
     const nodeHeaders = connectedNodes.map(function(url) {

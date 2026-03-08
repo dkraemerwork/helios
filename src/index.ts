@@ -17,8 +17,10 @@ export { Helios } from "@zenystx/helios-core/Helios";
 export { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
 export type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 export { loadConfig } from "@zenystx/helios-core/config/ConfigLoader";
+export { ConfigValidationError, validateClientConfig, validateHeliosConfig } from "@zenystx/helios-core/config/ConfigValidator";
 export { EvictionConfig } from "@zenystx/helios-core/config/EvictionConfig";
 export { EvictionPolicy } from "@zenystx/helios-core/config/EvictionPolicy";
+export * as HazelcastDefaults from "@zenystx/helios-core/config/HazelcastDefaults";
 export { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 export { InMemoryFormat } from "@zenystx/helios-core/config/InMemoryFormat";
 export { JoinConfig } from "@zenystx/helios-core/config/JoinConfig";
@@ -155,6 +157,28 @@ export { Version } from "@zenystx/helios-core/version/Version";
 // ── Remote Client ────────────────────────────────────────────────────────────
 export { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
 export { DEFERRED_CLIENT_FEATURES, HeliosClient } from "@zenystx/helios-core/client/HeliosClient";
+
+// ── CP Subsystem ─────────────────────────────────────────────────────────────
+export { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
+export type { CpCommand, CpGroupState, CpSession, RaftLogEntry } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
+export { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongService";
+export { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
+export { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
+export { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
+
+// ── CRDT ──────────────────────────────────────────────────────────────────────
+export { PNCounterService } from "@zenystx/helios-core/crdt/impl/PNCounterService";
+export type { PNCounterVectorState, ReplicaTimestampVector } from "@zenystx/helios-core/crdt/impl/PNCounterService";
+
+// ── Flake ID Generator ────────────────────────────────────────────────────────
+export { FlakeIdGeneratorService } from "@zenystx/helios-core/flakeid/impl/FlakeIdGeneratorService";
+export type { FlakeIdBatch, FlakeIdGeneratorConfig } from "@zenystx/helios-core/flakeid/impl/FlakeIdGeneratorService";
+
+// ── Cardinality Estimator ─────────────────────────────────────────────────────
+export { DistributedCardinalityEstimatorService } from "@zenystx/helios-core/cardinality/impl/DistributedCardinalityEstimatorService";
+export type { HllSnapshot } from "@zenystx/helios-core/cardinality/impl/DistributedCardinalityEstimatorService";
+export { HyperLogLogImpl } from "@zenystx/helios-core/cardinality/impl/HyperLogLogImpl";
+export type { HyperLogLog } from "@zenystx/helios-core/cardinality/HyperLogLog";
 
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";

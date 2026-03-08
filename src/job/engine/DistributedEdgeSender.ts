@@ -44,6 +44,8 @@ export class DistributedEdgeSender {
     private _running = false;
     private _loopPromise: Promise<void> | null = null;
     private _roundRobinIndex = 0;
+    private _itemsOut = 0;
+    private _bytesOut = 0;
 
     constructor(config: DistributedEdgeSenderConfig) {
         this._nc = config.nc;
@@ -60,6 +62,14 @@ export class DistributedEdgeSender {
 
     get isJetStream(): boolean {
         return this._isJetStream;
+    }
+
+    get itemsOut(): number {
+        return this._itemsOut;
+    }
+
+    get bytesOut(): number {
+        return this._bytesOut;
     }
 
     start(): void {
@@ -119,6 +129,9 @@ export class DistributedEdgeSender {
                 this._nc.publish(subject, payload, { headers: hdrs });
             }
         }
+        // Barriers count as one logical item out (sent to all members)
+        this._itemsOut++;
+        this._bytesOut += payload.byteLength;
     }
 
     private async _publishData(item: ProcessorItem): Promise<void> {
@@ -130,6 +143,8 @@ export class DistributedEdgeSender {
         } else {
             this._nc.publish(subject, payload);
         }
+        this._itemsOut++;
+        this._bytesOut += payload.byteLength;
     }
 
     private _routeSubject(item: ProcessorItem): string {

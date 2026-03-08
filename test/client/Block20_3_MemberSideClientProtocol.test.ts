@@ -56,6 +56,38 @@ function deserializeClientMessage(data: Buffer): ClientMessage {
     return reader.getClientMessage();
 }
 
+function buildOpcodeMessage(messageType: number, correlationId: number): ClientMessage {
+    const msg = ClientMessage.createForEncode();
+    const frame = Buffer.allocUnsafe(16);
+    frame.fill(0);
+    frame.writeUInt32LE(messageType, ClientMessage.TYPE_FIELD_OFFSET);
+    msg.add(new ClientMessageFrame(frame));
+    msg.setCorrelationId(correlationId);
+    msg.setPartitionId(-1);
+    msg.setFinal();
+    return msg;
+}
+
+async function waitForReceivedBufferCount(
+    receivedBuffers: Buffer[],
+    expectedCount: number,
+    timeoutMs = 500,
+): Promise<void> {
+    await Promise.race([
+        new Promise<void>((resolve) => {
+            const interval = setInterval(() => {
+                if (receivedBuffers.length >= expectedCount) {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 10);
+        }),
+        Bun.sleep(timeoutMs).then(() => {
+            throw new Error(`expected ${expectedCount} received buffer(s)`);
+        }),
+    ]);
+}
+
 /** Connect a raw TCP socket, send auth, and return the connection + parsed auth response. */
 async function connectAndAuth(
     port: number,
@@ -68,10 +100,15 @@ async function connectAndAuth(
     socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
     response: ReturnType<typeof ClientAuthenticationCodec.decodeResponse>;
     receivedBuffers: Buffer[];
+    waitForClose: Promise<void>;
 }> {
     const receivedBuffers: Buffer[] = [];
     let resolveAuth!: () => void;
     const authDone = new Promise<void>((r) => { resolveAuth = r; });
+    let resolveClose!: () => void;
+    const waitForClose = new Promise<void>((resolve) => {
+        resolveClose = resolve;
+    });
 
     const socket = await Bun.connect({
         hostname: "127.0.0.1",
@@ -82,7 +119,9 @@ async function connectAndAuth(
                 resolveAuth();
             },
             open() {},
-            close() {},
+            close() {
+                resolveClose();
+            },
             error() {},
         },
     });
@@ -110,7 +149,70 @@ async function connectAndAuth(
     const responseMsg = deserializeClientMessage(combined);
     const response = ClientAuthenticationCodec.decodeResponse(responseMsg);
 
-    return { socket: socket as any, response, receivedBuffers };
+    return { socket: socket as any, response, receivedBuffers, waitForClose };
+}
+
+async function openRawSocket(port: number): Promise<{
+    socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
+    receivedBuffers: Buffer[];
+    waitForClose: Promise<void>;
+}> {
+    const receivedBuffers: Buffer[] = [];
+    let resolveClose!: () => void;
+    const waitForClose = new Promise<void>((resolve) => {
+        resolveClose = resolve;
+    });
+
+    const socket = await Bun.connect({
+        hostname: "127.0.0.1",
+        port,
+        socket: {
+            data(_socket, data) {
+                receivedBuffers.push(Buffer.from(data));
+            },
+            open() {},
+            close() {
+                resolveClose();
+            },
+            error() {},
+        },
+    });
+
+    return { socket: socket as any, receivedBuffers, waitForClose };
+}
+
+async function openAuthenticatedRawSocket(port: number, clusterName = "dev"): Promise<{
+    socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
+    receivedBuffers: Buffer[];
+    waitForClose: Promise<void>;
+}> {
+    const connection = await openRawSocket(port);
+    const authReq = ClientAuthenticationCodec.encodeRequest(
+        clusterName,
+        null,
+        null,
+        null,
+        "BUN",
+        1,
+        "1.0.0",
+        "test-client",
+        [],
+    );
+    authReq.setCorrelationId(1);
+    authReq.setPartitionId(-1);
+    connection.socket.write(serializeClientMessage(authReq));
+
+    await new Promise<void>((resolve) => {
+        const interval = setInterval(() => {
+            if (connection.receivedBuffers.length > 0) {
+                clearInterval(interval);
+                resolve();
+            }
+        }, 10);
+    });
+
+    connection.receivedBuffers.length = 0;
+    return connection;
 }
 
 // ── 1. ClientProtocolServer starts on a dedicated port ──────────────────────
@@ -251,9 +353,15 @@ describe("authentication", () => {
         server = new ClientProtocolServer({ clusterName: "my-cluster", port: 0 });
         await server.start();
 
-        const { response, socket } = await connectAndAuth(server.getPort(), "wrong-cluster");
+        const { response, waitForClose } = await connectAndAuth(server.getPort(), "wrong-cluster");
         expect(response.status).toBe(AuthenticationStatus.CREDENTIALS_FAILED.getId());
-        socket.end();
+        await Promise.race([
+            waitForClose,
+            Bun.sleep(500).then(() => {
+                throw new Error("expected auth rejection connection to close");
+            }),
+        ]);
+        expect(server.getSessionRegistry().getSessionCount()).toBe(0);
     });
 
     test("auth with wrong username/password is rejected when server auth is configured", async () => {
@@ -270,9 +378,22 @@ describe("authentication", () => {
         });
         await server.start();
 
-        const { response, socket } = await connectAndAuth(server.getPort(), "dev", "test-client", null, "admin", "wrong");
+        const { response, waitForClose } = await connectAndAuth(
+            server.getPort(),
+            "dev",
+            "test-client",
+            null,
+            "admin",
+            "wrong",
+        );
         expect(response.status).toBe(AuthenticationStatus.CREDENTIALS_FAILED.getId());
-        socket.end();
+        await Promise.race([
+            waitForClose,
+            Bun.sleep(500).then(() => {
+                throw new Error("expected auth rejection connection to close");
+            }),
+        ]);
+        expect(server.getSessionRegistry().getSessionCount()).toBe(0);
     });
 
     test("auth with matching username/password succeeds when server auth is configured", async () => {
@@ -292,6 +413,53 @@ describe("authentication", () => {
         const { response, socket } = await connectAndAuth(server.getPort(), "dev", "test-client", null, "admin", "secret");
         expect(response.status).toBe(AuthenticationStatus.AUTHENTICATED.getId());
         socket.end();
+    });
+
+    test("rejects repeated auth on an already-authenticated session and closes the connection", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+
+        const server = new ClientProtocolServer({ clusterName: "dev", port: 0 });
+        await server.start();
+
+        try {
+            const { socket, receivedBuffers, waitForClose } = await openAuthenticatedRawSocket(server.getPort());
+            expect(server.getSessionRegistry().getSessionCount()).toBe(1);
+
+            const reauthReq = ClientAuthenticationCodec.encodeRequest(
+                "dev",
+                null,
+                null,
+                crypto.randomUUID(),
+                "BUN",
+                1,
+                "1.0.0",
+                "reauth-client",
+                [],
+            );
+            reauthReq.setCorrelationId(2);
+            reauthReq.setPartitionId(-1);
+            socket.write(serializeClientMessage(reauthReq));
+
+            await waitForReceivedBufferCount(receivedBuffers, 1);
+
+            const responseMsg = deserializeClientMessage(Buffer.concat(receivedBuffers));
+            const response = ClientAuthenticationCodec.decodeResponse(responseMsg);
+            expect(response.status).toBe(AuthenticationStatus.NOT_ALLOWED_IN_CLUSTER.getId());
+            expect(responseMsg.getCorrelationId()).toBe(2);
+
+            await Promise.race([
+                waitForClose,
+                Bun.sleep(500).then(() => {
+                    throw new Error("expected repeated auth connection to close");
+                }),
+            ]);
+
+            expect(server.getSessionRegistry().getSessionCount()).toBe(0);
+        } finally {
+            await server.shutdown();
+        }
     });
 });
 
@@ -356,8 +524,9 @@ describe("request-dispatch registry", () => {
         );
 
         const dispatcher = new ClientMessageDispatcher();
+        dispatcher.allowBeforeAuthentication(0xAABB00);
         let handled = false;
-        dispatcher.register(0xAABB, async (_msg, _session) => {
+        dispatcher.register(0xAABB00, async (_msg, _session) => {
             handled = true;
             return ClientMessage.createForEncode();
         });
@@ -365,20 +534,44 @@ describe("request-dispatch registry", () => {
         const msg = ClientMessage.createForEncode();
         const frame = Buffer.allocUnsafe(16);
         frame.fill(0);
-        frame.writeUInt32LE(0xAABB, ClientMessage.TYPE_FIELD_OFFSET);
+        frame.writeUInt32LE(0xAABB00, ClientMessage.TYPE_FIELD_OFFSET);
         msg.add(new ClientMessageFrame(frame));
         msg.setFinal();
 
-        await dispatcher.dispatch(msg, {} as any);
+        await dispatcher.dispatch(msg, { isAuthenticated: () => false } as any);
         expect(handled).toBe(true);
     });
-});
 
-// ── 11. Unknown message type returns error ──────────────────────────────────
+    test("blocks non-auth message types before session authentication", async () => {
+        const {
+            ClientAuthenticationRequiredError,
+            ClientMessageDispatcher,
+        } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher"
+        );
 
-describe("unknown message type", () => {
-    test("returns error response for unknown message type", async () => {
-        const { ClientMessageDispatcher } = await import(
+        const dispatcher = new ClientMessageDispatcher();
+        dispatcher.register(0xAABB00, async () => {
+            throw new Error("handler should not execute");
+        });
+
+        const msg = ClientMessage.createForEncode();
+        const frame = Buffer.allocUnsafe(16);
+        frame.fill(0);
+        frame.writeUInt32LE(0xAABB00, ClientMessage.TYPE_FIELD_OFFSET);
+        msg.add(new ClientMessageFrame(frame));
+        msg.setFinal();
+
+        await expect(
+            dispatcher.dispatch(msg, { isAuthenticated: () => false } as any),
+        ).rejects.toBeInstanceOf(ClientAuthenticationRequiredError);
+    });
+
+    test("rejects illegal non-request message types", async () => {
+        const {
+            ClientMessageDispatcher,
+            ClientProtocolOpcodeError,
+        } = await import(
             "@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher"
         );
 
@@ -386,12 +579,153 @@ describe("unknown message type", () => {
         const msg = ClientMessage.createForEncode();
         const frame = Buffer.allocUnsafe(16);
         frame.fill(0);
-        frame.writeUInt32LE(0xFFFF, ClientMessage.TYPE_FIELD_OFFSET);
+        frame.writeUInt32LE(MapPutCodec.RESPONSE_MESSAGE_TYPE, ClientMessage.TYPE_FIELD_OFFSET);
         msg.add(new ClientMessageFrame(frame));
         msg.setFinal();
 
-        const result = await dispatcher.dispatch(msg, {} as any);
-        expect(result).toBeNull();
+        await expect(
+            dispatcher.dispatch(msg, { isAuthenticated: () => true } as any),
+        ).rejects.toMatchObject({
+            messageType: MapPutCodec.RESPONSE_MESSAGE_TYPE,
+            reason: "illegal",
+        } satisfies Partial<InstanceType<typeof ClientProtocolOpcodeError>>);
+    });
+});
+
+// ── 11. Unknown message type fails closed ───────────────────────────────────
+
+describe("unknown message type", () => {
+    test("dispatcher rejects unknown request message type", async () => {
+        const {
+            ClientMessageDispatcher,
+            ClientProtocolOpcodeError,
+        } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher"
+        );
+
+        const dispatcher = new ClientMessageDispatcher();
+        const msg = ClientMessage.createForEncode();
+        const frame = Buffer.allocUnsafe(16);
+        frame.fill(0);
+        frame.writeUInt32LE(0x00ff00, ClientMessage.TYPE_FIELD_OFFSET);
+        msg.add(new ClientMessageFrame(frame));
+        msg.setFinal();
+
+        await expect(
+            dispatcher.dispatch(msg, { isAuthenticated: () => true } as any),
+        ).rejects.toMatchObject({
+            messageType: 0x00ff00,
+            reason: "unknown",
+        } satisfies Partial<InstanceType<typeof ClientProtocolOpcodeError>>);
+    });
+
+    test("authenticated client is closed on unknown request opcode over the live path", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+        const server = new ClientProtocolServer({ clusterName: "dev", port: 0 });
+        await server.start();
+
+        try {
+            const { socket, receivedBuffers, waitForClose } = await openAuthenticatedRawSocket(server.getPort());
+            socket.write(serializeClientMessage(buildOpcodeMessage(0x00ff00, 9)));
+
+            await Promise.race([
+                waitForClose,
+                Bun.sleep(500).then(() => {
+                    throw new Error("expected unknown opcode connection to close");
+                }),
+            ]);
+
+            expect(receivedBuffers).toHaveLength(0);
+        } finally {
+            await server.shutdown();
+        }
+    });
+
+    test("authenticated client is closed on illegal opcode over the live path", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+        const server = new ClientProtocolServer({ clusterName: "dev", port: 0, enableMapHandler: true });
+        await server.start();
+
+        try {
+            const { socket, receivedBuffers, waitForClose } = await openAuthenticatedRawSocket(server.getPort());
+            socket.write(serializeClientMessage(buildOpcodeMessage(MapPutCodec.RESPONSE_MESSAGE_TYPE, 10)));
+
+            await Promise.race([
+                waitForClose,
+                Bun.sleep(500).then(() => {
+                    throw new Error("expected illegal opcode connection to close");
+                }),
+            ]);
+
+            expect(receivedBuffers).toHaveLength(0);
+        } finally {
+            await server.shutdown();
+        }
+    });
+
+    test("pipelined bad opcode does not allow later requests over the raw server path", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+        const { SerializationServiceImpl } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl"
+        );
+        const { SerializationConfig } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationConfig"
+        );
+
+        const mutations: Array<{ name: string; key: Buffer; value: Buffer }> = [];
+        const server = new ClientProtocolServer({
+            clusterName: "dev",
+            port: 0,
+            enableMapHandler: true,
+            onMapPut: (name, key, value) => {
+                mutations.push({ name, key: Buffer.from(key), value: Buffer.from(value) });
+                return null;
+            },
+        });
+        await server.start();
+
+        const ss = new SerializationServiceImpl(new SerializationConfig());
+
+        try {
+            const keyData = ss.toData("pipeKey")!;
+            const valueData = ss.toData("pipeValue")!;
+            const putReq = MapPutCodec.encodeRequest("pipeMap", keyData, valueData, 0n, -1n);
+            putReq.setCorrelationId(42);
+            putReq.setPartitionId(0);
+            const putBytes = serializeClientMessage(putReq);
+
+            for (const { name, messageType } of [
+                { name: "unknown-opcode", messageType: 0x00ff00 },
+                { name: "illegal-opcode", messageType: MapPutCodec.RESPONSE_MESSAGE_TYPE },
+            ]) {
+                mutations.length = 0;
+                const { socket, receivedBuffers, waitForClose } = await openAuthenticatedRawSocket(server.getPort());
+                socket.write(Buffer.concat([
+                    serializeClientMessage(buildOpcodeMessage(messageType, 41)),
+                    putBytes,
+                ]));
+
+                await Promise.race([
+                    waitForClose,
+                    Bun.sleep(500).then(() => {
+                        throw new Error(`expected ${name} connection to close`);
+                    }),
+                ]);
+
+                expect(receivedBuffers).toHaveLength(0);
+                expect(mutations).toHaveLength(0);
+                socket.end();
+            }
+        } finally {
+            ss.destroy();
+            await server.shutdown();
+        }
     });
 });
 
@@ -626,6 +960,46 @@ describe("MapPut dispatch", () => {
         socket.end();
         ss.destroy();
     });
+
+    test("rejects MapPut before auth over the live client protocol path", async () => {
+        const { ClientProtocolServer } = await import(
+            "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer"
+        );
+        server = new ClientProtocolServer({
+            clusterName: "dev",
+            port: 0,
+            enableMapHandler: true,
+        });
+        await server.start();
+
+        const { socket, receivedBuffers, waitForClose } = await openRawSocket(server.getPort());
+        const { SerializationServiceImpl } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl"
+        );
+        const { SerializationConfig } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationConfig"
+        );
+        const ss = new SerializationServiceImpl(new SerializationConfig());
+        const keyData = ss.toData("myKey")!;
+        const valueData = ss.toData("myValue")!;
+
+        const putReq = MapPutCodec.encodeRequest("testMap", keyData, valueData, 0n, -1n);
+        putReq.setCorrelationId(42);
+        putReq.setPartitionId(0);
+        socket.write(serializeClientMessage(putReq));
+
+        await Promise.race([
+            waitForClose,
+            Bun.sleep(500).then(() => {
+                throw new Error("expected unauthenticated connection to close");
+            }),
+        ]);
+
+        expect(receivedBuffers).toHaveLength(0);
+        expect(server.getSessionRegistry().getSessionCount()).toBe(0);
+        socket.end();
+        ss.destroy();
+    });
 });
 
 // ── 19. HeliosInstanceImpl integration ──────────────────────────────────────
@@ -769,5 +1143,158 @@ describe("E2E verification", () => {
         socket2.end();
         ss.destroy();
         instance.shutdown();
+    });
+
+    test("HeliosInstanceImpl blocks pre-auth MapPut over the real request path", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import(
+            "@zenystx/helios-core/config/HeliosConfig"
+        );
+        const { SerializationServiceImpl } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl"
+        );
+        const { SerializationConfig } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationConfig"
+        );
+
+        const config = new HeliosConfig("guard-cluster");
+        config.getNetworkConfig().setClientProtocolPort(0);
+        const instance = new HeliosInstanceImpl(config);
+        await Bun.sleep(50);
+
+        const ss = new SerializationServiceImpl(new SerializationConfig());
+        const keyData = ss.toData("guardKey")!;
+        const valueData = ss.toData("guardValue")!;
+        const putReq = MapPutCodec.encodeRequest("guardMap", keyData, valueData, 0n, -1n);
+        putReq.setCorrelationId(7);
+        putReq.setPartitionId(0);
+
+        const { socket, receivedBuffers, waitForClose } = await openRawSocket(instance.getClientProtocolPort());
+        socket.write(serializeClientMessage(putReq));
+
+        await Promise.race([
+            waitForClose,
+            Bun.sleep(500).then(() => {
+                throw new Error("expected unauthenticated connection to close");
+            }),
+        ]);
+
+        expect(receivedBuffers).toHaveLength(0);
+        expect(await instance.getMap<string, string>("guardMap").get("guardKey")).toBeNull();
+
+        socket.end();
+        ss.destroy();
+        instance.shutdown();
+    });
+
+    test("HeliosInstanceImpl rejects repeated auth over the real request path", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import(
+            "@zenystx/helios-core/config/HeliosConfig"
+        );
+
+        const config = new HeliosConfig("reauth-guard-cluster");
+        config.getNetworkConfig().setClientProtocolPort(0);
+        const instance = new HeliosInstanceImpl(config);
+        await Bun.sleep(50);
+
+        const { socket, receivedBuffers, waitForClose } = await openAuthenticatedRawSocket(
+            instance.getClientProtocolPort(),
+            "reauth-guard-cluster",
+        );
+
+        const reauthReq = ClientAuthenticationCodec.encodeRequest(
+            "reauth-guard-cluster",
+            null,
+            null,
+            crypto.randomUUID(),
+            "BUN",
+            1,
+            "1.0.0",
+            "reauth-client",
+            [],
+        );
+        reauthReq.setCorrelationId(3);
+        reauthReq.setPartitionId(-1);
+        socket.write(serializeClientMessage(reauthReq));
+
+        await waitForReceivedBufferCount(receivedBuffers, 1);
+
+        const responseMsg = deserializeClientMessage(Buffer.concat(receivedBuffers));
+        const response = ClientAuthenticationCodec.decodeResponse(responseMsg);
+        expect(response.status).toBe(AuthenticationStatus.NOT_ALLOWED_IN_CLUSTER.getId());
+        expect(responseMsg.getCorrelationId()).toBe(3);
+
+        await Promise.race([
+            waitForClose,
+            Bun.sleep(500).then(() => {
+                throw new Error("expected repeated auth connection to close");
+            }),
+        ]);
+
+        socket.end();
+        instance.shutdown();
+    });
+
+    test("HeliosInstanceImpl drops pipelined bad opcode before later MapPut executes", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import(
+            "@zenystx/helios-core/config/HeliosConfig"
+        );
+        const { SerializationServiceImpl } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl"
+        );
+        const { SerializationConfig } = await import(
+            "@zenystx/helios-core/internal/serialization/impl/SerializationConfig"
+        );
+
+        const config = new HeliosConfig("pipe-guard-cluster");
+        config.getNetworkConfig().setClientProtocolPort(0);
+        const instance = new HeliosInstanceImpl(config);
+        await Bun.sleep(50);
+
+        const ss = new SerializationServiceImpl(new SerializationConfig());
+
+        try {
+            const keyData = ss.toData("pipeGuardKey")!;
+            const valueData = ss.toData("pipeGuardValue")!;
+            const putReq = MapPutCodec.encodeRequest("pipeGuardMap", keyData, valueData, 0n, -1n);
+            putReq.setCorrelationId(78);
+            putReq.setPartitionId(0);
+            const putBytes = serializeClientMessage(putReq);
+
+            for (const { name, messageType } of [
+                { name: "unknown-opcode", messageType: 0x00ff00 },
+                { name: "illegal-opcode", messageType: MapPutCodec.RESPONSE_MESSAGE_TYPE },
+            ]) {
+                const { socket, receivedBuffers, waitForClose } = await openAuthenticatedRawSocket(
+                    instance.getClientProtocolPort(),
+                );
+                socket.write(Buffer.concat([
+                    serializeClientMessage(buildOpcodeMessage(messageType, 77)),
+                    putBytes,
+                ]));
+
+                await Promise.race([
+                    waitForClose,
+                    Bun.sleep(500).then(() => {
+                        throw new Error(`expected ${name} connection to close`);
+                    }),
+                ]);
+
+                expect(receivedBuffers).toHaveLength(0);
+                expect(await instance.getMap<string, string>("pipeGuardMap").get("pipeGuardKey")).toBeNull();
+                socket.end();
+            }
+        } finally {
+            ss.destroy();
+            instance.shutdown();
+        }
     });
 });

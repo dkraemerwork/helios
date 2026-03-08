@@ -1,15 +1,20 @@
-import { InterfacesConfig } from '@zenystx/helios-core/config/InterfacesConfig';
-import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig';
-import { MemcacheProtocolConfig } from '@zenystx/helios-core/config/MemcacheProtocolConfig';
-import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig';
-import { TcpTransportScatterConfig } from '@zenystx/helios-core/config/TcpTransportScatterConfig';
+import {
+    DEFAULT_PORT,
+    DEFAULT_PORT_COUNT,
+} from '@zenystx/helios-core/config/HazelcastDefaults.js';
+import { InterfacesConfig } from '@zenystx/helios-core/config/InterfacesConfig.js';
+import { JoinConfig } from '@zenystx/helios-core/config/JoinConfig.js';
+import { MemcacheProtocolConfig } from '@zenystx/helios-core/config/MemcacheProtocolConfig.js';
+import { RestApiConfig } from '@zenystx/helios-core/config/RestApiConfig.js';
+import { TcpTransportScatterConfig } from '@zenystx/helios-core/config/TcpTransportScatterConfig.js';
 
 export class NetworkConfig {
-    static readonly DEFAULT_PORT = 5701;
+    /** @source {@code com.hazelcast.config.NetworkConfig.DEFAULT_PORT = 5701} */
+    static readonly DEFAULT_PORT = DEFAULT_PORT;
     static readonly PORT_MAX = 0xFFFF;
 
-    private _port: number = NetworkConfig.DEFAULT_PORT;
-    private _portCount: number = 100;
+    private _port: number = DEFAULT_PORT;
+    private _portCount: number = DEFAULT_PORT_COUNT;
     private _portAutoIncrement: boolean = true;
     private _reuseAddress: boolean = true;
     private _publicAddress: string | null = null;

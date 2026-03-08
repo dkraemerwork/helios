@@ -97,6 +97,7 @@ export class InvocationFuture<T> {
      * Use: const value = await future.get();
      */
     get(): Promise<T> {
+        void this._promise.catch(() => {});
         return this._promise;
     }
 

@@ -3,14 +3,15 @@
  *
  * Port of {@code com.hazelcast.client.impl.spi.impl.ClientInvocationServiceImpl}.
  */
-import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
-import type { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection";
-import type { ClientConnectionManager } from "@zenystx/helios-core/client/connection/ClientConnectionManager";
-import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientInvocation } from "@zenystx/helios-core/client/invocation/ClientInvocation";
-
-const DEFAULT_INVOCATION_TIMEOUT_MS = 120_000;
-const DEFAULT_RETRY_PAUSE_MS = 1_000;
+import type { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig.js";
+import type { ClientConnection } from "@zenystx/helios-core/client/connection/ClientConnection.js";
+import type { ClientConnectionManager } from "@zenystx/helios-core/client/connection/ClientConnectionManager.js";
+import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage.js";
+import { ClientInvocation } from "@zenystx/helios-core/client/invocation/ClientInvocation.js";
+import {
+    DEFAULT_INVOCATION_RETRY_PAUSE_MS,
+    DEFAULT_INVOCATION_TIMEOUT_MS,
+} from "@zenystx/helios-core/config/HazelcastDefaults.js";
 
 export class ClientInvocationService {
     private readonly _connectionManager: ClientConnectionManager;
@@ -24,7 +25,7 @@ export class ClientInvocationService {
         const timeout = config.getProperties().get("helios.client.invocation.timeout.seconds");
         this._invocationTimeoutMs = timeout ? parseInt(timeout, 10) * 1000 : DEFAULT_INVOCATION_TIMEOUT_MS;
         const retryPause = config.getProperties().get("helios.client.invocation.retry.pause.millis");
-        this._retryPauseMs = retryPause ? parseInt(retryPause, 10) : DEFAULT_RETRY_PAUSE_MS;
+        this._retryPauseMs = retryPause ? parseInt(retryPause, 10) : DEFAULT_INVOCATION_RETRY_PAUSE_MS;
     }
 
     start(): void {

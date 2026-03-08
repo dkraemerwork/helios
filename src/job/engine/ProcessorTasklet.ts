@@ -251,6 +251,10 @@ export class ProcessorTasklet {
       latencyP50Ms: this.latencyTracker.getP50(),
       latencyP99Ms: this.latencyTracker.getP99(),
       latencyMaxMs: this.latencyTracker.getMax(),
+      distributedItemsIn: 0,
+      distributedItemsOut: 0,
+      distributedBytesIn: 0,
+      distributedBytesOut: 0,
     };
   }
 

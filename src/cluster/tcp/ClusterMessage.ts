@@ -130,6 +130,8 @@ export interface OperationMsg {
 export interface OperationResponseMsg {
   readonly type: "OPERATION_RESPONSE";
   readonly callId: number;
+  readonly backupAcks: number;
+  readonly backupMemberIds: string[];
   readonly payload: unknown;
   readonly error: string | null;
 }
@@ -140,6 +142,10 @@ export interface BackupMsg {
   readonly callId: number;
   readonly partitionId: number;
   readonly replicaIndex: number;
+  readonly senderId: string;
+  readonly callerId: string;
+  readonly sync: boolean;
+  readonly replicaVersions: string[];
   readonly factoryId: number;
   readonly classId: number;
   readonly payload: Buffer;
@@ -149,6 +155,7 @@ export interface BackupMsg {
 export interface BackupAckMsg {
   readonly type: "BACKUP_ACK";
   readonly callId: number;
+  readonly senderId: string;
 }
 
 export interface RecoveryAntiEntropyMsg {
@@ -162,6 +169,7 @@ export interface RecoveryAntiEntropyMsg {
 
 export interface RecoverySyncRequestMsg {
   readonly type: "RECOVERY_SYNC_REQUEST";
+  readonly requestId: string;
   readonly requesterId: string;
   readonly partitionId: number;
   readonly replicaIndex: number;
@@ -176,8 +184,11 @@ export interface RecoverySyncNamespaceStateMsg {
 
 export interface RecoverySyncResponseMsg {
   readonly type: "RECOVERY_SYNC_RESPONSE";
+  readonly requestId: string;
   readonly partitionId: number;
   readonly replicaIndex: number;
+  readonly chunkIndex: number;
+  readonly chunkCount: number;
   readonly versions: string[];
   readonly namespaceVersions: Record<string, string[]>;
   readonly namespaceStates: readonly RecoverySyncNamespaceStateMsg[];
@@ -315,6 +326,172 @@ export interface ReliableTopicDestroyMsg {
   readonly topicName: string;
 }
 
+// ── Distributed List messages ─────────────────────────────────────────
+
+export interface ListRequestMsg {
+  readonly type: "LIST_REQUEST";
+  readonly requestId: string;
+  readonly sourceNodeId: string;
+  readonly listName: string;
+  readonly operation: string;
+  readonly index?: number;
+  readonly fromIndex?: number;
+  readonly toIndex?: number;
+  readonly data?: EncodedData;
+  readonly dataList?: EncodedData[];
+}
+
+export interface ListResponseMsg {
+  readonly type: "LIST_RESPONSE";
+  readonly requestId: string;
+  readonly success: boolean;
+  readonly resultType: "none" | "boolean" | "number" | "data" | "data-array";
+  readonly booleanResult?: boolean;
+  readonly numberResult?: number;
+  readonly data?: EncodedData;
+  readonly dataList?: EncodedData[];
+  readonly error?: string;
+}
+
+export interface ListStateSyncMsg {
+  readonly type: "LIST_STATE_SYNC";
+  readonly requestId: string | null;
+  readonly sourceNodeId: string;
+  readonly listName: string;
+  readonly version: number;
+  readonly items: EncodedData[];
+}
+
+export interface ListStateAckMsg {
+  readonly type: "LIST_STATE_ACK";
+  readonly requestId: string;
+  readonly listName: string;
+  readonly version: number;
+}
+
+// ── Distributed Set messages ──────────────────────────────────────────
+
+export interface SetRequestMsg {
+  readonly type: "SET_REQUEST";
+  readonly requestId: string;
+  readonly sourceNodeId: string;
+  readonly setName: string;
+  readonly operation: string;
+  readonly data?: EncodedData;
+  readonly dataList?: EncodedData[];
+}
+
+export interface SetResponseMsg {
+  readonly type: "SET_RESPONSE";
+  readonly requestId: string;
+  readonly success: boolean;
+  readonly resultType: "none" | "boolean" | "number" | "data-array";
+  readonly booleanResult?: boolean;
+  readonly numberResult?: number;
+  readonly dataList?: EncodedData[];
+  readonly error?: string;
+}
+
+export interface SetStateSyncMsg {
+  readonly type: "SET_STATE_SYNC";
+  readonly requestId: string | null;
+  readonly sourceNodeId: string;
+  readonly setName: string;
+  readonly version: number;
+  readonly items: EncodedData[];
+}
+
+export interface SetStateAckMsg {
+  readonly type: "SET_STATE_ACK";
+  readonly requestId: string;
+  readonly setName: string;
+  readonly version: number;
+}
+
+// ── Distributed MultiMap messages ─────────────────────────────────────
+
+export interface MultiMapRequestMsg {
+  readonly type: "MULTIMAP_REQUEST";
+  readonly requestId: string;
+  readonly sourceNodeId: string;
+  readonly mapName: string;
+  readonly operation: string;
+  readonly keyData?: EncodedData;
+  readonly valueData?: EncodedData;
+  readonly dataList?: EncodedData[];
+}
+
+export interface MultiMapResponseMsg {
+  readonly type: "MULTIMAP_RESPONSE";
+  readonly requestId: string;
+  readonly success: boolean;
+  readonly resultType: "none" | "boolean" | "number" | "data-array" | "entry-set";
+  readonly booleanResult?: boolean;
+  readonly numberResult?: number;
+  readonly dataList?: EncodedData[];
+  readonly entrySet?: Array<[EncodedData, EncodedData]>;
+  readonly error?: string;
+}
+
+export interface MultiMapStateSyncMsg {
+  readonly type: "MULTIMAP_STATE_SYNC";
+  readonly requestId: string | null;
+  readonly sourceNodeId: string;
+  readonly mapName: string;
+  readonly version: number;
+  readonly entries: Array<[EncodedData, EncodedData[]]>;
+  readonly valueCollectionType: "SET" | "LIST";
+}
+
+export interface MultiMapStateAckMsg {
+  readonly type: "MULTIMAP_STATE_ACK";
+  readonly requestId: string;
+  readonly mapName: string;
+  readonly version: number;
+}
+
+// ── Distributed ReplicatedMap messages ───────────────────────────────
+
+export interface ReplicatedMapPutMsg {
+  readonly type: "REPLICATED_MAP_PUT";
+  readonly mapName: string;
+  readonly version: number;
+  readonly sourceNodeId: string;
+  readonly keyData: EncodedData;
+  readonly valueData: EncodedData;
+}
+
+export interface ReplicatedMapRemoveMsg {
+  readonly type: "REPLICATED_MAP_REMOVE";
+  readonly mapName: string;
+  readonly version: number;
+  readonly sourceNodeId: string;
+  readonly keyData: EncodedData;
+}
+
+export interface ReplicatedMapClearMsg {
+  readonly type: "REPLICATED_MAP_CLEAR";
+  readonly mapName: string;
+  readonly version: number;
+  readonly sourceNodeId: string;
+}
+
+export interface ReplicatedMapStateSyncMsg {
+  readonly type: "REPLICATED_MAP_STATE_SYNC";
+  readonly requestId: string | null;
+  readonly sourceNodeId: string;
+  readonly mapName: string;
+  readonly version: number;
+  readonly entries: Array<[EncodedData, EncodedData]>;
+}
+
+export interface ReplicatedMapStateAckMsg {
+  readonly type: "REPLICATED_MAP_STATE_ACK";
+  readonly requestId: string;
+  readonly mapName: string;
+  readonly version: number;
+}
+
 // ── Blitz topology protocol messages ─────────────────────────────────
 
 export interface BlitzNodeRegisterMsg {
@@ -386,6 +563,23 @@ export type ClusterMessage =
   | ReliableTopicBackupMsg
   | ReliableTopicBackupAckMsg
   | ReliableTopicDestroyMsg
+  | ListRequestMsg
+  | ListResponseMsg
+  | ListStateSyncMsg
+  | ListStateAckMsg
+  | SetRequestMsg
+  | SetResponseMsg
+  | SetStateSyncMsg
+  | SetStateAckMsg
+  | MultiMapRequestMsg
+  | MultiMapResponseMsg
+  | MultiMapStateSyncMsg
+  | MultiMapStateAckMsg
+  | ReplicatedMapPutMsg
+  | ReplicatedMapRemoveMsg
+  | ReplicatedMapClearMsg
+  | ReplicatedMapStateSyncMsg
+  | ReplicatedMapStateAckMsg
   | BlitzNodeRegisterMsg
   | BlitzNodeRemoveMsg
   | BlitzTopologyRequestMsg

@@ -9,15 +9,16 @@
  *
  * Static methods provide named-client registry and shutdown-all management.
  */
-import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
-import { ClientConnectionManager } from "@zenystx/helios-core/client/connection/ClientConnectionManager";
-import { ClientLifecycleService } from "@zenystx/helios-core/client/impl/lifecycle/ClientLifecycleService";
-import { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager";
-import { createClientSerializationService } from "@zenystx/helios-core/client/impl/serialization/ClientSerializationService";
-import { ClientInvocationService } from "@zenystx/helios-core/client/invocation/ClientInvocationService";
-import { ProxyManager } from "@zenystx/helios-core/client/proxy/ProxyManager";
-import { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService";
-import { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService";
+import { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig.js";
+import { ClientConnectionManager } from "@zenystx/helios-core/client/connection/ClientConnectionManager.js";
+import { ClientLifecycleService } from "@zenystx/helios-core/client/impl/lifecycle/ClientLifecycleService.js";
+import { ClientNearCacheManager } from "@zenystx/helios-core/client/impl/nearcache/ClientNearCacheManager.js";
+import { createClientSerializationService } from "@zenystx/helios-core/client/impl/serialization/ClientSerializationService.js";
+import { ClientInvocationService } from "@zenystx/helios-core/client/invocation/ClientInvocationService.js";
+import { ProxyManager } from "@zenystx/helios-core/client/proxy/ProxyManager.js";
+import { ClientClusterService } from "@zenystx/helios-core/client/spi/ClientClusterService.js";
+import { ClientPartitionService } from "@zenystx/helios-core/client/spi/ClientPartitionService.js";
+import { validateClientConfig } from "@zenystx/helios-core/config/ConfigValidator.js";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import type { Member } from "@zenystx/helios-core/cluster/Member";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
@@ -161,6 +162,10 @@ export class HeliosClient implements HeliosInstance {
      * service so proxy operations route through real network calls.
      */
     async connect(): Promise<void> {
+        // Validate configuration eagerly — fail fast with a clear error message
+        // before any network activity is attempted.
+        validateClientConfig(this._config);
+
         const connMgr = new ClientConnectionManager(this._config);
         connMgr.setClusterService(this._clusterService);
         connMgr.setPartitionService(this._partitionService);

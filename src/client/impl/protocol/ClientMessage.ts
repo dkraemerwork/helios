@@ -63,16 +63,17 @@ export class ClientMessageForwardFrameIterator {
 // ─── ClientMessage ────────────────────────────────────────────────────────────
 
 export class ClientMessage {
-    // Frame flags
-    static readonly IS_FINAL_FLAG: number = 1 << 15;             // 0x8000
-    static readonly BEGIN_FRAGMENT_FLAG: number = 1 << 14;       // 0x4000
-    static readonly END_FRAGMENT_FLAG: number = 1 << 13;         // 0x2000
-    static readonly BEGIN_DATA_STRUCTURE_FLAG: number = 1 << 0;  // 0x0001
-    static readonly END_DATA_STRUCTURE_FLAG: number = 1 << 1;    // 0x0002
-    static readonly IS_NULL_FLAG: number = 1 << 2;               // 0x0004
-    static readonly IS_EVENT_FLAG: number = 1 << 3;              // 0x0008
-    static readonly BACKUP_AWARE_FLAG: number = 1 << 4;          // 0x0010
-    static readonly BACKUP_EVENT_FLAG: number = 1 << 5;          // 0x0020
+    // Frame flags — must match official Hazelcast binary protocol spec:
+    // https://github.com/hazelcast/hazelcast-client-protocol
+    static readonly BEGIN_FRAGMENT_FLAG: number = 1 << 15;       // 0x8000
+    static readonly END_FRAGMENT_FLAG: number = 1 << 14;         // 0x4000
+    static readonly IS_FINAL_FLAG: number = 1 << 13;             // 0x2000
+    static readonly BEGIN_DATA_STRUCTURE_FLAG: number = 1 << 12;  // 0x1000
+    static readonly END_DATA_STRUCTURE_FLAG: number = 1 << 11;    // 0x0800
+    static readonly IS_NULL_FLAG: number = 1 << 10;               // 0x0400
+    static readonly IS_EVENT_FLAG: number = 1 << 9;               // 0x0200
+    static readonly BACKUP_AWARE_FLAG: number = 1 << 8;           // 0x0100
+    static readonly BACKUP_EVENT_FLAG: number = 1 << 7;           // 0x0080
 
     // Frame length+flags header size
     static readonly SIZE_OF_FRAME_LENGTH_AND_FLAGS: number = 6;  // 4 (length) + 2 (flags)

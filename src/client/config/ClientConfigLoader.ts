@@ -5,8 +5,8 @@
  *
  * Fails fast on unsupported config sections instead of silently accepting them.
  */
-import { ClientConfig } from '@zenystx/helios-core/client/config/ClientConfig';
-import type { ReconnectMode } from '@zenystx/helios-core/client/config/ClientConnectionStrategyConfig';
+import { ClientConfig } from '@zenystx/helios-core/client/config/ClientConfig.js';
+import type { ReconnectMode } from '@zenystx/helios-core/client/config/ClientConnectionStrategyConfig.js';
 
 const SUPPORTED_TOP_LEVEL_KEYS = new Set([
     'instance-name',
@@ -17,12 +17,14 @@ const SUPPORTED_TOP_LEVEL_KEYS = new Set([
     'serialization',
     'near-caches',
     'properties',
+    'labels',
 ]);
 
 const SUPPORTED_NETWORK_KEYS = new Set([
     'cluster-members',
     'connection-timeout',
     'redo-operation',
+    'smart-routing',
 ]);
 
 const SUPPORTED_CONNECTION_STRATEGY_KEYS = new Set([
@@ -118,6 +120,9 @@ export function parseRawClientConfig(raw: unknown): ClientConfig {
         if (typeof netObj['redo-operation'] === 'boolean') {
             net.setRedoOperation(netObj['redo-operation']);
         }
+        if (typeof netObj['smart-routing'] === 'boolean') {
+            net.setSmartRouting(netObj['smart-routing']);
+        }
     }
 
     // connection-strategy
@@ -171,6 +176,15 @@ export function parseRawClientConfig(raw: unknown): ClientConfig {
             }
             if (typeof retryObj['jitter'] === 'number') {
                 retry.setJitter(retryObj['jitter']);
+            }
+        }
+    }
+
+    // labels
+    if (Array.isArray(obj['labels'])) {
+        for (const label of obj['labels']) {
+            if (typeof label === 'string') {
+                config.addLabel(label);
             }
         }
     }

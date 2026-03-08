@@ -2,7 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { HeliosInstance } from '@zenystx/helios-core/core/HeliosInstance';
 import type { MetricsRegistry, SampleListener } from '@zenystx/helios-core/monitor/MetricsRegistry';
 import type { MetricsSample, MonitorPayload } from '@zenystx/helios-core/monitor/MetricsSample';
+import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 import { HELIOS_INSTANCE_TOKEN } from '../HeliosInstanceDefinition';
+
+type HeliosInstanceInternals = {
+    getMetricsRegistry(): MetricsRegistry | null;
+    getMonitorStateProvider(): MonitorStateProvider | null;
+};
 
 /**
  * HeliosMonitorService — NestJS injectable service for programmatic access
@@ -28,14 +34,15 @@ import { HELIOS_INSTANCE_TOKEN } from '../HeliosInstanceDefinition';
  */
 @Injectable()
 export class HeliosMonitorService {
-    private readonly _helios: HeliosInstance;
     private readonly _registry: MetricsRegistry | null;
+    private readonly _provider: MonitorStateProvider | null;
 
     constructor(@Inject(HELIOS_INSTANCE_TOKEN) helios: HeliosInstance) {
-        this._helios = helios;
-        // HeliosInstance exposes getMetricsRegistry() on the concrete impl;
+        // HeliosInstance exposes monitoring internals on the concrete impl;
         // cast through unknown to avoid a direct impl dependency.
-        this._registry = (helios as unknown as { getMetricsRegistry(): MetricsRegistry | null }).getMetricsRegistry();
+        const internals = helios as unknown as HeliosInstanceInternals;
+        this._registry = internals.getMetricsRegistry();
+        this._provider = internals.getMonitorStateProvider();
     }
 
     /** Whether the monitoring subsystem is active (i.e. enabled in config). */
@@ -60,31 +67,15 @@ export class HeliosMonitorService {
     }
 
     /**
-     * Builds a {@link MonitorPayload} snapshot combining available cluster state
-     * from the Helios instance with the current time-series samples from the registry.
+     * Builds a {@link MonitorPayload} snapshot with all cluster state fields
+     * fully populated via the MetricsRegistry and MonitorStateProvider.
      *
      * Returns `null` when monitoring is disabled — callers should guard on
      * {@link isEnabled()} or null-check the return value.
      */
     getPayload(): MonitorPayload | null {
-        if (!this._registry) return null;
-
-        const samples = [...this._registry.getSamples()];
-        const latest = this._registry.getLatest();
-
-        return {
-            instanceName: this._helios.getName(),
-            nodeState: '',
-            clusterState: '',
-            clusterSize: this._helios.getCluster().getMembers().length,
-            clusterSafe: false,
-            memberVersion: '',
-            partitionCount: 0,
-            members: [],
-            objects: { maps: [], queues: [], topics: [], executors: [] },
-            samples,
-            latest,
-        };
+        if (!this._registry || !this._provider) return null;
+        return this._registry.buildPayload(this._provider);
     }
 
     /**

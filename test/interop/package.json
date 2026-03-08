@@ -1,0 +1,28 @@
+{
+  "name": "@zenystx/helios-interop-tests",
+  "version": "1.0.0",
+  "description": "Official hazelcast-client interoperability tests for Helios",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test --timeout 60000 suites/",
+    "test:connection": "bun test --timeout 60000 suites/connection.test.ts",
+    "test:map": "bun test --timeout 60000 suites/map.test.ts",
+    "test:queue": "bun test --timeout 60000 suites/queue.test.ts",
+    "test:topic": "bun test --timeout 60000 suites/topic.test.ts",
+    "test:collections": "bun test --timeout 60000 suites/collections.test.ts",
+    "test:multimap": "bun test --timeout 60000 suites/multimap.test.ts",
+    "test:replicatedmap": "bun test --timeout 60000 suites/replicatedmap.test.ts",
+    "test:atomics": "bun test --timeout 60000 suites/atomics.test.ts",
+    "test:flakeid": "bun test --timeout 60000 suites/flakeid.test.ts",
+    "test:pncounter": "bun test --timeout 60000 suites/pncounter.test.ts",
+    "test:lifecycle": "bun test --timeout 60000 suites/lifecycle.test.ts",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "devDependencies": {
+    "hazelcast-client": "5.6.0",
+    "@types/bun": "latest",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

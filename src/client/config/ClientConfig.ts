@@ -5,12 +5,13 @@
  * instance name, network settings, connection strategy, security,
  * near-cache configs, and serialization config.
  */
-import { ClientConnectionStrategyConfig } from '@zenystx/helios-core/client/config/ClientConnectionStrategyConfig';
-import { ClientNetworkConfig } from '@zenystx/helios-core/client/config/ClientNetworkConfig';
-import { ClientSecurityConfig } from '@zenystx/helios-core/client/config/ClientSecurityConfig';
-import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
-import type { InstanceConfig } from '@zenystx/helios-core/core/InstanceConfig';
-import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { ClientConnectionStrategyConfig } from '@zenystx/helios-core/client/config/ClientConnectionStrategyConfig.js';
+import { ClientNetworkConfig } from '@zenystx/helios-core/client/config/ClientNetworkConfig.js';
+import { ClientSecurityConfig } from '@zenystx/helios-core/client/config/ClientSecurityConfig.js';
+import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig.js';
+import { DEFAULT_CLUSTER_NAME } from '@zenystx/helios-core/config/HazelcastDefaults.js';
+import type { InstanceConfig } from '@zenystx/helios-core/core/InstanceConfig.js';
+import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig.js';
 
 /**
  * Port of {@code com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher}.
@@ -64,7 +65,8 @@ function getMatchingPoint(pattern: string, itemName: string): number {
 
 export class ClientConfig implements InstanceConfig {
     private _name = "helios-client";
-    private _clusterName = "dev";
+    private _clusterName = DEFAULT_CLUSTER_NAME;
+    private readonly _labels = new Set<string>();
     private readonly _networkConfig = new ClientNetworkConfig();
     private readonly _connectionStrategyConfig = new ClientConnectionStrategyConfig();
     private readonly _securityConfig = new ClientSecurityConfig();
@@ -144,6 +146,33 @@ export class ClientConfig implements InstanceConfig {
         for (const [k, v] of map) {
             v.setName(k);
             this._nearCacheConfigMap.set(k, v);
+        }
+        return this;
+    }
+
+    /**
+     * Returns the set of client labels.  Labels are arbitrary string tags that
+     * are sent to the cluster during authentication and stored in the member's
+     * view of this client session.
+     *
+     * @source {@code com.hazelcast.client.config.ClientConfig.labels}
+     */
+    getLabels(): ReadonlySet<string> {
+        return this._labels;
+    }
+
+    addLabel(label: string): this {
+        if (!label || label.trim() === "") {
+            throw new Error("Client label must be a non-empty string");
+        }
+        this._labels.add(label);
+        return this;
+    }
+
+    setLabels(labels: Iterable<string>): this {
+        this._labels.clear();
+        for (const l of labels) {
+            this.addLabel(l);
         }
         return this;
     }

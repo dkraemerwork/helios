@@ -140,6 +140,10 @@ export class TcpClusterTransport {
         return this._peers.size;
     }
 
+    hasPeer(peerId: string): boolean {
+        return this._peers.has(peerId);
+    }
+
     /** The actual TCP port this server is bound to (useful when port 0 was requested). */
     boundPort(): number | null {
         return this._server?.port() ?? null;
