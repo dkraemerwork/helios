@@ -112,8 +112,8 @@ describe('Eventloop', () => {
         expect(received).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
 
-    // ── 4. bounded buffer: single oversized write rejected ─────────────────
-    test('bounded buffer: single write larger than limit returns false', async () => {
+    // ── 4. bounded buffer: oversized write goes directly to socket ──────────
+    test('bounded buffer: single write larger than limit is accepted (not rejected)', async () => {
         const srv = Eventloop.listen(0, '127.0.0.1', {});
         servers.push(srv);
 
@@ -122,13 +122,15 @@ describe('Eventloop', () => {
         });
         channels.push(ch);
 
-        // 200-byte write exceeds 100-byte limit immediately
+        // 200-byte write exceeds 100-byte limit — written directly to socket
+        // (oversized frames bypass the limit; Bun handles kernel-level buffering)
         const large = Buffer.alloc(200, 0x42);
-        expect(ch.write(large)).toBe(false);
+        expect(ch.write(large)).toBe(true);
+        expect(ch.queuedFrames()).toBe(0); // direct write, not queued
     });
 
-    // ── 5. bounded buffer: cumulative pressure ────────────────────────────
-    test('bounded buffer: cumulative writes rejected when limit crossed', async () => {
+    // ── 5. bounded buffer: writes queued when limit crossed ─────────────
+    test('bounded buffer: writes queued (not rejected) when limit crossed', async () => {
         const srv = Eventloop.listen(0, '127.0.0.1', {});
         servers.push(srv);
 
@@ -137,11 +139,13 @@ describe('Eventloop', () => {
         });
         channels.push(ch);
 
-        // First write fits (50 bytes pending)
+        // First write fits (50 bytes pending, written directly)
         expect(ch.write(Buffer.alloc(50, 0xaa))).toBe(true);
-        // Second write would bring total to 110 > 100 → reject
-        // (no await between writes, so drain cannot have fired)
-        expect(ch.write(Buffer.alloc(60, 0xbb))).toBe(false);
+        expect(ch.queuedFrames()).toBe(0);
+
+        // Second write would exceed limit → queued for drain, NOT rejected
+        expect(ch.write(Buffer.alloc(60, 0xbb))).toBe(true);
+        expect(ch.queuedFrames()).toBe(1);
     });
 
     // ── 6. write after close returns false ────────────────────────────────

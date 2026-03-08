@@ -56,7 +56,7 @@ export interface EventloopOptions {
     maxOutboundBytes?: number;
 }
 
-const DEFAULT_MAX_OUTBOUND = 256 * 1024;
+const DEFAULT_MAX_OUTBOUND = 4 * 1024 * 1024;
 
 // ─── EventloopChannel ─────────────────────────────────────────────────────────
 
@@ -109,8 +109,10 @@ export class EventloopChannel {
             return true;
         }
 
-        // Try direct write if under the outbound limit
-        if (this._pendingBytes + data.length <= this._maxOutbound) {
+        // Try direct write if under the outbound limit, or if the frame itself
+        // is larger than the limit (oversized frames go straight to the socket —
+        // Bun handles kernel-level buffering)
+        if (this._pendingBytes + data.length <= this._maxOutbound || data.length > this._maxOutbound) {
             this._pendingBytes += data.length;
             this._socket.write(data);
             this._bytesWritten += data.length;
@@ -166,12 +168,25 @@ export class EventloopChannel {
     /**
      * Flush queued frames to the socket until the outbound limit is hit again.
      * Remaining frames stay in the queue for the next drain cycle.
+     *
+     * Oversized frames (larger than maxOutbound) are written directly — Bun's
+     * socket handles kernel-level buffering for large writes.
      */
     private _flushQueue(): void {
         while (this._writeQueue.length > 0) {
             const frame = this._writeQueue[0];
+
+            // Oversized frame: always write it — the OS socket buffer will accept
+            // what it can and Bun will drain the rest internally
+            if (frame.length > this._maxOutbound) {
+                this._writeQueue.shift();
+                this._pendingBytes += frame.length;
+                this._socket.write(frame);
+                continue;
+            }
+
             if (this._pendingBytes + frame.length > this._maxOutbound) {
-                // Socket buffer would overflow — stop flushing, wait for next drain
+                // Would overflow — stop flushing, wait for next drain
                 break;
             }
             this._writeQueue.shift();
