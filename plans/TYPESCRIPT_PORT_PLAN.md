@@ -904,13 +904,13 @@ Depends on: Block 22.10 (migration).
 **Goal:** Add anti-entropy repair for scheduled task metadata between primary and replicas.
 
 **TODO — Block 22.11**:
-- [ ] Periodic anti-entropy: run on a configurable interval, compare primary state with replica state
-- [ ] Ownership-event-triggered repair: also trigger repair on migration commit, promotion, and member departure
-- [ ] Conflict resolution: highest `ownerEpoch` wins, then highest `version` within the same epoch
-- [ ] Stale metadata repair: primary pushes authoritative state to replicas that have older or missing records
-- [ ] Tombstone handling: disposed tasks propagate tombstones to replicas to prevent resurrection
-- [ ] Tests: stale replica gets repaired, epoch-based conflict resolved correctly, disposed task not resurrected, ownership event triggers repair
-- [ ] Run a verification task that proves anti-entropy repair is a real runtime scheduler, conflict resolution follows epoch+version ordering, tombstones prevent resurrection, and no anti-entropy path is a no-op stub: `bun test test/scheduledexecutor/impl/ScheduledExecutorAntiEntropyTest.test.ts` green
+- [x] Periodic anti-entropy: run on a configurable interval, compare primary state with replica state
+- [x] Ownership-event-triggered repair: also trigger repair on migration commit, promotion, and member departure
+- [x] Conflict resolution: highest `ownerEpoch` wins, then highest `version` within the same epoch
+- [x] Stale metadata repair: primary pushes authoritative state to replicas that have older or missing records
+- [x] Tombstone handling: disposed tasks propagate tombstones to replicas to prevent resurrection
+- [x] Tests: stale replica gets repaired, epoch-based conflict resolved correctly, disposed task not resurrected, ownership event triggers repair
+- [x] Run a verification task that proves anti-entropy repair is a real runtime scheduler, conflict resolution follows epoch+version ordering, tombstones prevent resurrection, and no anti-entropy path is a no-op stub: `bun test test/scheduledexecutor/impl/ScheduledExecutorAntiEntropyTest.test.ts` green
 
 ---
 
@@ -1059,7 +1059,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
 - [x] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
 - [x] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests
-- [ ] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
+- [x] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
 - [ ] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests
 - [ ] **Block 22.13** — Member-owned scheduling + fanout (`scheduleOnMember(...)` with metadata anchored by hashed task ID in partitioned store, member-lifecycle-bound semantics matching Hazelcast, `scheduleOnAllMembers(...)` and `scheduleOnMembers(...)` create one future per target, member departure loses member-owned task, member fixed-rate variants) — ~16 tests
 - [ ] **Block 22.14** — `ClientScheduledExecutorProxy` + protocol (client proxy with full parity: schedule/cancel/dispose/getScheduledFuture/getAllScheduledFutures/stats/history, client protocol messages reusing `OperationWireCodec` patterns, handler reacquisition across client reconnect, stale/disposed error propagation) — ~18 tests
