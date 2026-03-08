@@ -1076,7 +1076,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 23.4** — `ProcessorTasklet` with Chandy-Lamport barrier alignment — ~18 tests
 - [x] **Block 23.5** — Distributed edge sender/receiver via NATS — ~16 tests
 - [x] **Block 23.6** — `ExecutionPlan` + `JobExecution` + `BlitzJobExecutor` — ~18 tests
-- [ ] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
+- [x] **Block 23.7** — Pipeline serialization + edge type API — ~14 tests
 - [ ] **Block 23.8** — `BlitzJob` handle + `JobRecord` + status listeners — ~16 tests
 - [ ] **Block 23.9** — `SnapshotCoordinator` + periodic snapshot orchestration — ~16 tests
 - [ ] **Block 23.10** — `BlitzJobCoordinator` + full job lifecycle management — ~22 tests
@@ -1204,11 +1204,11 @@ Depends on: Block 23.0 (PipelineDescriptor).
 **Goal:** Make Pipeline serializable and add edge type configuration for distributed execution.
 
 **TODO — Block 23.7**:
-- [ ] Modify `src/Vertex.ts`: add optional `sourceRef` and `sinkRef` fields to store Source/Sink instances
-- [ ] Modify `src/Edge.ts`: add `edgeType: EdgeType` field (default LOCAL), add fluent setters `.distributed()`, `.partitioned(keyFn)`, `.broadcast()`, `.allToOne()`
-- [ ] Modify `src/Pipeline.ts`: add `toDescriptor()` method that serializes DAG to `PipelineDescriptor`, store Source/Sink references on vertices during `readFrom()`/`writeTo()`, thread edge type through GeneralStage fluent API
-- [ ] Tests: toDescriptor round-trip, edge type defaults, fluent edge type API, source/sink reference preservation
-- [ ] Run a verification task that proves `toDescriptor()` serializes the full DAG losslessly, edge type fluent API is wired through `GeneralStage`, source/sink references survive pipeline construction, and existing Pipeline tests still pass: `bun test test/blitz/PipelineDescriptorTest.test.ts` green, existing Pipeline tests still pass
+- [x] Modify `src/Vertex.ts`: add optional `sourceRef` and `sinkRef` fields to store Source/Sink instances
+- [x] Modify `src/Edge.ts`: add `edgeType: EdgeType` field (default LOCAL), add fluent setters `.distributed()`, `.partitioned(keyFn)`, `.broadcast()`, `.allToOne()`
+- [x] Modify `src/Pipeline.ts`: add `toDescriptor()` method that serializes DAG to `PipelineDescriptor`, store Source/Sink references on vertices during `readFrom()`/`writeTo()`, thread edge type through GeneralStage fluent API
+- [x] Tests: toDescriptor round-trip, edge type defaults, fluent edge type API, source/sink reference preservation
+- [x] Run a verification task that proves `toDescriptor()` serializes the full DAG losslessly, edge type fluent API is wired through `GeneralStage`, source/sink references survive pipeline construction, and existing Pipeline tests still pass: `bun test test/blitz/PipelineDescriptorTest.test.ts` green, existing Pipeline tests still pass
 
 ---
 

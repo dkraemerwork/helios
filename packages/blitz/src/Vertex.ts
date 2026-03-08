@@ -1,3 +1,6 @@
+import type { Sink } from './sink/Sink.js';
+import type { Source } from './source/Source.js';
+
 /**
  * A node in the Blitz pipeline DAG.
  *
@@ -20,6 +23,11 @@ export class Vertex {
    */
   // eslint-disable-next-line @typescript-eslint/ban-types
   readonly fn?: Function;
+
+  /** Optional reference to the Source instance (set during Pipeline.readFrom). */
+  sourceRef?: Source<unknown>;
+  /** Optional reference to the Sink instance (set during GeneralStage.writeTo). */
+  sinkRef?: Sink<unknown>;
 
   constructor(
     name: string,

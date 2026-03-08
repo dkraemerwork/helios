@@ -3,6 +3,7 @@ import { PipelineError } from './errors/PipelineError.js';
 import type { Sink } from './sink/Sink.js';
 import type { Source } from './source/Source.js';
 import { Vertex } from './Vertex.js';
+import type { PipelineDescriptor, VertexDescriptor, EdgeDescriptor } from '@zenystx/helios-core/job/PipelineDescriptor.js';
 
 /**
  * Fluent stage handle returned by {@link Pipeline.readFrom} and each chaining call.
@@ -53,6 +54,42 @@ export class GeneralStage<T> {
     return new GeneralStage<T>(this._pipeline, vertex);
   }
 
+  /** Set the incoming edge to DISTRIBUTED_UNICAST. */
+  distributed(): GeneralStage<T> {
+    const lastEdge = this._pipeline.edges[this._pipeline.edges.length - 1];
+    if (lastEdge) {
+      lastEdge.distributed();
+    }
+    return this;
+  }
+
+  /** Set the incoming edge to DISTRIBUTED_PARTITIONED with a key function. */
+  partitioned(keyFn: (value: T) => string): GeneralStage<T> {
+    const lastEdge = this._pipeline.edges[this._pipeline.edges.length - 1];
+    if (lastEdge) {
+      lastEdge.partitioned(keyFn as (value: unknown) => string);
+    }
+    return this;
+  }
+
+  /** Set the incoming edge to DISTRIBUTED_BROADCAST. */
+  broadcast(): GeneralStage<T> {
+    const lastEdge = this._pipeline.edges[this._pipeline.edges.length - 1];
+    if (lastEdge) {
+      lastEdge.broadcast();
+    }
+    return this;
+  }
+
+  /** Set the incoming edge to ALL_TO_ONE. */
+  allToOne(): GeneralStage<T> {
+    const lastEdge = this._pipeline.edges[this._pipeline.edges.length - 1];
+    if (lastEdge) {
+      lastEdge.allToOne();
+    }
+    return this;
+  }
+
   /**
    * Terminate this stage chain by writing to a sink.
    *
@@ -61,6 +98,7 @@ export class GeneralStage<T> {
   writeTo(sink: Sink<T>): Pipeline {
     const name = sink.name;
     const vertex = new Vertex(name, 'sink');
+    vertex.sinkRef = sink;
     const edge = new Edge(
       this._vertex,
       vertex,
@@ -125,8 +163,38 @@ export class Pipeline {
    */
   readFrom<T>(source: Source<T>): GeneralStage<T> {
     const vertex = new Vertex(source.name, 'source');
+    vertex.sourceRef = source;
     this.vertices.push(vertex);
     return new GeneralStage<T>(this, vertex);
+  }
+
+  /**
+   * Serialize this pipeline's DAG into a {@link PipelineDescriptor}
+   * suitable for storage in IMap and cross-member distribution.
+   */
+  toDescriptor(): PipelineDescriptor {
+    const vertices: VertexDescriptor[] = this.vertices.map(v => ({
+      name: v.name,
+      type: v.type,
+      fnSource: v.fn ? v.fn.toString() : null,
+      sourceConfig: null,
+      sinkConfig: null,
+    }));
+
+    const edges: EdgeDescriptor[] = this.edges.map(e => ({
+      from: e.from.name,
+      to: e.to.name,
+      edgeType: e.edgeType,
+      subject: e.subject,
+      keyFnSource: e.keyFn ? e.keyFn.toString() : null,
+    }));
+
+    return {
+      name: this.name,
+      vertices,
+      edges,
+      parallelism: this.parallelism,
+    };
   }
 
   /**
