@@ -869,13 +869,13 @@ Depends on: Block 22.8 (replication).
 **Goal:** Add Hazelcast-parity fixed-rate scheduling with skip-on-overlap and exception suppression.
 
 **TODO — Block 22.9**:
-- [ ] Fixed-rate reschedule engine: after each run, compute `nextRunAt` aligned to original cadence timeline (`initialDelay + N * period`)
-- [ ] No-overlap skip: if the previous run is still active when `nextRunAt` arrives, skip that scheduled execution entirely
-- [ ] Exception suppression: if a periodic run throws or times out, suppress all future firings and mark the task in a terminal error state
-- [ ] Named periodic task handling: named periodic tasks follow the same `fail-if-exists` duplicate policy
-- [ ] Recovery catch-up: after pause/migration/recovery, coalesce overdue firings to one immediate catch-up run, then compute the next aligned fixed-rate slot
-- [ ] Tests: periodic fires at correct cadence, overlap is skipped, exception stops future runs, catch-up coalesces, next-aligned-slot math is correct, named periodic duplicate rejection
-- [ ] Run a verification task that proves fixed-rate cadence alignment, no-overlap skip, exception suppression, and recovery catch-up are all real runtime behavior with no fake time injection or deferred periodic semantics: `bun test test/scheduledexecutor/impl/PeriodicSchedulingTest.test.ts` green
+- [x] Fixed-rate reschedule engine: after each run, compute `nextRunAt` aligned to original cadence timeline (`initialDelay + N * period`)
+- [x] No-overlap skip: if the previous run is still active when `nextRunAt` arrives, skip that scheduled execution entirely
+- [x] Exception suppression: if a periodic run throws or times out, suppress all future firings and mark the task in a terminal error state
+- [x] Named periodic task handling: named periodic tasks follow the same `fail-if-exists` duplicate policy
+- [x] Recovery catch-up: after pause/migration/recovery, coalesce overdue firings to one immediate catch-up run, then compute the next aligned fixed-rate slot
+- [x] Tests: periodic fires at correct cadence, overlap is skipped, exception stops future runs, catch-up coalesces, next-aligned-slot math is correct, named periodic duplicate rejection
+- [x] Run a verification task that proves fixed-rate cadence alignment, no-overlap skip, exception suppression, and recovery catch-up are all real runtime behavior with no fake time injection or deferred periodic semantics: `bun test test/scheduledexecutor/impl/PeriodicSchedulingTest.test.ts` green
 
 ---
 
@@ -1057,7 +1057,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
 - [x] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
 - [x] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
-- [ ] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
+- [x] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
 - [ ] **Block 22.10** — `MigrationAwareService` integration + epoch fencing (`beforeMigration` suspends tasks on source, `commitMigration` installs new owner epoch and rehydrates ready queues on destination, `rollbackMigration` restores old owner, only new/promoted owner decides catch-up/replay, epoch increment on every ownership change) — ~16 tests
 - [ ] **Block 22.11** — Anti-entropy + conflict resolution (periodic + ownership-event-triggered repair, highest epoch then highest version wins, stale metadata repair from primary to replicas, tombstone handling for disposed tasks, anti-entropy payload shape) — ~14 tests
 - [ ] **Block 22.12** — Crash recovery + at-least-once replay (promoted owner fences retired epoch before replay, one-shot not durably completed is eligible for re-run, periodic catch-up coalesces to one immediate run then next aligned slot, crash-loop validation tests, version/attempt fencing prevents stale completion commits) — ~16 tests

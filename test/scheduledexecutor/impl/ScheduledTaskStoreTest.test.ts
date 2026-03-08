@@ -36,7 +36,7 @@ function makeHistoryEntry(overrides: Partial<RunHistoryEntry> = {}): RunHistoryE
 // ─── ScheduledTaskState ─────────────────────────────────────────────────────────
 
 describe('ScheduledTaskState', () => {
-    it('should define all six states', () => {
+    it('should define all seven states', () => {
         const states = Object.values(ScheduledTaskState);
         expect(states).toContain(ScheduledTaskState.SCHEDULED);
         expect(states).toContain(ScheduledTaskState.RUNNING);
@@ -44,7 +44,8 @@ describe('ScheduledTaskState', () => {
         expect(states).toContain(ScheduledTaskState.CANCELLED);
         expect(states).toContain(ScheduledTaskState.DISPOSED);
         expect(states).toContain(ScheduledTaskState.SUSPENDED);
-        expect(states).toHaveLength(6);
+        expect(states).toContain(ScheduledTaskState.SUPPRESSED);
+        expect(states).toHaveLength(7);
     });
 });
 

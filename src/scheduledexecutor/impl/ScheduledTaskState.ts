@@ -11,4 +11,5 @@ export enum ScheduledTaskState {
     CANCELLED = 'CANCELLED',
     DISPOSED = 'DISPOSED',
     SUSPENDED = 'SUSPENDED',
+    SUPPRESSED = 'SUPPRESSED',
 }

@@ -16,10 +16,11 @@ export type OwnerKind = 'PARTITION' | 'MEMBER';
  */
 const LEGAL_TRANSITIONS: ReadonlyMap<ScheduledTaskState, ReadonlySet<ScheduledTaskState>> = new Map([
     [ScheduledTaskState.SCHEDULED, new Set([ScheduledTaskState.RUNNING, ScheduledTaskState.CANCELLED, ScheduledTaskState.DISPOSED, ScheduledTaskState.SUSPENDED])],
-    [ScheduledTaskState.RUNNING, new Set([ScheduledTaskState.DONE, ScheduledTaskState.CANCELLED, ScheduledTaskState.DISPOSED, ScheduledTaskState.SUSPENDED, ScheduledTaskState.SCHEDULED])],
+    [ScheduledTaskState.RUNNING, new Set([ScheduledTaskState.DONE, ScheduledTaskState.CANCELLED, ScheduledTaskState.DISPOSED, ScheduledTaskState.SUSPENDED, ScheduledTaskState.SCHEDULED, ScheduledTaskState.SUPPRESSED])],
     [ScheduledTaskState.DONE, new Set([ScheduledTaskState.DISPOSED, ScheduledTaskState.SUSPENDED])],
     [ScheduledTaskState.CANCELLED, new Set([ScheduledTaskState.DISPOSED, ScheduledTaskState.SUSPENDED])],
     [ScheduledTaskState.DISPOSED, new Set<ScheduledTaskState>()],
+    [ScheduledTaskState.SUPPRESSED, new Set([ScheduledTaskState.DISPOSED])],
     [ScheduledTaskState.SUSPENDED, new Set([ScheduledTaskState.SCHEDULED, ScheduledTaskState.DISPOSED])],
 ]);
 
