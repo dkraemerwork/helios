@@ -249,27 +249,11 @@ export class TcpClusterTransport {
             const msgBytes = buf.subarray(4, 4 + msgLen);
             buf = buf.subarray(4 + msgLen);
 
-            // Peek at the frame to detect OPERATION/OPERATION_RESPONSE messages —
-            // these are high-volume and benefit from worker-thread deserialization.
-            // Other messages (HELLO, JOIN, HEARTBEAT) use the sync fast path.
-            const frameStr = msgBytes.toString('utf8');
-            const isHotPath = frameStr.includes('"OPERATION"') || frameStr.includes('"OPERATION_RESPONSE"');
-
-            if (isHotPath) {
-                // Offload deserialization to scatter worker — fire-and-forget
-                // Copy the bytes since msgBytes may be a subarray view that gets
-                // overwritten on the next _onData call.
-                const frameBuffer = Buffer.from(msgBytes);
-                void this._scatterStrategy.deserializeAsync(frameBuffer)
-                    .then((msg) => this._handleMsg(ch, msg))
-                    .catch(() => { /* malformed frame — discard */ });
-            } else {
-                try {
-                    const msg = this._strategy.deserialize(msgBytes);
-                    this._handleMsg(ch, msg);
-                } catch {
-                    // Malformed frame — discard and continue
-                }
+            try {
+                const msg = this._strategy.deserialize(msgBytes);
+                this._handleMsg(ch, msg);
+            } catch {
+                // Malformed frame — discard and continue
             }
         }
 

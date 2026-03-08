@@ -551,23 +551,21 @@ export class HeliosInstanceImpl implements HeliosInstance {
               },
             });
 
-            const operationMsg: import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage = {
+            const sent = transport.send(targetMemberId, {
               type: 'OPERATION',
               callId,
               partitionId: op.partitionId,
               operationType,
               payload,
               senderId: coordinator.getLocalMemberId(),
-            };
-
-            // Use async send to offload JSON.stringify to a scatter worker thread
-            void transport.sendAsync(targetMemberId, operationMsg).then((sent) => {
-              if (!sent) {
-                // Peer disconnected or channel closed — fail fast
-                pendingResponses.delete(callId);
-                reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
-              }
             });
+
+            if (!sent) {
+              // Peer disconnected or channel closed — fail fast
+              pendingResponses.delete(callId);
+              reject(new Error(`Send failed: peer ${targetMemberId} not connected (callId=${callId})`));
+              return;
+            }
 
             // Timeout after 10 seconds
             setTimeout(() => {
@@ -755,11 +753,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
         errorMsg = e instanceof Error ? e.message : String(e);
       }
 
-      // Find who sent this and reply — use async send to offload response
-      // serialization to a scatter worker thread
+      // Find who sent this and reply
       const senderMemberId = this._findSenderForOperation(message);
       if (senderMemberId !== null && this._transport !== null) {
-        void this._transport.sendAsync(senderMemberId, {
+        this._transport.send(senderMemberId, {
           type: 'OPERATION_RESPONSE',
           callId,
           payload: encodeResponsePayload(responseValue),

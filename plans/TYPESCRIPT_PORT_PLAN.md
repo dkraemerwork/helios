@@ -803,17 +803,17 @@ src/scheduledexecutor/impl/operation/
 ```
 
 **TODO — Block 22.6**:
-- [ ] `SubmitToPartitionOperation`: create task descriptor in target partition's store, return handler
-- [ ] `SubmitToMemberOperation`: create task descriptor in member bin, return handler
-- [ ] `CancelTaskOperation`: locate task by handler, execute cancel lifecycle
-- [ ] `DisposeTaskOperation`: locate task by handler, execute dispose lifecycle
-- [ ] `GetTaskStateOperation`: return current task state/stats by handler
-- [ ] `GetScheduledFutureOperation`: return task descriptor for handler reacquisition
-- [ ] Deterministic partition routing for partition-owned tasks via `PartitionInvocation`
-- [ ] Target routing for member-owned tasks via `TargetInvocation`
-- [ ] Handler lookup validation: reject lookups with mismatched scheduler name
-- [ ] Tests: submit routes to correct partition, cancel/dispose reach correct store, get returns expected state, handler validation rejects bad lookups
-- [ ] Run a verification task that proves all operations route through `OperationService`, partition routing is deterministic, member routing is real, and no operation class is a stub or defers to a fake path: `bun test test/scheduledexecutor/impl/operation/` green
+- [x] `SubmitToPartitionOperation`: create task descriptor in target partition's store, return handler
+- [x] `SubmitToMemberOperation`: create task descriptor in member bin, return handler
+- [x] `CancelTaskOperation`: locate task by handler, execute cancel lifecycle
+- [x] `DisposeTaskOperation`: locate task by handler, execute dispose lifecycle
+- [x] `GetTaskStateOperation`: return current task state/stats by handler
+- [x] `GetScheduledFutureOperation`: return task descriptor for handler reacquisition
+- [x] Deterministic partition routing for partition-owned tasks via `PartitionInvocation`
+- [x] Target routing for member-owned tasks via `TargetInvocation`
+- [x] Handler lookup validation: reject lookups with mismatched scheduler name
+- [x] Tests: submit routes to correct partition, cancel/dispose reach correct store, get returns expected state, handler validation rejects bad lookups
+- [x] Run a verification task that proves all operations route through `OperationService`, partition routing is deterministic, member routing is real, and no operation class is a stub or defers to a fake path: `bun test test/scheduledexecutor/impl/operation/` green
 
 ---
 
@@ -1054,7 +1054,7 @@ Depends on: Block 22.15 (stats).
 - [x] **Block 22.3** — `ScheduledExecutorContainerService` + local one-shot execution (partition-local task store management, one-shot delayed task scheduling via timer coordinator, dispatch into existing `ExecutorContainerService`, result envelope capture, wall-clock + monotonic hybrid timing, task state transitions on completion) — ~16 tests
 - [x] **Block 22.4** — Cancel/Dispose/Shutdown local lifecycle (`cancel()` stops future scheduling without interrupting in-flight run, `dispose()` removes task state and frees name/handler, versioned terminal-write ordering for cancel/dispose vs completion races, `shutdown()` rejects new submissions, stale-task behavior on disposed handler access) — ~14 tests
 - [x] **Block 22.5** — `ScheduledExecutorServiceProxy` + `HeliosInstance` wiring (`getScheduledExecutorService(name)` no longer throws deferred error, proxy routing for all API methods, handler-based future reacquisition, `getAllScheduledFutures()` fan-out, lifecycle integration, graceful shutdown hook) — ~14 tests
-- [ ] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
+- [x] **Block 22.6** — Create/Cancel/Dispose/Get operations + partition routing (`SubmitToPartitionOperation`, `SubmitToMemberOperation`, `CancelTaskOperation`, `DisposeTaskOperation`, `GetTaskStateOperation`, `GetScheduledFutureOperation`, deterministic partition routing for partition-owned tasks, target routing for member-owned tasks, handler lookup validation) — ~16 tests
 - [ ] **Block 22.7** — `ScheduledTaskScheduler` engine + ready-task dispatch (member-local scheduler loop scanning owned partitions, partition-local min-heap for `nextRunAt`, wake-on-nearest-boundary, fenced dispatch by `ownerEpoch`/`version`/`attemptId`, rehydration from store on startup, capacity enforcement per executor per member) — ~16 tests
 - [ ] **Block 22.8** — Durable create ack + backup replication (schedule/create success visible only after required backup acks, `ReplicationOperation` for partition-owned schedule metadata, durability config controls replica count, capacity ignored during migration with post-migration count repair) — ~14 tests
 - [ ] **Block 22.9** — Fixed-rate periodic engine + no-overlap skip policy (fixed-rate reschedule anchored to original cadence timeline, skip execution when previous run still active, exception/timeout suppresses future firings, named periodic task handling, one catch-up coalesced run after recovery then next-aligned-slot computation) — ~18 tests
