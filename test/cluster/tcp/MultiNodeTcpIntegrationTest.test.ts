@@ -356,10 +356,7 @@ describe("Multi-node TCP integration", () => {
     expect(await backup.getQueue<string>(queueName).poll()).toBeNull();
   });
 
-  it.skip("promoted_queue_owner_syncs_state_to_a_new_backup", async () => {
-    // Known issue: queue backup resync fires before partition table assigns the
-    // new member as backup. Requires integrating queue state sync into the
-    // partition backup-refill lifecycle (similar to map MigrationAwareService).
+  it("promoted_queue_owner_syncs_state_to_a_new_backup", async () => {
     const queueConfig = new QueueConfig("jobs").setBackupCount(1);
     const nodeA = await startNode("queue-sync-a", 18, [], (config) =>
       config.addQueueConfig(queueConfig),
@@ -373,6 +370,8 @@ describe("Multi-node TCP integration", () => {
 
     await waitForPeers(nodeA, 1);
     await waitForClusterSize(nodeA, 2);
+    await waitForPeers(nodeB, 1);
+    await waitForClusterSize(nodeB, 2);
 
     const queueName = "jobs";
     await nodeA.getQueue<string>(queueName).offer("job-1");
@@ -398,12 +397,13 @@ describe("Multi-node TCP integration", () => {
     await waitForPeers(backup, 1);
     await waitForClusterSize(backup, 2);
     await waitForClusterSize(nodeC, 2);
-    await waitForQueueReplicaState(backup, nodeC, queueName, 2);
+    const { owner: currentOwner, backup: currentBackup } =
+      await resolveQueueOwnerAndBackup(backup, nodeC, queueName, 2);
 
-    expect(await backup.getQueue<string>(queueName).poll()).toBe("job-1");
-    await waitForQueueReplicaState(backup, nodeC, queueName, 1);
-    expect(await backup.getQueue<string>(queueName).poll()).toBe("job-2");
-    await waitForQueueReplicaState(backup, nodeC, queueName, 0);
+    expect(await currentOwner.getQueue<string>(queueName).poll()).toBe("job-1");
+    await waitForQueueReplicaState(currentOwner, currentBackup, queueName, 1);
+    expect(await currentOwner.getQueue<string>(queueName).poll()).toBe("job-2");
+    await waitForQueueReplicaState(currentOwner, currentBackup, queueName, 0);
   }, 30_000);
 
   it("topic_config_without_global_ordering_publishes_after_peer_loss", async () => {

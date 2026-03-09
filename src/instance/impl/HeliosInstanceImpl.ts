@@ -5281,10 +5281,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return this._getOrCreateSqlService();
   }
 
-  getJet(): never {
-    throw new Error(
-      "Jet streaming is not supported in this version (deferred to v1.5)",
-    );
+  getJet(): { shutdown(): Promise<void>; isClosed: boolean } | null {
+    return this.getBlitzService();
   }
 
   getCPSubsystem(): CpSubsystemService {

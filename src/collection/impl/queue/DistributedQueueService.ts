@@ -572,13 +572,26 @@ export class DistributedQueueService {
     this._scheduleDestroyIfNeeded(message.queueName, runtime);
 
     if (message.requestId !== null) {
-      this._transport?.send(message.sourceNodeId, {
-        type: "QUEUE_STATE_ACK",
-        requestId: message.requestId,
-        queueName: message.queueName,
-        version: message.version,
-      });
+      void this._sendQueueStateAck(message);
     }
+  }
+
+  private async _sendQueueStateAck(message: QueueStateSyncMsg): Promise<void> {
+    if (this._transport === null || message.requestId === null) {
+      return;
+    }
+
+    const connected = await this._ensurePeerConnected(message.sourceNodeId);
+    if (!connected) {
+      return;
+    }
+
+    this._transport.send(message.sourceNodeId, {
+      type: "QUEUE_STATE_ACK",
+      requestId: message.requestId,
+      queueName: message.queueName,
+      version: message.version,
+    });
   }
 
   private _dispatchQueueEvent(message: QueueEventMsg): void {
@@ -859,6 +872,7 @@ export class DistributedQueueService {
 
   private _drainWaiters(name: string, runtime: QueueRuntime): void {
     let progressed = true;
+    let stateChanged = false;
     while (progressed) {
       progressed = false;
 
@@ -873,6 +887,7 @@ export class DistributedQueueService {
         this._appendItem(name, runtime, pendingOffer.data);
         pendingOffer.resolve(true);
         progressed = true;
+        stateChanged = true;
       }
 
       while (
@@ -886,10 +901,13 @@ export class DistributedQueueService {
         const item = this._pollNow(name, runtime);
         pendingPoll.resolve(item);
         progressed = true;
+        stateChanged = true;
       }
     }
 
-    void this._replicateState(name, runtime);
+    if (stateChanged) {
+      void this._replicateState(name, runtime);
+    }
   }
 
   private async _replicateState(
@@ -928,6 +946,11 @@ export class DistributedQueueService {
     waitForAck: boolean,
   ): Promise<void> {
     if (backupId === this._instanceName || this._transport === null) {
+      return;
+    }
+
+    const connected = await this._ensurePeerConnected(backupId);
+    if (!connected) {
       return;
     }
 
@@ -1015,6 +1038,39 @@ export class DistributedQueueService {
         this._sendStateSync(target, name, runtime, false),
       ),
     );
+  }
+
+  private async _ensurePeerConnected(peerId: string): Promise<boolean> {
+    if (this._transport === null) {
+      return false;
+    }
+    if (this._transport.hasPeer(peerId)) {
+      return true;
+    }
+
+    const memberAddress = this._coordinator?.getMemberAddress(peerId);
+    if (memberAddress === null || memberAddress === undefined) {
+      return false;
+    }
+
+    try {
+      await this._transport.connectToPeer(
+        memberAddress.getHost(),
+        memberAddress.getPort(),
+      );
+    } catch {
+      return false;
+    }
+
+    const deadline = Date.now() + 500;
+    while (!this._transport.hasPeer(peerId)) {
+      if (Date.now() >= deadline) {
+        return false;
+      }
+      await Bun.sleep(10);
+    }
+
+    return true;
   }
 
   private _remainingCapacity(name: string, runtime: QueueRuntime): number {

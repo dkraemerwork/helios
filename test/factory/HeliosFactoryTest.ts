@@ -239,22 +239,22 @@ describe('Config validation', () => {
     });
 });
 
-describe('Deferred service stubs', () => {
+describe('advanced service accessors', () => {
     afterEach(() => { Helios.shutdownAll(); });
 
-    it('getSql() throws a deferred-feature error', async () => {
+    it('getSql() returns a working SQL service', async () => {
         const hz = await Helios.newInstance();
-        expect(() => (hz as unknown as Record<string, () => void>).getSql()).toThrow(/sql.*not supported|deferred/i);
+        expect((hz as unknown as Record<string, () => void>).getSql()).toBeDefined();
     });
 
-    it('getJet() throws a deferred-feature error', async () => {
+    it('getJet() returns the Blitz-backed accessor when available', async () => {
         const hz = await Helios.newInstance();
-        expect(() => (hz as unknown as Record<string, () => void>).getJet()).toThrow(/jet.*not supported|deferred/i);
+        expect((hz as unknown as Record<string, () => void>).getJet()).toBeNull();
     });
 
-    it('getCPSubsystem() throws a deferred-feature error', async () => {
+    it('getCPSubsystem() returns a working CP subsystem service', async () => {
         const hz = await Helios.newInstance();
-        expect(() => (hz as unknown as Record<string, () => void>).getCPSubsystem()).toThrow(/cp.*not supported|deferred/i);
+        expect((hz as unknown as Record<string, () => void>).getCPSubsystem()).toBeDefined();
     });
 
     it('getScheduledExecutorService() returns a working proxy', async () => {
