@@ -232,6 +232,7 @@ interface MapClientListenerRegistration {
   registrationId: string;
   correlationId: number;
   flags: number;
+  session: ClientSession;
 }
 
 interface QueueClientListenerRegistration {
@@ -2558,6 +2559,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       registrationId,
       correlationId,
       flags,
+      session,
     });
     let registrations = this._clientSessionMapListeners.get(session.getSessionId());
     if (registrations === undefined) {
@@ -2593,10 +2595,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   private _publishClientMapEvent(name: string, key: Data | null, value: Data | null, oldValue: Data | null, eventType: number): void {
-    const sessionRegistry = this._clientProtocolServer?.getSessionRegistry();
-    if (sessionRegistry === undefined) {
-      return;
-    }
     for (const [registrationId, registration] of this._clientMapListenerRegistrations) {
       if (registration.mapName !== name) {
         continue;
@@ -2609,8 +2607,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (sessionId === undefined) {
         continue;
       }
-      const session = sessionRegistry.getSession(sessionId);
-      if (session === null || !session.isAuthenticated()) {
+      const session = registration.session;
+      if (!session.isAuthenticated()) {
         this._removeClientMapListener(sessionId, registrationId);
         continue;
       }
@@ -2620,7 +2618,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         oldValue,
         null,
         eventType,
-        this.getLocalMemberId(),
+        null,
         1,
       );
       eventMessage.setCorrelationId(registration.correlationId);
@@ -2629,10 +2627,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   private _publishClientMapBulkEvent(name: string, eventType: number, affectedEntries: number): void {
-    const sessionRegistry = this._clientProtocolServer?.getSessionRegistry();
-    if (sessionRegistry === undefined) {
-      return;
-    }
     for (const [registrationId, registration] of this._clientMapListenerRegistrations) {
       if (registration.mapName !== name) {
         continue;
@@ -2645,8 +2639,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (sessionId === undefined) {
         continue;
       }
-      const session = sessionRegistry.getSession(sessionId);
-      if (session === null || !session.isAuthenticated()) {
+      const session = registration.session;
+      if (!session.isAuthenticated()) {
         this._removeClientMapListener(sessionId, registrationId);
         continue;
       }
@@ -2656,7 +2650,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         null,
         null,
         eventType,
-        this.getLocalMemberId(),
+        null,
         affectedEntries,
       );
       eventMessage.setCorrelationId(registration.correlationId);
@@ -2687,13 +2681,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const queueListenerId = this._distributedQueueService!.addItemListener(name, {
       itemAdded: (event) => {
         const item = includeValue ? this._ss.toData(event.getItem()) : null;
-        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, this.getLocalMemberId(), 1);
+        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, null, 1);
         eventMessage.setCorrelationId(correlationId);
         session.pushEvent(eventMessage);
       },
       itemRemoved: (event) => {
         const item = includeValue ? this._ss.toData(event.getItem()) : null;
-        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, this.getLocalMemberId(), 2);
+        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, null, 2);
         eventMessage.setCorrelationId(correlationId);
         session.pushEvent(eventMessage);
       },
