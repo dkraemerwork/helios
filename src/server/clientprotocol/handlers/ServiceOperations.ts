@@ -208,6 +208,7 @@ export interface CacheServiceOperations {
     containsKey(name: string, key: Data): Promise<boolean>;
     getAndPut(name: string, key: Data, value: Data, expiryPolicy: Data | null, completionId: number): Promise<Data | null>;
     getAndRemove(name: string, key: Data, completionId: number): Promise<Data | null>;
+    getAndReplace(name: string, key: Data, value: Data, expiryPolicy: Data | null, completionId: number): Promise<Data | null>;
     putIfAbsent(name: string, key: Data, value: Data, expiryPolicy: Data | null, completionId: number): Promise<boolean>;
     replace(name: string, key: Data, oldValue: Data | null, newValue: Data, expiryPolicy: Data | null, completionId: number): Promise<boolean>;
     getAll(name: string, keys: Data[], expiryPolicy: Data | null): Promise<Array<[Data, Data]>>;

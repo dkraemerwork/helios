@@ -65,6 +65,7 @@ import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
 import { NearCacheInvalidationManager } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationManager";
+import { MutationTrigger } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent";
 import { PartitionReplicaManager } from "@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager";
 import { PartitionBackupReplicaAntiEntropyOp } from "@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp";
 import { chunkNamespaceStates } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest";
@@ -89,6 +90,7 @@ import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/Repli
 import { DistributedReplicatedMapService } from "@zenystx/helios-core/replicatedmap/impl/DistributedReplicatedMapService";
 import { ReplicatedMapProxyImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapProxyImpl";
 import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
+import { CacheUtil } from "@zenystx/helios-core/cache/CacheUtil";
 import { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
 import { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
 import { ClusterReadHandler } from "@zenystx/helios-core/rest/handler/ClusterReadHandler";
@@ -274,6 +276,13 @@ interface ReplicatedMapClientListenerRegistration {
   session: ClientSession;
 }
 
+interface CacheClientInvalidationListenerRegistration {
+  name: string;
+  invalidationName: string;
+  registrationId: string;
+  session: ClientSession;
+}
+
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
   const trimmed = member.trim();
@@ -441,6 +450,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionMultiMapListeners = new Map<string, Set<string>>();
   private readonly _clientReplicatedMapListenerRegistrations = new Map<string, ReplicatedMapClientListenerRegistration>();
   private readonly _clientSessionReplicatedMapListeners = new Map<string, Set<string>>();
+  private readonly _clientCacheInvalidationListenerRegistrations = new Map<string, CacheClientInvalidationListenerRegistration>();
+  private readonly _clientSessionCacheInvalidationListeners = new Map<string, Set<string>>();
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
@@ -928,13 +939,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._transport,
       this._clusterCoordinator,
     );
-    this._distributedCacheService = new DistributedCacheService(
-      localMemberId,
-      this._config,
-      this._ss,
-      this._transport,
-      this._clusterCoordinator,
-    );
+    this._distributedCacheService = this._createDistributedCacheService(localMemberId);
     this._distributedRingbufferService = new DistributedRingbufferService(
       localMemberId,
       this._config,
@@ -2675,6 +2680,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._ensureCacheService();
         return this._distributedCacheService!.getAndRemove(name, key);
       },
+      getAndReplace: async (name, key, value) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.getAndReplace(name, key, value);
+      },
       putIfAbsent: async (name, key, value) => {
         this._ensureCacheService();
         return this._distributedCacheService!.putIfAbsent(name, key, value);
@@ -2706,8 +2715,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._ensureCacheService();
         this._distributedCacheService!.destroy(name);
       },
-      addInvalidationListener: async () => notImplemented(),
-      removeInvalidationListener: async () => notImplemented(),
+      addInvalidationListener: async (name, _localOnly, session) => this._registerClientCacheInvalidationListener(name, session),
+      removeInvalidationListener: async (registrationId, session) =>
+        this._removeClientCacheInvalidationListener(session.getSessionId(), registrationId),
     };
 
     const transactionOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').TransactionServiceOperations = {
@@ -2855,6 +2865,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._removeClientSetListenersForSession(session.getSessionId());
       this._removeClientMultiMapListenersForSession(session.getSessionId());
       this._removeClientReplicatedMapListenersForSession(session.getSessionId());
+      this._removeClientCacheInvalidationListenersForSession(session.getSessionId());
+      this._nearCacheInvalidationManager.removeSession(session.getSessionId());
     });
 
     // ── Wire all handlers ─────────────────────────────────────────────────
@@ -2968,15 +2980,78 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
   }
 
+  private _createDistributedCacheService(
+    localMemberId: string,
+    transport: TcpClusterTransport | null = this._transport,
+    coordinator: HeliosClusterCoordinator | null = this._clusterCoordinator,
+  ): DistributedCacheService {
+    return new DistributedCacheService(
+      localMemberId,
+      this._config,
+      this._ss,
+      transport,
+      coordinator,
+      {
+        onMutation: (event) => {
+          this._publishCacheMutationInvalidation(event.cacheName, event.operation, event.keyData, event.keyDataList);
+        },
+      },
+    );
+  }
+
+  private _toCacheInvalidationName(name: string): string {
+    return name.startsWith("/hz/") ? name : CacheUtil.getDistributedObjectName(name);
+  }
+
+  private _toCacheMutationTrigger(operation: string): MutationTrigger {
+    switch (operation) {
+      case "put":
+      case "getAndPut":
+        return MutationTrigger.PUT;
+      case "putIfAbsent":
+        return MutationTrigger.PUT_IF_ABSENT;
+      case "getAndReplace":
+      case "replace":
+        return MutationTrigger.REPLACE;
+      case "getAndRemove":
+      case "remove":
+        return MutationTrigger.REMOVE;
+      case "clear":
+        return MutationTrigger.CLEAR;
+      default:
+        return MutationTrigger.UNKNOWN;
+    }
+  }
+
+  private _publishCacheMutationInvalidation(name: string, operation: string, keyData?: Data, keyDataList?: Data[]): void {
+    const invalidationName = this._toCacheInvalidationName(name);
+    const trigger = this._toCacheMutationTrigger(operation);
+    if (keyDataList !== undefined && keyDataList.length > 0) {
+      this._nearCacheInvalidationManager.invalidateBatch(
+        invalidationName,
+        keyDataList.map((key) => ({
+          keyBytes: Buffer.from(key.toByteArray() ?? []),
+          partitionId: this._nodeEngine.getPartitionService().getPartitionId(key),
+        })),
+        trigger,
+      );
+      return;
+    }
+    if (keyData !== undefined) {
+      this._nearCacheInvalidationManager.invalidateKey(
+        invalidationName,
+        Buffer.from(keyData.toByteArray() ?? []),
+        this._nodeEngine.getPartitionService().getPartitionId(keyData),
+        trigger,
+      );
+      return;
+    }
+    this._nearCacheInvalidationManager.invalidateAll(invalidationName, trigger);
+  }
+
   private _ensureCacheService(): void {
     if (this._distributedCacheService === null) {
-      this._distributedCacheService = new DistributedCacheService(
-        this.getLocalMemberId(),
-        this._config,
-        this._ss,
-        this._transport,
-        this._clusterCoordinator,
-      );
+      this._distributedCacheService = this._createDistributedCacheService(this.getLocalMemberId());
     }
   }
 
@@ -3554,6 +3629,50 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     for (const registrationId of Array.from(registrations)) {
       this._removeClientReplicatedMapListener(sessionId, registrationId);
+    }
+  }
+
+  private _registerClientCacheInvalidationListener(name: string, session: ClientSession): string {
+    const registrationId = crypto.randomUUID();
+    const invalidationName = this._toCacheInvalidationName(name);
+    this._nearCacheInvalidationManager.subscribe(session, invalidationName);
+    this._clientCacheInvalidationListenerRegistrations.set(registrationId, {
+      name,
+      invalidationName,
+      registrationId,
+      session,
+    });
+    let registrations = this._clientSessionCacheInvalidationListeners.get(session.getSessionId());
+    if (registrations === undefined) {
+      registrations = new Set<string>();
+      this._clientSessionCacheInvalidationListeners.set(session.getSessionId(), registrations);
+    }
+    registrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientCacheInvalidationListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientCacheInvalidationListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientCacheInvalidationListenerRegistrations.delete(registrationId);
+    const registrations = this._clientSessionCacheInvalidationListeners.get(sessionId);
+    registrations?.delete(registrationId);
+    if (registrations !== undefined && registrations.size === 0) {
+      this._clientSessionCacheInvalidationListeners.delete(sessionId);
+    }
+    this._nearCacheInvalidationManager.unsubscribe(sessionId, registration.invalidationName);
+    return true;
+  }
+
+  private _removeClientCacheInvalidationListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionCacheInvalidationListeners.get(sessionId);
+    if (registrations === undefined) {
+      return;
+    }
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientCacheInvalidationListener(sessionId, registrationId);
     }
   }
 
@@ -4209,13 +4328,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Get (or create) a distributed cache by name. */
   getCache<K, V>(name: string): DistributedCacheService {
     if (this._distributedCacheService === null) {
-      this._distributedCacheService = new DistributedCacheService(
-        this._name,
-        this._config,
-        this._ss,
-        null,
-        null,
-      );
+      this._distributedCacheService = this._createDistributedCacheService(this._name, null, null);
     }
     return this._distributedCacheService;
   }

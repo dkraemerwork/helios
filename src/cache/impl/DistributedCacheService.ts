@@ -114,6 +114,17 @@ type CacheOperation =
   | "size"
   | "clear";
 
+export interface CacheMutationEvent {
+  cacheName: string;
+  operation: CacheOperation;
+  keyData?: Data;
+  keyDataList?: Data[];
+}
+
+export interface DistributedCacheServiceOptions {
+  onMutation?: (event: CacheMutationEvent) => void;
+}
+
 // ── Service ───────────────────────────────────────────────────────────
 
 export class DistributedCacheService {
@@ -129,6 +140,7 @@ export class DistributedCacheService {
     private readonly _ss: SerializationService,
     private readonly _transport: TcpClusterTransport | null,
     private readonly _coordinator: HeliosClusterCoordinator | null,
+    private readonly _options: DistributedCacheServiceOptions = {},
   ) {
     this._coordinator?.onMembershipChanged(() => {
       this._resyncAll();
@@ -283,6 +295,7 @@ export class DistributedCacheService {
 
   destroy(name: string): void {
     this._caches.delete(name);
+    this._notifyMutation({ cacheName: name, operation: "clear" });
   }
 
   // ── Routing ──────────────────────────────────────────────────────────
@@ -373,6 +386,7 @@ export class DistributedCacheService {
           this._putEntry(container, key, val, expiresAt);
           container.version++;
           await this._replicateState(name, container);
+          this._notifyMutation({ cacheName: name, operation, keyData: key });
           return this._voidResponse();
         }
         case "putIfAbsent": {
@@ -386,6 +400,7 @@ export class DistributedCacheService {
             this._putEntry(container, key, val, expiresAt);
             container.version++;
             await this._replicateState(name, container);
+            this._notifyMutation({ cacheName: name, operation, keyData: key });
           }
           return this._boolResponse(!exists);
         }
@@ -399,6 +414,7 @@ export class DistributedCacheService {
           this._putEntry(container, key, val, expiresAt);
           container.version++;
           await this._replicateState(name, container);
+          this._notifyMutation({ cacheName: name, operation, keyData: key });
           return old === null
             ? this._voidResponse()
             : { type: "CACHE_RESPONSE", requestId: "local", success: true, resultType: "data", data: encodeData(old.value) };
@@ -411,6 +427,7 @@ export class DistributedCacheService {
             container.entries.delete(dataFp(key));
             container.version++;
             await this._replicateState(name, container);
+            this._notifyMutation({ cacheName: name, operation, keyData: key });
           }
           return old === null
             ? this._voidResponse()
@@ -427,6 +444,7 @@ export class DistributedCacheService {
             this._putEntry(container, key, val, expiresAt);
             container.version++;
             await this._replicateState(name, container);
+            this._notifyMutation({ cacheName: name, operation, keyData: key });
             return { type: "CACHE_RESPONSE", requestId: "local", success: true, resultType: "data", data: encodeData(old.value) };
           }
           return this._voidResponse();
@@ -439,6 +457,7 @@ export class DistributedCacheService {
             container.entries.delete(dataFp(key));
             container.version++;
             await this._replicateState(name, container);
+            this._notifyMutation({ cacheName: name, operation, keyData: key });
           }
           return this._boolResponse(existed);
         }
@@ -453,6 +472,7 @@ export class DistributedCacheService {
             this._putEntry(container, key, val, expiresAt);
             container.version++;
             await this._replicateState(name, container);
+            this._notifyMutation({ cacheName: name, operation, keyData: key });
           }
           return this._boolResponse(existing !== null);
         }
@@ -472,9 +492,14 @@ export class DistributedCacheService {
           container.entries.clear();
           container.version++;
           await this._replicateState(name, container);
+          this._notifyMutation({ cacheName: name, operation });
           return this._voidResponse();
       }
     });
+  }
+
+  private _notifyMutation(event: CacheMutationEvent): void {
+    this._options.onMutation?.(event);
   }
 
   // ── Remote message handlers ──────────────────────────────────────────

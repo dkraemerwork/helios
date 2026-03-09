@@ -181,7 +181,7 @@ export function registerCacheServiceHandlers(
         return _nullable(CACHE_GET_AND_PUT_RESPONSE, await operations.getAndPut(name, key, value, expiryPolicy, completionId));
     });
 
-    // Cache.GetAndReplace (alias: same as getAndPut semantically in handler)
+    // Cache.GetAndReplace
     dispatcher.register(CACHE_GET_AND_REPLACE_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
@@ -190,7 +190,7 @@ export function registerCacheServiceHandlers(
         const key = DataCodec.decode(iter);
         const value = DataCodec.decode(iter);
         const expiryPolicy = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
-        return _nullable(CACHE_GET_AND_REPLACE_RESPONSE, await operations.getAndPut(name, key, value, expiryPolicy, completionId));
+        return _nullable(CACHE_GET_AND_REPLACE_RESPONSE, await operations.getAndReplace(name, key, value, expiryPolicy, completionId));
     });
 
     // Cache.PutAll
