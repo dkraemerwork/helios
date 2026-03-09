@@ -10,6 +10,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/AuthModule.js';
 import { ClusterConnectorModule } from '../connector/ClusterConnectorModule.js';
+import { JobsModule } from '../jobs/JobsModule.js';
 import { PersistenceModule } from '../persistence/PersistenceModule.js';
 import { WsHeartbeatService } from './WsHeartbeatService.js';
 import { HistoryQueryService } from './HistoryQueryService.js';
@@ -19,6 +20,7 @@ import { DashboardGateway } from './DashboardGateway.js';
   imports: [
     AuthModule,
     ClusterConnectorModule,
+    JobsModule,
     PersistenceModule,
   ],
   providers: [

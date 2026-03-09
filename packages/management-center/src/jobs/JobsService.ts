@@ -99,7 +99,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (!rawJobs) return;
 
     const jobs = normalizeJobsResponse(rawJobs);
-    if (jobs.length === 0) return;
+    if (jobs.length === 0) {
+      this.pruneMissingJobStatuses(clusterId, new Set());
+      this.eventEmitter.emit('jobs.received', { clusterId, jobs: [] });
+      return;
+    }
 
     const now = nowMs();
     const snapshots: JobSnapshot[] = [];
@@ -139,21 +143,24 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
 
     if (snapshots.length > 0) {
       await this.insertSnapshots(snapshots);
-      this.eventEmitter.emit('jobs.received', { clusterId, count: snapshots.length });
+      this.eventEmitter.emit('jobs.received', { clusterId, jobs: snapshots });
     }
 
-    // Clean up status tracking for jobs that are terminal and have been stored
-    for (const [key, status] of this.lastKnownStatus) {
-      if (key.startsWith(`${clusterId}:`) && TERMINAL_STATUSES.has(status)) {
-        // Keep terminal entries for one more poll cycle, then remove
-        // to prevent unbounded growth. We mark them with a deletion flag.
-        const jobId = key.slice(clusterId.length + 1);
-        const stillPresent = jobs.some(
-          (j) => String(j['id'] ?? j['jobId'] ?? '') === jobId,
-        );
-        if (!stillPresent) {
-          this.lastKnownStatus.delete(key);
-        }
+    this.pruneMissingJobStatuses(
+      clusterId,
+      new Set(jobs.map(job => String(job['id'] ?? job['jobId'] ?? ''))),
+    );
+  }
+
+  private pruneMissingJobStatuses(clusterId: string, activeJobIds: ReadonlySet<string>): void {
+    for (const key of this.lastKnownStatus.keys()) {
+      if (!key.startsWith(`${clusterId}:`)) {
+        continue;
+      }
+
+      const jobId = key.slice(clusterId.length + 1);
+      if (!activeJobIds.has(jobId)) {
+        this.lastKnownStatus.delete(key);
       }
     }
   }

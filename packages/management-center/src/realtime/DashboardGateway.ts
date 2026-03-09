@@ -28,6 +28,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { WsTicketService } from '../auth/WsTicketService.js';
 import { SessionService } from '../auth/SessionService.js';
 import { ClusterStateStore } from '../connector/ClusterStateStore.js';
+import { JobsService } from '../jobs/JobsService.js';
 import { WsHeartbeatService } from './WsHeartbeatService.js';
 import { HistoryQueryService } from './HistoryQueryService.js';
 import { parseClientMessage, encodeServerMessage } from './WsProtocol.js';
@@ -87,6 +88,7 @@ export class DashboardGateway
     private readonly wsTicketService: WsTicketService,
     private readonly sessionService: SessionService,
     private readonly clusterStateStore: ClusterStateStore,
+    private readonly jobsService: JobsService,
     private readonly heartbeatService: WsHeartbeatService,
     private readonly historyQueryService: HistoryQueryService,
   ) {}
@@ -480,6 +482,18 @@ export class DashboardGateway
       queueStats: clusterState.queueStats,
       topicStats: clusterState.topicStats,
     });
+
+    try {
+      const jobs = await this.jobsService.getActiveJobs(clusterId);
+      this.sendToSocket(socket, 'jobs:update', {
+        clusterId,
+        jobs,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to load initial jobs for cluster ${clusterId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // ── Utilities ─────────────────────────────────────────────────────────
@@ -529,13 +543,16 @@ function extractTicketFromUrl(url: string | undefined): string | null {
 
 /**
  * Serializes a ClusterState for transmission, converting the members Map
- * to a plain object and stripping the in-memory sample ring buffer.
+ * to an array and stripping the in-memory sample ring buffer.
+ *
+ * The frontend store expects `members` as an array of member objects
+ * (checked with `Array.isArray`), not a keyed object.
  */
 function serializeClusterState(state: ClusterState): Record<string, unknown> {
-  const members: Record<string, unknown> = {};
+  const members: Array<Record<string, unknown>> = [];
 
-  for (const [addr, member] of state.members) {
-    members[addr] = {
+  for (const [, member] of state.members) {
+    members.push({
       address: member.address,
       restAddress: member.restAddress,
       connected: member.connected,
@@ -544,7 +561,7 @@ function serializeClusterState(state: ClusterState): Record<string, unknown> {
       error: member.error,
       // Only include latestSample, not the full recentSamples ring
       latestSample: member.latestSample,
-    };
+    });
   }
 
   return {
