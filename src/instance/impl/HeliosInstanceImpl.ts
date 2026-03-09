@@ -166,6 +166,11 @@ import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/Distrib
 import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
 import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
+import { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongService";
+import { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
+import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
+import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
+import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -397,6 +402,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _scheduledExecutorContainers = new Map<string, ScheduledContainerService>();
   private _knownExecutorMemberIds = new Set<string>();
   private _sqlService: SqlService | null = null;
+  private _cpSubsystemService: CpSubsystemService | null = null;
+  private _atomicLongService: AtomicLongService | null = null;
+  private _atomicReferenceService: AtomicReferenceService | null = null;
+  private _countDownLatchService: CountDownLatchService | null = null;
+  private _semaphoreService: SemaphoreService | null = null;
 
   /** TCP transport — non-null when TCP-IP or multicast join is enabled. */
   private _transport: TcpClusterTransport | null = null;
@@ -2857,51 +2867,69 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const atomicLongOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicLongOperations = {
-      get: async () => notImplemented(),
-      set: async () => notImplemented(),
-      getAndSet: async () => notImplemented(),
-      addAndGet: async () => notImplemented(),
-      getAndAdd: async () => notImplemented(),
-      compareAndSet: async () => notImplemented(),
-      incrementAndGet: async () => notImplemented(),
-      getAndIncrement: async () => notImplemented(),
-      decrementAndGet: async () => notImplemented(),
-      getAndDecrement: async () => notImplemented(),
-      apply: async () => notImplemented(),
-      alter: async () => notImplemented(),
-      alterAndGet: async () => notImplemented(),
-      getAndAlter: async () => notImplemented(),
+      get: async (name) => this._getOrCreateAtomicLongService().get(name),
+      set: async (name, value) => this._getOrCreateAtomicLongService().set(name, value),
+      getAndSet: async (name, value) => this._getOrCreateAtomicLongService().getAndSet(name, value),
+      addAndGet: async (name, delta) => this._getOrCreateAtomicLongService().addAndGet(name, delta),
+      getAndAdd: async (name, delta) => this._getOrCreateAtomicLongService().getAndAdd(name, delta),
+      compareAndSet: async (name, expect, update) => this._getOrCreateAtomicLongService().compareAndSet(name, expect, update),
+      incrementAndGet: async (name) => this._getOrCreateAtomicLongService().incrementAndGet(name),
+      getAndIncrement: async (name) => this._getOrCreateAtomicLongService().getAndIncrement(name),
+      decrementAndGet: async (name) => this._getOrCreateAtomicLongService().decrementAndGet(name),
+      getAndDecrement: async (name) => this._getOrCreateAtomicLongService().getAndDecrement(name),
+      apply: async (name, functionData) => {
+        const result = await this._getOrCreateAtomicLongService().apply(name, this._deserializeAtomicLongFunction(functionData));
+        return this._toClientData(result);
+      },
+      alter: async (name, functionData) => {
+        await this._getOrCreateAtomicLongService().alter(name, (value) => this._coerceBigInt(this._deserializeAtomicLongFunction(functionData)(value)));
+      },
+      alterAndGet: async (name, functionData) =>
+        this._getOrCreateAtomicLongService().alterAndGet(name, (value) => this._coerceBigInt(this._deserializeAtomicLongFunction(functionData)(value))),
+      getAndAlter: async (name, functionData) =>
+        this._getOrCreateAtomicLongService().getAndAlter(name, (value) => this._coerceBigInt(this._deserializeAtomicLongFunction(functionData)(value))),
     };
 
     const atomicRefOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicRefOperations = {
-      get: async () => notImplemented(),
-      set: async () => notImplemented(),
-      compareAndSet: async () => notImplemented(),
-      isNull: async () => notImplemented(),
-      clear: async () => notImplemented(),
-      contains: async () => notImplemented(),
-      apply: async () => notImplemented(),
-      alter: async () => notImplemented(),
-      alterAndGet: async () => notImplemented(),
-      getAndAlter: async () => notImplemented(),
+      get: async (name) => this._toClientData(await this._getOrCreateAtomicReferenceService().get(name)),
+      set: async (name, value) => this._getOrCreateAtomicReferenceService().set(name, this._ss.toObject(value)),
+      compareAndSet: async (name, expected, updated) =>
+        this._getOrCreateAtomicReferenceService().compareAndSet(name, this._ss.toObject(expected), this._ss.toObject(updated)),
+      isNull: async (name) => this._getOrCreateAtomicReferenceService().isNull(name),
+      clear: async (name) => this._getOrCreateAtomicReferenceService().clear(name),
+      contains: async (name, value) => this._getOrCreateAtomicReferenceService().contains(name, this._ss.toObject(value)),
+      apply: async (name, functionData) =>
+        this._toClientData(await this._getOrCreateAtomicReferenceService().apply(name, this._deserializeAtomicReferenceFunction(functionData))),
+      alter: async (name, functionData) => {
+        await this._getOrCreateAtomicReferenceService().alter(name, this._deserializeAtomicReferenceFunction(functionData));
+      },
+      alterAndGet: async (name, functionData) =>
+        this._toClientData(await this._getOrCreateAtomicReferenceService().alterAndGet(name, this._deserializeAtomicReferenceFunction(functionData))),
+      getAndAlter: async (name, functionData) =>
+        this._toClientData(await this._getOrCreateAtomicReferenceService().getAndAlter(name, this._deserializeAtomicReferenceFunction(functionData))),
     };
 
     const countDownLatchOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CountDownLatchOperations = {
-      trySetCount: async () => notImplemented(),
-      await: async () => notImplemented(),
-      countDown: async () => notImplemented(),
-      getCount: async () => notImplemented(),
-      getRound: async () => notImplemented(),
+      trySetCount: async (name, count) => this._getOrCreateCountDownLatchService().trySetCount(name, count),
+      await: async (name, timeoutMs) => this._getOrCreateCountDownLatchService().await(name, this._toOptionalTimeoutMs(timeoutMs)),
+      countDown: async (name, expectedRound, invocationUuid) => this._getOrCreateCountDownLatchService().countDown(name, expectedRound, invocationUuid),
+      getCount: async (name) => this._getOrCreateCountDownLatchService().getCount(name),
+      getRound: async (name) => this._getOrCreateCountDownLatchService().getRound(name),
     };
 
     const semaphoreOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SemaphoreOperations = {
-      init: async () => notImplemented(),
-      acquire: async () => notImplemented(),
-      release: async () => notImplemented(),
-      drain: async () => notImplemented(),
-      change: async () => notImplemented(),
-      availablePermits: async () => notImplemented(),
-      tryAcquire: async () => notImplemented(),
+      init: async (name, permits) => this._getOrCreateSemaphoreService().init(name, permits),
+      acquire: async (name, sessionId, _threadId, invocationUuid, permits) =>
+        this._getOrCreateSemaphoreService().acquire(name, permits, this._toOptionalCpSessionId(sessionId), invocationUuid),
+      release: async (name, sessionId, _threadId, invocationUuid, permits) =>
+        this._getOrCreateSemaphoreService().release(name, permits, this._toOptionalCpSessionId(sessionId), invocationUuid),
+      drain: async (name, sessionId, _threadId, invocationUuid) =>
+        this._getOrCreateSemaphoreService().drain(name, this._toOptionalCpSessionId(sessionId), invocationUuid),
+      change: async (name, _sessionId, _threadId, invocationUuid, permits) =>
+        this._getOrCreateSemaphoreService().change(name, permits, invocationUuid),
+      availablePermits: async (name) => this._getOrCreateSemaphoreService().availablePermits(name),
+      tryAcquire: async (name, sessionId, _threadId, invocationUuid, permits, timeoutMs) =>
+        this._getOrCreateSemaphoreService().tryAcquire(name, permits, this._toOptionalTimeoutMs(timeoutMs), this._toOptionalCpSessionId(sessionId), invocationUuid),
     };
 
     const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
@@ -3055,6 +3083,118 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._sqlService = new SqlService(this._nodeEngine, this._mapService);
     }
     return this._sqlService;
+  }
+
+  private _getOrCreateCpSubsystemService(): CpSubsystemService {
+    if (this._cpSubsystemService === null) {
+      this._cpSubsystemService = new CpSubsystemService(this.getLocalMemberId());
+      this._nodeEngine.registerService(CpSubsystemService.SERVICE_NAME, this._cpSubsystemService);
+    }
+    return this._cpSubsystemService;
+  }
+
+  private _getOrCreateAtomicLongService(): AtomicLongService {
+    if (this._atomicLongService === null) {
+      this._atomicLongService = new AtomicLongService(this._getOrCreateCpSubsystemService());
+      this._nodeEngine.registerService(AtomicLongService.SERVICE_NAME, this._atomicLongService);
+    }
+    return this._atomicLongService;
+  }
+
+  private _getOrCreateAtomicReferenceService(): AtomicReferenceService {
+    if (this._atomicReferenceService === null) {
+      this._atomicReferenceService = new AtomicReferenceService(this._getOrCreateCpSubsystemService());
+      this._nodeEngine.registerService(AtomicReferenceService.SERVICE_NAME, this._atomicReferenceService);
+    }
+    return this._atomicReferenceService;
+  }
+
+  private _getOrCreateCountDownLatchService(): CountDownLatchService {
+    if (this._countDownLatchService === null) {
+      this._countDownLatchService = new CountDownLatchService(this._getOrCreateCpSubsystemService());
+      this._nodeEngine.registerService(CountDownLatchService.SERVICE_NAME, this._countDownLatchService);
+    }
+    return this._countDownLatchService;
+  }
+
+  private _getOrCreateSemaphoreService(): SemaphoreService {
+    if (this._semaphoreService === null) {
+      this._semaphoreService = new SemaphoreService(this._getOrCreateCpSubsystemService());
+      this._nodeEngine.registerService(SemaphoreService.SERVICE_NAME, this._semaphoreService);
+    }
+    return this._semaphoreService;
+  }
+
+  private _toOptionalTimeoutMs(timeoutMs: bigint): number | undefined {
+    if (timeoutMs < 0n || timeoutMs > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return undefined;
+    }
+    return Number(timeoutMs);
+  }
+
+  private _toOptionalCpSessionId(sessionId: bigint): string | null {
+    return sessionId >= 0n ? sessionId.toString() : null;
+  }
+
+  private _coerceBigInt(value: unknown): bigint {
+    if (typeof value === 'bigint') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return BigInt(Math.trunc(value));
+    }
+    if (typeof value === 'string') {
+      return BigInt(value);
+    }
+    throw new Error('AtomicLong function result must be coercible to bigint');
+  }
+
+  private _deserializeAtomicLongFunction(functionData: Data): (value: bigint) => unknown {
+    const candidate = this._ss.toObject<unknown>(functionData);
+    if (candidate !== null && typeof (candidate as { apply?: unknown }).apply === 'function') {
+      return (value: bigint) => (candidate as { apply(input: bigint): unknown }).apply(value);
+    }
+    if (typeof candidate === 'string') {
+      switch (candidate) {
+        case 'increment':
+          return (value: bigint) => value + 1n;
+        case 'decrement':
+          return (value: bigint) => value - 1n;
+        case 'negate':
+          return (value: bigint) => -value;
+        case 'identity':
+          return (value: bigint) => value;
+      }
+    }
+    if (candidate !== null && typeof candidate === 'object' && 'type' in candidate) {
+      const descriptor = candidate as { type: string; delta?: string | number | bigint; value?: string | number | bigint };
+      switch (descriptor.type) {
+        case 'add':
+          return (value: bigint) => value + this._coerceBigInt(descriptor.delta ?? 0n);
+        case 'set':
+          return () => this._coerceBigInt(descriptor.value ?? 0n);
+      }
+    }
+    throw new Error('AtomicLong function payload is not a supported callable descriptor');
+  }
+
+  private _deserializeAtomicReferenceFunction(functionData: Data): (value: unknown | null) => unknown {
+    const candidate = this._ss.toObject<unknown>(functionData);
+    if (candidate !== null && typeof (candidate as { apply?: unknown }).apply === 'function') {
+      return (value: unknown | null) => (candidate as { apply(input: unknown | null): unknown }).apply(value);
+    }
+    if (candidate !== null && typeof candidate === 'object' && 'type' in candidate) {
+      const descriptor = candidate as { type: string; value?: unknown };
+      switch (descriptor.type) {
+        case 'identity':
+          return (value: unknown | null) => value;
+        case 'clear':
+          return () => null;
+        case 'set':
+          return () => descriptor.value ?? null;
+      }
+    }
+    throw new Error('AtomicReference function payload is not a supported callable descriptor');
   }
 
   private _clientSqlQueryKey(queryId: ClientSqlQueryId): string {
@@ -4490,6 +4630,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     for (const topic of Array.from(this._topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
     this._distributedReplicatedMapService?.shutdown();
+    this._cpSubsystemService?.shutdown();
     for (const rm of Array.from(this._replicatedMaps.values())) rm.destroy();
     this._nearCachedMaps.clear();
     this._nearCacheManager.destroyAllNearCaches();
@@ -4503,6 +4644,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._reliableTopics.clear();
     this._multiMaps.clear();
     this._replicatedMaps.clear();
+    this._atomicLongService = null;
+    this._atomicReferenceService = null;
+    this._countDownLatchService = null;
+    this._semaphoreService = null;
+    this._cpSubsystemService = null;
     this._lifecycleService.shutdown();
     this._nodeEngine.shutdown();
     this._ss.destroy();

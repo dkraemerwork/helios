@@ -22,15 +22,22 @@ interface SemaphoreState {
   available: number;
   /** Permits held per session: sessionId -> count */
   sessionPermits: Record<string, number>;
+  /** Idempotent results keyed by invocation UUID. */
+  invocationResults: Record<string, number | true>;
 }
 
 function defaultState(available: number): SemaphoreState {
-  return { available, sessionPermits: {} };
+  return { available, sessionPermits: {}, invocationResults: {} };
 }
 
 function deserializeState(raw: unknown): SemaphoreState {
   if (raw === undefined || raw === null) return defaultState(0);
-  return raw as SemaphoreState;
+  const value = raw as Partial<SemaphoreState>;
+  return {
+    available: typeof value.available === 'number' ? value.available : 0,
+    sessionPermits: value.sessionPermits ?? {},
+    invocationResults: value.invocationResults ?? {},
+  };
 }
 
 export class SemaphoreService {
@@ -42,6 +49,7 @@ export class SemaphoreService {
     Array<{
       permits: number;
       sessionId: string | null;
+      invocationUuid?: string;
       resolve: () => void;
       reject: (err: Error) => void;
       timeoutHandle: ReturnType<typeof setTimeout> | null;
@@ -72,9 +80,14 @@ export class SemaphoreService {
    * Acquire `permits` permits, blocking indefinitely until available.
    * @param sessionId Optional CP session ID for session-aware tracking.
    */
-  async acquire(name: string, permits = 1, sessionId: string | null = null): Promise<void> {
+  async acquire(
+    name: string,
+    permits = 1,
+    sessionId: string | null = null,
+    invocationUuid?: string,
+  ): Promise<void> {
     if (permits <= 0) throw new Error('Permits must be positive');
-    await this._doAcquire(name, permits, sessionId, undefined);
+    await this._doAcquire(name, permits, sessionId, undefined, invocationUuid);
   }
 
   /**
@@ -86,9 +99,10 @@ export class SemaphoreService {
     permits = 1,
     timeoutMs?: number,
     sessionId: string | null = null,
+    invocationUuid?: string,
   ): Promise<boolean> {
     if (permits <= 0) throw new Error('Permits must be positive');
-    return this._doAcquire(name, permits, sessionId, timeoutMs ?? 0);
+    return this._doAcquire(name, permits, sessionId, timeoutMs ?? 0, invocationUuid);
   }
 
   // ── Release ──────────────────────────────────────────────────────────────
@@ -97,9 +111,17 @@ export class SemaphoreService {
    * Release `permits` permits.
    * @param sessionId If provided, decrements that session's tracked permit count.
    */
-  async release(name: string, permits = 1, sessionId: string | null = null): Promise<void> {
+  async release(
+    name: string,
+    permits = 1,
+    sessionId: string | null = null,
+    invocationUuid?: string,
+  ): Promise<void> {
     if (permits <= 0) throw new Error('Permits must be positive');
     const state = this._readState(name);
+    if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
+      return;
+    }
     if (sessionId !== null) {
       const held = state.sessionPermits[sessionId] ?? 0;
       if (held < permits) {
@@ -113,6 +135,9 @@ export class SemaphoreService {
       }
     }
     state.available += permits;
+    if (invocationUuid !== undefined) {
+      state.invocationResults[invocationUuid] = true;
+    }
     await this._writeState(name, state);
     this._drainWaitQueue(name);
   }
@@ -126,10 +151,22 @@ export class SemaphoreService {
   /**
    * Drain all available permits, returning the number drained.
    */
-  async drain(name: string): Promise<number> {
+  async drain(name: string, sessionId: string | null = null, invocationUuid?: string): Promise<number> {
     const state = this._readState(name);
+    if (invocationUuid !== undefined) {
+      const previous = state.invocationResults[invocationUuid];
+      if (typeof previous === 'number') {
+        return previous;
+      }
+    }
     const drained = state.available;
     state.available = 0;
+    if (sessionId !== null && drained > 0) {
+      state.sessionPermits[sessionId] = (state.sessionPermits[sessionId] ?? 0) + drained;
+    }
+    if (invocationUuid !== undefined) {
+      state.invocationResults[invocationUuid] = drained;
+    }
     await this._writeState(name, state);
     return drained;
   }
@@ -154,6 +191,23 @@ export class SemaphoreService {
     state.available += increase;
     await this._writeState(name, state);
     this._drainWaitQueue(name);
+  }
+
+  async change(name: string, permits: number, invocationUuid?: string): Promise<void> {
+    const state = this._readState(name);
+    if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
+      return;
+    }
+    state.available = permits >= 0
+      ? state.available + permits
+      : Math.max(0, state.available + permits);
+    if (invocationUuid !== undefined) {
+      state.invocationResults[invocationUuid] = true;
+    }
+    await this._writeState(name, state);
+    if (permits > 0) {
+      this._drainWaitQueue(name);
+    }
   }
 
   /**
@@ -212,12 +266,19 @@ export class SemaphoreService {
     permits: number,
     sessionId: string | null,
     timeoutMs: number | undefined,
+    invocationUuid?: string,
   ): Promise<boolean> {
     const state = this._readState(name);
+    if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
+      return true;
+    }
     if (state.available >= permits) {
       state.available -= permits;
       if (sessionId !== null) {
         state.sessionPermits[sessionId] = (state.sessionPermits[sessionId] ?? 0) + permits;
+      }
+      if (invocationUuid !== undefined) {
+        state.invocationResults[invocationUuid] = true;
       }
       await this._writeState(name, state);
       return true;
@@ -233,12 +294,14 @@ export class SemaphoreService {
       const waiter: {
         permits: number;
         sessionId: string | null;
+        invocationUuid?: string;
         resolve: () => void;
         reject: (err: Error) => void;
         timeoutHandle: ReturnType<typeof setTimeout> | null;
       } = {
         permits,
         sessionId,
+        invocationUuid,
         resolve: () => resolve(true),
         reject,
         timeoutHandle: null,
@@ -276,6 +339,9 @@ export class SemaphoreService {
             if (waiter.sessionId !== null) {
               state.sessionPermits[waiter.sessionId] =
                 (state.sessionPermits[waiter.sessionId] ?? 0) + waiter.permits;
+            }
+            if (waiter.invocationUuid !== undefined) {
+              state.invocationResults[waiter.invocationUuid] = true;
             }
             await this._writeState(name, state);
             if (waiter.timeoutHandle !== null) clearTimeout(waiter.timeoutHandle);

@@ -12,14 +12,42 @@ import { CpSubsystemService } from './CpSubsystemService.js';
 
 const CP_GROUP_DEFAULT = 'default';
 const KEY_PREFIX = 'cdl:';
-const WAITERS_PREFIX = 'cdl:waiters:';
+
+interface CountDownLatchState {
+  count: number;
+  round: number;
+  invocationUuids: string[];
+}
 
 function stateKey(name: string): string {
   return KEY_PREFIX + name;
 }
 
-function waitersKey(name: string): string {
-  return WAITERS_PREFIX + name;
+function defaultState(): CountDownLatchState {
+  return {
+    count: 0,
+    round: 0,
+    invocationUuids: [],
+  };
+}
+
+function deserializeState(raw: unknown): CountDownLatchState {
+  if (raw === undefined) {
+    return defaultState();
+  }
+  if (typeof raw === 'number') {
+    return {
+      count: raw,
+      round: raw > 0 ? 1 : 0,
+      invocationUuids: [],
+    };
+  }
+  const value = raw as Partial<CountDownLatchState>;
+  return {
+    count: typeof value.count === 'number' ? value.count : 0,
+    round: typeof value.round === 'number' ? value.round : 0,
+    invocationUuids: Array.isArray(value.invocationUuids) ? [...value.invocationUuids] : [],
+  };
 }
 
 export class CountDownLatchService {
@@ -41,10 +69,14 @@ export class CountDownLatchService {
    */
   async trySetCount(name: string, count: number): Promise<boolean> {
     if (count < 0) throw new Error('Count must be >= 0');
-    const current = await this._readCount(name);
-    if (current > 0) return false;
+    const current = await this._readState(name);
+    if (current.count > 0) return false;
 
-    await this._applyCount(name, count);
+    await this._writeState(name, {
+      count,
+      round: current.round + (count > 0 ? 1 : 0),
+      invocationUuids: [],
+    });
     return true;
   }
 
@@ -52,19 +84,33 @@ export class CountDownLatchService {
    * Decrement the count of the latch. If count reaches zero, all waiting threads
    * are released.
    */
-  async countDown(name: string): Promise<void> {
-    const current = await this._readCount(name);
-    if (current <= 0) return;
-    const newCount = current - 1;
-    await this._applyCount(name, newCount);
-    if (newCount === 0) {
+  async countDown(name: string, expectedRound?: number, invocationUuid?: string): Promise<void> {
+    const current = await this._readState(name);
+    if (current.count <= 0) return;
+    if (expectedRound !== undefined && current.round !== expectedRound) return;
+    if (invocationUuid !== undefined && current.invocationUuids.includes(invocationUuid)) return;
+
+    const nextState: CountDownLatchState = {
+      count: current.count - 1,
+      round: current.round,
+      invocationUuids: invocationUuid !== undefined
+        ? [...current.invocationUuids, invocationUuid]
+        : current.invocationUuids,
+    };
+
+    await this._writeState(name, nextState);
+    if (nextState.count === 0) {
       this._releaseWaiters(name);
     }
   }
 
   /** Returns the current count. */
   async getCount(name: string): Promise<number> {
-    return this._readCount(name);
+    return (await this._readState(name)).count;
+  }
+
+  async getRound(name: string): Promise<number> {
+    return (await this._readState(name)).round;
   }
 
   /**
@@ -72,8 +118,8 @@ export class CountDownLatchService {
    * Returns true if count reached zero, false if timeout elapsed.
    */
   async await(name: string, timeoutMs?: number): Promise<boolean> {
-    const current = await this._readCount(name);
-    if (current <= 0) return true;
+    const current = await this._readState(name);
+    if (current.count <= 0) return true;
 
     return new Promise<boolean>((resolve) => {
       let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -120,23 +166,23 @@ export class CountDownLatchService {
 
   // ── Internal ───────────────────────────────────────────────────────────
 
-  private async _readCount(name: string): Promise<number> {
+  private async _readState(name: string): Promise<CountDownLatchState> {
     this._cp.getOrCreateGroup(CP_GROUP_DEFAULT);
     const raw = this._cp.readState(CP_GROUP_DEFAULT, stateKey(name));
-    return raw !== undefined ? (raw as number) : 0;
+    return deserializeState(raw);
   }
 
-  private async _applyCount(name: string, count: number): Promise<void> {
+  private async _writeState(name: string, state: CountDownLatchState): Promise<void> {
     this._cp.getOrCreateGroup(CP_GROUP_DEFAULT);
 
     await this._cp.executeCommand({
       type: 'CDL_SET',
       groupId: CP_GROUP_DEFAULT,
       key: stateKey(name),
-      payload: { count },
+      payload: state,
     });
 
-    this._cp.applyStateMutation(CP_GROUP_DEFAULT, stateKey(name), count);
+    this._cp.applyStateMutation(CP_GROUP_DEFAULT, stateKey(name), state);
   }
 
   private _releaseWaiters(name: string): void {
