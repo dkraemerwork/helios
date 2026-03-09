@@ -12,18 +12,19 @@
  * OperationService with owner-routed partition dispatch (no legacy
  * MAP_PUT/MAP_REMOVE/MAP_CLEAR broadcast).
  */
-import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
+import { CacheUtil } from "@zenystx/helios-core/cache/CacheUtil";
+import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
+import { DistributedCardinalityEstimatorService } from "@zenystx/helios-core/cardinality/impl/DistributedCardinalityEstimatorService";
+import { ListAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js";
 import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
 import { MultiMapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
-import { ListAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js";
 import { QueueAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js";
 import { SetAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/SetAddListenerCodec.js";
-import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
-import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
+import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { Address } from "@zenystx/helios-core/cluster/Address";
-import { MemberInfo } from "@zenystx/helios-core/cluster/MemberInfo";
-import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
+import type { Member } from "@zenystx/helios-core/cluster/Member";
+import { MemberInfo } from "@zenystx/helios-core/cluster/MemberInfo";
 import { LocalCluster } from "@zenystx/helios-core/cluster/impl/LocalCluster";
 import { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
 import { MulticastService } from "@zenystx/helios-core/cluster/multicast/MulticastService";
@@ -32,44 +33,45 @@ import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpCluster
 import type { IList } from "@zenystx/helios-core/collection/IList";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { ISet } from "@zenystx/helios-core/collection/ISet";
+import type { LocalQueueStats } from "@zenystx/helios-core/collection/LocalQueueStats";
 import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
 import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
 import { DistributedListService } from "@zenystx/helios-core/collection/impl/list/DistributedListService";
 import { ListProxyImpl } from "@zenystx/helios-core/collection/impl/list/ListProxyImpl";
-import { DistributedSetService } from "@zenystx/helios-core/collection/impl/set/DistributedSetService";
-import { SetProxyImpl } from "@zenystx/helios-core/collection/impl/set/SetProxyImpl";
 import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
 import { QueueProxyImpl } from "@zenystx/helios-core/collection/impl/queue/QueueProxyImpl";
-import { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
-import { TransactionManagerServiceImpl } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
-import { TransactionalListProxy } from "@zenystx/helios-core/transaction/impl/TransactionalListProxy";
-import { TransactionalMapProxy } from "@zenystx/helios-core/transaction/impl/TransactionalMapProxy";
-import { TransactionalMultiMapProxy } from "@zenystx/helios-core/transaction/impl/TransactionalMultiMapProxy";
-import { TransactionalQueueProxy } from "@zenystx/helios-core/transaction/impl/TransactionalQueueProxy";
-import { TransactionalSetProxy } from "@zenystx/helios-core/transaction/impl/TransactionalSetProxy";
-import { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
-import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
-import { TransactionOptions, TransactionType } from "@zenystx/helios-core/transaction/TransactionOptions";
+import { DistributedSetService } from "@zenystx/helios-core/collection/impl/set/DistributedSetService";
+import { SetProxyImpl } from "@zenystx/helios-core/collection/impl/set/SetProxyImpl";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
+import { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongService";
+import { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
+import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
+import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
+import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
+import { PNCounterService } from "@zenystx/helios-core/crdt/impl/PNCounterService";
+import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
+import type { StoreLatencyMetrics } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
+import { StoreLatencyTracker } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
+import type { SystemEvent } from "@zenystx/helios-core/diagnostics/SystemEventLog";
+import { SystemEventLog } from "@zenystx/helios-core/diagnostics/SystemEventLog";
 import { ExecutorRejectedExecutionException } from "@zenystx/helios-core/executor/ExecutorExceptions";
-import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import type { ExecutorOperationResult } from "@zenystx/helios-core/executor/ExecutorOperationResult";
+import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import type { TaskCallable } from "@zenystx/helios-core/executor/TaskCallable";
 import { CancellationOperation } from "@zenystx/helios-core/executor/impl/CancellationOperation";
 import { ExecuteCallableOperation } from "@zenystx/helios-core/executor/impl/ExecuteCallableOperation";
 import { ExecutorContainerService } from "@zenystx/helios-core/executor/impl/ExecutorContainerService";
 import { ExecutorServiceProxy } from "@zenystx/helios-core/executor/impl/ExecutorServiceProxy";
-import { MemberCallableOperation } from "@zenystx/helios-core/executor/impl/MemberCallableOperation";
-import type { IScheduledExecutorService } from "@zenystx/helios-core/scheduledexecutor/IScheduledExecutorService";
-import { ScheduledExecutorServiceProxy } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorServiceProxy";
-import { ScheduledExecutorContainerService as ScheduledContainerService } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorContainerService";
 import { InlineExecutionBackend } from "@zenystx/helios-core/executor/impl/InlineExecutionBackend";
+import { MemberCallableOperation } from "@zenystx/helios-core/executor/impl/MemberCallableOperation";
 import { ScatterExecutionBackend } from "@zenystx/helios-core/executor/impl/ScatterExecutionBackend";
 import { TaskTypeRegistry } from "@zenystx/helios-core/executor/impl/TaskTypeRegistry";
+import { FlakeIdGeneratorService } from "@zenystx/helios-core/flakeid/impl/FlakeIdGeneratorService";
+import { EndpointQualifier } from "@zenystx/helios-core/instance/EndpointQualifier";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { InvocationMonitor } from "@zenystx/helios-core/instance/impl/InvocationMonitor";
 import { PendingResponseEntryPool } from "@zenystx/helios-core/instance/impl/PendingResponseEntryPool";
@@ -78,9 +80,10 @@ import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
+import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
-import { NearCacheInvalidationManager } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationManager";
-import { MutationTrigger } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent";
+import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
+import { MigrationQueue } from "@zenystx/helios-core/internal/partition/impl/MigrationQueue";
 import { PartitionReplicaManager } from "@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager";
 import { PartitionBackupReplicaAntiEntropyOp } from "@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp";
 import { chunkNamespaceStates } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest";
@@ -88,26 +91,34 @@ import { PartitionReplicaSyncChunkAssembler, PartitionReplicaSyncResponse } from
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import { SerializationConfig } from "@zenystx/helios-core/internal/serialization/impl/SerializationConfig";
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
-import type { IMap } from "@zenystx/helios-core/map/IMap";
+import { blitzJobMetricsToJSON } from "@zenystx/helios-core/job/metrics/BlitzJobMetrics";
 import type { EntryProcessor } from "@zenystx/helios-core/map/EntryProcessor";
+import type { IMap } from "@zenystx/helios-core/map/IMap";
 import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
 import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
-import { SimpleEntryView } from "@zenystx/helios-core/map/impl/SimpleEntryView.js";
-import { MapEntryProcessorEngine } from "@zenystx/helios-core/map/impl/query/MapEntryProcessorEngine";
 import { NearCachedIMapWrapper } from "@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper";
+import { MapEntryProcessorEngine } from "@zenystx/helios-core/map/impl/query/MapEntryProcessorEngine";
+import { globalMetrics } from "@zenystx/helios-core/monitor/HazelcastMetrics";
+import { HealthMonitor } from "@zenystx/helios-core/monitor/HealthMonitor";
+import { MetricsRegistry } from "@zenystx/helios-core/monitor/MetricsRegistry";
+import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitionInfo, MigrationMetrics, ObjectInventory, OperationMetrics, ThreadPoolMetrics, TransportMetrics } from "@zenystx/helios-core/monitor/MetricsSample";
+import { MetricsSampler } from "@zenystx/helios-core/monitor/MetricsSampler";
+import type { MonitorStateProvider } from "@zenystx/helios-core/monitor/MonitorStateProvider";
+import { globalResourceLimiter } from "@zenystx/helios-core/monitor/ResourceLimiter";
 import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
-import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import { DistributedMultiMapService } from "@zenystx/helios-core/multimap/impl/DistributedMultiMapService";
+import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import { MultiMapProxyImpl } from "@zenystx/helios-core/multimap/impl/MultiMapProxyImpl";
+import type { Predicate } from "@zenystx/helios-core/query/Predicate";
 import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
-import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
 import { DistributedReplicatedMapService } from "@zenystx/helios-core/replicatedmap/impl/DistributedReplicatedMapService";
+import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
 import { ReplicatedMapProxyImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapProxyImpl";
-import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
-import { CacheUtil } from "@zenystx/helios-core/cache/CacheUtil";
 import { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
 import { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
+import type { AdminOperationsProvider } from "@zenystx/helios-core/rest/handler/AdminHandler";
+import { AdminHandler } from "@zenystx/helios-core/rest/handler/AdminHandler";
 import { ClusterReadHandler } from "@zenystx/helios-core/rest/handler/ClusterReadHandler";
 import { ClusterWriteHandler } from "@zenystx/helios-core/rest/handler/ClusterWriteHandler";
 import type {
@@ -117,60 +128,53 @@ import type {
 } from "@zenystx/helios-core/rest/handler/DataHandler";
 import { DataHandler } from "@zenystx/helios-core/rest/handler/DataHandler";
 import { HealthCheckHandler } from "@zenystx/helios-core/rest/handler/HealthCheckHandler";
-import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
-import type { MonitorJobsProvider, MonitorJobSnapshot } from "@zenystx/helios-core/rest/handler/MonitorHandler";
 import { MetricsHandler } from "@zenystx/helios-core/rest/handler/MetricsHandler";
-import { AdminHandler } from "@zenystx/helios-core/rest/handler/AdminHandler";
-import type { AdminOperationsProvider } from "@zenystx/helios-core/rest/handler/AdminHandler";
-import { blitzJobMetricsToJSON } from "@zenystx/helios-core/job/metrics/BlitzJobMetrics";
-import { MetricsRegistry } from "@zenystx/helios-core/monitor/MetricsRegistry";
-import { MetricsSampler } from "@zenystx/helios-core/monitor/MetricsSampler";
-import { HealthMonitor } from "@zenystx/helios-core/monitor/HealthMonitor";
-import { globalMetrics } from "@zenystx/helios-core/monitor/HazelcastMetrics";
-import { globalResourceLimiter } from "@zenystx/helios-core/monitor/ResourceLimiter";
-import type { MonitorStateProvider } from "@zenystx/helios-core/monitor/MonitorStateProvider";
-import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitionInfo, MigrationMetrics, ObjectInventory, OperationMetrics, ThreadPoolMetrics, TransportMetrics } from "@zenystx/helios-core/monitor/MetricsSample";
-import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
-import { MigrationQueue } from "@zenystx/helios-core/internal/partition/impl/MigrationQueue";
-import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import type { MonitorJobSnapshot, MonitorJobsProvider } from "@zenystx/helios-core/rest/handler/MonitorHandler";
+import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
 import { DistributedRingbufferService } from "@zenystx/helios-core/ringbuffer/impl/DistributedRingbufferService";
-import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
-import { StoreLatencyTracker } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
-import { SystemEventLog } from "@zenystx/helios-core/diagnostics/SystemEventLog";
-import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
-import type { LocalQueueStats } from "@zenystx/helios-core/collection/LocalQueueStats";
-import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats";
-import type { StoreLatencyMetrics } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
-import type { SystemEvent } from "@zenystx/helios-core/diagnostics/SystemEventLog";
+import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import type { IScheduledExecutorService } from "@zenystx/helios-core/scheduledexecutor/IScheduledExecutorService";
+import { ScheduledExecutorContainerService as ScheduledContainerService } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorContainerService";
+import { ScheduledExecutorServiceProxy } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorServiceProxy";
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
-import type { Predicate } from "@zenystx/helios-core/query/Predicate";
-import type { SqlColumnType } from "@zenystx/helios-core/sql/impl/SqlRowMetadata";
-import { SqlResult } from "@zenystx/helios-core/sql/impl/SqlResult";
-import { SqlService } from "@zenystx/helios-core/sql/impl/SqlService";
-import { SqlStatement } from "@zenystx/helios-core/sql/impl/SqlStatement";
+import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
+import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
 import type { PartitionService } from "@zenystx/helios-core/spi/PartitionService";
+import { MutationTrigger } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent";
+import { NearCacheInvalidationManager } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationManager";
 import { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
+import type { BackpressureStats } from "@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator";
+import { BackpressureRegulator } from "@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator";
+import { isBackupAwareOperation } from "@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation";
 import {
   deserializeOperation,
   serializeOperation,
 } from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
-import { isBackupAwareOperation } from "@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation";
-import { BackpressureRegulator, OverloadError } from "@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator";
-import type { BackpressureStats } from "@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator";
-import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
 import { RetryableException } from "@zenystx/helios-core/spi/impl/operationservice/RetryableException";
+import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
+import { SqlResult } from "@zenystx/helios-core/sql/impl/SqlResult";
+import type { SqlColumnType } from "@zenystx/helios-core/sql/impl/SqlRowMetadata";
+import { SqlService } from "@zenystx/helios-core/sql/impl/SqlService";
+import { SqlStatement } from "@zenystx/helios-core/sql/impl/SqlStatement";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
+import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats";
 import type { Message } from "@zenystx/helios-core/topic/Message";
 import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
 import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
 import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
-import { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongService";
-import { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
-import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
-import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
-import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
+import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
+import { TransactionOptions, TransactionType } from "@zenystx/helios-core/transaction/TransactionOptions";
+import { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
+import { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
+import { TransactionManagerServiceImpl } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
+import { TransactionalListProxy } from "@zenystx/helios-core/transaction/impl/TransactionalListProxy";
+import { TransactionalMapProxy } from "@zenystx/helios-core/transaction/impl/TransactionalMapProxy";
+import { TransactionalMultiMapProxy } from "@zenystx/helios-core/transaction/impl/TransactionalMultiMapProxy";
+import { TransactionalQueueProxy } from "@zenystx/helios-core/transaction/impl/TransactionalQueueProxy";
+import { TransactionalSetProxy } from "@zenystx/helios-core/transaction/impl/TransactionalSetProxy";
+import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -341,6 +345,28 @@ function parseMemberAddress(member: string): [string, number] {
   return [trimmed, 5701];
 }
 
+function extractHostFromAddress(address: string): string {
+  const trimmed = address.trim();
+  if (trimmed.startsWith("[")) {
+    const bracketEnd = trimmed.indexOf("]");
+    if (bracketEnd !== -1) {
+      return trimmed.slice(1, bracketEnd);
+    }
+  }
+
+  const lastColon = trimmed.lastIndexOf(":");
+  if (lastColon === -1) {
+    return trimmed;
+  }
+
+  const port = Number.parseInt(trimmed.slice(lastColon + 1), 10);
+  return Number.isNaN(port) ? trimmed : trimmed.slice(0, lastColon);
+}
+
+function formatUrlHost(host: string): string {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}
+
 function clientDataFingerprint(data: Data): string {
   return data.toByteArray()?.toString("base64") ?? "";
 }
@@ -407,6 +433,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _atomicReferenceService: AtomicReferenceService | null = null;
   private _countDownLatchService: CountDownLatchService | null = null;
   private _semaphoreService: SemaphoreService | null = null;
+  private _pnCounterService: PNCounterService | null = null;
+  private _flakeIdGeneratorService: FlakeIdGeneratorService | null = null;
+  private _cardinalityEstimatorService: DistributedCardinalityEstimatorService | null = null;
 
   /** TCP transport — non-null when TCP-IP or multicast join is enabled. */
   private _transport: TcpClusterTransport | null = null;
@@ -641,6 +670,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
 
     this._restServer.start();
+    this._syncLocalMemberRestEndpoint();
 
     // Initialize monitoring subsystem if configured
     this._initMonitor();
@@ -2316,9 +2346,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._removeClientTopicListener(session.getSessionId(), registrationId),
     };
 
-    // ── No-op adapters for unimplemented services ─────────────────────────
-    const notImplemented = (): never => { throw new Error('not implemented'); };
-
     const listOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ListServiceOperations = {
       add: async (name, value) => {
         this._ensureListService();
@@ -2933,18 +2960,28 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
-      newIdBatch: async () => notImplemented(),
+      newIdBatch: async (name, batchSize) => this._getOrCreateFlakeIdGeneratorService().newBatch(name, batchSize),
     };
 
     const pnCounterOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').PnCounterOperations = {
-      get: async () => notImplemented(),
-      add: async () => notImplemented(),
-      getConfiguredReplicaCount: async () => notImplemented(),
+      get: async (name) => ({
+        value: this._getOrCreatePnCounterService().get(name),
+        replicaTimestamps: this._getPnCounterReplicaTimestamps(name),
+      }),
+      add: async (name, delta, getBeforeUpdate) => ({
+        value: getBeforeUpdate
+          ? this._getOrCreatePnCounterService().getAndAdd(name, delta)
+          : this._getOrCreatePnCounterService().addAndGet(name, delta),
+        replicaTimestamps: this._getPnCounterReplicaTimestamps(name),
+      }),
+      getConfiguredReplicaCount: async () => this._getOrCreatePnCounterService().getReplicaCount(),
     };
 
     const cardinalityOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CardinalityEstimatorOperations = {
-      add: async () => notImplemented(),
-      estimate: async () => notImplemented(),
+      add: async (name, item) => {
+        this._getOrCreateCardinalityEstimatorService().add(name, item.hashCode() >>> 0);
+      },
+      estimate: async (name) => BigInt(this._getOrCreateCardinalityEstimatorService().estimateGlobal(name)),
     };
 
     // ── TopologyPublisher ─────────────────────────────────────────────────
@@ -3091,6 +3128,45 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._nodeEngine.registerService(CpSubsystemService.SERVICE_NAME, this._cpSubsystemService);
     }
     return this._cpSubsystemService;
+  }
+
+  private _getOrCreatePnCounterService(): PNCounterService {
+    if (this._pnCounterService === null) {
+      this._pnCounterService = new PNCounterService(this.getLocalMemberId());
+      this._nodeEngine.registerService(PNCounterService.SERVICE_NAME, this._pnCounterService);
+    }
+    return this._pnCounterService;
+  }
+
+  private _getOrCreateFlakeIdGeneratorService(): FlakeIdGeneratorService {
+    if (this._flakeIdGeneratorService === null) {
+      this._flakeIdGeneratorService = new FlakeIdGeneratorService(this._computeStableNodeNumber(this.getLocalMemberId()));
+      this._nodeEngine.registerService(FlakeIdGeneratorService.SERVICE_NAME, this._flakeIdGeneratorService);
+    }
+    return this._flakeIdGeneratorService;
+  }
+
+  private _getOrCreateCardinalityEstimatorService(): DistributedCardinalityEstimatorService {
+    if (this._cardinalityEstimatorService === null) {
+      this._cardinalityEstimatorService = new DistributedCardinalityEstimatorService();
+      this._nodeEngine.registerService(DistributedCardinalityEstimatorService.SERVICE_NAME, this._cardinalityEstimatorService);
+    }
+    return this._cardinalityEstimatorService;
+  }
+
+  private _getPnCounterReplicaTimestamps(name: string): Array<[string, bigint]> {
+    return Array.from(
+      this._getOrCreatePnCounterService().getReplicaTimestampVector(name).timestamps,
+      ([replicaId, timestamp]) => [replicaId, BigInt(timestamp)],
+    );
+  }
+
+  private _computeStableNodeNumber(value: string): number {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = ((hash * 31) + value.charCodeAt(i)) | 0;
+    }
+    return hash >>> 0;
   }
 
   private _getOrCreateAtomicLongService(): AtomicLongService {
@@ -4648,6 +4724,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._atomicReferenceService = null;
     this._countDownLatchService = null;
     this._semaphoreService = null;
+    this._pnCounterService = null;
+    this._flakeIdGeneratorService = null;
+    this._cardinalityEstimatorService = null;
     this._cpSubsystemService = null;
     this._lifecycleService.shutdown();
     this._nodeEngine.shutdown();
@@ -5198,10 +5277,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
     throw new Error(`Unknown distributed object service: '${serviceName}'`);
   }
 
-  // ── Deferred service stubs ───────────────────────────────────────────────
-  // These services are deferred to future versions. They are exposed as stubs
-  // so callers receive a clear error rather than "not a function".
-
   getSql(): SqlService {
     return this._getOrCreateSqlService();
   }
@@ -5212,10 +5287,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
   }
 
-  getCPSubsystem(): never {
-    throw new Error(
-      "CP subsystem is not supported in this version (deferred to v2)",
-    );
+  getCPSubsystem(): CpSubsystemService {
+    return this._getOrCreateCpSubsystemService();
   }
 
   getScheduledExecutorService(name: string): IScheduledExecutorService {
@@ -5475,6 +5548,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     for (const member of members) {
       const address = `${member.getAddress().getHost()}:${member.getAddress().getPort()}`;
+      const isLocal = address === localAddress;
       let primaryPartitions = 0;
       let backupPartitions = 0;
 
@@ -5488,17 +5562,95 @@ export class HeliosInstanceImpl implements HeliosInstance {
         }
       }
 
+      const restAdvertisement = this._getMemberRestAdvertisement(
+        member,
+        address === localAddress ? localMember : null,
+      );
+
       result.push({
         uuid: member.getUuid(),
         address,
+        restPort: restAdvertisement?.port ?? 0,
+        restAddress: restAdvertisement?.url ?? null,
         isMaster: address === masterAddress,
-        isLocal: address === localAddress,
+        isLocal,
         primaryPartitions,
         backupPartitions,
       });
     }
 
     return result;
+  }
+
+  private _buildAdvertisedRestAddress(localMember: Member): string | null {
+    const restApiConfig = this._config.getNetworkConfig().getRestApiConfig();
+    if (!restApiConfig.isEnabled()) {
+      return null;
+    }
+
+    const restPort = this._restServer.isStarted()
+      ? this._restServer.getBoundPort()
+      : restApiConfig.getPort();
+    if (restPort <= 0) {
+      return null;
+    }
+
+    const publicAddress = this._config.getNetworkConfig().getPublicAddress();
+    const host = publicAddress !== null && publicAddress.trim().length > 0
+      ? extractHostFromAddress(publicAddress)
+      : localMember.getAddress().getHost();
+
+    return `http://${formatUrlHost(host)}:${restPort}`;
+  }
+
+  private _syncLocalMemberRestEndpoint(): void {
+    const localMember = this.getCluster().getLocalMember();
+    const restAddress = this._buildAdvertisedRestAddress(localMember);
+    const addressMap = localMember.getAddressMap();
+
+    for (const qualifier of addressMap.keys()) {
+      if (qualifier.type === EndpointQualifier.REST.type) {
+        addressMap.delete(qualifier);
+      }
+    }
+
+    if (restAddress === null) {
+      return;
+    }
+
+    const host = extractHostFromAddress(restAddress);
+    const port = this._restServer.getBoundPort();
+    addressMap.set(EndpointQualifier.REST, new Address(host, port));
+  }
+
+  private _getMemberRestAdvertisement(
+    member: Member,
+    localMember: Member | null,
+  ): { port: number; url: string } | null {
+    if (localMember !== null) {
+      const localRestAddress = this._buildAdvertisedRestAddress(localMember);
+      if (localRestAddress === null) {
+        return null;
+      }
+
+      return {
+        port: this._restServer.getBoundPort(),
+        url: localRestAddress,
+      };
+    }
+
+    for (const [qualifier, address] of member.getAddressMap()) {
+      if (qualifier.type !== EndpointQualifier.REST.type) {
+        continue;
+      }
+
+      return {
+        port: address.getPort(),
+        url: `http://${formatUrlHost(address.getHost())}:${address.getPort()}`,
+      };
+    }
+
+    return null;
   }
 
   private _getThreadPoolMetrics(): ThreadPoolMetrics {
