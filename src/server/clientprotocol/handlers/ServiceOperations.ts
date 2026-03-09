@@ -110,7 +110,7 @@ export interface ListServiceOperations {
     lastIndexOf(name: string, value: Data): Promise<number>;
     iterator(name: string): Promise<Data[]>;
     subList(name: string, from: number, to: number): Promise<Data[]>;
-    addItemListener(name: string, includeValue: boolean, session: ClientSession): Promise<string>;
+    addItemListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): Promise<string>;
     removeItemListener(registrationId: string, session: ClientSession): Promise<boolean>;
     isEmpty(name: string): Promise<boolean>;
     removeAll(name: string, values: Data[]): Promise<boolean>;

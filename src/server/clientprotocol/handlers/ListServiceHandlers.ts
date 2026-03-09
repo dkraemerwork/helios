@@ -7,31 +7,32 @@
  *   List.Contains          (0x050200)
  *   List.ContainsAll       (0x050300)
  *   List.Add               (0x050400)
- *   List.AddAll            (0x050500)
- *   List.AddAllWithIndex   (0x050600)
- *   List.Remove            (0x050700)
- *   List.RemoveAll         (0x050800)
- *   List.RetainAll         (0x050900)
- *   List.Clear             (0x050a00)
- *   List.Get               (0x050b00)
- *   List.Set               (0x050c00)
- *   List.AddWithIndex      (0x050d00)
- *   List.RemoveWithIndex   (0x050e00)
- *   List.LastIndexOf       (0x050f00)
- *   List.IndexOf           (0x051000)
- *   List.SubList           (0x051100)
- *   List.Iterator          (0x051200)
- *   List.ListIterator      (0x051300)
- *   List.IsEmpty           (0x051400)
- *   List.AddListener       (0x051500)
- *   List.RemoveListener    (0x051600)
+ *   List.Remove            (0x050500)
+ *   List.AddAll            (0x050600)
+ *   List.RemoveAll         (0x050700)
+ *   List.RetainAll         (0x050800)
+ *   List.Clear             (0x050900)
+ *   List.Iterator          (0x050a00)
+ *   List.AddListener       (0x050b00)
+ *   List.RemoveListener    (0x050c00)
+ *   List.IsEmpty           (0x050d00)
+ *   List.AddAllWithIndex   (0x050e00)
+ *   List.Get               (0x050f00)
+ *   List.Set               (0x051000)
+ *   List.AddWithIndex      (0x051100)
+ *   List.RemoveWithIndex   (0x051200)
+ *   List.LastIndexOf       (0x051300)
+ *   List.IndexOf           (0x051400)
+ *   List.SubList           (0x051500)
+ *   List.ListIterator      (0x051600)
  */
 
 import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
+import { ListAddListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js';
 import type { ListServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
@@ -47,44 +48,44 @@ const LIST_CONTAINS_ALL_REQUEST_TYPE    = 0x050300;
 const LIST_CONTAINS_ALL_RESPONSE_TYPE   = 0x050301;
 const LIST_ADD_REQUEST_TYPE             = 0x050400;
 const LIST_ADD_RESPONSE_TYPE            = 0x050401;
-const LIST_ADD_ALL_REQUEST_TYPE         = 0x050500;
-const LIST_ADD_ALL_RESPONSE_TYPE        = 0x050501;
-const LIST_ADD_ALL_WITH_INDEX_REQUEST_TYPE  = 0x050600;
-const LIST_ADD_ALL_WITH_INDEX_RESPONSE_TYPE = 0x050601;
-const LIST_REMOVE_REQUEST_TYPE          = 0x050700;
-const LIST_REMOVE_RESPONSE_TYPE         = 0x050701;
-const LIST_REMOVE_ALL_REQUEST_TYPE      = 0x050800;
-const LIST_REMOVE_ALL_RESPONSE_TYPE     = 0x050801;
-const LIST_RETAIN_ALL_REQUEST_TYPE      = 0x050900;
-const LIST_RETAIN_ALL_RESPONSE_TYPE     = 0x050901;
-const LIST_CLEAR_REQUEST_TYPE           = 0x050a00;
-const LIST_CLEAR_RESPONSE_TYPE          = 0x050a01;
-const LIST_GET_REQUEST_TYPE             = 0x050b00;
-const LIST_GET_RESPONSE_TYPE            = 0x050b01;
-const LIST_SET_REQUEST_TYPE             = 0x050c00;
-const LIST_SET_RESPONSE_TYPE            = 0x050c01;
-const LIST_ADD_WITH_INDEX_REQUEST_TYPE  = 0x050d00;
-const LIST_ADD_WITH_INDEX_RESPONSE_TYPE = 0x050d01;
-const LIST_REMOVE_WITH_INDEX_REQUEST_TYPE  = 0x050e00;
-const LIST_REMOVE_WITH_INDEX_RESPONSE_TYPE = 0x050e01;
-const LIST_LAST_INDEX_OF_REQUEST_TYPE   = 0x050f00;
-const LIST_LAST_INDEX_OF_RESPONSE_TYPE  = 0x050f01;
-const LIST_INDEX_OF_REQUEST_TYPE        = 0x051000;
-const LIST_INDEX_OF_RESPONSE_TYPE       = 0x051001;
-const LIST_SUB_LIST_REQUEST_TYPE        = 0x051100;
-const LIST_SUB_LIST_RESPONSE_TYPE       = 0x051101;
-const LIST_ITERATOR_REQUEST_TYPE        = 0x051200;
-const LIST_ITERATOR_RESPONSE_TYPE       = 0x051201;
-const LIST_LIST_ITERATOR_REQUEST_TYPE   = 0x051300;
-const LIST_LIST_ITERATOR_RESPONSE_TYPE  = 0x051301;
-const LIST_IS_EMPTY_REQUEST_TYPE        = 0x051400;
-const LIST_IS_EMPTY_RESPONSE_TYPE       = 0x051401;
-const LIST_ADD_LISTENER_REQUEST_TYPE    = 0x051500;
-const LIST_ADD_LISTENER_RESPONSE_TYPE   = 0x051501;
-const LIST_REMOVE_LISTENER_REQUEST_TYPE = 0x051600;
-const LIST_REMOVE_LISTENER_RESPONSE_TYPE = 0x051601;
+const LIST_REMOVE_REQUEST_TYPE          = 0x050500;
+const LIST_REMOVE_RESPONSE_TYPE         = 0x050501;
+const LIST_ADD_ALL_REQUEST_TYPE         = 0x050600;
+const LIST_ADD_ALL_RESPONSE_TYPE        = 0x050601;
+const LIST_REMOVE_ALL_REQUEST_TYPE      = 0x050700;
+const LIST_REMOVE_ALL_RESPONSE_TYPE     = 0x050701;
+const LIST_RETAIN_ALL_REQUEST_TYPE      = 0x050800;
+const LIST_RETAIN_ALL_RESPONSE_TYPE     = 0x050801;
+const LIST_CLEAR_REQUEST_TYPE           = 0x050900;
+const LIST_CLEAR_RESPONSE_TYPE          = 0x050901;
+const LIST_ITERATOR_REQUEST_TYPE        = 0x050a00;
+const LIST_ITERATOR_RESPONSE_TYPE       = 0x050a01;
+const LIST_ADD_LISTENER_REQUEST_TYPE    = 0x050b00;
+const LIST_ADD_LISTENER_RESPONSE_TYPE   = 0x050b01;
+const LIST_REMOVE_LISTENER_REQUEST_TYPE = 0x050c00;
+const LIST_REMOVE_LISTENER_RESPONSE_TYPE = 0x050c01;
+const LIST_IS_EMPTY_REQUEST_TYPE        = 0x050d00;
+const LIST_IS_EMPTY_RESPONSE_TYPE       = 0x050d01;
+const LIST_ADD_ALL_WITH_INDEX_REQUEST_TYPE  = 0x050e00;
+const LIST_ADD_ALL_WITH_INDEX_RESPONSE_TYPE = 0x050e01;
+const LIST_GET_REQUEST_TYPE             = 0x050f00;
+const LIST_GET_RESPONSE_TYPE            = 0x050f01;
+const LIST_SET_REQUEST_TYPE             = 0x051000;
+const LIST_SET_RESPONSE_TYPE            = 0x051001;
+const LIST_ADD_WITH_INDEX_REQUEST_TYPE  = 0x051100;
+const LIST_ADD_WITH_INDEX_RESPONSE_TYPE = 0x051101;
+const LIST_REMOVE_WITH_INDEX_REQUEST_TYPE  = 0x051200;
+const LIST_REMOVE_WITH_INDEX_RESPONSE_TYPE = 0x051201;
+const LIST_LAST_INDEX_OF_REQUEST_TYPE   = 0x051300;
+const LIST_LAST_INDEX_OF_RESPONSE_TYPE  = 0x051301;
+const LIST_INDEX_OF_REQUEST_TYPE        = 0x051400;
+const LIST_INDEX_OF_RESPONSE_TYPE       = 0x051401;
+const LIST_SUB_LIST_REQUEST_TYPE        = 0x051500;
+const LIST_SUB_LIST_RESPONSE_TYPE       = 0x051501;
+const LIST_LIST_ITERATOR_REQUEST_TYPE   = 0x051600;
+const LIST_LIST_ITERATOR_RESPONSE_TYPE  = 0x051601;
 
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES; // 13
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -221,6 +222,10 @@ export function registerListServiceHandlers(
         const from = initialFrame.content.readInt32LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
         const to = initialFrame.content.readInt32LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
         const name = StringCodec.decode(iter);
+        const size = await operations.size(name);
+        if (from < 0 || to > size || from > to) {
+            throw new Error(`IndexOutOfBoundsException: fromIndex=${from} toIndex=${to}`);
+        }
         const items = await operations.subList(name, from, to);
         return _encodeDataListResponse(LIST_SUB_LIST_RESPONSE_TYPE, items);
     });
@@ -233,9 +238,15 @@ export function registerListServiceHandlers(
     });
 
     dispatcher.register(LIST_LIST_ITERATOR_REQUEST_TYPE, async (msg, _session) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const startIndex = initialFrame.content.readInt32LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
         const name = StringCodec.decode(iter);
-        const items = await operations.iterator(name);
+        const size = await operations.size(name);
+        if (startIndex < 0 || startIndex > size) {
+            throw new Error(`IndexOutOfBoundsException: index ${startIndex}`);
+        }
+        const items = await operations.subList(name, startIndex, size);
         return _encodeDataListResponse(LIST_LIST_ITERATOR_RESPONSE_TYPE, items);
     });
 
@@ -250,13 +261,18 @@ export function registerListServiceHandlers(
         const initialFrame = iter.next();
         const includeValue = initialFrame.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
         const name = StringCodec.decode(iter);
-        const registrationId = await operations.addItemListener(name, includeValue, session);
-        return _encodeStringResponse(LIST_ADD_LISTENER_RESPONSE_TYPE, registrationId);
+        const registrationId = await operations.addItemListener(name, includeValue, msg.getCorrelationId(), session);
+        return ListAddListenerCodec.encodeResponse(registrationId);
     });
 
     dispatcher.register(LIST_REMOVE_LISTENER_REQUEST_TYPE, async (msg, session) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const registrationId = StringCodec.decode(iter);
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const registrationId = FixedSizeTypesCodec.decodeUUID(initialFrame.content, INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+        StringCodec.decode(iter);
+        if (registrationId === null) {
+            throw new Error('registrationId is required');
+        }
         const result = await operations.removeItemListener(registrationId, session);
         return _encodeBooleanResponse(LIST_REMOVE_LISTENER_RESPONSE_TYPE, result);
     });
@@ -295,18 +311,6 @@ function _encodeIntResponse(responseType: number, value: number): ClientMessage 
     buf.writeInt32LE(value | 0, RESPONSE_HEADER_SIZE);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
-    msg.setFinal();
-    return msg;
-}
-
-function _encodeStringResponse(responseType: number, value: string): ClientMessage {
-    const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
-    buf.fill(0);
-    buf.writeUInt32LE(responseType >>> 0, 0);
-    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
-    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
-    StringCodec.encode(msg, value);
     msg.setFinal();
     return msg;
 }

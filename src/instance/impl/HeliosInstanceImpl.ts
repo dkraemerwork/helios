@@ -14,6 +14,7 @@
  */
 import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
+import { ListAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js";
 import { QueueAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js";
 import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
 import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
@@ -245,6 +246,14 @@ interface QueueClientListenerRegistration {
   queueListenerId: string;
 }
 
+interface ItemClientListenerRegistration {
+  name: string;
+  registrationId: string;
+  includeValue: boolean;
+  correlationId: number;
+  session: ClientSession;
+}
+
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
   const trimmed = member.trim();
@@ -255,6 +264,10 @@ function parseMemberAddress(member: string): [string, number] {
     if (!isNaN(port)) return [host, port];
   }
   return [trimmed, 5701];
+}
+
+function clientDataFingerprint(data: Data): string {
+  return data.toByteArray()?.toString("base64") ?? "";
 }
 
 export class HeliosInstanceImpl implements HeliosInstance {
@@ -399,6 +412,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionMapListeners = new Map<string, Set<string>>();
   private readonly _clientQueueListenerRegistrations = new Map<string, QueueClientListenerRegistration>();
   private readonly _clientSessionQueueListeners = new Map<string, Set<string>>();
+  private readonly _clientListListenerRegistrations = new Map<string, ItemClientListenerRegistration>();
+  private readonly _clientSessionListListeners = new Map<string, Set<string>>();
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
@@ -2188,27 +2203,146 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const notImplemented = (): never => { throw new Error('not implemented'); };
 
     const listOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ListServiceOperations = {
-      add: async () => notImplemented(),
-      addWithIndex: async () => notImplemented(),
-      get: async () => notImplemented(),
-      set: async () => notImplemented(),
-      remove: async () => notImplemented(),
-      removeWithIndex: async () => notImplemented(),
-      size: async () => notImplemented(),
-      contains: async () => notImplemented(),
-      containsAll: async () => notImplemented(),
-      addAll: async () => notImplemented(),
-      addAllWithIndex: async () => notImplemented(),
-      clear: async () => notImplemented(),
-      indexOf: async () => notImplemented(),
-      lastIndexOf: async () => notImplemented(),
-      iterator: async () => notImplemented(),
-      subList: async () => notImplemented(),
-      addItemListener: async () => notImplemented(),
-      removeItemListener: async () => notImplemented(),
-      isEmpty: async () => notImplemented(),
-      removeAll: async () => notImplemented(),
-      retainAll: async () => notImplemented(),
+      add: async (name, value) => {
+        this._ensureListService();
+        const added = await this._distributedListService!.add(name, value);
+        if (added) {
+          this._publishClientListEvent(name, value, 1);
+        }
+        return added;
+      },
+      addWithIndex: async (name, index, value) => {
+        this._ensureListService();
+        await this._distributedListService!.addAt(name, index, value);
+        this._publishClientListEvent(name, value, 1);
+      },
+      get: async (name, index) => {
+        this._ensureListService();
+        return this._distributedListService!.get(name, index);
+      },
+      set: async (name, index, value) => {
+        this._ensureListService();
+        const oldValue = await this._distributedListService!.set(name, index, value);
+        this._publishClientListEvent(name, oldValue, 2);
+        this._publishClientListEvent(name, value, 1);
+        return oldValue;
+      },
+      remove: async (name, value) => {
+        this._ensureListService();
+        const removed = await this._distributedListService!.remove(name, value);
+        if (removed) {
+          this._publishClientListEvent(name, value, 2);
+        }
+        return removed;
+      },
+      removeWithIndex: async (name, index) => {
+        this._ensureListService();
+        const removed = await this._distributedListService!.removeAt(name, index);
+        this._publishClientListEvent(name, removed, 2);
+        return removed;
+      },
+      size: async (name) => {
+        this._ensureListService();
+        return this._distributedListService!.size(name);
+      },
+      contains: async (name, value) => {
+        this._ensureListService();
+        return this._distributedListService!.contains(name, value);
+      },
+      containsAll: async (name, values) => {
+        this._ensureListService();
+        return this._distributedListService!.containsAll(name, values);
+      },
+      addAll: async (name, values) => {
+        this._ensureListService();
+        const added = await this._distributedListService!.addAll(name, values);
+        if (added) {
+          for (const value of values) {
+            this._publishClientListEvent(name, value, 1);
+          }
+        }
+        return added;
+      },
+      addAllWithIndex: async (name, index, values) => {
+        this._ensureListService();
+        const added = await this._distributedListService!.addAllAt(name, index, values);
+        if (added) {
+          for (const value of values) {
+            this._publishClientListEvent(name, value, 1);
+          }
+        }
+        return added;
+      },
+      clear: async (name) => {
+        this._ensureListService();
+        const previous = await this._distributedListService!.toArray(name);
+        await this._distributedListService!.clear(name);
+        for (const value of previous) {
+          this._publishClientListEvent(name, value, 2);
+        }
+      },
+      indexOf: async (name, value) => {
+        this._ensureListService();
+        return this._distributedListService!.indexOf(name, value);
+      },
+      lastIndexOf: async (name, value) => {
+        this._ensureListService();
+        return this._distributedListService!.lastIndexOf(name, value);
+      },
+      iterator: async (name) => {
+        this._ensureListService();
+        return this._distributedListService!.toArray(name);
+      },
+      subList: async (name, from, to) => {
+        this._ensureListService();
+        return this._distributedListService!.subList(name, from, to);
+      },
+      addItemListener: async (name, includeValue, correlationId, session) =>
+        this._registerClientListListener(name, includeValue, correlationId, session),
+      removeItemListener: async (registrationId, session) =>
+        this._removeClientListListener(session.getSessionId(), registrationId),
+      isEmpty: async (name) => {
+        this._ensureListService();
+        return this._distributedListService!.isEmpty(name);
+      },
+      removeAll: async (name, values) => {
+        this._ensureListService();
+        const previous = await this._distributedListService!.toArray(name);
+        const fingerprints = new Set(values.map(clientDataFingerprint));
+        const survivors = previous.filter((value) => !fingerprints.has(clientDataFingerprint(value)));
+        const changed = survivors.length !== previous.length;
+        if (changed) {
+          await this._distributedListService!.clear(name);
+          if (survivors.length > 0) {
+            await this._distributedListService!.addAll(name, survivors);
+          }
+          for (const value of previous) {
+            if (fingerprints.has(clientDataFingerprint(value))) {
+              this._publishClientListEvent(name, value, 2);
+            }
+          }
+        }
+        return changed;
+      },
+      retainAll: async (name, values) => {
+        this._ensureListService();
+        const previous = await this._distributedListService!.toArray(name);
+        const fingerprints = new Set(values.map(clientDataFingerprint));
+        const survivors = previous.filter((value) => fingerprints.has(clientDataFingerprint(value)));
+        const changed = survivors.length !== previous.length;
+        if (changed) {
+          await this._distributedListService!.clear(name);
+          if (survivors.length > 0) {
+            await this._distributedListService!.addAll(name, survivors);
+          }
+          for (const value of previous) {
+            if (!fingerprints.has(clientDataFingerprint(value))) {
+              this._publishClientListEvent(name, value, 2);
+            }
+          }
+        }
+        return changed;
+      },
     };
 
     const setOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SetServiceOperations = {
@@ -2443,6 +2577,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._removeClientTopicListenersForSession(session.getSessionId());
       this._removeClientMapListenersForSession(session.getSessionId());
       this._removeClientQueueListenersForSession(session.getSessionId());
+      this._removeClientListListenersForSession(session.getSessionId());
     });
 
     // ── Wire all handlers ─────────────────────────────────────────────────
@@ -2491,6 +2626,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._name,
         this._config,
         this._ss,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
+
+  private _ensureListService(): void {
+    if (this._distributedListService === null) {
+      this._distributedListService = new DistributedListService(
+        this.getLocalMemberId(),
+        this._config,
         this._transport,
         this._clusterCoordinator,
       );
@@ -2735,6 +2881,73 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     for (const registrationId of Array.from(registrations)) {
       this._removeClientQueueListener(sessionId, registrationId);
+    }
+  }
+
+  private _registerClientListListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
+    const registrationId = crypto.randomUUID();
+    this._clientListListenerRegistrations.set(registrationId, {
+      name,
+      registrationId,
+      includeValue,
+      correlationId,
+      session,
+    });
+    let registrations = this._clientSessionListListeners.get(session.getSessionId());
+    if (registrations === undefined) {
+      registrations = new Set<string>();
+      this._clientSessionListListeners.set(session.getSessionId(), registrations);
+    }
+    registrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientListListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientListListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientListListenerRegistrations.delete(registrationId);
+    const registrations = this._clientSessionListListeners.get(sessionId);
+    registrations?.delete(registrationId);
+    if (registrations !== undefined && registrations.size === 0) {
+      this._clientSessionListListeners.delete(sessionId);
+    }
+    return true;
+  }
+
+  private _removeClientListListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionListListeners.get(sessionId);
+    if (registrations === undefined) {
+      return;
+    }
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientListListener(sessionId, registrationId);
+    }
+  }
+
+  private _publishClientListEvent(name: string, item: Data, eventType: number): void {
+    const memberUuid = this._cluster.getLocalMember().getUuid();
+    for (const [registrationId, registration] of this._clientListListenerRegistrations) {
+      if (registration.name !== name) {
+        continue;
+      }
+      const sessionId = [...this._clientSessionListListeners.entries()]
+        .find(([, registrations]) => registrations.has(registrationId))?.[0];
+      if (sessionId === undefined) {
+        continue;
+      }
+      if (!registration.session.isAuthenticated()) {
+        this._removeClientListListener(sessionId, registrationId);
+        continue;
+      }
+      const eventMessage = ListAddListenerCodec.encodeItemEvent(
+        registration.includeValue ? item : null,
+        memberUuid,
+        eventType,
+      );
+      eventMessage.setCorrelationId(registration.correlationId);
+      registration.session.pushEvent(eventMessage);
     }
   }
 
