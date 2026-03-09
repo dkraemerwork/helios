@@ -22,6 +22,7 @@ const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   '/health',
   '/health/ready',
   '/health/live',
+  '/health/startup',
 ]);
 
 /** Route prefixes that do not require authentication. */
