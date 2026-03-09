@@ -8,6 +8,7 @@ import {
 } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
+import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
@@ -428,6 +429,7 @@ describe('sql and executor protocol adapters', () => {
         const dispatcher = (instance as any)._clientProtocolServer.getDispatcher();
         const session = new TestClientSession('executor-session');
         const executor = instance.getExecutorService('protocol-exec');
+        const container = instance.getNodeEngine().getService<ExecutorContainerService>('helios:executor:container:protocol-exec');
         const started: string[] = [];
 
         executor.registerTaskType('slow-task', async (input) => {
@@ -471,10 +473,19 @@ describe('sql and executor protocol adapters', () => {
             session,
         ))!)).toBe(false);
         await dispatcher.dispatch(buildNameRequest(EXEC_SHUTDOWN_REQUEST_TYPE, 16, 'protocol-exec'), session);
+        expect(container.isShutdown()).toBe(true);
         expect(decodeBooleanResponse((await dispatcher.dispatch(
             buildNameRequest(EXEC_IS_SHUTDOWN_REQUEST_TYPE, 17, 'protocol-exec'),
             session,
         ))!)).toBe(true);
+        await expect(dispatcher.dispatch(
+            buildExecutorSubmitToPartitionRequest(18, 'shutdown-partition-task', partitionTask, 0, 'protocol-exec'),
+            session,
+        )).rejects.toThrow(/shut down/i);
+        await expect(dispatcher.dispatch(
+            buildExecutorSubmitToMemberRequest(19, 'shutdown-member-task', memberTask, memberUuid, 'protocol-exec'),
+            session,
+        )).rejects.toThrow(/shut down/i);
 
         ss.destroy();
     });

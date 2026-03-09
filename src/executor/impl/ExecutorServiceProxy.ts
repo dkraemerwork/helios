@@ -20,6 +20,7 @@ import {
 import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
 import type { IExecutorService, LocalExecutorStats, TaskTypeRegistration } from '@zenystx/helios-core/executor/IExecutorService.js';
 import { CancellationOperation } from '@zenystx/helios-core/executor/impl/CancellationOperation.js';
+import type { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
 import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/helios-core/executor/impl/ExecuteCallableOperation.js';
 import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
@@ -178,10 +179,14 @@ export class ExecutorServiceProxy implements IExecutorService {
 
     async shutdown(): Promise<void> {
         this._shutdown = true;
+        const container = this._getContainer();
+        if (container !== null && !container.isShutdown()) {
+            await container.shutdown();
+        }
     }
 
     isShutdown(): boolean {
-        return this._shutdown;
+        return this._shutdown || this._getContainer()?.isShutdown() === true;
     }
 
     // ── Stats ───────────────────────────────────────────────────────────
@@ -193,9 +198,13 @@ export class ExecutorServiceProxy implements IExecutorService {
     // ── Private helpers ─────────────────────────────────────────────────
 
     private _checkNotShutdown(): void {
-        if (this._shutdown) {
+        if (this.isShutdown()) {
             throw new ExecutorRejectedExecutionException(`Executor "${this._name}" is shut down`);
         }
+    }
+
+    private _getContainer(): ExecutorContainerService | null {
+        return this._nodeEngine.getServiceOrNull<ExecutorContainerService>(`helios:executor:container:${this._name}`);
     }
 
     private _rejectInline(task: TaskCallable<unknown>): void {

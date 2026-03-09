@@ -6,6 +6,7 @@
  * coexist, scheduled executor returns a working proxy.
  */
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
+import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { afterEach, describe, expect, test } from 'bun:test';
@@ -74,6 +75,19 @@ describe('HeliosInstance executor wiring (Block 17.8)', () => {
         inst.shutdown();
         expect(a.isShutdown()).toBe(true);
         expect(b.isShutdown()).toBe(true);
+    });
+
+    test('executor shutdown also shuts down the backing runtime container', async () => {
+        const inst = createInstance();
+        const exec = inst.getExecutorService('compute');
+        const container = inst.getNodeEngine().getService<ExecutorContainerService>('helios:executor:container:compute');
+
+        expect(container.isShutdown()).toBe(false);
+        await exec.shutdown();
+
+        expect(exec.isShutdown()).toBe(true);
+        expect(container.isShutdown()).toBe(true);
+        expect(() => exec.submit({ taskType: 'echo', input: 1 })).toThrow(/shut.*down/i);
     });
 
     test('shutdownAsync() awaits executor drain before tearing down', async () => {

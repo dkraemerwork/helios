@@ -2841,9 +2841,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const executorOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ExecutorServiceOperations = {
       shutdown: async (name) => {
-        await this.getExecutorService(name).shutdown();
+        const { container, proxy } = this._getOrCreateExecutorRuntime(name);
+        await container.shutdown();
+        await proxy.shutdown();
       },
-      isShutdown: async (name) => this.getExecutorService(name).isShutdown(),
+      isShutdown: async (name) => this._getOrCreateExecutorRuntime(name).container.isShutdown(),
       cancelOnPartition: async (uuid, partitionId, interrupt) =>
         this._cancelClientExecutorTaskOnPartition(uuid, partitionId, interrupt),
       cancelOnMember: async (uuid, memberUuid, interrupt) =>
@@ -3257,12 +3259,28 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return this._cluster.getMembers().find((member) => member.getUuid() === memberUuid) ?? null;
   }
 
+  private _getOrCreateExecutorRuntime(name: string): {
+    proxy: ExecutorServiceProxy;
+    container: ExecutorContainerService;
+  } {
+    const proxy = this.getExecutorService(name) as ExecutorServiceProxy;
+    const container = this._executorContainers.get(name)
+      ?? this._nodeEngine.getServiceOrNull<ExecutorContainerService>(`helios:executor:container:${name}`);
+    if (container === null || container === undefined) {
+      throw new Error(`No executor container registered for executor \"${name}\"`);
+    }
+    return { proxy, container };
+  }
+
   private _buildClientExecutorOperation(
     name: string,
     uuid: string,
     callable: Data,
   ): ExecuteCallableOperation {
-    this.getExecutorService(name);
+    const { container } = this._getOrCreateExecutorRuntime(name);
+    if (container.isShutdown()) {
+      throw new ExecutorRejectedExecutionException(`Executor \"${name}\" is shut down`);
+    }
 
     const registry = this._nodeEngine.getServiceOrNull<TaskTypeRegistry>(
       `helios:executor:registry:${name}`,
