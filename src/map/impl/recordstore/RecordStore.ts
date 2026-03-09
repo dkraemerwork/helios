@@ -7,6 +7,7 @@
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryProcessor } from '@zenystx/helios-core/map/EntryProcessor';
+import type { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView';
 
 export interface RecordStore {
     // ── point ops ──────────────────────────────────────────────────────────
@@ -32,6 +33,10 @@ export interface RecordStore {
      * Matches Java {@code RecordStore.putIfAbsent(Data, Object, long, long, Address)}.
      */
     putIfAbsent(key: Data, value: Data, ttl: number, maxIdle: number): Data | null;
+
+    replace(key: Data, value: Data, ttl: number, maxIdle: number): Data | null;
+
+    removeIfSame(key: Data, value: Data): boolean;
 
     /** Removes key and returns the old value, or null if absent. */
     remove(key: Data): Data | null;
@@ -73,6 +78,12 @@ export interface RecordStore {
      * @returns array of (key, result) pairs in iteration order.
      */
     executeOnEntries<R>(processor: EntryProcessor<R>): Array<readonly [Data, R | null]>;
+
+    evict(key: Data): boolean;
+
+    getEntryView(key: Data): SimpleEntryView<Data, Data> | null;
+
+    setTtl(key: Data, ttl: number): boolean;
 
     // ── metadata ────────────────────────────────────────────────────────────
 

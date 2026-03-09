@@ -62,6 +62,7 @@ import { MapClearCodec } from '@zenystx/helios-core/client/impl/protocol/codec/M
 import { MapDeleteCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapDeleteCodec.js';
 import { MapSetCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapSetCodec.js';
 import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec.js';
+import { MapGetEntryViewCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapGetEntryViewCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClusteredOperationDispatcher } from '@zenystx/helios-core/spi/impl/ClusteredOperationDispatcher.js';
 import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, FixedSizeTypesCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
@@ -214,7 +215,7 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         const listenerFlags = initialFrame.content.readInt32LE(MapAddEntryListenerCodec.REQUEST_INITIAL_FRAME_SIZE - BOOLEAN_SIZE_IN_BYTES - INT_SIZE_IN_BYTES);
         const localOnly = initialFrame.content.readUInt8(MapAddEntryListenerCodec.REQUEST_INITIAL_FRAME_SIZE - BOOLEAN_SIZE_IN_BYTES) !== 0;
         const name = StringCodec.decode(iter);
-        const registrationId = await operations.addEntryListener(name, listenerFlags, localOnly, session);
+        const registrationId = await operations.addEntryListener(name, listenerFlags, localOnly, msg.getCorrelationId(), session);
         return _encodeListenerRegistrationResponse(0x011901, registrationId);
     });
 
@@ -223,8 +224,8 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         const iter = msg.forwardFrameIterator();
         iter.next(); // skip initial frame
         const registrationId = StringCodec.decode(iter);
-        await operations.removeEntryListener(registrationId, session);
-        return _encodeBooleanResponse(MAP_REMOVE_ENTRY_LISTENER_RESPONSE_TYPE, true);
+        const removed = await operations.removeEntryListener(registrationId, session);
+        return _encodeBooleanResponse(MAP_REMOVE_ENTRY_LISTENER_RESPONSE_TYPE, removed);
     });
 
     // Map.Lock
@@ -318,8 +319,7 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         const name = StringCodec.decode(iter);
         const key = DataCodec.decode(iter);
         const view = await operations.getEntryView(name, key, threadId);
-        // Encode null entry view (no-op for now; full implementation requires EntryViewCodec)
-        return _encodeNullableDataResponse(MAP_GET_ENTRY_VIEW_RESPONSE_TYPE, null);
+        return MapGetEntryViewCodec.encodeResponse(view, BigInt(view?.getMaxIdle() ?? -1));
     });
 
     // Map.Evict
@@ -457,8 +457,8 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         iter.next();
         const name = StringCodec.decode(iter);
         const id = StringCodec.decode(iter);
-        await operations.removeInterceptor(name, id);
-        return _encodeBooleanResponse(MAP_REMOVE_INTERCEPTOR_RESPONSE_TYPE, true);
+        const removed = await operations.removeInterceptor(name, id);
+        return _encodeBooleanResponse(MAP_REMOVE_INTERCEPTOR_RESPONSE_TYPE, removed);
     });
 
     // Map.ExecuteOnKey

@@ -245,7 +245,7 @@ export function registerQueueServiceHandlers(
         const initialFrame = iter.next();
         const includeValue = initialFrame.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
         const name = StringCodec.decode(iter);
-        const registrationId = await operations.addItemListener(name, includeValue, session);
+        const registrationId = await operations.addItemListener(name, includeValue, msg.getCorrelationId(), session);
         return _encodeStringResponse(QUEUE_ADD_LISTENER_RESPONSE_TYPE, registrationId);
     });
 

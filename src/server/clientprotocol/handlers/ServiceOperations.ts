@@ -15,6 +15,7 @@
  */
 
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import type { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 
 // ── Map ───────────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ export interface MapServiceOperations {
     set(name: string, key: Data, value: Data, threadId: bigint, ttl: bigint): Promise<void>;
     getAll(name: string, keys: Data[]): Promise<Array<[Data, Data]>>;
     putAll(name: string, entries: Array<[Data, Data]>, triggerMapLoader: boolean): Promise<void>;
-    getEntryView(name: string, key: Data, threadId: bigint): Promise<unknown | null>;
+    getEntryView(name: string, key: Data, threadId: bigint): Promise<SimpleEntryView<Data, Data> | null>;
     evict(name: string, key: Data, threadId: bigint): Promise<boolean>;
     evictAll(name: string): Promise<void>;
     flush(name: string): Promise<void>;
@@ -48,9 +49,9 @@ export interface MapServiceOperations {
     tryLock(name: string, key: Data, threadId: bigint, lease: bigint, timeout: bigint, referenceId: bigint): Promise<boolean>;
     isLocked(name: string, key: Data): Promise<boolean>;
     forceUnlock(name: string, key: Data, referenceId: bigint): Promise<void>;
-    addEntryListener(name: string, flags: number, localOnly: boolean, session: ClientSession): Promise<string>;
-    removeEntryListener(registrationId: string, session: ClientSession): Promise<void>;
-    removeInterceptor(name: string, id: string): Promise<void>;
+    addEntryListener(name: string, flags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
+    removeEntryListener(registrationId: string, session: ClientSession): Promise<boolean>;
+    removeInterceptor(name: string, id: string): Promise<boolean>;
     executeOnKey(name: string, key: Data, entryProcessor: Data, threadId: bigint): Promise<Data | null>;
     executeOnAllKeys(name: string, entryProcessor: Data): Promise<Array<[Data, Data]>>;
     executeWithPredicate(name: string, entryProcessor: Data, predicate: Data): Promise<Array<[Data, Data]>>;
@@ -77,7 +78,7 @@ export interface QueueServiceOperations {
     remainingCapacity(name: string): Promise<number>;
     take(name: string): Promise<Data | null>;
     put(name: string, value: Data): Promise<void>;
-    addItemListener(name: string, includeValue: boolean, session: ClientSession): Promise<string>;
+    addItemListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): Promise<string>;
     removeItemListener(registrationId: string, session: ClientSession): Promise<boolean>;
 }
 

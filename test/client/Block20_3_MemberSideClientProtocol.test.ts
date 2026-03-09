@@ -28,7 +28,12 @@ import { ClientMessage, ClientMessageFrame } from "@zenystx/helios-core/client/i
 import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
 import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
 import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
+import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
+import { MapGetEntryViewCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetEntryViewCodec.js";
 import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
+import { QueueAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js";
+import { QueueOfferCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueOfferCodec";
+import { StringCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -56,6 +61,20 @@ function deserializeClientMessage(data: Buffer): ClientMessage {
     return reader.getClientMessage();
 }
 
+function deserializeClientMessages(data: Buffer): ClientMessage[] {
+    const messages: ClientMessage[] = [];
+    const buf = ByteBuffer.wrap(data);
+    while (buf.remaining() > 0) {
+        const reader = new ClientMessageReader();
+        const ok = reader.readFrom(buf, true);
+        if (!ok) {
+            throw new Error("ClientMessageReader did not complete");
+        }
+        messages.push(reader.getClientMessage());
+    }
+    return messages;
+}
+
 function buildOpcodeMessage(messageType: number, correlationId: number): ClientMessage {
     const msg = ClientMessage.createForEncode();
     const frame = Buffer.allocUnsafe(16);
@@ -64,6 +83,19 @@ function buildOpcodeMessage(messageType: number, correlationId: number): ClientM
     msg.add(new ClientMessageFrame(frame));
     msg.setCorrelationId(correlationId);
     msg.setPartitionId(-1);
+    msg.setFinal();
+    return msg;
+}
+
+function buildStringRequest(messageType: number, correlationId: number, value: string): ClientMessage {
+    const msg = ClientMessage.createForEncode();
+    const frame = Buffer.allocUnsafe(16);
+    frame.fill(0);
+    frame.writeUInt32LE(messageType, ClientMessage.TYPE_FIELD_OFFSET);
+    msg.add(new ClientMessageFrame(frame));
+    msg.setCorrelationId(correlationId);
+    msg.setPartitionId(-1);
+    StringCodec.encode(msg, value);
     msg.setFinal();
     return msg;
 }
