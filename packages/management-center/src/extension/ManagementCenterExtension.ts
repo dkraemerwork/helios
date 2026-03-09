@@ -49,6 +49,9 @@ export interface HeliosExtension {
   stop(): Promise<void>;
 }
 
+/** DI token for the extension context provided by the host Helios instance. */
+export const EXTENSION_CONTEXT = Symbol('EXTENSION_CONTEXT');
+
 export class ManagementCenterExtension implements HeliosExtension {
   readonly id = 'management-center';
 
@@ -70,8 +73,6 @@ export class ManagementCenterExtension implements HeliosExtension {
     logger.info('Management Center extension starting');
 
     // Lazy-import the root module to avoid circular dependency at declaration time.
-    // ManagementCenterModule will be created in a later step; the dynamic import
-    // ensures the extension compiles even before the module exists.
     const { ManagementCenterModule } = await import('../app/ManagementCenterModule.js');
 
     const adapter = new FastifyAdapter({
@@ -86,6 +87,8 @@ export class ManagementCenterExtension implements HeliosExtension {
         abortOnError: false,
       },
     );
+
+    this._app.enableShutdownHooks();
 
     const host = this._config.host ?? '0.0.0.0';
     const port = this._config.port ?? 8080;

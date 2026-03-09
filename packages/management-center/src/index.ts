@@ -7,6 +7,11 @@
  * @packageDocumentation
  */
 
+// ── Extension ───────────────────────────────────────────────────────────────
+export { ManagementCenterExtension } from './extension/ManagementCenterExtension.js';
+export type { ManagementCenterExtensionConfig } from './extension/ManagementCenterExtensionConfig.js';
+export { createManagementCenterExtension } from './extension/ExtensionRegistration.js';
+
 // ── Shared Types ────────────────────────────────────────────────────────────
 export * from './shared/types.js';
 
@@ -23,10 +28,9 @@ export * from './shared/time.js';
 export * from './shared/formatters.js';
 
 // ── Config ──────────────────────────────────────────────────────────────────
+export { ConfigService } from './config/ConfigService.js';
 export type { ManagementCenterConfig } from './config/ConfigSchema.js';
 export { managementCenterConfigSchema, parseEnvToRawConfig } from './config/ConfigSchema.js';
 
-// ── Extension ───────────────────────────────────────────────────────────────
-export { ManagementCenterExtension } from './extension/ManagementCenterExtension.js';
-export type { ManagementCenterExtensionConfig } from './extension/ManagementCenterExtensionConfig.js';
-export { createManagementCenterExtension } from './extension/ExtensionRegistration.js';
+// ── Module (for advanced usage / testing) ───────────────────────────────────
+export { ManagementCenterModule } from './app/ManagementCenterModule.js';
