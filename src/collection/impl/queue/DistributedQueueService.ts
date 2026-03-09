@@ -1075,8 +1075,8 @@ export class DistributedQueueService {
 
   private _remainingCapacity(name: string, runtime: QueueRuntime): number {
     const maxSize = this._getQueueConfig(name).getMaxSize();
-    if (maxSize === 0) {
-      return Number.MAX_SAFE_INTEGER;
+    if (maxSize <= 0) {
+      return 0x7fffffff;
     }
     return maxSize - runtime.state.items.length;
   }

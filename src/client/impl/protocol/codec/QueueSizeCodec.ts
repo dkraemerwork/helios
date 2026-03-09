@@ -10,8 +10,8 @@ export class QueueSizeCodec {
     static readonly RESPONSE_MESSAGE_TYPE: number = 0x030301;
 
     static readonly REQUEST_INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-    private static readonly RESPONSE_SIZE_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET;
+    private static readonly RESPONSE_SIZE_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
+    private static readonly RESPONSE_HEADER_SIZE = QueueSizeCodec.RESPONSE_SIZE_OFFSET + INT_SIZE_IN_BYTES;
 
     private constructor() {}
 

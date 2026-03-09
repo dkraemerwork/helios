@@ -8,13 +8,13 @@ import { BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './
 import { StringCodec } from './builtin/StringCodec';
 
 export class MapContainsKeyCodec {
-    static readonly REQUEST_MESSAGE_TYPE: number = 0x010500;
-    static readonly RESPONSE_MESSAGE_TYPE: number = 0x010501;
+    static readonly REQUEST_MESSAGE_TYPE: number = 0x010600;
+    static readonly RESPONSE_MESSAGE_TYPE: number = 0x010601;
 
     private static readonly REQUEST_THREAD_ID_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     static readonly REQUEST_INITIAL_FRAME_SIZE = MapContainsKeyCodec.REQUEST_THREAD_ID_OFFSET + LONG_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + BOOLEAN_SIZE_IN_BYTES;
-    private static readonly RESPONSE_RESULT_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET;
+    private static readonly RESPONSE_RESULT_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
+    private static readonly RESPONSE_HEADER_SIZE = MapContainsKeyCodec.RESPONSE_RESULT_OFFSET + BOOLEAN_SIZE_IN_BYTES;
 
     private constructor() {}
 

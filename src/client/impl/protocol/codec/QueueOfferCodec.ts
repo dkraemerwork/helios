@@ -13,8 +13,8 @@ export class QueueOfferCodec {
 
     private static readonly REQUEST_TIMEOUT_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     static readonly REQUEST_INITIAL_FRAME_SIZE = QueueOfferCodec.REQUEST_TIMEOUT_OFFSET + LONG_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + BOOLEAN_SIZE_IN_BYTES;
-    private static readonly RESPONSE_RESULT_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET;
+    private static readonly RESPONSE_RESULT_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
+    private static readonly RESPONSE_HEADER_SIZE = QueueOfferCodec.RESPONSE_RESULT_OFFSET + BOOLEAN_SIZE_IN_BYTES;
 
     private constructor() {}
 

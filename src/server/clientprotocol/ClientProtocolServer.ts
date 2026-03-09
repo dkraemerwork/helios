@@ -249,16 +249,18 @@ export class ClientProtocolServer {
     ): Promise<void> {
         state.processing = true;
         try {
-            // Strip the 3-byte binary protocol version header ("CP2") that the
-            // official hazelcast-client sends before the first ClientMessage.
             if (!state.protocolHeaderReceived) {
                 if (state.buffer.length < 3) {
                     state.processing = false;
                     return;
                 }
-                // Skip the header regardless of content — clients always send
-                // exactly 3 bytes for the protocol version.
-                state.buffer = state.buffer.subarray(3);
+
+                const hasProtocolHeader = state.buffer[0] === 0x43
+                    && state.buffer[1] === 0x50
+                    && state.buffer[2] === 0x32;
+                if (hasProtocolHeader) {
+                    state.buffer = state.buffer.subarray(3);
+                }
                 state.protocolHeaderReceived = true;
             }
 

@@ -52,7 +52,8 @@ const PN_GET_CONFIGURED_REPLICA_COUNT_REQUEST  = 0x1d0300;
 const PN_GET_CONFIGURED_REPLICA_COUNT_RESPONSE = 0x1d0301;
 
 // Response header size: messageType(4) + correlationId(8)
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+const REQUEST_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ export function registerPnCounterServiceHandlers(opts: PnCounterServiceHandlersO
     dispatcher.register(PN_GET_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
-        const targetReplicaUUID = FixedSizeTypesCodec.decodeUUID(f.content, RH) ?? '';
+        const targetReplicaUUID = FixedSizeTypesCodec.decodeUUID(f.content, REQUEST_HEADER_SIZE) ?? '';
         const name = StringCodec.decode(iter);
         const replicaTimestamps = _decodeReplicaTimestamps(iter);
 
@@ -100,9 +101,9 @@ export function registerPnCounterServiceHandlers(opts: PnCounterServiceHandlersO
     dispatcher.register(PN_ADD_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
-        const delta = f.content.readBigInt64LE(RH);
-        const getBeforeUpdate = f.content.readUInt8(RH + LONG_SIZE_IN_BYTES) !== 0;
-        const targetReplicaUUID = FixedSizeTypesCodec.decodeUUID(f.content, RH + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES) ?? '';
+        const delta = f.content.readBigInt64LE(REQUEST_HEADER_SIZE);
+        const getBeforeUpdate = f.content.readUInt8(REQUEST_HEADER_SIZE + LONG_SIZE_IN_BYTES) !== 0;
+        const targetReplicaUUID = FixedSizeTypesCodec.decodeUUID(f.content, REQUEST_HEADER_SIZE + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES) ?? '';
         const name = StringCodec.decode(iter);
         const replicaTimestamps = _decodeReplicaTimestamps(iter);
 
@@ -176,10 +177,11 @@ function _pnValueResponse(
     const msg = CM.createForEncode();
 
     // Initial frame: value (long)
-    const b = Buffer.allocUnsafe(RH + LONG_SIZE_IN_BYTES);
+    const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
     b.fill(0);
     b.writeUInt32LE(messageType >>> 0, 0);
-    b.writeBigInt64LE(value, RH);
+    b.writeBigInt64LE(value, RESPONSE_HEADER_SIZE);
+    b.writeInt32LE(replicaTimestamps.length, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
 
@@ -200,10 +202,10 @@ function _pnValueResponse(
 
 function _intResponse(messageType: number, value: number): ClientMessage {
     const msg = CM.createForEncode();
-    const b = Buffer.allocUnsafe(RH + INT_SIZE_IN_BYTES);
+    const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES);
     b.fill(0);
     b.writeUInt32LE(messageType >>> 0, 0);
-    b.writeInt32LE(value | 0, RH);
+    b.writeInt32LE(value | 0, RESPONSE_HEADER_SIZE);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     msg.setFinal();

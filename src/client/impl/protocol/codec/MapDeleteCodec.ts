@@ -10,6 +10,7 @@ import { StringCodec } from './builtin/StringCodec';
 export class MapDeleteCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x010700;
     static readonly RESPONSE_MESSAGE_TYPE: number = 0x010701;
+    static readonly RESPONSE_INITIAL_FRAME_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private static readonly REQUEST_THREAD_ID_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     static readonly REQUEST_INITIAL_FRAME_SIZE = MapDeleteCodec.REQUEST_THREAD_ID_OFFSET + LONG_SIZE_IN_BYTES;
@@ -42,7 +43,7 @@ export class MapDeleteCodec {
 
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
+        const initialFrame = Buffer.allocUnsafe(MapDeleteCodec.RESPONSE_INITIAL_FRAME_SIZE);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(MapDeleteCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

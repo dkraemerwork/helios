@@ -12,6 +12,7 @@ export class TopicPublishCodec {
     static readonly RESPONSE_MESSAGE_TYPE: number = 0x040101;
 
     static readonly REQUEST_INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
+    static readonly RESPONSE_INITIAL_FRAME_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private constructor() {}
 
@@ -39,7 +40,7 @@ export class TopicPublishCodec {
 
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
+        const initialFrame = Buffer.allocUnsafe(TopicPublishCodec.RESPONSE_INITIAL_FRAME_SIZE);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(TopicPublishCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

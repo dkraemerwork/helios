@@ -8,11 +8,11 @@ import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesC
 import { StringCodec } from './builtin/StringCodec';
 
 export class QueuePeekCodec {
-    static readonly REQUEST_MESSAGE_TYPE: number = 0x030400;
-    static readonly RESPONSE_MESSAGE_TYPE: number = 0x030401;
+    static readonly REQUEST_MESSAGE_TYPE: number = 0x030700;
+    static readonly RESPONSE_MESSAGE_TYPE: number = 0x030701;
 
     static readonly REQUEST_INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private constructor() {}
 

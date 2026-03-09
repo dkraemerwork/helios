@@ -3,6 +3,7 @@
  */
 import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { INT_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
 import { StringCodec } from './builtin/StringCodec';
 
 export interface DistributedObjectInfo {
@@ -32,18 +33,17 @@ export class ClientGetDistributedObjectsCodec {
 
     static encodeResponse(objects: DistributedObjectInfo[]): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        // Response header with count
-        const headerSize = INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // messageType + count
-        const initialFrame = Buffer.allocUnsafe(headerSize);
+        const initialFrame = Buffer.allocUnsafe(ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(ClientGetDistributedObjectsCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
-        initialFrame.writeInt32LE(objects.length, INT_SIZE_IN_BYTES);
         msg.add(new ClientMessage.Frame(initialFrame));
 
-        for (const obj of objects) {
-            StringCodec.encode(msg, obj.serviceName);
-            StringCodec.encode(msg, obj.name);
-        }
+        ListMultiFrameCodec.encode(msg, objects, (clientMessage, obj) => {
+            clientMessage.add(new ClientMessage.Frame(Buffer.alloc(0), ClientMessage.BEGIN_DATA_STRUCTURE_FLAG));
+            StringCodec.encode(clientMessage, obj.serviceName);
+            StringCodec.encode(clientMessage, obj.name);
+            clientMessage.add(new ClientMessage.Frame(Buffer.alloc(0), ClientMessage.END_DATA_STRUCTURE_FLAG));
+        });
 
         msg.setFinal();
         return msg;

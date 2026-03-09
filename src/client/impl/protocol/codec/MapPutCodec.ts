@@ -71,7 +71,7 @@ export class MapPutCodec {
         return { name, key, value, threadId, ttl };
     }
 
-    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES; // 12
+    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1; // 13
 
     static encodeResponse(response: Data | null): ClientMessage {
         const msg = ClientMessage.createForEncode();

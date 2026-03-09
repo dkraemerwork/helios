@@ -15,7 +15,7 @@ export class MapGetCodec {
     private static readonly REQUEST_THREAD_ID_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     static readonly REQUEST_INITIAL_FRAME_SIZE = MapGetCodec.REQUEST_THREAD_ID_OFFSET + LONG_SIZE_IN_BYTES;
 
-    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private constructor() {}
 

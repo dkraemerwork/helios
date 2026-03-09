@@ -6,10 +6,11 @@ import { INT_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { StringCodec } from './builtin/StringCodec';
 
 export class QueueClearCodec {
-    static readonly REQUEST_MESSAGE_TYPE: number = 0x030500;
-    static readonly RESPONSE_MESSAGE_TYPE: number = 0x030501;
+    static readonly REQUEST_MESSAGE_TYPE: number = 0x030f00;
+    static readonly RESPONSE_MESSAGE_TYPE: number = 0x030f01;
 
     static readonly REQUEST_INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
+    static readonly RESPONSE_INITIAL_FRAME_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private constructor() {}
 
@@ -35,7 +36,7 @@ export class QueueClearCodec {
 
     static encodeResponse(): ClientMessage {
         const msg = ClientMessage.createForEncode();
-        const initialFrame = Buffer.allocUnsafe(ClientMessage.PARTITION_ID_FIELD_OFFSET);
+        const initialFrame = Buffer.allocUnsafe(QueueClearCodec.RESPONSE_INITIAL_FRAME_SIZE);
         initialFrame.fill(0);
         initialFrame.writeUInt32LE(QueueClearCodec.RESPONSE_MESSAGE_TYPE >>> 0, 0);
         msg.add(new ClientMessage.Frame(initialFrame));

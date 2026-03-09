@@ -154,6 +154,12 @@ export class ClientMessage {
 
     /** Mark the last frame with IS_FINAL_FLAG. */
     setFinal(): void {
+        if (
+            this._startFrame !== null
+            && (this._startFrame.flags & (ClientMessage.BEGIN_FRAGMENT_FLAG | ClientMessage.END_FRAGMENT_FLAG)) === 0
+        ) {
+            this._startFrame.flags |= ClientMessage.BEGIN_FRAGMENT_FLAG | ClientMessage.END_FRAGMENT_FLAG;
+        }
         if (this._endFrame !== null) {
             this._endFrame.flags |= ClientMessage.IS_FINAL_FLAG;
         }

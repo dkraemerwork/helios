@@ -8,12 +8,12 @@ import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesC
 import { StringCodec } from './builtin/StringCodec';
 
 export class QueuePollCodec {
-    static readonly REQUEST_MESSAGE_TYPE: number = 0x030200;
-    static readonly RESPONSE_MESSAGE_TYPE: number = 0x030201;
+    static readonly REQUEST_MESSAGE_TYPE: number = 0x030500;
+    static readonly RESPONSE_MESSAGE_TYPE: number = 0x030501;
 
     private static readonly REQUEST_TIMEOUT_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     static readonly REQUEST_INITIAL_FRAME_SIZE = QueuePollCodec.REQUEST_TIMEOUT_OFFSET + LONG_SIZE_IN_BYTES;
-    private static readonly RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    private static readonly RESPONSE_HEADER_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private constructor() {}
 

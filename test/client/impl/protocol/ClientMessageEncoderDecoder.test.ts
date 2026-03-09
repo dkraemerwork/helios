@@ -6,6 +6,7 @@ import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientM
 import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/ClientMessageReader';
 import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
 import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec';
+import { ClientCreateProxyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientCreateProxyCodec';
 import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
 import { QueueAddListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js';
 import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
@@ -36,6 +37,17 @@ describe('ClientMessage encode/decode round-trip', () => {
 
         const result = roundTrip(msg);
         expect(result.getStartFrame().content.toString()).toBe('hello');
+    });
+
+    it('setFinal marks start frame as unfragmented when flags are absent', () => {
+        const msg = ClientMessage.createForEncode();
+        msg.add(new ClientMessage.Frame(Buffer.alloc(16)));
+
+        msg.setFinal();
+
+        expect(ClientMessage.isFlagSet(msg.getStartFrame().flags, ClientMessage.BEGIN_FRAGMENT_FLAG)).toBe(true);
+        expect(ClientMessage.isFlagSet(msg.getStartFrame().flags, ClientMessage.END_FRAGMENT_FLAG)).toBe(true);
+        expect(ClientMessage.isFlagSet(msg.getStartFrame().flags, ClientMessage.IS_FINAL_FLAG)).toBe(true);
     });
 
     it('mapPut request round-trip', () => {
@@ -111,6 +123,15 @@ describe('ClientMessage encode/decode round-trip', () => {
         expect(decoded.clusterId).toBe(clusterId);
         expect(decoded.failoverSupported).toBe(false);
         expect(decoded.serverHazelcastVersion).toBe('5.4.0');
+    });
+
+    it('clientCreateProxy response reserves backup-acks slot', () => {
+        const msg = ClientCreateProxyCodec.encodeResponse();
+
+        expect(msg.getStartFrame().content.length).toBe(ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1);
+
+        const result = roundTrip(msg);
+        expect(result.getMessageType()).toBe(ClientCreateProxyCodec.RESPONSE_MESSAGE_TYPE);
     });
 
     it('mapAddEntryListener event round-trip', () => {

@@ -24,11 +24,12 @@ import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/bui
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
-const FLAKE_NEW_ID_BATCH_REQUEST  = 0x1e0100;
-const FLAKE_NEW_ID_BATCH_RESPONSE = 0x1e0101;
+const FLAKE_NEW_ID_BATCH_REQUEST  = 0x1c0100;
+const FLAKE_NEW_ID_BATCH_RESPONSE = 0x1c0101;
 
 // Response header size: messageType(4) + correlationId(8)
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+const REQUEST_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + 1;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ export function registerFlakeIdServiceHandlers(opts: FlakeIdServiceHandlersOptio
     dispatcher.register(FLAKE_NEW_ID_BATCH_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
-        const batchSize = f.content.readInt32LE(RH);
+        const batchSize = f.content.readInt32LE(REQUEST_HEADER_SIZE);
         const name = StringCodec.decode(iter);
 
         const { base, increment, batchSize: returnedBatchSize } =
@@ -74,12 +75,12 @@ export function registerFlakeIdServiceHandlers(opts: FlakeIdServiceHandlersOptio
 function _newIdBatchResponse(base: bigint, increment: bigint, batchSize: number): ClientMessage {
     const msg = CM.createForEncode();
     // base(8) + increment(8) + batchSize(4)
-    const b = Buffer.allocUnsafe(RH + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+    const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
     b.fill(0);
     b.writeUInt32LE(FLAKE_NEW_ID_BATCH_RESPONSE >>> 0, 0);
-    b.writeBigInt64LE(base, RH);
-    b.writeBigInt64LE(increment, RH + LONG_SIZE_IN_BYTES);
-    b.writeInt32LE(batchSize | 0, RH + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+    b.writeBigInt64LE(base, RESPONSE_HEADER_SIZE);
+    b.writeBigInt64LE(increment, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES);
+    b.writeInt32LE(batchSize | 0, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
