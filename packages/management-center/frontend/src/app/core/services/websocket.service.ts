@@ -1,6 +1,7 @@
 import { Injectable, PLATFORM_ID, inject, signal, NgZone } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Observable, Subject, filter, map, share } from 'rxjs';
+import { AuthService } from './auth.service';
 
 // ── Protocol Types ───────────────────────────────────────────────────────────
 
@@ -38,22 +39,28 @@ const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 const RECONNECT_BACKOFF_FACTOR = 1.5;
 
+/** Close codes that indicate an auth failure — do not retry with the same ticket. */
+const AUTH_FAILURE_CODES = new Set([4000, 4001, 4003]);
+
 /**
  * WebSocket service for real-time cluster updates.
  *
  * SSR-safe: all WebSocket operations are skipped when running on the server.
  * Implements automatic heartbeat response and reconnection with exponential backoff.
+ * Tickets are one-time-use, so a fresh ticket is fetched from the server on every
+ * reconnect attempt (both after normal disconnects and auth-failure close codes).
  */
+
 @Injectable({ providedIn: 'root' })
 export class WebSocketService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly zone = inject(NgZone);
+  private readonly authService = inject(AuthService);
 
   private ws: WebSocket | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
-  private currentTicket: string | null = null;
   private manualClose = false;
 
   /** All incoming messages as a hot observable. */
@@ -71,7 +78,6 @@ export class WebSocketService {
   connect(ticket: string): void {
     if (!isPlatformBrowser(this.platformId)) return;
 
-    this.currentTicket = ticket;
     this.manualClose = false;
     this.doConnect(ticket);
   }
@@ -169,7 +175,13 @@ export class WebSocketService {
           this.clearHeartbeatTimer();
 
           if (!this.manualClose && event.code !== 1000) {
-            this.scheduleReconnect();
+            // Auth failures need a fresh ticket — fetch one then reconnect.
+            // All other disconnects reconnect with exponential backoff.
+            if (AUTH_FAILURE_CODES.has(event.code)) {
+              this.scheduleReconnectWithFreshTicket();
+            } else {
+              this.scheduleReconnect();
+            }
           } else {
             this.connectionState.set('disconnected');
           }
@@ -206,6 +218,11 @@ export class WebSocketService {
     }
   }
 
+  /**
+   * Schedules a reconnect attempt for transient disconnects (network blip,
+   * server restart, etc.). Uses the same auth session — no new ticket needed
+   * because the previous ticket was already consumed on connect, not on close.
+   */
   private scheduleReconnect(): void {
     this.connectionState.set('reconnecting');
     this.reconnectAttempts++;
@@ -216,10 +233,27 @@ export class WebSocketService {
     );
 
     this.reconnectTimer = setTimeout(() => {
-      if (this.currentTicket) {
-        this.doConnect(this.currentTicket);
-      }
+      this.scheduleReconnectWithFreshTicket();
     }, delay);
+  }
+
+  /**
+   * Fetches a fresh one-time ticket from the server and reconnects.
+   * Used both for auth-failure close codes and for normal reconnects
+   * (tickets are one-time-use, so a new one is always required).
+   */
+  private scheduleReconnectWithFreshTicket(): void {
+    this.connectionState.set('reconnecting');
+
+    this.authService.requestWsTicket().then(ticket => {
+      if (!this.manualClose) {
+        this.doConnect(ticket);
+      }
+    }).catch(() => {
+      if (!this.manualClose) {
+        this.scheduleReconnect();
+      }
+    });
   }
 
   private resetHeartbeatTimer(): void {
