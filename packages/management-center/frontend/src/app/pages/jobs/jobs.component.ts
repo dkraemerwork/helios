@@ -1,9 +1,11 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
-import { ClusterStore } from '../../core/store/cluster.store';
+import { Subscription } from 'rxjs';
 import { ApiService, type JobSnapshot } from '../../core/services/api.service';
 import { SsrStateService } from '../../core/services/ssr-state.service';
+import { WebSocketService } from '../../core/services/websocket.service';
+import { ClusterStore } from '../../core/store/cluster.store';
 
 @Component({
   selector: 'mc-jobs',
@@ -58,19 +60,30 @@ import { SsrStateService } from '../../core/services/ssr-state.service';
     </div>
   `,
 })
-export class JobsComponent implements OnInit {
+export class JobsComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly clusterStore = inject(ClusterStore);
   private readonly apiService = inject(ApiService);
   private readonly ssrState = inject(SsrStateService);
+  private readonly wsService = inject(WebSocketService);
+  private clusterId: string | null = null;
+  private jobsSubscription: Subscription | null = null;
 
   readonly jobs = signal<JobSnapshot[]>([]);
   readonly loading = signal(true);
 
   async ngOnInit(): Promise<void> {
-    const clusterId = this.route.parent?.snapshot.paramMap.get('id');
-    if (clusterId) {
-      this.clusterStore.setActiveCluster(clusterId);
+    this.clusterId = this.route.parent?.snapshot.paramMap.get('id') ?? null;
+    if (this.clusterId) {
+      this.clusterStore.setActiveCluster(this.clusterId);
+      this.wsService.subscribe(this.clusterId, 'all');
+      this.jobsSubscription = this.wsService.onMessage<{ clusterId: string; jobs: JobSnapshot[] }>('jobs:update')
+        .subscribe((payload) => {
+          if (payload.clusterId === this.clusterId) {
+            this.jobs.set(payload.jobs ?? []);
+            this.loading.set(false);
+          }
+        });
     }
 
     // Try SSR state first
@@ -81,7 +94,24 @@ export class JobsComponent implements OnInit {
       return;
     }
 
-    // No SSR data available — jobs are loaded via WebSocket initial payload
-    this.loading.set(false);
+    if (!this.clusterId) {
+      this.loading.set(false);
+      return;
+    }
+
+    try {
+      this.jobs.set(await this.apiService.getClusterJobs(this.clusterId));
+    } catch {
+      this.jobs.set([]);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.jobsSubscription?.unsubscribe();
+    if (this.clusterId) {
+      this.wsService.unsubscribe(this.clusterId);
+    }
   }
 }

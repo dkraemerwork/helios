@@ -288,6 +288,12 @@ export class ApiService {
     );
   }
 
+  getClusterJobs(clusterId: string): Promise<JobSnapshot[]> {
+    return firstValueFrom(
+      this.http.get<{ jobs: JobSnapshot[] }>(`/api/clusters/${enc(clusterId)}/jobs`),
+    ).then(response => response.jobs);
+  }
+
   // ── Metrics & History ──────────────────────────────────────────────────
 
   getMetricsHistory(params: {
