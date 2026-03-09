@@ -153,7 +153,7 @@ export function registerReplicatedMapServiceHandlers(
     dispatcher.register(RM_ADD_LISTENER_REQUEST, async (msg, session) => {
         const iter = msg.forwardFrameIterator(); iter.next();
         const name = StringCodec.decode(iter);
-        return _string(RM_ADD_LISTENER_RESPONSE, await operations.addEntryListener(name, session));
+        return _string(RM_ADD_LISTENER_RESPONSE, await operations.addEntryListener(name, msg.getCorrelationId(), session));
     });
 
     // RemoveEntryListener
@@ -168,7 +168,7 @@ export function registerReplicatedMapServiceHandlers(
         const iter = msg.forwardFrameIterator(); iter.next();
         const name = StringCodec.decode(iter);
         const key = DataCodec.decode(iter);
-        return _string(RM_ADD_LISTENER_KEY_RESPONSE, await operations.addEntryListenerWithKey(name, key, session));
+        return _string(RM_ADD_LISTENER_KEY_RESPONSE, await operations.addEntryListenerWithKey(name, key, msg.getCorrelationId(), session));
     });
 
     // AddEntryListenerWithPredicate
@@ -176,7 +176,7 @@ export function registerReplicatedMapServiceHandlers(
         const iter = msg.forwardFrameIterator(); iter.next();
         const name = StringCodec.decode(iter);
         const predicate = DataCodec.decode(iter);
-        return _string(RM_ADD_LISTENER_PRED_RESPONSE, await operations.addEntryListenerWithPredicate(name, predicate, session));
+        return _string(RM_ADD_LISTENER_PRED_RESPONSE, await operations.addEntryListenerWithPredicate(name, predicate, msg.getCorrelationId(), session));
     });
 
     // AddEntryListenerToKeyWithPredicate
@@ -185,7 +185,7 @@ export function registerReplicatedMapServiceHandlers(
         const name = StringCodec.decode(iter);
         const key = DataCodec.decode(iter);
         const predicate = DataCodec.decode(iter);
-        return _string(RM_ADD_LISTENER_KEY_PRED_RESPONSE, await operations.addEntryListenerWithKeyAndPredicate(name, key, predicate, session));
+        return _string(RM_ADD_LISTENER_KEY_PRED_RESPONSE, await operations.addEntryListenerWithKeyAndPredicate(name, key, predicate, msg.getCorrelationId(), session));
     });
 }
 

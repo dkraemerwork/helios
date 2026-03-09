@@ -24,6 +24,24 @@ import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 
+export type ReplicatedMapEventType = "ADDED" | "UPDATED" | "REMOVED" | "CLEARED";
+
+export interface ReplicatedMapEntryEvent {
+  name: string;
+  key: Data | null;
+  value: Data | null;
+  oldValue: Data | null;
+  eventType: ReplicatedMapEventType;
+  numberOfAffectedEntries: number;
+}
+
+export interface ReplicatedMapEntryListener {
+  entryAdded?(event: ReplicatedMapEntryEvent): void;
+  entryUpdated?(event: ReplicatedMapEntryEvent): void;
+  entryRemoved?(event: ReplicatedMapEntryEvent): void;
+  mapCleared?(event: ReplicatedMapEntryEvent): void;
+}
+
 const ANTI_ENTROPY_INTERVAL_MS = 10_000;
 
 function dataFp(d: Data): string {
@@ -58,6 +76,8 @@ export class DistributedReplicatedMapService {
     string,
     PendingRemoteRequest
   >();
+  private readonly _listeners = new Map<string, Map<string, ReplicatedMapEntryListener>>();
+  private readonly _listenerCounters = new Map<string, number>();
   private _antiEntropyHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -121,6 +141,13 @@ export class DistributedReplicatedMapService {
     });
 
     this._broadcastPut(name, keyData, valueData, version);
+    this._dispatchEntryEvent(
+      name,
+      old === null ? "ADDED" : "UPDATED",
+      keyData,
+      valueData,
+      old,
+    );
     return old;
   }
 
@@ -144,6 +171,7 @@ export class DistributedReplicatedMapService {
     existing.version = version;
 
     this._broadcastRemove(name, keyData, version);
+    this._dispatchEntryEvent(name, "REMOVED", keyData, null, old);
     return old;
   }
 
@@ -174,12 +202,16 @@ export class DistributedReplicatedMapService {
 
   clear(name: string): void {
     const container = this._getOrCreate(name);
+    const affectedEntries = this.size(name);
     const version = ++container.localVersion;
     for (const entry of Array.from(container.entries.values())) {
       entry.tombstone = true;
       entry.version = version;
     }
     this._broadcastClear(name, version);
+    if (affectedEntries > 0) {
+      this._dispatchEntryEvent(name, "CLEARED", null, null, null, affectedEntries);
+    }
   }
 
   keySet(name: string): Data[] {
@@ -210,6 +242,23 @@ export class DistributedReplicatedMapService {
     for (const [k, v] of pairs) {
       this.put(name, k, v);
     }
+  }
+
+  addEntryListener(name: string, listener: ReplicatedMapEntryListener): string {
+    if (listener === null || listener === undefined) {
+      throw new Error("NullPointerException: listener is null");
+    }
+    const registrations = this._listeners.get(name) ?? new Map<string, ReplicatedMapEntryListener>();
+    this._listeners.set(name, registrations);
+    const nextCounter = (this._listenerCounters.get(name) ?? 0) + 1;
+    this._listenerCounters.set(name, nextCounter);
+    const id = `listener-${nextCounter}`;
+    registrations.set(id, listener);
+    return id;
+  }
+
+  removeEntryListener(name: string, registrationId: string): boolean {
+    return this._listeners.get(name)?.delete(registrationId) ?? false;
   }
 
   // ── Remote broadcast helpers ──────────────────────────────────────────
@@ -273,6 +322,13 @@ export class DistributedReplicatedMapService {
       version: message.version,
       tombstone: false,
     });
+    this._dispatchEntryEvent(
+      message.mapName,
+      existing === undefined || existing.tombstone ? "ADDED" : "UPDATED",
+      key,
+      value,
+      existing === undefined || existing.tombstone ? null : existing.value,
+    );
     // Update local version to be at least as high as the remote version
     if (message.version > container.localVersion) {
       container.localVersion = message.version;
@@ -290,9 +346,13 @@ export class DistributedReplicatedMapService {
     if (existing !== undefined && existing.version >= message.version) return;
 
     const entry = existing ?? { key, value: key, version: 0, tombstone: false };
+    const oldValue = existing !== undefined && !existing.tombstone ? existing.value : null;
     entry.tombstone = true;
     entry.version = message.version;
     container.entries.set(fp, entry);
+    if (oldValue !== null) {
+      this._dispatchEntryEvent(message.mapName, "REMOVED", key, null, oldValue);
+    }
 
     if (message.version > container.localVersion) {
       container.localVersion = message.version;
@@ -303,14 +363,58 @@ export class DistributedReplicatedMapService {
     message: Extract<ClusterMessage, { type: "REPLICATED_MAP_CLEAR" }>,
   ): void {
     const container = this._getOrCreate(message.mapName);
+    let affectedEntries = 0;
     for (const entry of Array.from(container.entries.values())) {
       if (entry.version < message.version) {
+        if (!entry.tombstone) {
+          affectedEntries++;
+        }
         entry.tombstone = true;
         entry.version = message.version;
       }
     }
+    if (affectedEntries > 0) {
+      this._dispatchEntryEvent(message.mapName, "CLEARED", null, null, null, affectedEntries);
+    }
     if (message.version > container.localVersion) {
       container.localVersion = message.version;
+    }
+  }
+
+  private _dispatchEntryEvent(
+    name: string,
+    eventType: ReplicatedMapEventType,
+    key: Data | null,
+    value: Data | null,
+    oldValue: Data | null,
+    numberOfAffectedEntries = 1,
+  ): void {
+    const listeners = this._listeners.get(name);
+    if (listeners === undefined) {
+      return;
+    }
+    const event: ReplicatedMapEntryEvent = {
+      name,
+      key,
+      value,
+      oldValue,
+      eventType,
+      numberOfAffectedEntries,
+    };
+    for (const listener of listeners.values()) {
+      if (eventType === "ADDED") {
+        listener.entryAdded?.(event);
+        continue;
+      }
+      if (eventType === "UPDATED") {
+        listener.entryUpdated?.(event);
+        continue;
+      }
+      if (eventType === "REMOVED") {
+        listener.entryRemoved?.(event);
+        continue;
+      }
+      listener.mapCleared?.(event);
     }
   }
 

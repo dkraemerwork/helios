@@ -266,6 +266,14 @@ interface MultiMapClientListenerRegistration {
   session: ClientSession;
 }
 
+interface ReplicatedMapClientListenerRegistration {
+  name: string;
+  registrationId: string;
+  entryListenerId?: string;
+  correlationId: number;
+  session: ClientSession;
+}
+
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
   const trimmed = member.trim();
@@ -431,6 +439,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionSetListeners = new Map<string, Set<string>>();
   private readonly _clientMultiMapListenerRegistrations = new Map<string, MultiMapClientListenerRegistration>();
   private readonly _clientSessionMultiMapListeners = new Map<string, Set<string>>();
+  private readonly _clientReplicatedMapListenerRegistrations = new Map<string, ReplicatedMapClientListenerRegistration>();
+  private readonly _clientSessionReplicatedMapListeners = new Map<string, Set<string>>();
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
@@ -2519,11 +2529,50 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._ensureReplicatedMapService();
         return this._distributedReplicatedMapService!.isEmpty(name);
       },
-      addEntryListener: async () => notImplemented(),
-      removeEntryListener: async () => notImplemented(),
-      addEntryListenerWithKey: async () => notImplemented(),
-      addEntryListenerWithPredicate: async () => notImplemented(),
-      addEntryListenerWithKeyAndPredicate: async () => notImplemented(),
+      addEntryListener: async (name, correlationId, session) =>
+        this._registerClientReplicatedMapListener(name, correlationId, session),
+      removeEntryListener: async (registrationId, session) =>
+        this._removeClientReplicatedMapListener(session.getSessionId(), registrationId),
+      addEntryListenerWithKey: async (name, key, correlationId, session) =>
+        this._registerClientReplicatedMapListener(
+          name,
+          correlationId,
+          session,
+          (eventKey: Data | null) => eventKey === null || eventKey.equals(key),
+        ),
+      addEntryListenerWithPredicate: async (name, predicateData, correlationId, session) => {
+        const predicate = deserializePredicate(predicateData);
+        return this._registerClientReplicatedMapListener(
+          name,
+          correlationId,
+          session,
+          (eventKey: Data | null, eventValue: Data | null, eventOldValue: Data | null) => {
+            if (eventKey === null) {
+              return true;
+            }
+            const candidateValue = eventValue ?? eventOldValue;
+            return candidateValue !== null && predicateMatches(predicate, eventKey, candidateValue);
+          },
+        );
+      },
+      addEntryListenerWithKeyAndPredicate: async (name, key, predicateData, correlationId, session) => {
+        const predicate = deserializePredicate(predicateData);
+        return this._registerClientReplicatedMapListener(
+          name,
+          correlationId,
+          session,
+          (eventKey: Data | null, eventValue: Data | null, eventOldValue: Data | null) => {
+            if (eventKey === null) {
+              return true;
+            }
+            if (!eventKey.equals(key)) {
+              return false;
+            }
+            const candidateValue = eventValue ?? eventOldValue;
+            return candidateValue !== null && predicateMatches(predicate, eventKey, candidateValue);
+          },
+        );
+      },
     };
 
     const ringbufferOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').RingbufferServiceOperations = {
@@ -2561,6 +2610,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       readMany: async (name, startSequence, minCount, maxCount, filter) => {
         this._ensureRingbufferService();
+        const effectiveStartSequence = Math.max(
+          Number(startSequence),
+          await this._distributedRingbufferService!.headSequence(name),
+        );
         const items = await this._distributedRingbufferService!.readMany(
           name,
           Number(startSequence),
@@ -2569,12 +2622,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
           filter,
         );
         const readCount = items.length;
-        const baseSequence = Number(startSequence);
         return {
           readCount,
           items,
-          itemSeqs: Array.from({ length: readCount }, (_, index) => BigInt(baseSequence + index)),
-          nextSeq: BigInt(baseSequence + readCount),
+          itemSeqs: Array.from({ length: readCount }, (_, index) => BigInt(effectiveStartSequence + index)),
+          nextSeq: BigInt(effectiveStartSequence + readCount),
         };
       },
     };
@@ -2802,6 +2854,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._removeClientListListenersForSession(session.getSessionId());
       this._removeClientSetListenersForSession(session.getSessionId());
       this._removeClientMultiMapListenersForSession(session.getSessionId());
+      this._removeClientReplicatedMapListenersForSession(session.getSessionId());
     });
 
     // ── Wire all handlers ─────────────────────────────────────────────────
@@ -3385,6 +3438,122 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     for (const registrationId of Array.from(registrations)) {
       this._removeClientMultiMapListener(sessionId, registrationId);
+    }
+  }
+
+  private _registerClientReplicatedMapListener(
+    name: string,
+    correlationId: number,
+    session: ClientSession,
+    filter?: (key: Data | null, value: Data | null, oldValue: Data | null, eventType: number) => boolean,
+  ): string {
+    this._ensureReplicatedMapService();
+    const memberUuid = this._cluster.getLocalMember().getUuid();
+    const registrationId = crypto.randomUUID();
+    const entryListenerId = this._distributedReplicatedMapService!.addEntryListener(name, {
+      entryAdded: (event) => {
+        if (filter !== undefined && !filter(event.key, event.value, event.oldValue, 1)) {
+          return;
+        }
+        const eventMessage = MapAddEntryListenerCodec.encodeEntryEvent(
+          event.key,
+          event.value,
+          event.oldValue,
+          null,
+          1,
+          memberUuid,
+          event.numberOfAffectedEntries,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      entryUpdated: (event) => {
+        if (filter !== undefined && !filter(event.key, event.value, event.oldValue, 4)) {
+          return;
+        }
+        const eventMessage = MapAddEntryListenerCodec.encodeEntryEvent(
+          event.key,
+          event.value,
+          event.oldValue,
+          null,
+          4,
+          memberUuid,
+          event.numberOfAffectedEntries,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      entryRemoved: (event) => {
+        if (filter !== undefined && !filter(event.key, event.value, event.oldValue, 2)) {
+          return;
+        }
+        const eventMessage = MapAddEntryListenerCodec.encodeEntryEvent(
+          event.key,
+          null,
+          event.oldValue,
+          null,
+          2,
+          memberUuid,
+          event.numberOfAffectedEntries,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      mapCleared: (event) => {
+        const eventMessage = MapAddEntryListenerCodec.encodeEntryEvent(
+          null,
+          null,
+          null,
+          null,
+          64,
+          memberUuid,
+          event.numberOfAffectedEntries,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+    });
+    this._clientReplicatedMapListenerRegistrations.set(registrationId, {
+      name,
+      registrationId,
+      entryListenerId,
+      correlationId,
+      session,
+    });
+    let registrations = this._clientSessionReplicatedMapListeners.get(session.getSessionId());
+    if (registrations === undefined) {
+      registrations = new Set<string>();
+      this._clientSessionReplicatedMapListeners.set(session.getSessionId(), registrations);
+    }
+    registrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientReplicatedMapListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientReplicatedMapListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientReplicatedMapListenerRegistrations.delete(registrationId);
+    const registrations = this._clientSessionReplicatedMapListeners.get(sessionId);
+    registrations?.delete(registrationId);
+    if (registrations !== undefined && registrations.size === 0) {
+      this._clientSessionReplicatedMapListeners.delete(sessionId);
+    }
+    this._ensureReplicatedMapService();
+    return this._distributedReplicatedMapService!.removeEntryListener(
+      registration.name,
+      registration.entryListenerId ?? registration.registrationId,
+    );
+  }
+
+  private _removeClientReplicatedMapListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionReplicatedMapListeners.get(sessionId);
+    if (registrations === undefined) {
+      return;
+    }
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientReplicatedMapListener(sessionId, registrationId);
     }
   }
 

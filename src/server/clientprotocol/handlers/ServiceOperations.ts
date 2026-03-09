@@ -176,11 +176,11 @@ export interface ReplicatedMapServiceOperations {
     entrySet(name: string): Promise<Array<[Data, Data]>>;
     putAll(name: string, entries: Array<[Data, Data]>): Promise<void>;
     isEmpty(name: string): Promise<boolean>;
-    addEntryListener(name: string, session: ClientSession): Promise<string>;
+    addEntryListener(name: string, correlationId: number, session: ClientSession): Promise<string>;
     removeEntryListener(registrationId: string, session: ClientSession): Promise<boolean>;
-    addEntryListenerWithKey(name: string, key: Data, session: ClientSession): Promise<string>;
-    addEntryListenerWithPredicate(name: string, predicate: Data, session: ClientSession): Promise<string>;
-    addEntryListenerWithKeyAndPredicate(name: string, key: Data, predicate: Data, session: ClientSession): Promise<string>;
+    addEntryListenerWithKey(name: string, key: Data, correlationId: number, session: ClientSession): Promise<string>;
+    addEntryListenerWithPredicate(name: string, predicate: Data, correlationId: number, session: ClientSession): Promise<string>;
+    addEntryListenerWithKeyAndPredicate(name: string, key: Data, predicate: Data, correlationId: number, session: ClientSession): Promise<string>;
 }
 
 // ── Ringbuffer ────────────────────────────────────────────────────────────────
