@@ -20,14 +20,14 @@ export class MapAddEntryListenerCodec {
     static readonly REQUEST_INITIAL_FRAME_SIZE =
         MapAddEntryListenerCodec.REQUEST_LOCAL_ONLY_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 21
 
-    // Event initial frame: type(4) + eventType(4) + uuid(17) + numberOfAffectedEntries(4) = 29
-    private static readonly EVENT_EVENT_TYPE_OFFSET = INT_SIZE_IN_BYTES; // 4
+    // Event initial frame: type(4) + correlationId(8) + partitionId(4) + eventType(4) + uuid(17) + numberOfAffectedEntries(4) = 41
+    private static readonly EVENT_EVENT_TYPE_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES; // 16
     private static readonly EVENT_UUID_OFFSET =
-        MapAddEntryListenerCodec.EVENT_EVENT_TYPE_OFFSET + INT_SIZE_IN_BYTES; // 8
+        MapAddEntryListenerCodec.EVENT_EVENT_TYPE_OFFSET + INT_SIZE_IN_BYTES; // 20
     private static readonly EVENT_NUMBER_OF_AFFECTED_ENTRIES_OFFSET =
-        MapAddEntryListenerCodec.EVENT_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 25
+        MapAddEntryListenerCodec.EVENT_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 37
     static readonly EVENT_INITIAL_FRAME_SIZE =
-        MapAddEntryListenerCodec.EVENT_NUMBER_OF_AFFECTED_ENTRIES_OFFSET + INT_SIZE_IN_BYTES; // 29
+        MapAddEntryListenerCodec.EVENT_NUMBER_OF_AFFECTED_ENTRIES_OFFSET + INT_SIZE_IN_BYTES; // 41
 
     private constructor() {}
 
@@ -61,12 +61,13 @@ export class MapAddEntryListenerCodec {
     ): ClientMessage {
         const msg = ClientMessage.createForEncode();
 
-        const buf = Buffer.allocUnsafe(MapAddEntryListenerCodec.EVENT_INITIAL_FRAME_SIZE);
+        const buf = Buffer.alloc(MapAddEntryListenerCodec.EVENT_INITIAL_FRAME_SIZE);
         buf.writeUInt32LE(MapAddEntryListenerCodec.EVENT_ENTRY_MESSAGE_TYPE >>> 0, ClientMessage.TYPE_FIELD_OFFSET);
+        buf.writeInt32LE(-1, ClientMessage.PARTITION_ID_FIELD_OFFSET);
         buf.writeInt32LE(eventType | 0, MapAddEntryListenerCodec.EVENT_EVENT_TYPE_OFFSET);
         FixedSizeTypesCodec.encodeUUID(buf, MapAddEntryListenerCodec.EVENT_UUID_OFFSET, uuid);
         buf.writeInt32LE(numberOfAffectedEntries | 0, MapAddEntryListenerCodec.EVENT_NUMBER_OF_AFFECTED_ENTRIES_OFFSET);
-        msg.add(new ClientMessage.Frame(buf));
+        msg.add(new ClientMessage.Frame(buf, ClientMessage.IS_EVENT_FLAG));
 
         CodecUtil.encodeNullable(msg, key, (m, d) => DataCodec.encode(m, d));
         CodecUtil.encodeNullable(msg, value, (m, d) => DataCodec.encode(m, d));

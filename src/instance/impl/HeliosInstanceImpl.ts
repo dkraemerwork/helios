@@ -2595,6 +2595,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   private _publishClientMapEvent(name: string, key: Data | null, value: Data | null, oldValue: Data | null, eventType: number): void {
+    const memberUuid = this._cluster.getLocalMember().getUuid();
     for (const [registrationId, registration] of this._clientMapListenerRegistrations) {
       if (registration.mapName !== name) {
         continue;
@@ -2618,7 +2619,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         oldValue,
         null,
         eventType,
-        null,
+        memberUuid,
         1,
       );
       eventMessage.setCorrelationId(registration.correlationId);
@@ -2627,6 +2628,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   private _publishClientMapBulkEvent(name: string, eventType: number, affectedEntries: number): void {
+    const memberUuid = this._cluster.getLocalMember().getUuid();
     for (const [registrationId, registration] of this._clientMapListenerRegistrations) {
       if (registration.mapName !== name) {
         continue;
@@ -2650,7 +2652,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         null,
         null,
         eventType,
-        null,
+        memberUuid,
         affectedEntries,
       );
       eventMessage.setCorrelationId(registration.correlationId);
@@ -2677,17 +2679,18 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   private _registerClientQueueListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
     this._ensureQueueService();
+    const memberUuid = this._cluster.getLocalMember().getUuid();
     const registrationId = crypto.randomUUID();
     const queueListenerId = this._distributedQueueService!.addItemListener(name, {
       itemAdded: (event) => {
         const item = includeValue ? this._ss.toData(event.getItem()) : null;
-        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, null, 1);
+        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, memberUuid, 1);
         eventMessage.setCorrelationId(correlationId);
         session.pushEvent(eventMessage);
       },
       itemRemoved: (event) => {
         const item = includeValue ? this._ss.toData(event.getItem()) : null;
-        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, null, 2);
+        const eventMessage = QueueAddListenerCodec.encodeItemEvent(item, memberUuid, 2);
         eventMessage.setCorrelationId(correlationId);
         session.pushEvent(eventMessage);
       },

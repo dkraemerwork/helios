@@ -7,6 +7,7 @@ import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/C
 import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
 import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec';
 import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
+import { QueueAddListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js';
 import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
@@ -133,6 +134,26 @@ describe('ClientMessage encode/decode round-trip', () => {
         expect(decoded.mergingValue).toBeNull();
     });
 
+    it('mapAddEntryListener event keeps payload after correlation id is set', () => {
+        const keyBuf = Buffer.allocUnsafe(8);
+        keyBuf.fill(0xBB);
+        const key = new HeapData(keyBuf);
+        const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+        const msg = MapAddEntryListenerCodec.encodeEntryEvent(key, null, null, null, 64, uuid, 3);
+        msg.setCorrelationId(42);
+
+        const result = roundTrip(msg);
+        const decoded = MapAddEntryListenerCodec.decodeEntryEvent(result);
+
+        expect(result.getCorrelationId()).toBe(42);
+        expect(result.getMessageType()).toBe(MapAddEntryListenerCodec.EVENT_ENTRY_MESSAGE_TYPE);
+        expect(decoded.eventType).toBe(64);
+        expect(decoded.uuid).toBe(uuid);
+        expect(decoded.numberOfAffectedEntries).toBe(3);
+        expect(decoded.key?.toByteArray()).toEqual(keyBuf);
+    });
+
     it('mapAddEntryListener event handler — dispatches handleEntryEvent', () => {
         const uuid = 'cafebabe-cafe-babe-cafe-babecafebabe';
         const msg = MapAddEntryListenerCodec.encodeEntryEvent(null, null, null, null, 2, uuid, 1);
@@ -150,6 +171,25 @@ describe('ClientMessage encode/decode round-trip', () => {
         handler.handle(msg);
         expect(handledEventType).toBe(2);
         expect(handledUuid as unknown as string).toBe(uuid);
+    });
+
+    it('queueAddListener event keeps payload after correlation id is set', () => {
+        const itemBuf = Buffer.allocUnsafe(8);
+        itemBuf.fill(0xCC);
+        const item = new HeapData(itemBuf);
+        const uuid = '11111111-2222-3333-4444-555555555555';
+
+        const msg = QueueAddListenerCodec.encodeItemEvent(item, uuid, 2);
+        msg.setCorrelationId(77);
+
+        const result = roundTrip(msg);
+        const decoded = QueueAddListenerCodec.decodeItemEvent(result);
+
+        expect(result.getCorrelationId()).toBe(77);
+        expect(result.getMessageType()).toBe(QueueAddListenerCodec.EVENT_ITEM_MESSAGE_TYPE);
+        expect(decoded.eventType).toBe(2);
+        expect(decoded.uuid).toBe(uuid);
+        expect(decoded.item?.toByteArray()).toEqual(itemBuf);
     });
 
     it('fragmented message encode/decode', () => {
