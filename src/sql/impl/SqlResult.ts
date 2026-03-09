@@ -66,6 +66,14 @@ export class SqlResult implements Iterable<SqlRow>, AsyncIterable<SqlRow> {
         return this._rows.length;
     }
 
+    remainingRowCount(): number {
+        return this._rows.length - this._cursor;
+    }
+
+    hasMoreRows(): boolean {
+        return this.remainingRowCount() > 0;
+    }
+
     /** True if the cursor has been closed. */
     isClosed(): boolean {
         return this._closed;

@@ -57,8 +57,13 @@ import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObj
 import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
 import { ExecutorRejectedExecutionException } from "@zenystx/helios-core/executor/ExecutorExceptions";
 import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
+import type { ExecutorOperationResult } from "@zenystx/helios-core/executor/ExecutorOperationResult";
+import type { TaskCallable } from "@zenystx/helios-core/executor/TaskCallable";
+import { CancellationOperation } from "@zenystx/helios-core/executor/impl/CancellationOperation";
+import { ExecuteCallableOperation } from "@zenystx/helios-core/executor/impl/ExecuteCallableOperation";
 import { ExecutorContainerService } from "@zenystx/helios-core/executor/impl/ExecutorContainerService";
 import { ExecutorServiceProxy } from "@zenystx/helios-core/executor/impl/ExecutorServiceProxy";
+import { MemberCallableOperation } from "@zenystx/helios-core/executor/impl/MemberCallableOperation";
 import type { IScheduledExecutorService } from "@zenystx/helios-core/scheduledexecutor/IScheduledExecutorService";
 import { ScheduledExecutorServiceProxy } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorServiceProxy";
 import { ScheduledExecutorContainerService as ScheduledContainerService } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorContainerService";
@@ -140,6 +145,10 @@ import type { SystemEvent } from "@zenystx/helios-core/diagnostics/SystemEventLo
 import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
 import type { Predicate } from "@zenystx/helios-core/query/Predicate";
+import type { SqlColumnType } from "@zenystx/helios-core/sql/impl/SqlRowMetadata";
+import { SqlResult } from "@zenystx/helios-core/sql/impl/SqlResult";
+import { SqlService } from "@zenystx/helios-core/sql/impl/SqlService";
+import { SqlStatement } from "@zenystx/helios-core/sql/impl/SqlStatement";
 import type { PartitionService } from "@zenystx/helios-core/spi/PartitionService";
 import { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
 import {
@@ -202,6 +211,19 @@ type BlitzRuntimeLauncher = (input: {
   config: HeliosBlitzRuntimeConfig;
   routes: string[];
 }) => Promise<BlitzRuntimeHandle>;
+
+type ClientSqlQueryId = {
+  localHigh: bigint;
+  localLow: bigint;
+  globalHigh: bigint;
+  globalLow: bigint;
+};
+
+type ClientExecutorTaskRoute = {
+  name: string;
+  partitionId: number | null;
+  memberUuid: string | null;
+};
 
 const defaultBlitzRuntimeLauncher: BlitzRuntimeLauncher = async ({
   instanceName,
@@ -369,9 +391,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
   >();
   private readonly _executors = new Map<string, ExecutorServiceProxy>();
   private readonly _executorContainers = new Map<string, ExecutorContainerService>();
+  private readonly _clientExecutorTasks = new Map<string, ClientExecutorTaskRoute>();
+  private readonly _clientSqlResults = new Map<string, SqlResult>();
   private readonly _scheduledExecutors = new Map<string, ScheduledExecutorServiceProxy>();
   private readonly _scheduledExecutorContainers = new Map<string, ScheduledContainerService>();
   private _knownExecutorMemberIds = new Set<string>();
+  private _sqlService: SqlService | null = null;
 
   /** TCP transport — non-null when TCP-IP or multicast join is enabled. */
   private _transport: TcpClusterTransport | null = null;
@@ -2806,18 +2831,27 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const sqlOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlServiceOperations = {
-      execute: async () => notImplemented(),
-      fetch: async () => notImplemented(),
-      close: async () => notImplemented(),
+      execute: async (sql, params, timeoutMs, cursorBufferSize, partitionArgumentIndex, queryId) =>
+        this._executeClientSql(sql, params, timeoutMs, cursorBufferSize, partitionArgumentIndex, queryId),
+      fetch: async (queryId, cursorBufferSize) =>
+        this._fetchClientSql(queryId, cursorBufferSize),
+      close: async (queryId) =>
+        this._closeClientSql(queryId),
     };
 
     const executorOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ExecutorServiceOperations = {
-      shutdown: async () => notImplemented(),
-      isShutdown: async () => notImplemented(),
-      cancelOnPartition: async () => notImplemented(),
-      cancelOnMember: async () => notImplemented(),
-      submitToPartition: async () => notImplemented(),
-      submitToMember: async () => notImplemented(),
+      shutdown: async (name) => {
+        await this.getExecutorService(name).shutdown();
+      },
+      isShutdown: async (name) => this.getExecutorService(name).isShutdown(),
+      cancelOnPartition: async (uuid, partitionId, interrupt) =>
+        this._cancelClientExecutorTaskOnPartition(uuid, partitionId, interrupt),
+      cancelOnMember: async (uuid, memberUuid, interrupt) =>
+        this._cancelClientExecutorTaskOnMember(uuid, memberUuid, interrupt),
+      submitToPartition: async (name, uuid, callable, partitionId) =>
+        this._submitClientExecutorTaskToPartition(name, uuid, callable, partitionId),
+      submitToMember: async (name, uuid, callable, memberUuid) =>
+        this._submitClientExecutorTaskToMember(name, uuid, callable, memberUuid),
     };
 
     const atomicLongOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicLongOperations = {
@@ -3012,6 +3046,359 @@ export class HeliosInstanceImpl implements HeliosInstance {
       }
     }
     return items;
+  }
+
+  private _getOrCreateSqlService(): SqlService {
+    if (this._sqlService === null) {
+      this._sqlService = new SqlService(this._nodeEngine, this._mapService);
+    }
+    return this._sqlService;
+  }
+
+  private _clientSqlQueryKey(queryId: ClientSqlQueryId): string {
+    return `${queryId.localHigh}:${queryId.localLow}:${queryId.globalHigh}:${queryId.globalLow}`;
+  }
+
+  private _encodeSqlCell(value: unknown): Data {
+    return this._ss.toData(value) ?? this._ss.toData(null) as Data;
+  }
+
+  private _mapSqlColumnType(type: SqlColumnType): number {
+    switch (type) {
+      case 'VARCHAR':
+        return 0;
+      case 'BOOLEAN':
+        return 1;
+      case 'TINYINT':
+        return 2;
+      case 'SMALLINT':
+        return 3;
+      case 'INTEGER':
+        return 4;
+      case 'BIGINT':
+        return 5;
+      case 'DECIMAL':
+        return 6;
+      case 'REAL':
+        return 7;
+      case 'DOUBLE':
+        return 8;
+      case 'DATE':
+        return 9;
+      case 'TIME':
+        return 10;
+      case 'TIMESTAMP':
+        return 11;
+      case 'TIMESTAMP_WITH_TIME_ZONE':
+        return 12;
+      case 'OBJECT':
+        return 13;
+      case 'NULL':
+        return 14;
+      default:
+        return 13;
+    }
+  }
+
+  private _toProtocolSqlMetadata(
+    result: SqlResult,
+  ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlColumnMetadata[] {
+    return result.getRowMetadata().getColumns().map((column) => ({
+      name: column.name,
+      type: this._mapSqlColumnType(column.type),
+      nullable: column.nullable,
+      nullableIsSet: true,
+    }));
+  }
+
+  private _toProtocolSqlPage(
+    result: SqlResult,
+    pageSize: number,
+  ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlPage {
+    const columns = result.getRowMetadata().getColumns();
+    const rows = result.fetchPage(pageSize > 0 ? pageSize : 4096);
+    const columnData = columns.map(() => [] as Data[]);
+
+    for (const row of rows) {
+      columns.forEach((column, index) => {
+        columnData[index].push(this._encodeSqlCell(row[column.name]));
+      });
+    }
+
+    return {
+      columnTypes: columns.map((column) => this._mapSqlColumnType(column.type)),
+      columns: columnData,
+      last: !result.hasMoreRows(),
+    };
+  }
+
+  private _toProtocolSqlError(
+    error: unknown,
+  ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlError {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      code: -1,
+      message,
+      originatingMemberId: this.getLocalMemberId(),
+      suggestion: null,
+    };
+  }
+
+  private _closeStoredClientSqlResult(queryKey: string): void {
+    const existing = this._clientSqlResults.get(queryKey);
+    if (existing !== undefined) {
+      this._clientSqlResults.delete(queryKey);
+      existing.close();
+    }
+  }
+
+  private _executeClientSql(
+    sql: string,
+    params: Data[],
+    timeoutMs: bigint,
+    cursorBufferSize: number,
+    partitionArgumentIndex: number,
+    queryId: ClientSqlQueryId,
+  ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlExecuteResult {
+    const queryKey = this._clientSqlQueryKey(queryId);
+    this._closeStoredClientSqlResult(queryKey);
+
+    try {
+      const statement = new SqlStatement(
+        sql,
+        params.map((param) => this._ss.toObject(param)),
+      );
+      if (timeoutMs >= 0n && timeoutMs <= BigInt(Number.MAX_SAFE_INTEGER)) {
+        statement.setTimeoutMillis(Number(timeoutMs));
+      }
+      if (cursorBufferSize > 0) {
+        statement.setCursorBufferSize(cursorBufferSize);
+      }
+
+      const result = this._getOrCreateSqlService().executeStatement(statement);
+      if (result.isUpdateCount()) {
+        const updateCount = BigInt(result.getUpdateCount());
+        result.close();
+        return {
+          queryId,
+          rowMetadata: null,
+          rowPage: null,
+          updateCount,
+          error: null,
+          isInfiniteRows: false,
+          partitionArgumentIndex,
+        };
+      }
+
+      const rowPage = this._toProtocolSqlPage(result, cursorBufferSize);
+      if (rowPage.last) {
+        result.close();
+      } else {
+        this._clientSqlResults.set(queryKey, result);
+      }
+
+      return {
+        queryId,
+        rowMetadata: this._toProtocolSqlMetadata(result),
+        rowPage,
+        updateCount: -1n,
+        error: null,
+        isInfiniteRows: false,
+        partitionArgumentIndex,
+      };
+    } catch (error) {
+      return {
+        queryId,
+        rowMetadata: null,
+        rowPage: null,
+        updateCount: 0n,
+        error: this._toProtocolSqlError(error),
+        isInfiniteRows: false,
+        partitionArgumentIndex,
+      };
+    }
+  }
+
+  private _fetchClientSql(
+    queryId: ClientSqlQueryId,
+    cursorBufferSize: number,
+  ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlFetchResult {
+    const queryKey = this._clientSqlQueryKey(queryId);
+    const result = this._clientSqlResults.get(queryKey);
+    if (result === undefined) {
+      return {
+        rowPage: null,
+        error: this._toProtocolSqlError(new Error(`SQL cursor not found for queryId ${queryKey}`)),
+      };
+    }
+
+    try {
+      const rowPage = this._toProtocolSqlPage(result, cursorBufferSize);
+      if (rowPage.last) {
+        this._clientSqlResults.delete(queryKey);
+        result.close();
+      }
+      return { rowPage, error: null };
+    } catch (error) {
+      this._closeStoredClientSqlResult(queryKey);
+      return { rowPage: null, error: this._toProtocolSqlError(error) };
+    }
+  }
+
+  private _closeClientSql(queryId: ClientSqlQueryId): void {
+    this._closeStoredClientSqlResult(this._clientSqlQueryKey(queryId));
+  }
+
+  private _getExecutorTaskRoute(uuid: string): ClientExecutorTaskRoute | null {
+    return this._clientExecutorTasks.get(uuid) ?? null;
+  }
+
+  private _findClusterMemberByUuid(memberUuid: string) {
+    return this._cluster.getMembers().find((member) => member.getUuid() === memberUuid) ?? null;
+  }
+
+  private _buildClientExecutorOperation(
+    name: string,
+    uuid: string,
+    callable: Data,
+  ): ExecuteCallableOperation {
+    this.getExecutorService(name);
+
+    const registry = this._nodeEngine.getServiceOrNull<TaskTypeRegistry>(
+      `helios:executor:registry:${name}`,
+    );
+    if (registry === null) {
+      throw new Error(`No executor registry registered for executor \"${name}\"`);
+    }
+
+    const task = this._ss.toObject<TaskCallable<unknown>>(callable);
+    if (task === null || typeof task !== 'object' || typeof task.taskType !== 'string') {
+      throw new Error('Executor callable payload must serialize to a TaskCallable');
+    }
+    if (task.taskType === '__inline__') {
+      throw new Error('Inline tasks cannot be submitted for distributed execution');
+    }
+
+    const taskDescriptor = registry.get(task.taskType);
+    if (taskDescriptor === undefined) {
+      throw new Error(`Unknown task type: \"${task.taskType}\"`);
+    }
+
+    const config = this._config.getExecutorConfig(name);
+    if (config.getExecutionBackend() === 'scatter' && !registry.isWorkerSafe(task.taskType)) {
+      throw new Error(
+        `Task \"${task.taskType}\" is not worker-safe (no modulePath). `
+        + 'Distributed tasks require module-backed registration with modulePath and exportName.',
+      );
+    }
+
+    return new ExecuteCallableOperation({
+      taskUuid: uuid,
+      executorName: name,
+      taskType: task.taskType,
+      registrationFingerprint: taskDescriptor.fingerprint,
+      inputData: Buffer.from(JSON.stringify(task.input ?? null)),
+      submitterMemberUuid: this.getLocalMemberId(),
+      timeoutMillis: config.getTaskTimeoutMillis(),
+    });
+  }
+
+  private _trackClientExecutorTask(
+    uuid: string,
+    route: ClientExecutorTaskRoute,
+    future: import('@zenystx/helios-core/spi/impl/operationservice/InvocationFuture').InvocationFuture<ExecutorOperationResult>,
+  ): void {
+    this._clientExecutorTasks.set(uuid, route);
+    future.whenComplete(() => {
+      this._clientExecutorTasks.delete(uuid);
+    });
+  }
+
+  private _submitClientExecutorTaskToPartition(
+    name: string,
+    uuid: string,
+    callable: Data,
+    partitionId: number,
+  ): void {
+    const operation = this._buildClientExecutorOperation(name, uuid, callable);
+    const future = this._nodeEngine.getOperationService().invokeOnPartition<ExecutorOperationResult>(
+      'helios:executor',
+      operation,
+      partitionId,
+    );
+    this._trackClientExecutorTask(uuid, { name, partitionId, memberUuid: null }, future);
+  }
+
+  private _submitClientExecutorTaskToMember(
+    name: string,
+    uuid: string,
+    callable: Data,
+    memberUuid: string,
+  ): void {
+    const member = this._findClusterMemberByUuid(memberUuid);
+    if (member === null) {
+      throw new Error(`Executor target member not found: ${memberUuid}`);
+    }
+
+    const operation = new MemberCallableOperation(
+      this._buildClientExecutorOperation(name, uuid, callable).descriptor,
+      memberUuid,
+    );
+    const future = this._nodeEngine.getOperationService().invokeOnTarget<ExecutorOperationResult>(
+      'helios:executor',
+      operation,
+      member.getAddress(),
+    );
+    this._trackClientExecutorTask(uuid, { name, partitionId: null, memberUuid }, future);
+  }
+
+  private async _cancelClientExecutorTaskOnPartition(
+    uuid: string,
+    partitionId: number,
+    _interrupt: boolean,
+  ): Promise<boolean> {
+    const route = this._getExecutorTaskRoute(uuid);
+    if (route === null || route.partitionId !== partitionId) {
+      return false;
+    }
+
+    const operation = new CancellationOperation(route.name, uuid);
+    const cancelled = await this._nodeEngine.getOperationService().invokeOnPartition<boolean>(
+      'helios:executor',
+      operation,
+      partitionId,
+    ).get();
+    if (cancelled) {
+      this._clientExecutorTasks.delete(uuid);
+    }
+    return cancelled;
+  }
+
+  private async _cancelClientExecutorTaskOnMember(
+    uuid: string,
+    memberUuid: string,
+    _interrupt: boolean,
+  ): Promise<boolean> {
+    const route = this._getExecutorTaskRoute(uuid);
+    if (route === null || route.memberUuid !== memberUuid) {
+      return false;
+    }
+
+    const member = this._findClusterMemberByUuid(memberUuid);
+    if (member === null) {
+      return false;
+    }
+
+    const operation = new CancellationOperation(route.name, uuid);
+    const cancelled = await this._nodeEngine.getOperationService().invokeOnTarget<boolean>(
+      'helios:executor',
+      operation,
+      member.getAddress(),
+    ).get();
+    if (cancelled) {
+      this._clientExecutorTasks.delete(uuid);
+    }
+    return cancelled;
   }
 
   private _getTransactionalMap(
@@ -4067,6 +4454,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     this._executors.clear();
     this._executorContainers.clear();
+    this._clientExecutorTasks.clear();
+    for (const queryKey of Array.from(this._clientSqlResults.keys())) {
+      this._closeStoredClientSqlResult(queryKey);
+    }
     // Shut down all scheduled executor containers + proxies
     for (const [name, schedProxy] of Array.from(this._scheduledExecutors.entries())) {
       const schedContainer = this._scheduledExecutorContainers.get(name);
@@ -4647,8 +5038,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   // These services are deferred to future versions. They are exposed as stubs
   // so callers receive a clear error rather than "not a function".
 
-  getSql(): never {
-    throw new Error("SQL is not supported in this version (deferred to v2)");
+  getSql(): SqlService {
+    return this._getOrCreateSqlService();
   }
 
   getJet(): never {
