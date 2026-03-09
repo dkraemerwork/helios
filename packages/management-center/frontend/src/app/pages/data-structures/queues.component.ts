@@ -1,5 +1,6 @@
-import { Component, OnInit, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, computed } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { WebSocketService } from '../../core/services/websocket.service';
 import { ClusterStore } from '../../core/store/cluster.store';
 
 @Component({
@@ -42,9 +43,11 @@ import { ClusterStore } from '../../core/store/cluster.store';
     </div>
   `,
 })
-export class QueuesComponent implements OnInit {
+export class QueuesComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly clusterStore = inject(ClusterStore);
+  private readonly wsService = inject(WebSocketService);
+  private clusterId: string | null = null;
 
   readonly queues = computed(() => {
     const cluster = this.clusterStore.activeCluster();
@@ -60,8 +63,17 @@ export class QueuesComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const clusterId = this.route.parent?.snapshot.paramMap.get('id');
-    if (clusterId) this.clusterStore.setActiveCluster(clusterId);
+    this.clusterId = this.route.parent?.snapshot.paramMap.get('id') ?? null;
+    if (this.clusterId) {
+      this.clusterStore.setActiveCluster(this.clusterId);
+      this.wsService.subscribe(this.clusterId, 'all');
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.clusterId) {
+      this.wsService.unsubscribe(this.clusterId);
+    }
   }
 
   formatStats(stats: Record<string, unknown>): string {

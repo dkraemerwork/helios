@@ -1,9 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { JsonPipe } from '@angular/common';
 import { ClusterStore } from '../../core/store/cluster.store';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { WebSocketService } from '../../core/services/websocket.service';
 
 @Component({
   selector: 'mc-map-detail',
@@ -34,10 +35,7 @@ import { AuthService } from '../../core/services/auth.service';
 
       @if (actionResult(); as result) {
         <div class="p-3 rounded-md text-sm"
-          [class.bg-mc-emerald/10]="result.success"
-          [class.text-mc-emerald]="result.success"
-          [class.bg-mc-red/10]="!result.success"
-          [class.text-mc-red]="!result.success">
+          [class]="result.success ? 'bg-mc-emerald/10 text-mc-emerald' : 'bg-mc-red/10 text-mc-red'">
           {{ result.message }}
         </div>
       }
@@ -52,26 +50,37 @@ import { AuthService } from '../../core/services/auth.service';
     </div>
   `,
 })
-export class MapDetailComponent implements OnInit {
+export class MapDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly clusterStore = inject(ClusterStore);
   private readonly apiService = inject(ApiService);
+  private readonly wsService = inject(WebSocketService);
   readonly authService = inject(AuthService);
 
   mapName = '';
-  readonly stats = signal<Record<string, unknown> | null>(null);
+  private clusterId: string | null = null;
+  readonly stats = computed(() => {
+    const cluster = this.clusterStore.activeCluster();
+    if (!cluster || !this.mapName) {
+      return null;
+    }
+    return (cluster.mapStats[this.mapName] as Record<string, unknown>) ?? null;
+  });
   readonly actionLoading = signal(false);
   readonly actionResult = signal<{ success: boolean; message: string } | null>(null);
 
   ngOnInit(): void {
     this.mapName = this.route.snapshot.paramMap.get('name') ?? '';
-    const clusterId = this.route.parent?.snapshot.paramMap.get('id');
-    if (clusterId) {
-      this.clusterStore.setActiveCluster(clusterId);
-      const cluster = this.clusterStore.activeCluster();
-      if (cluster?.mapStats[this.mapName]) {
-        this.stats.set(cluster.mapStats[this.mapName] as Record<string, unknown>);
-      }
+    this.clusterId = this.route.parent?.snapshot.paramMap.get('id') ?? null;
+    if (this.clusterId) {
+      this.clusterStore.setActiveCluster(this.clusterId);
+      this.wsService.subscribe(this.clusterId, 'all');
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.clusterId) {
+      this.wsService.unsubscribe(this.clusterId);
     }
   }
 
