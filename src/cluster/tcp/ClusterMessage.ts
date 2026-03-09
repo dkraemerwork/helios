@@ -369,6 +369,14 @@ export interface ListStateAckMsg {
   readonly version: number;
 }
 
+export interface ListEventMsg {
+  readonly type: "LIST_EVENT";
+  readonly listName: string;
+  readonly eventType: "ADDED" | "REMOVED";
+  readonly sourceNodeId: string;
+  readonly data: EncodedData | null;
+}
+
 // ── Distributed Set messages ──────────────────────────────────────────
 
 export interface SetRequestMsg {
@@ -567,6 +575,7 @@ export type ClusterMessage =
   | ListResponseMsg
   | ListStateSyncMsg
   | ListStateAckMsg
+  | ListEventMsg
   | SetRequestMsg
   | SetResponseMsg
   | SetStateSyncMsg

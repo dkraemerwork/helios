@@ -254,8 +254,10 @@ describe('list protocol adapter', () => {
             const registrationId = ListAddListenerCodec.decodeResponse(addResponse!);
 
             expect(registrationId).toBeTruthy();
+            expect((instance as any)._distributedListService).not.toBeNull();
 
-            await dispatcher.dispatch(buildNameDataRequest(LIST_ADD_REQUEST_TYPE, 31, listName, ss.toData('first')!), session);
+            const list = instance.getList<string>(listName) as any;
+            expect(await list.add('first')).toBe(true);
 
             expect(session.events).toHaveLength(1);
             expect(session.events[0].getMessageType()).toBe(ListAddListenerCodec.EVENT_ITEM_MESSAGE_TYPE);
@@ -266,7 +268,7 @@ describe('list protocol adapter', () => {
             expect(addedEvent.uuid).toBe(memberUuid);
 
             session.events.length = 0;
-            await dispatcher.dispatch(buildIndexedNameRequest(LIST_REMOVE_WITH_INDEX_REQUEST_TYPE, 32, 0, listName), session);
+            expect(await list.removeAt(0)).toBe('first');
 
             expect(session.events).toHaveLength(1);
             const removedEvent = ListAddListenerCodec.decodeItemEvent(session.events[0]);
@@ -278,8 +280,49 @@ describe('list protocol adapter', () => {
             expect(decodeBooleanResponse(removeResponse!)).toBe(true);
 
             session.events.length = 0;
-            await dispatcher.dispatch(buildNameDataRequest(LIST_ADD_REQUEST_TYPE, 34, listName, ss.toData('second')!), session);
+            expect(await list.add('second')).toBe(true);
             expect(session.events).toHaveLength(0);
+        } finally {
+            ss.destroy();
+        }
+    });
+
+    test('list listeners observe real proxy mutations after listener registration', async () => {
+        const config = new HeliosConfig('list-protocol-proxy-listener');
+        config.setClusterName('list-protocol-proxy-listener');
+        config.getNetworkConfig().setClientProtocolPort(0);
+        const instance = new HeliosInstanceImpl(config);
+        instances.push(instance);
+
+        const dispatcher = (instance as any)._clientProtocolServer.getDispatcher();
+        const session = new TestClientSession('list-proxy-listener') as any;
+        const ss = new SerializationServiceImpl(new SerializationConfig());
+
+        try {
+            const listName = 'proxy-listener-list';
+            const addRequest = ListAddListenerCodec.encodeRequest(listName, true, false);
+            addRequest.setCorrelationId(40);
+            addRequest.setPartitionId(-1);
+
+            const addResponse = await dispatcher.dispatch(addRequest, session);
+            expect(ListAddListenerCodec.decodeResponse(addResponse!)).toBeTruthy();
+
+            const list = instance.getList<string>(listName) as any;
+            await list.add('proxy-add');
+            await list.set(0, 'proxy-set');
+            await list.clear();
+
+            const events = session.events.map((message: ClientMessage) => ListAddListenerCodec.decodeItemEvent(message));
+            expect(events).toHaveLength(4);
+            expect(events.map((event: { item: Data | null; uuid: string | null; eventType: number }) => ({
+                item: ss.toObject(event.item!) as string,
+                eventType: event.eventType,
+            }))).toEqual([
+                { item: 'proxy-add', eventType: 1 },
+                { item: 'proxy-add', eventType: 2 },
+                { item: 'proxy-set', eventType: 1 },
+                { item: 'proxy-set', eventType: 2 },
+            ]);
         } finally {
             ss.destroy();
         }

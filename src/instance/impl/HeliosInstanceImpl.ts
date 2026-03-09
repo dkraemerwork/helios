@@ -30,7 +30,6 @@ import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpCluster
 import type { IList } from "@zenystx/helios-core/collection/IList";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 import type { ISet } from "@zenystx/helios-core/collection/ISet";
-import { ListImpl } from "@zenystx/helios-core/collection/impl/ListImpl";
 import { QueueImpl } from "@zenystx/helios-core/collection/impl/QueueImpl";
 import { SetImpl } from "@zenystx/helios-core/collection/impl/SetImpl";
 import { DistributedListService } from "@zenystx/helios-core/collection/impl/list/DistributedListService";
@@ -249,6 +248,7 @@ interface QueueClientListenerRegistration {
 interface ItemClientListenerRegistration {
   name: string;
   registrationId: string;
+  itemListenerId?: string;
   includeValue: boolean;
   correlationId: number;
   session: ClientSession;
@@ -306,7 +306,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     NearCachedIMapWrapper<unknown, unknown>
   >();
   private readonly _queues = new Map<string, IQueue<unknown>>();
-  private readonly _lists = new Map<string, ListProxyImpl<unknown> | ListImpl<unknown>>();
+  private readonly _lists = new Map<string, ListProxyImpl<unknown>>();
   private readonly _sets = new Map<string, SetProxyImpl<unknown> | SetImpl<unknown>>();
   private readonly _topics = new Map<string, ITopic<unknown>>();
   private readonly _reliableTopics = new Map<string, ITopic<unknown>>();
@@ -874,6 +874,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._distributedListService = new DistributedListService(
       localMemberId,
       this._config,
+      this._ss,
       this._transport,
       this._clusterCoordinator,
     );
@@ -2205,16 +2206,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const listOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ListServiceOperations = {
       add: async (name, value) => {
         this._ensureListService();
-        const added = await this._distributedListService!.add(name, value);
-        if (added) {
-          this._publishClientListEvent(name, value, 1);
-        }
-        return added;
+        return this._distributedListService!.add(name, value);
       },
       addWithIndex: async (name, index, value) => {
         this._ensureListService();
         await this._distributedListService!.addAt(name, index, value);
-        this._publishClientListEvent(name, value, 1);
       },
       get: async (name, index) => {
         this._ensureListService();
@@ -2222,24 +2218,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       set: async (name, index, value) => {
         this._ensureListService();
-        const oldValue = await this._distributedListService!.set(name, index, value);
-        this._publishClientListEvent(name, oldValue, 2);
-        this._publishClientListEvent(name, value, 1);
-        return oldValue;
+        return this._distributedListService!.set(name, index, value);
       },
       remove: async (name, value) => {
         this._ensureListService();
-        const removed = await this._distributedListService!.remove(name, value);
-        if (removed) {
-          this._publishClientListEvent(name, value, 2);
-        }
-        return removed;
+        return this._distributedListService!.remove(name, value);
       },
       removeWithIndex: async (name, index) => {
         this._ensureListService();
-        const removed = await this._distributedListService!.removeAt(name, index);
-        this._publishClientListEvent(name, removed, 2);
-        return removed;
+        return this._distributedListService!.removeAt(name, index);
       },
       size: async (name) => {
         this._ensureListService();
@@ -2255,31 +2242,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       addAll: async (name, values) => {
         this._ensureListService();
-        const added = await this._distributedListService!.addAll(name, values);
-        if (added) {
-          for (const value of values) {
-            this._publishClientListEvent(name, value, 1);
-          }
-        }
-        return added;
+        return this._distributedListService!.addAll(name, values);
       },
       addAllWithIndex: async (name, index, values) => {
         this._ensureListService();
-        const added = await this._distributedListService!.addAllAt(name, index, values);
-        if (added) {
-          for (const value of values) {
-            this._publishClientListEvent(name, value, 1);
-          }
-        }
-        return added;
+        return this._distributedListService!.addAllAt(name, index, values);
       },
       clear: async (name) => {
         this._ensureListService();
-        const previous = await this._distributedListService!.toArray(name);
         await this._distributedListService!.clear(name);
-        for (const value of previous) {
-          this._publishClientListEvent(name, value, 2);
-        }
       },
       indexOf: async (name, value) => {
         this._ensureListService();
@@ -2316,11 +2287,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
           if (survivors.length > 0) {
             await this._distributedListService!.addAll(name, survivors);
           }
-          for (const value of previous) {
-            if (fingerprints.has(clientDataFingerprint(value))) {
-              this._publishClientListEvent(name, value, 2);
-            }
-          }
         }
         return changed;
       },
@@ -2334,11 +2300,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
           await this._distributedListService!.clear(name);
           if (survivors.length > 0) {
             await this._distributedListService!.addAll(name, survivors);
-          }
-          for (const value of previous) {
-            if (!fingerprints.has(clientDataFingerprint(value))) {
-              this._publishClientListEvent(name, value, 2);
-            }
           }
         }
         return changed;
@@ -2637,6 +2598,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._distributedListService = new DistributedListService(
         this.getLocalMemberId(),
         this._config,
+        this._ss,
         this._transport,
         this._clusterCoordinator,
       );
@@ -2885,10 +2847,27 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   private _registerClientListListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
+    this._ensureListService();
+    const memberUuid = this._cluster.getLocalMember().getUuid();
     const registrationId = crypto.randomUUID();
+    const itemListenerId = this._distributedListService!.addItemListener(name, {
+      itemAdded: (event) => {
+        const item = includeValue ? this._ss.toData(event.getItem()) : null;
+        const eventMessage = ListAddListenerCodec.encodeItemEvent(item, memberUuid, 1);
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      itemRemoved: (event) => {
+        const item = includeValue ? this._ss.toData(event.getItem()) : null;
+        const eventMessage = ListAddListenerCodec.encodeItemEvent(item, memberUuid, 2);
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+    }, includeValue);
     this._clientListListenerRegistrations.set(registrationId, {
       name,
       registrationId,
+      itemListenerId,
       includeValue,
       correlationId,
       session,
@@ -2913,7 +2892,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (registrations !== undefined && registrations.size === 0) {
       this._clientSessionListListeners.delete(sessionId);
     }
-    return true;
+    this._ensureListService();
+    return this._distributedListService!.removeItemListener(
+      registration.name,
+      registration.itemListenerId ?? registration.registrationId,
+    );
   }
 
   private _removeClientListListenersForSession(sessionId: string): void {
@@ -2923,31 +2906,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     for (const registrationId of Array.from(registrations)) {
       this._removeClientListListener(sessionId, registrationId);
-    }
-  }
-
-  private _publishClientListEvent(name: string, item: Data, eventType: number): void {
-    const memberUuid = this._cluster.getLocalMember().getUuid();
-    for (const [registrationId, registration] of this._clientListListenerRegistrations) {
-      if (registration.name !== name) {
-        continue;
-      }
-      const sessionId = [...this._clientSessionListListeners.entries()]
-        .find(([, registrations]) => registrations.has(registrationId))?.[0];
-      if (sessionId === undefined) {
-        continue;
-      }
-      if (!registration.session.isAuthenticated()) {
-        this._removeClientListListener(sessionId, registrationId);
-        continue;
-      }
-      const eventMessage = ListAddListenerCodec.encodeItemEvent(
-        registration.includeValue ? item : null,
-        memberUuid,
-        eventType,
-      );
-      eventMessage.setCorrelationId(registration.correlationId);
-      registration.session.pushEvent(eventMessage);
     }
   }
 
@@ -3504,15 +3462,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   getList<E>(name: string): IList<E> {
+    this._ensureListService();
     let list = this._lists.get(name);
     if (!list) {
-      list =
-        this._distributedListService === null
-          ? new ListImpl<unknown>()
-          : new ListProxyImpl<unknown>(name, this._distributedListService, this._ss);
+      list = new ListProxyImpl<unknown>(name, this._distributedListService!, this._ss);
       this._lists.set(name, list);
     }
-    return list as IList<E>;
+    return list as unknown as IList<E>;
   }
 
   getSet<E>(name: string): ISet<E> {

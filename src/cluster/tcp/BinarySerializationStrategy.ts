@@ -4,6 +4,7 @@ import type {
     BlitzTopologyResponseMsg,
     ClusterMessage,
     FinalizeJoinMsg,
+    ListEventMsg,
     ListResponseMsg,
     ListStateSyncMsg,
     MembersUpdateMsg,
@@ -82,19 +83,20 @@ const MESSAGE_TYPE_TO_ID = {
     LIST_RESPONSE: 40,
     LIST_STATE_SYNC: 41,
     LIST_STATE_ACK: 42,
-    SET_REQUEST: 43,
-    SET_RESPONSE: 44,
-    SET_STATE_SYNC: 45,
-    SET_STATE_ACK: 46,
-    MULTIMAP_REQUEST: 47,
-    MULTIMAP_RESPONSE: 48,
-    MULTIMAP_STATE_SYNC: 49,
-    MULTIMAP_STATE_ACK: 50,
-    REPLICATED_MAP_PUT: 51,
-    REPLICATED_MAP_REMOVE: 52,
-    REPLICATED_MAP_CLEAR: 53,
-    REPLICATED_MAP_STATE_SYNC: 54,
-    REPLICATED_MAP_STATE_ACK: 55,
+    LIST_EVENT: 43,
+    SET_REQUEST: 44,
+    SET_RESPONSE: 45,
+    SET_STATE_SYNC: 46,
+    SET_STATE_ACK: 47,
+    MULTIMAP_REQUEST: 48,
+    MULTIMAP_RESPONSE: 49,
+    MULTIMAP_STATE_SYNC: 50,
+    MULTIMAP_STATE_ACK: 51,
+    REPLICATED_MAP_PUT: 52,
+    REPLICATED_MAP_REMOVE: 53,
+    REPLICATED_MAP_CLEAR: 54,
+    REPLICATED_MAP_STATE_SYNC: 55,
+    REPLICATED_MAP_STATE_ACK: 56,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -343,6 +345,9 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.listName);
                 out.writeLong(BigInt(message.version));
                 return;
+            case 'LIST_EVENT':
+                writeListEvent(out, message);
+                return;
             case 'SET_REQUEST':
                 out.writeString(message.requestId);
                 out.writeString(message.sourceNodeId);
@@ -583,6 +588,8 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return readListStateSync(inp);
             case 'LIST_STATE_ACK':
                 return { type: 'LIST_STATE_ACK', requestId: readRequiredString(inp), listName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'LIST_EVENT':
+                return readListEvent(inp);
             case 'SET_REQUEST': {
                 const requestId = readRequiredString(inp);
                 const sourceNodeId = readRequiredString(inp);
@@ -652,6 +659,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
             case 'RELIABLE_TOPIC_BACKUP':
                 return FLAG_IS_BACKUP;
             case 'QUEUE_EVENT':
+            case 'LIST_EVENT':
             case 'TOPIC_MESSAGE':
             case 'RELIABLE_TOPIC_MESSAGE':
             case 'BLITZ_TOPOLOGY_ANNOUNCE':
@@ -914,6 +922,23 @@ function readQueueEvent(inp: ByteArrayObjectDataInput): QueueEventMsg {
         type: 'QUEUE_EVENT',
         queueName: readRequiredString(inp),
         eventType: readRequiredString(inp) as QueueEventMsg['eventType'],
+        sourceNodeId: readRequiredString(inp),
+        data: readOptionalEncodedData(inp),
+    };
+}
+
+function writeListEvent(out: ByteArrayObjectDataOutput, message: ListEventMsg): void {
+    out.writeString(message.listName);
+    out.writeString(message.eventType);
+    out.writeString(message.sourceNodeId);
+    writeOptionalEncodedData(out, message.data);
+}
+
+function readListEvent(inp: ByteArrayObjectDataInput): ListEventMsg {
+    return {
+        type: 'LIST_EVENT',
+        listName: readRequiredString(inp),
+        eventType: readRequiredString(inp) as ListEventMsg['eventType'],
         sourceNodeId: readRequiredString(inp),
         data: readOptionalEncodedData(inp),
     };

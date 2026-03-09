@@ -12,6 +12,7 @@
  */
 import type {
   ClusterMessage,
+  ListEventMsg,
   ListResponseMsg,
   ListStateAckMsg,
   ListStateSyncMsg,
@@ -21,9 +22,12 @@ import {
   encodeData,
 } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { ItemEvent } from "@zenystx/helios-core/collection/ItemEvent";
+import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
 
 // ── Container ─────────────────────────────────────────────────────────
 
@@ -39,6 +43,11 @@ interface PendingRemoteRequest {
   resolve: (msg: ListResponseMsg | ListStateAckMsg) => void;
   reject: (err: Error) => void;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
+}
+
+interface ListListenerRegistration<E = unknown> {
+  listener: ItemListener<E>;
+  includeValue: boolean;
 }
 
 type ListOperation =
@@ -64,6 +73,11 @@ type ListOperation =
 
 export class DistributedListService {
   private readonly _containers = new Map<string, ListContainer>();
+  private readonly _listeners = new Map<
+    string,
+    Map<string, ListListenerRegistration>
+  >();
+  private readonly _listenerCounters = new Map<string, number>();
   private readonly _pendingRemoteRequests = new Map<
     string,
     PendingRemoteRequest
@@ -72,6 +86,7 @@ export class DistributedListService {
   constructor(
     private readonly _instanceName: string,
     private readonly _config: HeliosConfig,
+    private readonly _serializationService: SerializationService,
     private readonly _transport: TcpClusterTransport | null,
     private readonly _coordinator: HeliosClusterCoordinator | null,
   ) {
@@ -93,6 +108,9 @@ export class DistributedListService {
         return true;
       case "LIST_STATE_SYNC":
         this._handleStateSync(message);
+        return true;
+      case "LIST_EVENT":
+        this._dispatchListEvent(message);
         return true;
       default:
         return false;
@@ -201,6 +219,28 @@ export class DistributedListService {
     await this._invoke(name, "clear");
   }
 
+  addItemListener<E>(
+    name: string,
+    listener: ItemListener<E>,
+    includeValue = true,
+  ): string {
+    if (listener === null || listener === undefined) {
+      throw new Error("NullPointerException: listener is null");
+    }
+    const registrations =
+      this._listeners.get(name) ?? new Map<string, ListListenerRegistration>();
+    this._listeners.set(name, registrations);
+    const nextCounter = (this._listenerCounters.get(name) ?? 0) + 1;
+    this._listenerCounters.set(name, nextCounter);
+    const id = `listener-${nextCounter}`;
+    registrations.set(id, { listener, includeValue });
+    return id;
+  }
+
+  removeItemListener(name: string, registrationId: string): boolean {
+    return this._listeners.get(name)?.delete(registrationId) ?? false;
+  }
+
   // ── Routing ──────────────────────────────────────────────────────────
 
   private async _invoke(
@@ -269,6 +309,7 @@ export class DistributedListService {
           container.items.push(d);
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "ADDED", d);
           return this._boolResponse(true);
         }
         case "addAt": {
@@ -279,6 +320,7 @@ export class DistributedListService {
           container.items.splice(idx, 0, d);
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "ADDED", d);
           return this._voidResponse();
         }
         case "addAll": {
@@ -287,6 +329,9 @@ export class DistributedListService {
           container.items.push(...list);
           container.version++;
           await this._replicateState(name, container);
+          for (const item of list) {
+            this._broadcastEvent(name, "ADDED", item);
+          }
           return this._boolResponse(true);
         }
         case "addAllAt": {
@@ -297,6 +342,9 @@ export class DistributedListService {
           container.items.splice(idx, 0, ...list);
           container.version++;
           await this._replicateState(name, container);
+          for (const item of list) {
+            this._broadcastEvent(name, "ADDED", item);
+          }
           return this._boolResponse(true);
         }
         case "get": {
@@ -319,6 +367,8 @@ export class DistributedListService {
           container.items[idx] = d;
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "REMOVED", old);
+          this._broadcastEvent(name, "ADDED", d);
           return {
             type: "LIST_RESPONSE",
             requestId: "local",
@@ -332,9 +382,10 @@ export class DistributedListService {
           if (d === undefined) throw new Error("NullPointerException");
           const i = container.items.findIndex((item) => item.equals(d));
           if (i === -1) return this._boolResponse(false);
-          container.items.splice(i, 1);
+          const [removed] = container.items.splice(i, 1);
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "REMOVED", removed);
           return this._boolResponse(true);
         }
         case "removeAt": {
@@ -343,6 +394,7 @@ export class DistributedListService {
           const [removed] = container.items.splice(idx, 1);
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "REMOVED", removed);
           return {
             type: "LIST_RESPONSE",
             requestId: "local",
@@ -407,9 +459,13 @@ export class DistributedListService {
           };
         case "clear":
           if (container.items.length > 0) {
+            const removedItems = [...container.items];
             container.items.length = 0;
             container.version++;
             await this._replicateState(name, container);
+            for (const item of removedItems) {
+              this._broadcastEvent(name, "REMOVED", item);
+            }
           }
           return this._voidResponse();
       }
@@ -483,6 +539,31 @@ export class DistributedListService {
     }
   }
 
+  private _dispatchListEvent(message: ListEventMsg): void {
+    const registrations = this._listeners.get(message.listName);
+    if (registrations === undefined) {
+      return;
+    }
+
+    for (const registration of Array.from(registrations.values())) {
+      const value =
+        registration.includeValue && message.data !== null
+          ? this._serializationService.toObject(decodeData(message.data))
+          : null;
+      const event = new ItemEvent(
+        message.listName,
+        value,
+        message.eventType,
+        message.sourceNodeId,
+      );
+      if (message.eventType === "ADDED") {
+        registration.listener.itemAdded?.(event);
+      } else {
+        registration.listener.itemRemoved?.(event);
+      }
+    }
+  }
+
   // ── Replication ──────────────────────────────────────────────────────
 
   private async _replicateState(
@@ -550,6 +631,22 @@ export class DistributedListService {
     this._transport.send(backupId, msg);
 
     if (ackPromise !== null) await ackPromise;
+  }
+
+  private _broadcastEvent(
+    name: string,
+    eventType: "ADDED" | "REMOVED",
+    data: Data | null,
+  ): void {
+    const message: ListEventMsg = {
+      type: "LIST_EVENT",
+      listName: name,
+      eventType,
+      sourceNodeId: this._instanceName,
+      data: data === null ? null : encodeData(data),
+    };
+    this._dispatchListEvent(message);
+    this._transport?.broadcast(message);
   }
 
   private _resyncAll(): void {
