@@ -84,6 +84,11 @@ export function normalizeHeliosPayload(raw: Record<string, unknown>): MonitorPay
   const rawMembers = r['members'] as Array<Record<string, unknown>> | undefined;
   const members = Array.isArray(rawMembers) ? rawMembers.map(m => ({
     address: (m['address'] as string) ?? '',
+    // restPort: advertised by each member in its own payload (0 = REST disabled / unknown)
+    restPort: (m['restPort'] as number) ?? 0,
+    restAddress: typeof m['restAddress'] === 'string' && m['restAddress'].trim().length > 0
+      ? m['restAddress'].trim()
+      : null,
     liteMember: (m['liteMember'] as boolean) ?? !(m['isMaster'] as boolean ?? true),
     localMember: (m['localMember'] as boolean) ?? (m['isLocal'] as boolean) ?? false,
     uuid: (m['uuid'] as string) ?? '',

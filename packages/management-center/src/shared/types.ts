@@ -264,6 +264,10 @@ export interface MonitorPayload {
 
 export interface MemberInfo {
   address: string;
+  /** REST port advertised by the member (0 = unknown / not reported). */
+  restPort: number;
+  /** Authoritative REST base URL advertised by the member, when known. */
+  restAddress: string | null;
   liteMember: boolean;
   localMember: boolean;
   uuid: string;

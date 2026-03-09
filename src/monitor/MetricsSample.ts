@@ -83,6 +83,10 @@ export interface TransportMetrics {
 export interface MemberPartitionInfo {
     uuid: string;
     address: string;
+    /** REST API port this member is listening on, or 0 if REST is disabled. */
+    restPort: number;
+    /** Authoritative REST base URL for this member, when known. */
+    restAddress: string | null;
     isMaster: boolean;
     isLocal: boolean;
     primaryPartitions: number;

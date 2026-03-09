@@ -13,12 +13,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '../config/ConfigService.js';
 import { WriteBatcher } from '../persistence/WriteBatcher.js';
 import { MetricsRepository } from '../persistence/MetricsRepository.js';
+import { AuthRepository } from '../persistence/AuthRepository.js';
 import { ClusterStateStore } from './ClusterStateStore.js';
 import { MemberSseClient } from './MemberSseClient.js';
 import { MemberRestClient } from './MemberRestClient.js';
 import { nowMs } from '../shared/time.js';
 import type {
   ClusterConfig,
+  ClusterRecord,
   MonitorPayload,
   MemberMetricsSample,
   MetricSample,
@@ -77,6 +79,29 @@ function extractHost(tcpAddress: string): string {
   return tcpAddress.slice(0, lastColon);
 }
 
+/**
+ * Extracts an explicit port from an address string ("host:port"), or returns
+ * undefined if the address is a bare host with no port component.
+ * Handles IPv6 bracket notation ("[::1]:8080" -> 8080).
+ */
+function extractPort(address: string): number | undefined {
+  if (address.startsWith('[')) {
+    // IPv6: "[::1]:port"
+    const bracketEnd = address.indexOf(']');
+    if (bracketEnd !== -1 && address[bracketEnd + 1] === ':') {
+      const port = parseInt(address.slice(bracketEnd + 2), 10);
+      return Number.isNaN(port) ? undefined : port;
+    }
+    return undefined;
+  }
+
+  const lastColon = address.lastIndexOf(':');
+  if (lastColon === -1) return undefined;
+
+  const port = parseInt(address.slice(lastColon + 1), 10);
+  return Number.isNaN(port) ? undefined : port;
+}
+
 /** Builds a REST URL from a host, port, and SSL flag. */
 function buildRestUrl(host: string, port: number, ssl: boolean): string {
   const scheme = ssl ? 'https' : 'http';
@@ -106,6 +131,7 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
     private readonly stateStore: ClusterStateStore,
     private readonly writeBatcher: WriteBatcher,
     private readonly metricsRepository: MetricsRepository,
+    private readonly authRepository: AuthRepository,
     private readonly restClient: MemberRestClient,
     private readonly eventEmitter: EventEmitter2,
   ) {}
@@ -113,8 +139,9 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     this.logger.log('Initializing cluster connector service');
 
-    // Load cluster configurations
+    // Load cluster configurations and persist bootstrap clusters to DB
     for (const config of this.configService.clusters) {
+      await this.persistClusterConfig(config);
       this.connectCluster(config.id, config);
     }
 
@@ -148,6 +175,30 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
   // ── Public API ──────────────────────────────────────────────────────────
 
   /**
+   * Persists a bootstrap cluster config to the DB so the REST API
+   * (`GET /api/clusters`) can list it. Uses upsert to avoid duplicates.
+   */
+  private async persistClusterConfig(config: ClusterConfig): Promise<void> {
+    const now = nowMs();
+    const record: ClusterRecord = {
+      id: config.id,
+      displayName: config.displayName,
+      configJson: JSON.stringify(config),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      await this.authRepository.upsertCluster(record);
+      this.logger.debug(`Persisted bootstrap cluster config: ${config.id}`);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to persist cluster config ${config.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /**
    * Connects to a cluster by creating SSE clients for each configured member.
    * Initializes cluster state and begins streaming.
    */
@@ -163,9 +214,14 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
       this.sseClients.set(clusterId, new Map());
     }
 
-    // Connect to each configured member address
+    // Connect to each configured member address.
+    // memberAddresses may be bare hosts ("127.0.0.1") or host:port pairs
+    // ("127.0.0.1:18082"). When a port is present it overrides config.restPort,
+    // allowing each member to be reached on a different REST port.
     for (const memberAddr of config.memberAddresses) {
-      const restUrl = buildRestUrl(memberAddr, config.restPort, config.sslEnabled);
+      const host = extractHost(memberAddr);
+      const port = extractPort(memberAddr) ?? config.restPort;
+      const restUrl = buildRestUrl(host, port, config.sslEnabled);
       this.connectMember(clusterId, memberAddr, restUrl, config);
     }
 
@@ -254,35 +310,38 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
       if (existing.isRunning) return;
     }
 
-    const client = new MemberSseClient({
+    let currentMemberAddr = memberAddr;
+    let client!: MemberSseClient;
+
+    client = new MemberSseClient({
       memberAddr,
       restUrl,
       authToken: config.authToken,
       requestTimeoutMs: config.requestTimeoutMs,
 
       onInit: (payload) => {
-        this.handleInit(clusterId, memberAddr, restUrl, payload);
+        currentMemberAddr = this.handleInit(clusterId, currentMemberAddr, restUrl, payload, client);
       },
 
       onSample: (sample) => {
-        this.handleSample(clusterId, memberAddr, sample);
+        this.handleSample(clusterId, currentMemberAddr, sample);
       },
 
       onPayload: (payload) => {
-        this.handlePayload(clusterId, memberAddr, payload);
+        this.handlePayload(clusterId, currentMemberAddr, payload);
       },
 
       onError: (error) => {
-        this.stateStore.setMemberError(clusterId, memberAddr, error);
-        this.logger.warn(`Member ${memberAddr} error in cluster ${clusterId}: ${error}`);
+        this.stateStore.setMemberError(clusterId, currentMemberAddr, error);
+        this.logger.warn(`Member ${currentMemberAddr} error in cluster ${clusterId}: ${error}`);
       },
 
       onDisconnect: () => {
-        this.handleDisconnect(clusterId, memberAddr);
+        this.handleDisconnect(clusterId, currentMemberAddr);
       },
 
       onReconnect: (attempt) => {
-        this.logger.debug(`Reconnecting to ${memberAddr} (attempt ${attempt})`);
+        this.logger.debug(`Reconnecting to ${currentMemberAddr} (attempt ${attempt})`);
       },
     });
 
@@ -306,20 +365,32 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
     memberAddr: string,
     restUrl: string,
     payload: MonitorPayload,
-  ): void {
+    client: MemberSseClient,
+  ): string {
+    const reportingMember = getReportingMemberInfo(payload);
+    const canonicalMemberAddr = reportingMember?.address ?? memberAddr;
+    const authoritativeRestUrl = reportingMember?.restAddress ?? restUrl;
+
+    if (canonicalMemberAddr !== memberAddr) {
+      this.promoteConnectedMember(clusterId, memberAddr, canonicalMemberAddr, authoritativeRestUrl, client);
+    }
+
     this.logger.log(
-      `Received init payload from ${memberAddr} — cluster: ${payload.clusterName}, ` +
+      `Received init payload from ${canonicalMemberAddr} — cluster: ${payload.clusterName}, ` +
         `state: ${payload.clusterState}, members: ${payload.clusterSize}`,
     );
 
     // Update state store with the full payload
-    this.stateStore.updateFromPayload(clusterId, memberAddr, payload);
+    this.stateStore.updateFromPayload(clusterId, canonicalMemberAddr, payload);
+    this.stateStore.setMemberConnected(clusterId, canonicalMemberAddr, authoritativeRestUrl);
 
     // Emit payload event
-    this.eventEmitter.emit('payload.received', { clusterId, memberAddr, payload });
+    this.eventEmitter.emit('payload.received', { clusterId, memberAddr: canonicalMemberAddr, payload });
 
     // Check for auto-discoverable members
     this.autoDiscoverMembers(clusterId, payload);
+
+    return canonicalMemberAddr;
   }
 
   private handleSample(
@@ -364,8 +435,8 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * When a payload arrives, inspect its members list for addresses not
-   * currently connected. Extract the host from the TCP address, build a
-   * REST URL with the configured restPort, and connect.
+   * currently connected. Only connect when the member advertised an
+   * authoritative REST endpoint, so single-seed discovery never guesses.
    */
   private autoDiscoverMembers(clusterId: string, payload: MonitorPayload): void {
     const config = this.clusterConfigs.get(clusterId);
@@ -380,9 +451,18 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
       // Already connected to this member
       if (clients.has(tcpAddr)) continue;
 
-      // Extract host from TCP address and build REST URL
-      const host = extractHost(tcpAddr);
-      const restUrl = buildRestUrl(host, config.restPort, config.sslEnabled);
+      // Extract host from TCP address and build REST URL.
+      // Prefer the restPort advertised by the member itself (non-zero means it
+      // self-reported its own REST port). Fall back to the cluster-wide config
+      // value for members that don't yet advertise a restPort.
+      const restUrl = this.resolveMemberRestUrl(memberInfo, config);
+      if (restUrl === null) {
+        this.logger.warn(
+          `Skipping auto-discovery for ${tcpAddr} in cluster ${clusterId}: ` +
+            'member did not advertise an authoritative REST endpoint',
+        );
+        continue;
+      }
 
       this.logger.log(
         `Auto-discovered member ${tcpAddr} in cluster ${clusterId}, ` +
@@ -397,6 +477,43 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
         `Auto-discovered and connecting to member ${tcpAddr} (REST: ${restUrl})`,
       );
     }
+  }
+
+  private promoteConnectedMember(
+    clusterId: string,
+    currentMemberAddr: string,
+    canonicalMemberAddr: string,
+    restUrl: string,
+    client: MemberSseClient,
+  ): void {
+    const clients = this.sseClients.get(clusterId);
+    if (clients) {
+      const registeredClient = clients.get(currentMemberAddr);
+      if (registeredClient === client) {
+        clients.delete(currentMemberAddr);
+        clients.set(canonicalMemberAddr, client);
+      }
+    }
+
+    this.stateStore.canonicalizeMemberAddress(
+      clusterId,
+      currentMemberAddr,
+      canonicalMemberAddr,
+      restUrl,
+    );
+  }
+
+  private resolveMemberRestUrl(memberInfo: MonitorPayload['members'][number], config: ClusterConfig): string | null {
+    if (memberInfo.restAddress) {
+      return memberInfo.restAddress;
+    }
+
+    if (memberInfo.restPort <= 0) {
+      return null;
+    }
+
+    const host = extractHost(memberInfo.address);
+    return buildRestUrl(host, memberInfo.restPort, config.sslEnabled);
   }
 
   // ── Private: Staleness Check ────────────────────────────────────────────
@@ -431,4 +548,8 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
       );
     });
   }
+}
+
+function getReportingMemberInfo(payload: MonitorPayload): MonitorPayload['members'][number] | null {
+  return payload.members.find((member) => member.localMember) ?? null;
 }

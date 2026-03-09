@@ -108,14 +108,15 @@ export class ClusterStateStore {
       const existing = state.members.get(addr);
 
       if (existing) {
-        existing.info = memberInfo;
+        existing.info = mergeMemberInfo(existing.info, memberInfo);
+        if (memberInfo.restAddress) {
+          existing.restAddress = memberInfo.restAddress;
+        }
         existing.lastSeen = now;
       } else {
-        // Auto-discovered member — create entry without REST address
-        // (the connector service will populate restAddress separately)
         state.members.set(addr, {
           address: addr,
-          restAddress: '',
+          restAddress: memberInfo.restAddress ?? '',
           connected: false,
           lastSeen: now,
           latestSample: null,
@@ -131,6 +132,28 @@ export class ClusterStateStore {
     if (reporter) {
       reporter.lastSeen = now;
     }
+  }
+
+  canonicalizeMemberAddress(
+    clusterId: string,
+    currentAddr: string,
+    canonicalAddr: string,
+    restAddress?: string | null,
+  ): void {
+    const state = this.clusters.get(clusterId);
+    if (!state || currentAddr === canonicalAddr) {
+      if (restAddress) {
+        this.setMemberConnected(clusterId, canonicalAddr, restAddress);
+      }
+      return;
+    }
+
+    const current = state.members.get(currentAddr);
+    const canonical = state.members.get(canonicalAddr);
+    const merged = mergeMemberState(current, canonical, restAddress ?? null);
+
+    state.members.set(canonicalAddr, merged);
+    state.members.delete(currentAddr);
   }
 
   /**
@@ -245,4 +268,47 @@ function createEmptyMember(address: string, restAddress: string): MemberState {
     info: null,
     error: null,
   };
+}
+
+function mergeMemberInfo(existing: MemberInfo | null, incoming: MemberInfo): MemberInfo {
+  return {
+    ...incoming,
+    restAddress: incoming.restAddress ?? existing?.restAddress ?? null,
+  };
+}
+
+function mergeMemberState(
+  current: MemberState | undefined,
+  canonical: MemberState | undefined,
+  restAddress: string | null,
+): MemberState {
+  const address = canonical?.address ?? current?.address ?? '';
+  const latestSample = pickLatestSample(current?.latestSample ?? null, canonical?.latestSample ?? null);
+  const recentSamples = [...(current?.recentSamples ?? []), ...(canonical?.recentSamples ?? [])]
+    .sort((left, right) => left.timestamp - right.timestamp)
+    .slice(-MAX_SAMPLES_IN_MEMORY);
+
+  return {
+    address,
+    restAddress: restAddress ?? canonical?.restAddress ?? current?.restAddress ?? '',
+    connected: (canonical?.connected ?? false) || (current?.connected ?? false),
+    lastSeen: Math.max(canonical?.lastSeen ?? 0, current?.lastSeen ?? 0, nowMs()),
+    latestSample,
+    recentSamples,
+    info: canonical?.info ?? current?.info ?? null,
+    error: canonical?.error ?? current?.error ?? null,
+  };
+}
+
+function pickLatestSample(
+  left: MemberMetricsSample | null,
+  right: MemberMetricsSample | null,
+): MemberMetricsSample | null {
+  if (left === null) {
+    return right;
+  }
+  if (right === null) {
+    return left;
+  }
+  return left.timestamp >= right.timestamp ? left : right;
 }

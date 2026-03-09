@@ -11,10 +11,13 @@
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import { Address } from "@zenystx/helios-core/cluster/Address";
+import { MemberImpl } from "@zenystx/helios-core/cluster/impl/MemberImpl";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { EndpointQualifier } from "@zenystx/helios-core/instance/EndpointQualifier";
 import type { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import type { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
+import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 describe("HeliosInstanceImpl", () => {
@@ -253,6 +256,54 @@ describe("HeliosInstanceImpl", () => {
   });
 
   describe("phase 1 quick wins", () => {
+    it("builds authoritative REST advertisements for remote members", () => {
+      const config = new HeliosConfig("test-cluster");
+      config.getNetworkConfig().getRestApiConfig().setEnabled(true).setPort(8080);
+      config.getNetworkConfig().setPublicAddress("public-local.example:8080");
+
+      const localMember = new MemberImpl.Builder(new Address("127.0.0.1", 5701))
+        .uuid("local-member")
+        .localMember(true)
+        .version(new MemberVersion(1, 0, 0))
+        .build();
+      const remoteMember = new MemberImpl.Builder(new Address("10.0.0.6", 5701))
+        .uuid("remote-member")
+        .version(new MemberVersion(1, 0, 0))
+        .addressMap(new Map([[EndpointQualifier.REST, new Address("public-remote.example", 18082)]]))
+        .build();
+
+      const instance = Object.create(HeliosInstanceImpl.prototype) as any;
+      instance._config = config;
+      instance._restServer = {
+        isStarted: () => true,
+        getBoundPort: () => 8080,
+      };
+      instance._cluster = {
+        getMembers: () => [localMember, remoteMember],
+        getLocalMember: () => localMember,
+      };
+      instance.getCluster = () => instance._cluster;
+      instance.getClusterMasterAddress = () => "127.0.0.1:5701";
+      instance.getPartitionCount = () => 2;
+      instance.getPartitionOwnerId = (pid: number) => pid === 0 ? "local-member" : "remote-member";
+      instance.getPartitionBackupIds = (pid: number) => pid === 0 ? ["remote-member"] : ["local-member"];
+
+      const members = instance._buildMemberPartitionInfo();
+      expect(members).toHaveLength(2);
+      expect(members).toEqual([
+        expect.objectContaining({
+          uuid: "local-member",
+          restPort: 8080,
+          restAddress: "http://public-local.example:8080",
+        }),
+        expect.objectContaining({
+          uuid: "remote-member",
+          restPort: 18082,
+          restAddress: "http://public-remote.example:18082",
+        }),
+      ]);
+    });
+
     it("sweeps expired pending responses without touching fresh ones", () => {
       const instance = Object.create(HeliosInstanceImpl.prototype) as any;
 
