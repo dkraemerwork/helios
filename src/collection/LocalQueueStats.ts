@@ -78,4 +78,8 @@ export class LocalQueueStatsImpl implements LocalQueueStats {
   getEventOperationCount(): number {
     return this._snapshot.eventOperationCount;
   }
+
+  toJSON(): LocalQueueStatsSnapshot {
+    return { ...this._snapshot };
+  }
 }

@@ -29,4 +29,11 @@ export class LocalTopicStatsImpl implements LocalTopicStats {
     getReceiveOperationCount(): number {
         return this.receiveCount;
     }
+
+    toJSON(): { publishOperationCount: number; receiveOperationCount: number } {
+        return {
+            publishOperationCount: this.publishCount,
+            receiveOperationCount: this.receiveCount,
+        };
+    }
 }

@@ -68,3 +68,47 @@ export interface BlitzJobMetrics {
    */
   readonly executionCompletionTime: number;
 }
+
+/** Convert a VertexMetrics to a plain JSON-serializable object (Maps → plain objects). */
+export function vertexMetricsToJSON(vm: VertexMetrics): Record<string, unknown> {
+  return {
+    name: vm.name,
+    type: vm.type,
+    itemsIn: vm.itemsIn,
+    itemsOut: vm.itemsOut,
+    queueSize: vm.queueSize,
+    queueCapacity: vm.queueCapacity,
+    latencyP50Ms: vm.latencyP50Ms,
+    latencyP99Ms: vm.latencyP99Ms,
+    latencyMaxMs: vm.latencyMaxMs,
+    distributedItemsIn: vm.distributedItemsIn,
+    distributedItemsOut: vm.distributedItemsOut,
+    distributedBytesIn: vm.distributedBytesIn,
+    distributedBytesOut: vm.distributedBytesOut,
+    topObservedWm: vm.topObservedWm,
+    coalescedWm: vm.coalescedWm,
+    lastForwardedWm: vm.lastForwardedWm,
+    lastForwardedWmLatency: vm.lastForwardedWmLatency,
+    tags: vm.tags ? Object.fromEntries(vm.tags) : undefined,
+    userMetrics: vm.userMetrics ? Object.fromEntries(vm.userMetrics) : undefined,
+  };
+}
+
+/** Convert BlitzJobMetrics to a plain JSON-serializable object (Maps → plain objects). */
+export function blitzJobMetricsToJSON(m: BlitzJobMetrics): Record<string, unknown> {
+  return {
+    totalIn: m.totalIn,
+    totalOut: m.totalOut,
+    totalDistributedItemsIn: m.totalDistributedItemsIn,
+    totalDistributedItemsOut: m.totalDistributedItemsOut,
+    totalDistributedBytesIn: m.totalDistributedBytesIn,
+    totalDistributedBytesOut: m.totalDistributedBytesOut,
+    vertices: Object.fromEntries(
+      [...m.vertices].map(([k, v]) => [k, vertexMetricsToJSON(v)]),
+    ),
+    snapshots: { ...m.snapshots },
+    collectedAt: m.collectedAt,
+    executionStartTime: m.executionStartTime,
+    executionCompletionTime: m.executionCompletionTime,
+  };
+}

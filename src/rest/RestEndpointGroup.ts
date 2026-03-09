@@ -13,4 +13,6 @@ export enum RestEndpointGroup {
     DATA = 'DATA',
     /** Monitoring dashboard — /helios/monitor — disabled by default. Enabled via MonitorConfig. */
     MONITOR = 'MONITOR',
+    /** Admin operations — /helios/admin — disabled by default. Enabled via MonitorConfig. */
+    ADMIN = 'ADMIN',
 }

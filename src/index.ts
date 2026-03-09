@@ -150,6 +150,19 @@ export type {
 // ── Server / CLI ──────────────────────────────────────────────────────────────
 export { HeliosServer } from "@zenystx/helios-core/server/HeliosServer";
 
+// ── Extension ────────────────────────────────────────────────────────────────
+export type { HeliosExtension, ExtensionContext, ExtensionLogger } from "@zenystx/helios-core/extension/HeliosExtension";
+
+// ── Admin ────────────────────────────────────────────────────────────────────
+export { AdminHandler } from "@zenystx/helios-core/rest/handler/AdminHandler";
+export type { AdminOperationsProvider } from "@zenystx/helios-core/rest/handler/AdminHandler";
+
+// ── Monitor (extended) ───────────────────────────────────────────────────────
+export type { MonitorJobsProvider, MonitorJobSnapshot } from "@zenystx/helios-core/rest/handler/MonitorHandler";
+
+// ── Job Metrics Serialization ────────────────────────────────────────────────
+export { blitzJobMetricsToJSON, vertexMetricsToJSON } from "@zenystx/helios-core/job/metrics/BlitzJobMetrics";
+
 // ── Version ───────────────────────────────────────────────────────────────────
 export { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 export { Version } from "@zenystx/helios-core/version/Version";

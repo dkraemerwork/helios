@@ -10,6 +10,7 @@ import { Helios } from '@zenystx/helios-core/Helios';
 import { loadConfig } from '@zenystx/helios-core/config/ConfigLoader';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import type { HeliosExtension, ExtensionContext, ExtensionLogger } from '@zenystx/helios-core/extension/HeliosExtension';
 
 export type ServerState = 'stopped' | 'starting' | 'running' | 'stopping';
 
@@ -32,6 +33,8 @@ export class HeliosServer {
     private _state: ServerState = 'stopped';
     private _instance: HeliosInstanceImpl | null = null;
     private readonly _shutdownHooks: ShutdownHook[] = [];
+    private readonly _extensions: HeliosExtension[] = [];
+    private readonly _startedExtensions: HeliosExtension[] = [];
 
     // ──────────────────────────────────────────
     // State / accessors
@@ -75,6 +78,21 @@ export class HeliosServer {
     }
 
     // ──────────────────────────────────────────
+    // Extension registration
+    // ──────────────────────────────────────────
+
+    /**
+     * Register an extension to be started after the server instance initializes.
+     * Must be called before {@link start()}.
+     */
+    registerExtension(extension: HeliosExtension): void {
+        if (this._state !== 'stopped') {
+            throw new Error('Cannot register extensions after the server has started.');
+        }
+        this._extensions.push(extension);
+    }
+
+    // ──────────────────────────────────────────
     // Lifecycle
     // ──────────────────────────────────────────
 
@@ -112,7 +130,12 @@ export class HeliosServer {
 
             this._instance = await Helios.newInstance(config);
             this._state = 'running';
+
+            // Start registered extensions
+            await this._startExtensions();
         } catch (err) {
+            // Stop any already-started extensions on failure
+            await this._stopExtensions();
             this._state = 'stopped';
             this._instance = null;
             throw err;
@@ -122,7 +145,7 @@ export class HeliosServer {
     /**
      * Gracefully stops the server.
      *
-     * Runs all registered shutdown hooks in registration order,
+     * Stops extensions in reverse order, runs all registered shutdown hooks,
      * then shuts down the underlying HeliosInstance.
      * Safe to call even when the server is already stopped.
      */
@@ -135,6 +158,9 @@ export class HeliosServer {
         }
 
         this._state = 'stopping';
+
+        // Stop extensions in reverse order
+        await this._stopExtensions();
 
         // Run shutdown hooks
         for (const hook of this._shutdownHooks) {
@@ -162,6 +188,50 @@ export class HeliosServer {
      */
     addShutdownHook(hook: ShutdownHook): void {
         this._shutdownHooks.push(hook);
+    }
+
+    // ──────────────────────────────────────────
+    // Extension lifecycle
+    // ──────────────────────────────────────────
+
+    private async _startExtensions(): Promise<void> {
+        if (this._instance === null) return;
+
+        for (const ext of this._extensions) {
+            const context = this._buildExtensionContext(ext.id);
+            await ext.start(context);
+            this._startedExtensions.push(ext);
+        }
+    }
+
+    private async _stopExtensions(): Promise<void> {
+        // Stop in reverse order
+        for (let i = this._startedExtensions.length - 1; i >= 0; i--) {
+            try {
+                await this._startedExtensions[i]!.stop();
+            } catch {
+                // Swallow — extensions must not block shutdown
+            }
+        }
+        this._startedExtensions.length = 0;
+    }
+
+    private _buildExtensionContext(extensionId: string): ExtensionContext {
+        const instance = this._instance!;
+
+        const logger: ExtensionLogger = {
+            info: (message, context) => console.log(JSON.stringify({ level: 'INFO', extension: extensionId, message, ...context })),
+            warn: (message, context) => console.warn(JSON.stringify({ level: 'WARN', extension: extensionId, message, ...context })),
+            error: (message, context) => console.error(JSON.stringify({ level: 'ERROR', extension: extensionId, message, ...context })),
+            debug: (message, context) => console.debug(JSON.stringify({ level: 'DEBUG', extension: extensionId, message, ...context })),
+        };
+
+        return {
+            logger,
+            env: process.env as Record<string, string | undefined>,
+            metricsRegistry: instance.getMetricsRegistry(),
+            restServer: instance.getRestServer(),
+        };
     }
 
     // ──────────────────────────────────────────

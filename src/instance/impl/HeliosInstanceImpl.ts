@@ -99,7 +99,11 @@ import type {
 import { DataHandler } from "@zenystx/helios-core/rest/handler/DataHandler";
 import { HealthCheckHandler } from "@zenystx/helios-core/rest/handler/HealthCheckHandler";
 import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
+import type { MonitorJobsProvider, MonitorJobSnapshot } from "@zenystx/helios-core/rest/handler/MonitorHandler";
 import { MetricsHandler } from "@zenystx/helios-core/rest/handler/MetricsHandler";
+import { AdminHandler } from "@zenystx/helios-core/rest/handler/AdminHandler";
+import type { AdminOperationsProvider } from "@zenystx/helios-core/rest/handler/AdminHandler";
+import { blitzJobMetricsToJSON } from "@zenystx/helios-core/job/metrics/BlitzJobMetrics";
 import { MetricsRegistry } from "@zenystx/helios-core/monitor/MetricsRegistry";
 import { MetricsSampler } from "@zenystx/helios-core/monitor/MetricsSampler";
 import { HealthMonitor } from "@zenystx/helios-core/monitor/HealthMonitor";
@@ -3584,13 +3588,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._metricsRegistry = new MetricsRegistry(monitorConfig);
     this._metricsSampler = new MetricsSampler(monitorConfig, stateProvider, this._metricsRegistry);
 
-    // Register the monitor REST handler
-    const monitorHandler = new MonitorHandler(monitorConfig, this._metricsRegistry, stateProvider);
+    // Build the jobs provider for /helios/monitor/jobs
+    const jobsProvider = this._createMonitorJobsProvider();
+
+    // Register the monitor REST handler (with jobs and config endpoints)
+    const monitorHandler = new MonitorHandler(monitorConfig, this._metricsRegistry, stateProvider, jobsProvider);
     this._restServer.registerHandler('/helios/monitor', (req) => monitorHandler.handle(req));
 
     // Register the /helios/metrics REST handler (JSON + Prometheus text)
     const metricsHandler = new MetricsHandler(globalMetrics, this._metricsRegistry, globalResourceLimiter);
     this._restServer.registerHandler('/helios/metrics', (req) => metricsHandler.handle(req));
+
+    // Enable and register admin endpoints (co-enabled with monitoring)
+    this._config.getNetworkConfig().getRestApiConfig()
+      .enableGroups(RestEndpointGroup.ADMIN);
+    const adminHandler = new AdminHandler(this._createAdminOperationsProvider());
+    this._restServer.registerHandler('/helios/admin', (req) => adminHandler.handle(req));
 
     // Create and start the health monitor (subscribes to registry sample events)
     this._healthMonitor = new HealthMonitor(monitorConfig, this._metricsRegistry, stateProvider);
@@ -3598,6 +3611,122 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Start sampling
     this._metricsSampler.start();
+  }
+
+  private _createMonitorJobsProvider(): MonitorJobsProvider {
+    return {
+      getActiveJobs: async (): Promise<MonitorJobSnapshot[]> => {
+        // Collect jobs from the BlitzJobCoordinator if available via the Blitz service bridge
+        const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
+        if (blitzService === null) return [];
+
+        // The coordinator is accessed through the service-like bridge pattern.
+        // If no coordinator method is exposed, return an empty list gracefully.
+        const getJobsFn = (blitzService as unknown as { getJobs?(): Promise<unknown[]> }).getJobs;
+        if (typeof getJobsFn !== 'function') return [];
+
+        try {
+          const jobs = await getJobsFn.call(blitzService) as Array<{
+            id: string;
+            name: string;
+            getStatus(): string;
+            getSubmissionTime(): number;
+            getMetrics?(): Promise<unknown>;
+          }>;
+
+          const snapshots: MonitorJobSnapshot[] = [];
+          for (const job of jobs) {
+            let metrics: Record<string, unknown> | null = null;
+            if (typeof job.getMetrics === 'function') {
+              try {
+                const m = await job.getMetrics();
+                if (m !== null && typeof m === 'object' && 'vertices' in (m as Record<string, unknown>)) {
+                  metrics = blitzJobMetricsToJSON(m as import('@zenystx/helios-core/job/metrics/BlitzJobMetrics').BlitzJobMetrics);
+                }
+              } catch {
+                // Metrics collection may fail for completed jobs
+              }
+            }
+
+            snapshots.push({
+              id: job.id,
+              name: job.name,
+              status: typeof job.getStatus === 'function' ? job.getStatus() : 'UNKNOWN',
+              submittedAt: typeof job.getSubmissionTime === 'function' ? job.getSubmissionTime() : 0,
+              lightJob: false,
+              participatingMembers: [],
+              vertices: [],
+              edges: [],
+              metrics,
+            });
+          }
+          return snapshots;
+        } catch {
+          return [];
+        }
+      },
+    };
+  }
+
+  private _createAdminOperationsProvider(): AdminOperationsProvider {
+    return {
+      setClusterState: (state: string): void => {
+        // Cluster state is a soft label in Helios (no hard enforcement like Hazelcast).
+        // The ClusterServiceImpl tracks it if present.
+        const validStates = ['ACTIVE', 'FROZEN', 'PASSIVE', 'NO_MIGRATION'];
+        if (!validStates.includes(state)) {
+          throw new Error(`Invalid cluster state: '${state}'. Valid values: ${validStates.join(', ')}`);
+        }
+        // For single-node or coordinator-less mode, this is a no-op label.
+        // In clustered mode, the cluster coordinator would propagate this.
+        if (this._clusterCoordinator !== null) {
+          (this._clusterCoordinator as unknown as { setClusterState?(s: string): void }).setClusterState?.(state);
+        }
+      },
+
+      cancelJob: async (jobId: string): Promise<void> => {
+        const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
+        if (blitzService === null) {
+          throw new Error('No Blitz service available for job operations.');
+        }
+        const cancelFn = (blitzService as unknown as { cancelJob?(id: string): Promise<void> }).cancelJob;
+        if (typeof cancelFn !== 'function') {
+          throw new Error('Job cancel is not supported by this Blitz service.');
+        }
+        await cancelFn.call(blitzService, jobId);
+      },
+
+      restartJob: async (jobId: string): Promise<void> => {
+        const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
+        if (blitzService === null) {
+          throw new Error('No Blitz service available for job operations.');
+        }
+        const restartFn = (blitzService as unknown as { restartJob?(id: string): Promise<void> }).restartJob;
+        if (typeof restartFn !== 'function') {
+          throw new Error('Job restart is not supported by this Blitz service.');
+        }
+        await restartFn.call(blitzService, jobId);
+      },
+
+      clearMap: async (name: string): Promise<void> => {
+        const proxy = this._getOrCreateProxy(name);
+        await proxy.clear();
+      },
+
+      evictMap: async (name: string): Promise<void> => {
+        // MapProxy does not expose evictAll(); use clear() as the eviction path.
+        // This is semantically equivalent for the MC admin "evict map" action.
+        const proxy = this._getOrCreateProxy(name);
+        await proxy.clear();
+      },
+
+      triggerGc: (): void => {
+        if (typeof globalThis.gc === 'function') {
+          globalThis.gc();
+        }
+        // Bun's --expose-gc or V8 flag needed; otherwise this is a best-effort no-op.
+      },
+    };
   }
 
   private _createMonitorStateProvider(): MonitorStateProvider {

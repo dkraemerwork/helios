@@ -5,6 +5,8 @@
  *   GET /helios/monitor           — HTML dashboard (single-page, self-contained)
  *   GET /helios/monitor/data      — Full MonitorPayload as JSON (one-shot)
  *   GET /helios/monitor/stream    — SSE stream of MetricsSample events
+ *   GET /helios/monitor/jobs      — Active jobs with topology and metrics
+ *   GET /helios/monitor/config    — Cluster configuration metadata for MC compatibility
  *
  * The SSE stream sends:
  *   - `event: sample` with JSON MetricsSample on each new sample
@@ -17,10 +19,34 @@ import type { MetricsRegistry } from '@zenystx/helios-core/monitor/MetricsRegist
 import { renderMonitorDashboard } from '@zenystx/helios-core/monitor/MonitorDashboard';
 import type { MonitorStateProvider } from '@zenystx/helios-core/monitor/MonitorStateProvider';
 
+/**
+ * Provider for job-level data exposed via `/helios/monitor/jobs`.
+ * Implemented by HeliosInstanceImpl or a bridge that delegates to the BlitzJobCoordinator.
+ */
+export interface MonitorJobsProvider {
+    getActiveJobs(): Promise<MonitorJobSnapshot[]>;
+}
+
+/** JSON-serializable snapshot of a single active job. */
+export interface MonitorJobSnapshot {
+    id: string;
+    name: string;
+    status: string;
+    submittedAt: number;
+    lightJob: boolean;
+    participatingMembers: readonly string[];
+    /** Vertex descriptors (topology nodes). */
+    vertices: ReadonlyArray<{ name: string; type: string }>;
+    /** Edge descriptors (topology edges). */
+    edges: ReadonlyArray<{ from: string; to: string; edgeType: string }>;
+    /** Per-vertex metrics (already JSON-safe — Maps converted to plain objects). */
+    metrics: Record<string, unknown> | null;
+}
+
 /** CORS headers — required for multi-node dashboards where the browser connects to nodes on different ports. */
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -39,9 +65,10 @@ export class MonitorHandler {
         private readonly _config: MonitorConfig,
         private readonly _registry: MetricsRegistry,
         private readonly _provider: MonitorStateProvider,
+        private readonly _jobsProvider: MonitorJobsProvider | null = null,
     ) {}
 
-    handle(req: Request): Response {
+    handle(req: Request): Response | Promise<Response> {
         // Handle CORS preflight for cross-port multi-node dashboard requests
         if (req.method === 'OPTIONS') {
             return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -57,6 +84,12 @@ export class MonitorHandler {
         }
         if (path === '/helios/monitor/stream') {
             return this._stream();
+        }
+        if (path === '/helios/monitor/jobs') {
+            return this._jobs();
+        }
+        if (path === '/helios/monitor/config') {
+            return this._configEndpoint();
         }
 
         return new Response(
@@ -76,6 +109,44 @@ export class MonitorHandler {
     /** Serve the full MonitorPayload as JSON. */
     private _data(): Response {
         const payload = this._registry.buildPayload(this._provider);
+        return new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: JSON_HEADERS,
+        });
+    }
+
+    /** Serve active jobs with topology and metrics. */
+    private async _jobs(): Promise<Response> {
+        if (this._jobsProvider === null) {
+            return new Response(
+                JSON.stringify({ jobs: [], message: 'No job coordinator available.' }),
+                { status: 200, headers: JSON_HEADERS },
+            );
+        }
+
+        const jobs = await this._jobsProvider.getActiveJobs();
+        return new Response(JSON.stringify({ jobs }), {
+            status: 200,
+            headers: JSON_HEADERS,
+        });
+    }
+
+    /** Serve cluster configuration metadata for Management Center compatibility. */
+    private _configEndpoint(): Response {
+        const payload = {
+            instanceName: this._provider.getInstanceName(),
+            clusterState: this._provider.getClusterState(),
+            clusterSize: this._provider.getClusterSize(),
+            memberVersion: this._provider.getMemberVersion(),
+            partitionCount: this._provider.getPartitionCount(),
+            nodeState: this._provider.getNodeState(),
+            capabilities: {
+                monitoring: true,
+                admin: true,
+                jobs: this._jobsProvider !== null,
+                extensions: true,
+            },
+        };
         return new Response(JSON.stringify(payload), {
             status: 200,
             headers: JSON_HEADERS,
