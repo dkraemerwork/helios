@@ -21,8 +21,9 @@
 import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
+import { SetAddListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/SetAddListenerCodec.js';
 import type { SetServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
@@ -37,10 +38,10 @@ const SET_CONTAINS_ALL_REQUEST_TYPE    = 0x060300;
 const SET_CONTAINS_ALL_RESPONSE_TYPE   = 0x060301;
 const SET_ADD_REQUEST_TYPE             = 0x060400;
 const SET_ADD_RESPONSE_TYPE            = 0x060401;
-const SET_ADD_ALL_REQUEST_TYPE         = 0x060500;
-const SET_ADD_ALL_RESPONSE_TYPE        = 0x060501;
-const SET_REMOVE_REQUEST_TYPE          = 0x060600;
-const SET_REMOVE_RESPONSE_TYPE         = 0x060601;
+const SET_REMOVE_REQUEST_TYPE          = 0x060500;
+const SET_REMOVE_RESPONSE_TYPE         = 0x060501;
+const SET_ADD_ALL_REQUEST_TYPE         = 0x060600;
+const SET_ADD_ALL_RESPONSE_TYPE        = 0x060601;
 const SET_REMOVE_ALL_REQUEST_TYPE      = 0x060700;
 const SET_REMOVE_ALL_RESPONSE_TYPE     = 0x060701;
 const SET_RETAIN_ALL_REQUEST_TYPE      = 0x060800;
@@ -56,7 +57,7 @@ const SET_REMOVE_LISTENER_RESPONSE_TYPE = 0x060c01;
 const SET_IS_EMPTY_REQUEST_TYPE        = 0x060d00;
 const SET_IS_EMPTY_RESPONSE_TYPE       = 0x060d01;
 
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES; // 13
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -127,12 +128,17 @@ export function registerSetServiceHandlers(
         const initialFrame = iter.next();
         const includeValue = initialFrame.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
         const name = StringCodec.decode(iter);
-        return _encodeStringResponse(SET_ADD_LISTENER_RESPONSE_TYPE, await operations.addItemListener(name, includeValue, session));
+        return SetAddListenerCodec.encodeResponse(await operations.addItemListener(name, includeValue, msg.getCorrelationId(), session));
     });
 
     dispatcher.register(SET_REMOVE_LISTENER_REQUEST_TYPE, async (msg, session) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const registrationId = StringCodec.decode(iter);
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const registrationId = FixedSizeTypesCodec.decodeUUID(initialFrame.content, INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+        StringCodec.decode(iter);
+        if (registrationId === null) {
+            throw new Error('registrationId is required');
+        }
         return _encodeBooleanResponse(SET_REMOVE_LISTENER_RESPONSE_TYPE, await operations.removeItemListener(registrationId, session));
     });
 
@@ -168,14 +174,6 @@ function _encodeIntResponse(responseType: number, value: number): ClientMessage 
     buf.writeInt32LE(value | 0, RESPONSE_HEADER_SIZE);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg;
-}
-
-function _encodeStringResponse(responseType: number, value: string): ClientMessage {
-    const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
-    buf.fill(0); buf.writeUInt32LE(responseType >>> 0, 0);
-    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
-    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE)); StringCodec.encode(msg, value); msg.setFinal(); return msg;
 }
 
 function _encodeDataListResponse(responseType: number, items: Data[]): ClientMessage {

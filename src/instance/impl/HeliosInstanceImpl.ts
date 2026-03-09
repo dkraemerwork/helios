@@ -14,8 +14,10 @@
  */
 import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
+import { MultiMapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
 import { ListAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js";
 import { QueueAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js";
+import { SetAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/SetAddListenerCodec.js";
 import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
 import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
 import { Address } from "@zenystx/helios-core/cluster/Address";
@@ -254,6 +256,14 @@ interface ItemClientListenerRegistration {
   session: ClientSession;
 }
 
+interface MultiMapClientListenerRegistration {
+  name: string;
+  registrationId: string;
+  includeValue: boolean;
+  correlationId: number;
+  session: ClientSession;
+}
+
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
   const trimmed = member.trim();
@@ -414,6 +424,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionQueueListeners = new Map<string, Set<string>>();
   private readonly _clientListListenerRegistrations = new Map<string, ItemClientListenerRegistration>();
   private readonly _clientSessionListListeners = new Map<string, Set<string>>();
+  private readonly _clientSetListenerRegistrations = new Map<string, ItemClientListenerRegistration>();
+  private readonly _clientSessionSetListeners = new Map<string, Set<string>>();
+  private readonly _clientMultiMapListenerRegistrations = new Map<string, MultiMapClientListenerRegistration>();
+  private readonly _clientSessionMultiMapListeners = new Map<string, Set<string>>();
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
@@ -2307,43 +2321,194 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const setOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SetServiceOperations = {
-      add: async () => notImplemented(),
-      remove: async () => notImplemented(),
-      size: async () => notImplemented(),
-      contains: async () => notImplemented(),
-      containsAll: async () => notImplemented(),
-      addAll: async () => notImplemented(),
-      removeAll: async () => notImplemented(),
-      retainAll: async () => notImplemented(),
-      clear: async () => notImplemented(),
-      iterator: async () => notImplemented(),
-      isEmpty: async () => notImplemented(),
-      addItemListener: async () => notImplemented(),
-      removeItemListener: async () => notImplemented(),
+      add: async (name, value) => {
+        this._ensureSetService();
+        const added = await this._distributedSetService!.add(name, value);
+        if (added) {
+          this._publishClientSetEvent(name, value, 1);
+        }
+        return added;
+      },
+      remove: async (name, value) => {
+        this._ensureSetService();
+        const removed = await this._distributedSetService!.remove(name, value);
+        if (removed) {
+          this._publishClientSetEvent(name, value, 2);
+        }
+        return removed;
+      },
+      size: async (name) => {
+        this._ensureSetService();
+        return this._distributedSetService!.size(name);
+      },
+      contains: async (name, value) => {
+        this._ensureSetService();
+        return this._distributedSetService!.contains(name, value);
+      },
+      containsAll: async (name, values) => {
+        this._ensureSetService();
+        return this._distributedSetService!.containsAll(name, values);
+      },
+      addAll: async (name, values) => {
+        this._ensureSetService();
+        const previous = await this._distributedSetService!.toArray(name);
+        const added = await this._distributedSetService!.addAll(name, values);
+        if (added) {
+          const previousFingerprints = new Set(previous.map(clientDataFingerprint));
+          for (const value of values) {
+            if (!previousFingerprints.has(clientDataFingerprint(value))) {
+              this._publishClientSetEvent(name, value, 1);
+            }
+          }
+        }
+        return added;
+      },
+      removeAll: async (name, values) => {
+        this._ensureSetService();
+        const previous = await this._distributedSetService!.toArray(name);
+        const removed = await this._distributedSetService!.removeAll(name, values);
+        if (removed) {
+          const previousFingerprints = new Set(previous.map(clientDataFingerprint));
+          for (const value of values) {
+            if (previousFingerprints.has(clientDataFingerprint(value))) {
+              this._publishClientSetEvent(name, value, 2);
+            }
+          }
+        }
+        return removed;
+      },
+      retainAll: async (name, values) => {
+        this._ensureSetService();
+        const previous = await this._distributedSetService!.toArray(name);
+        const changed = await this._distributedSetService!.retainAll(name, values);
+        if (changed) {
+          for (const value of previous) {
+            if (!values.some((item) => item.equals(value))) {
+              this._publishClientSetEvent(name, value, 2);
+            }
+          }
+        }
+        return changed;
+      },
+      clear: async (name) => {
+        this._ensureSetService();
+        const previous = await this._distributedSetService!.toArray(name);
+        await this._distributedSetService!.clear(name);
+        for (const value of previous) {
+          this._publishClientSetEvent(name, value, 2);
+        }
+      },
+      iterator: async (name) => {
+        this._ensureSetService();
+        return this._distributedSetService!.toArray(name);
+      },
+      isEmpty: async (name) => {
+        this._ensureSetService();
+        return this._distributedSetService!.isEmpty(name);
+      },
+      addItemListener: async (name, includeValue, correlationId, session) =>
+        this._registerClientSetListener(name, includeValue, correlationId, session),
+      removeItemListener: async (registrationId, session) =>
+        this._removeClientSetListener(session.getSessionId(), registrationId),
     };
 
     const multiMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').MultiMapServiceOperations = {
-      put: async () => notImplemented(),
-      get: async () => notImplemented(),
-      remove: async () => notImplemented(),
-      removeEntry: async () => notImplemented(),
-      size: async () => notImplemented(),
-      containsKey: async () => notImplemented(),
-      containsValue: async () => notImplemented(),
-      containsEntry: async () => notImplemented(),
-      clear: async () => notImplemented(),
-      keySet: async () => notImplemented(),
-      values: async () => notImplemented(),
-      entrySet: async () => notImplemented(),
-      valueCount: async () => notImplemented(),
-      lock: async () => notImplemented(),
-      unlock: async () => notImplemented(),
-      tryLock: async () => notImplemented(),
-      isLocked: async () => notImplemented(),
-      forceUnlock: async () => notImplemented(),
-      addEntryListener: async () => notImplemented(),
-      removeEntryListener: async () => notImplemented(),
-      putAll: async () => notImplemented(),
+      put: async (name, key, value) => {
+        this._ensureMultiMapService();
+        const added = await this._distributedMultiMapService!.put(name, key, value);
+        if (added) {
+          this._publishClientMultiMapEvent(name, key, value, null, 1, 1);
+        }
+        return added;
+      },
+      get: async (name, key) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.get(name, key);
+      },
+      remove: async (name, key) => {
+        this._ensureMultiMapService();
+        const removedValues = await this._distributedMultiMapService!.removeAll(name, key);
+        for (const value of removedValues) {
+          this._publishClientMultiMapEvent(name, key, null, value, 2, 1);
+        }
+        return removedValues;
+      },
+      removeEntry: async (name, key, value) => {
+        this._ensureMultiMapService();
+        const removed = await this._distributedMultiMapService!.remove(name, key, value);
+        if (removed) {
+          this._publishClientMultiMapEvent(name, key, null, value, 2, 1);
+        }
+        return removed;
+      },
+      size: async (name) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.size(name);
+      },
+      containsKey: async (name, key) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.containsKey(name, key);
+      },
+      containsValue: async (name, value) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.containsValue(name, value);
+      },
+      containsEntry: async (name, key, value) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.containsEntry(name, key, value);
+      },
+      clear: async (name) => {
+        this._ensureMultiMapService();
+        const previousEntries = await this._distributedMultiMapService!.entrySet(name);
+        await this._distributedMultiMapService!.clear(name);
+        if (previousEntries.length > 0) {
+          this._publishClientMultiMapEvent(name, null, null, null, 64, previousEntries.length);
+        }
+      },
+      keySet: async (name) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.keySet(name);
+      },
+      values: async (name) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.values(name);
+      },
+      entrySet: async (name) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.entrySet(name);
+      },
+      valueCount: async (name, key) => {
+        this._ensureMultiMapService();
+        return this._distributedMultiMapService!.valueCount(name, key);
+      },
+      lock: async (name, key) => {
+        this._getOrCreateProxy(`__hz_multimap_lock__:${name}`).lock(getKeyObject(key));
+      },
+      unlock: async (name, key) => {
+        this._getOrCreateProxy(`__hz_multimap_lock__:${name}`).unlock(getKeyObject(key));
+      },
+      tryLock: async (name, key) => {
+        return this._getOrCreateProxy(`__hz_multimap_lock__:${name}`).tryLock(getKeyObject(key));
+      },
+      isLocked: async (name, key) => {
+        return this._getOrCreateProxy(`__hz_multimap_lock__:${name}`).isLocked(getKeyObject(key));
+      },
+      forceUnlock: async (name, key) => {
+        this._getOrCreateProxy(`__hz_multimap_lock__:${name}`).unlock(getKeyObject(key));
+      },
+      addEntryListener: async (name, includeValue, _localOnly, correlationId, session) =>
+        this._registerClientMultiMapListener(name, includeValue, correlationId, session),
+      removeEntryListener: async (registrationId, session) =>
+        this._removeClientMultiMapListener(session.getSessionId(), registrationId),
+      putAll: async (name, key, values) => {
+        this._ensureMultiMapService();
+        for (const value of values) {
+          const added = await this._distributedMultiMapService!.put(name, key, value);
+          if (added) {
+            this._publishClientMultiMapEvent(name, key, value, null, 1, 1);
+          }
+        }
+      },
     };
 
     const replicatedMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ReplicatedMapServiceOperations = {
@@ -2539,6 +2704,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._removeClientMapListenersForSession(session.getSessionId());
       this._removeClientQueueListenersForSession(session.getSessionId());
       this._removeClientListListenersForSession(session.getSessionId());
+      this._removeClientSetListenersForSession(session.getSessionId());
+      this._removeClientMultiMapListenersForSession(session.getSessionId());
     });
 
     // ── Wire all handlers ─────────────────────────────────────────────────
@@ -2604,6 +2771,30 @@ export class HeliosInstanceImpl implements HeliosInstance {
       );
     }
   }
+
+  private _ensureSetService(): void {
+    if (this._distributedSetService === null) {
+      this._distributedSetService = new DistributedSetService(
+        this.getLocalMemberId(),
+        this._config,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
+
+
+  private _ensureMultiMapService(): void {
+    if (this._distributedMultiMapService === null) {
+      this._distributedMultiMapService = new DistributedMultiMapService(
+        this.getLocalMemberId(),
+        this._config,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
+
 
   private _registerClientTopicListener(topicName: string, correlationId: number, session: ClientSession): string {
     this._ensureTopicService();
@@ -2908,6 +3099,152 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._removeClientListListener(sessionId, registrationId);
     }
   }
+
+  private _registerClientSetListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
+    const registrationId = crypto.randomUUID();
+    this._clientSetListenerRegistrations.set(registrationId, {
+      name,
+      registrationId,
+      includeValue,
+      correlationId,
+      session,
+    });
+    let registrations = this._clientSessionSetListeners.get(session.getSessionId());
+    if (registrations === undefined) {
+      registrations = new Set<string>();
+      this._clientSessionSetListeners.set(session.getSessionId(), registrations);
+    }
+    registrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientSetListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientSetListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientSetListenerRegistrations.delete(registrationId);
+    const registrations = this._clientSessionSetListeners.get(sessionId);
+    registrations?.delete(registrationId);
+    if (registrations !== undefined && registrations.size === 0) {
+      this._clientSessionSetListeners.delete(sessionId);
+    }
+    return true;
+  }
+
+  private _removeClientSetListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionSetListeners.get(sessionId);
+    if (registrations === undefined) {
+      return;
+    }
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientSetListener(sessionId, registrationId);
+    }
+  }
+
+  private _publishClientSetEvent(name: string, item: Data, eventType: number): void {
+    const memberUuid = this._cluster.getLocalMember().getUuid();
+    for (const [registrationId, registration] of this._clientSetListenerRegistrations) {
+      if (registration.name !== name) {
+        continue;
+      }
+      const sessionId = [...this._clientSessionSetListeners.entries()]
+        .find(([, registrations]) => registrations.has(registrationId))?.[0];
+      if (sessionId === undefined) {
+        continue;
+      }
+      if (!registration.session.isAuthenticated()) {
+        this._removeClientSetListener(sessionId, registrationId);
+        continue;
+      }
+      const eventMessage = SetAddListenerCodec.encodeItemEvent(
+        registration.includeValue ? item : null,
+        memberUuid,
+        eventType,
+      );
+      eventMessage.setCorrelationId(registration.correlationId);
+      registration.session.pushEvent(eventMessage);
+    }
+  }
+
+  private _registerClientMultiMapListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
+    const registrationId = crypto.randomUUID();
+    this._clientMultiMapListenerRegistrations.set(registrationId, {
+      name,
+      registrationId,
+      includeValue,
+      correlationId,
+      session,
+    });
+    let registrations = this._clientSessionMultiMapListeners.get(session.getSessionId());
+    if (registrations === undefined) {
+      registrations = new Set<string>();
+      this._clientSessionMultiMapListeners.set(session.getSessionId(), registrations);
+    }
+    registrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientMultiMapListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientMultiMapListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientMultiMapListenerRegistrations.delete(registrationId);
+    const registrations = this._clientSessionMultiMapListeners.get(sessionId);
+    registrations?.delete(registrationId);
+    if (registrations !== undefined && registrations.size === 0) {
+      this._clientSessionMultiMapListeners.delete(sessionId);
+    }
+    return true;
+  }
+
+  private _removeClientMultiMapListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionMultiMapListeners.get(sessionId);
+    if (registrations === undefined) {
+      return;
+    }
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientMultiMapListener(sessionId, registrationId);
+    }
+  }
+
+  private _publishClientMultiMapEvent(
+    name: string,
+    key: Data | null,
+    value: Data | null,
+    oldValue: Data | null,
+    eventType: number,
+    numberOfAffectedEntries: number,
+  ): void {
+    const memberUuid = this._cluster.getLocalMember().getUuid();
+    for (const [registrationId, registration] of this._clientMultiMapListenerRegistrations) {
+      if (registration.name !== name) {
+        continue;
+      }
+      const sessionId = [...this._clientSessionMultiMapListeners.entries()]
+        .find(([, registrations]) => registrations.has(registrationId))?.[0];
+      if (sessionId === undefined) {
+        continue;
+      }
+      if (!registration.session.isAuthenticated()) {
+        this._removeClientMultiMapListener(sessionId, registrationId);
+        continue;
+      }
+      const eventMessage = MultiMapAddEntryListenerCodec.encodeEntryEvent(
+        key,
+        registration.includeValue ? value : null,
+        registration.includeValue ? oldValue : null,
+        null,
+        eventType,
+        memberUuid,
+        numberOfAffectedEntries,
+      );
+      eventMessage.setCorrelationId(registration.correlationId);
+      registration.session.pushEvent(eventMessage);
+    }
+  }
+
 
   /**
    * Returns the port the client protocol server is listening on, or 0 if not started.

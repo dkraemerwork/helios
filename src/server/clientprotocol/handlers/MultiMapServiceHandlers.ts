@@ -30,8 +30,9 @@
 import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
+import { MultiMapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js';
 import type { MultiMapServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
@@ -62,28 +63,28 @@ const MM_CLEAR_REQUEST          = 0x020b00;
 const MM_CLEAR_RESPONSE         = 0x020b01;
 const MM_VALUE_COUNT_REQUEST    = 0x020c00;
 const MM_VALUE_COUNT_RESPONSE   = 0x020c01;
-const MM_ADD_LISTENER_REQUEST   = 0x020d00;
-const MM_ADD_LISTENER_RESPONSE  = 0x020d01;
-const MM_REMOVE_LISTENER_REQUEST  = 0x020e00;
-const MM_REMOVE_LISTENER_RESPONSE = 0x020e01;
-const MM_LOCK_REQUEST           = 0x020f00;
-const MM_LOCK_RESPONSE          = 0x020f01;
-const MM_TRY_LOCK_REQUEST       = 0x021000;
-const MM_TRY_LOCK_RESPONSE      = 0x021001;
-const MM_IS_LOCKED_REQUEST      = 0x021100;
-const MM_IS_LOCKED_RESPONSE     = 0x021101;
-const MM_UNLOCK_REQUEST         = 0x021200;
-const MM_UNLOCK_RESPONSE        = 0x021201;
-const MM_FORCE_UNLOCK_REQUEST   = 0x021300;
-const MM_FORCE_UNLOCK_RESPONSE  = 0x021301;
-const MM_REMOVE_ENTRY_REQUEST   = 0x021400;
-const MM_REMOVE_ENTRY_RESPONSE  = 0x021401;
-const MM_PUT_ALL_REQUEST        = 0x021500;
-const MM_PUT_ALL_RESPONSE       = 0x021501;
+const MM_ADD_LISTENER_REQUEST   = 0x020e00;
+const MM_ADD_LISTENER_RESPONSE  = 0x020e01;
+const MM_REMOVE_LISTENER_REQUEST  = 0x020f00;
+const MM_REMOVE_LISTENER_RESPONSE = 0x020f01;
+const MM_LOCK_REQUEST           = 0x021000;
+const MM_LOCK_RESPONSE          = 0x021001;
+const MM_TRY_LOCK_REQUEST       = 0x021100;
+const MM_TRY_LOCK_RESPONSE      = 0x021101;
+const MM_IS_LOCKED_REQUEST      = 0x021200;
+const MM_IS_LOCKED_RESPONSE     = 0x021201;
+const MM_UNLOCK_REQUEST         = 0x021300;
+const MM_UNLOCK_RESPONSE        = 0x021301;
+const MM_FORCE_UNLOCK_REQUEST   = 0x021400;
+const MM_FORCE_UNLOCK_RESPONSE  = 0x021401;
+const MM_REMOVE_ENTRY_REQUEST   = 0x021500;
+const MM_REMOVE_ENTRY_RESPONSE  = 0x021501;
 const MM_DELETE_REQUEST         = 0x021600;
 const MM_DELETE_RESPONSE        = 0x021601;
+const MM_PUT_ALL_REQUEST        = 0x021700;
+const MM_PUT_ALL_RESPONSE       = 0x021701;
 
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // Response header size = 16
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES; // Response header size = 13
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -202,13 +203,18 @@ export function registerMultiMapServiceHandlers(
         const includeValue = f.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
         const localOnly = f.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES) !== 0;
         const name = StringCodec.decode(iter);
-        return _string(MM_ADD_LISTENER_RESPONSE, await operations.addEntryListener(name, includeValue, localOnly, session));
+        return MultiMapAddEntryListenerCodec.encodeResponse(await operations.addEntryListener(name, includeValue, localOnly, msg.getCorrelationId(), session));
     });
 
     // RemoveEntryListener
     dispatcher.register(MM_REMOVE_LISTENER_REQUEST, async (msg, session) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const registrationId = StringCodec.decode(iter);
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const registrationId = FixedSizeTypesCodec.decodeUUID(initialFrame.content, INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+        StringCodec.decode(iter);
+        if (registrationId === null) {
+            throw new Error('registrationId is required');
+        }
         return _bool(MM_REMOVE_LISTENER_RESPONSE, await operations.removeEntryListener(registrationId, session));
     });
 
@@ -325,13 +331,6 @@ function _int(t: number, v: number): ClientMessage {
     b.writeUInt32LE(t >>> 0, 0); b.writeInt32LE(v | 0, RH);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg;
-}
-
-function _string(t: number, v: string): ClientMessage {
-    const msg = CM.createForEncode();
-    const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0);
-    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
-    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); StringCodec.encode(msg, v); msg.setFinal(); return msg;
 }
 
 function _dataList(t: number, items: Data[]): ClientMessage {

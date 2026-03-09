@@ -131,7 +131,7 @@ export interface SetServiceOperations {
     clear(name: string): Promise<void>;
     iterator(name: string): Promise<Data[]>;
     isEmpty(name: string): Promise<boolean>;
-    addItemListener(name: string, includeValue: boolean, session: ClientSession): Promise<string>;
+    addItemListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): Promise<string>;
     removeItemListener(registrationId: string, session: ClientSession): Promise<boolean>;
 }
 
@@ -156,7 +156,7 @@ export interface MultiMapServiceOperations {
     tryLock(name: string, key: Data, threadId: bigint, lease: bigint, timeout: bigint, referenceId: bigint): Promise<boolean>;
     isLocked(name: string, key: Data): Promise<boolean>;
     forceUnlock(name: string, key: Data): Promise<void>;
-    addEntryListener(name: string, includeValue: boolean, localOnly: boolean, session: ClientSession): Promise<string>;
+    addEntryListener(name: string, includeValue: boolean, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
     removeEntryListener(registrationId: string, session: ClientSession): Promise<boolean>;
     putAll(name: string, key: Data, values: Data[], threadId: bigint): Promise<void>;
 }
