@@ -183,6 +183,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.clusterName);
                 out.writeInt(message.partitionCount);
                 writeMemberVersion(out, message.joinerVersion);
+                writeOptionalAddress(out, message.joinerRestEndpoint);
                 return;
             case 'FINALIZE_JOIN':
             case 'MEMBERS_UPDATE':
@@ -446,6 +447,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     clusterName: readRequiredString(inp),
                     partitionCount: inp.readInt(),
                     joinerVersion: readMemberVersion(inp),
+                    joinerRestEndpoint: readOptionalAddress(inp),
                 };
             case 'FINALIZE_JOIN':
                 return readMembershipMessage(inp, 'FINALIZE_JOIN');
@@ -1123,6 +1125,7 @@ function writeWireMembers(out: ByteArrayObjectDataOutput, members: readonly Wire
         out.writeBoolean(member.liteMember);
         writeMemberVersion(out, member.version);
         out.writeInt(member.memberListJoinVersion);
+        writeOptionalAddress(out, member.restEndpoint);
     }
 }
 
@@ -1137,9 +1140,26 @@ function readWireMembers(inp: ByteArrayObjectDataInput): WireMemberInfo[] {
             liteMember: inp.readBoolean(),
             version: readMemberVersion(inp),
             memberListJoinVersion: inp.readInt(),
+            restEndpoint: readOptionalAddress(inp),
         };
     }
     return members;
+}
+
+function writeOptionalAddress(
+    out: ByteArrayObjectDataOutput,
+    address: { host: string; port: number } | null,
+): void {
+    out.writeBoolean(address !== null);
+    if (address !== null) {
+        writeAddress(out, address);
+    }
+}
+
+function readOptionalAddress(
+    inp: ByteArrayObjectDataInput,
+): { host: string; port: number } | null {
+    return inp.readBoolean() ? readAddress(inp) : null;
 }
 
 function writeEncodedData(out: ByteArrayObjectDataOutput, data: EncodedData): void {

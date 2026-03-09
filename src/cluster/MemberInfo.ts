@@ -81,6 +81,7 @@ export class MemberInfo {
             .attributes(this.#attributes)
             .liteMember(this.#liteMember)
             .memberListJoinVersion(this.#memberListJoinVersion)
+            .addressMap(this.#addressMap)
             .build();
     }
 

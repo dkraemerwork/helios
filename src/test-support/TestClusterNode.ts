@@ -202,6 +202,7 @@ export class TestClusterNode {
             patch: m.getVersion().getPatch(),
           },
           memberListJoinVersion: m.getMemberListJoinVersion(),
+          restEndpoint: null,
         }));
 
         const masterAddr = this._clusterService.getMasterAddress()!;
@@ -261,6 +262,7 @@ export class TestClusterNode {
         .localMember(isLocal)
         .attributes(new Map(Object.entries(wm.attributes)))
         .memberListJoinVersion(wm.memberListJoinVersion)
+        .addressMap(new Map())
         .build();
     });
 
@@ -289,6 +291,7 @@ export class TestClusterNode {
         .localMember(isLocal)
         .attributes(new Map(Object.entries(wm.attributes)))
         .memberListJoinVersion(wm.memberListJoinVersion)
+        .addressMap(new Map())
         .build();
     });
 

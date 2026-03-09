@@ -47,6 +47,11 @@ export interface WirePartitionReplica {
   readonly uuid: string;
 }
 
+export interface WireRestEndpointInfo {
+  readonly host: string;
+  readonly port: number;
+}
+
 // ── Block 16.A5: New message types ────────────────────────────────────
 
 /** Serialized member info for wire transfer. */
@@ -57,6 +62,7 @@ export interface WireMemberInfo {
   readonly liteMember: boolean;
   readonly version: { major: number; minor: number; patch: number };
   readonly memberListJoinVersion: number;
+  readonly restEndpoint: WireRestEndpointInfo | null;
 }
 
 /** Join protocol: joiner announces itself to the master. */
@@ -67,6 +73,7 @@ export interface JoinRequestMsg {
   readonly clusterName: string;
   readonly partitionCount: number;
   readonly joinerVersion: { major: number; minor: number; patch: number };
+  readonly joinerRestEndpoint: WireRestEndpointInfo | null;
 }
 
 /** Join protocol: master finalizes the join with the new member list. */

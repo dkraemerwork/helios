@@ -82,6 +82,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         clusterName: "helios-cluster",
         partitionCount: 271,
         joinerVersion: { major: 1, minor: 0, patch: 0 },
+        joinerRestEndpoint: { host: "public-a.example", port: 18081 },
       };
       const buf = strategy.serialize(msg);
       const result = strategy.deserialize(buf);
@@ -100,6 +101,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
             liteMember: false,
             version: { major: 1, minor: 0, patch: 0 },
             memberListJoinVersion: 1,
+            restEndpoint: { host: "public-a.example", port: 18081 },
           },
         ],
         masterAddress: { host: "127.0.0.1", port: 5701 },
@@ -122,6 +124,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
             liteMember: false,
             version: { major: 1, minor: 2, patch: 3 },
             memberListJoinVersion: 2,
+            restEndpoint: { host: "public-a.example", port: 18081 },
           },
           {
             address: { host: "10.0.0.2", port: 5702 },
@@ -130,6 +133,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
             liteMember: true,
             version: { major: 1, minor: 2, patch: 3 },
             memberListJoinVersion: 4,
+            restEndpoint: null,
           },
         ],
         masterAddress: { host: "10.0.0.1", port: 5701 },
@@ -280,6 +284,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
       clusterName: "test-cluster",
       partitionCount: 271,
       joinerVersion: { major: 1, minor: 0, patch: 0 },
+      joinerRestEndpoint: { host: "public-joiner.example", port: 18082 },
     });
 
     await waitUntil(() => received.some((m) => m.type === "JOIN_REQUEST"));

@@ -11,9 +11,11 @@ import type {
   PartitionStateMsg,
   WireMemberInfo,
   WirePartitionReplica,
+  WireRestEndpointInfo,
 } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { EndpointQualifier } from "@zenystx/helios-core/instance/EndpointQualifier";
 import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
 import { ClusterJoinManager } from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
@@ -46,6 +48,63 @@ interface BlitzCoordinatorListener {
   onDemotion?(): void;
 }
 const DEFAULT_CLUSTER_NAME = "helios";
+
+function extractHostFromAddress(address: string): string {
+  const trimmed = address.trim();
+  if (trimmed.startsWith("[")) {
+    const bracketEnd = trimmed.indexOf("]");
+    if (bracketEnd !== -1) {
+      return trimmed.slice(1, bracketEnd);
+    }
+  }
+
+  const lastColon = trimmed.lastIndexOf(":");
+  if (lastColon === -1) {
+    return trimmed;
+  }
+
+  const port = Number.parseInt(trimmed.slice(lastColon + 1), 10);
+  return Number.isNaN(port) ? trimmed : trimmed.slice(0, lastColon);
+}
+
+function buildAdvertisedRestEndpoint(
+  config: HeliosConfig,
+  localAddress: Address,
+): Address | null {
+  const restApiConfig = config.getNetworkConfig().getRestApiConfig();
+  if (!restApiConfig.isEnabled()) {
+    return null;
+  }
+
+  const port = restApiConfig.getPort();
+  if (port <= 0) {
+    return null;
+  }
+
+  const publicAddress = config.getNetworkConfig().getPublicAddress();
+  const host = publicAddress !== null && publicAddress.trim().length > 0
+    ? extractHostFromAddress(publicAddress)
+    : localAddress.getHost();
+  return new Address(host, port);
+}
+
+function createAddressMap(restEndpoint: Address | null): Map<EndpointQualifier, Address> {
+  const addressMap = new Map<EndpointQualifier, Address>();
+  if (restEndpoint !== null) {
+    addressMap.set(EndpointQualifier.REST, restEndpoint);
+  }
+  return addressMap;
+}
+
+function getRestEndpointAddress(member: MemberImpl): Address | null {
+  for (const [qualifier, address] of member.getAddressMap()) {
+    if (qualifier.type === EndpointQualifier.REST.type) {
+      return address;
+    }
+  }
+
+  return null;
+}
 
 export class HeliosClusterCoordinator {
   private readonly _localAddress: Address;
@@ -80,6 +139,11 @@ export class HeliosClusterCoordinator {
       .uuid(memberUuid ?? crypto.randomUUID())
       .version(new MemberVersion(1, 0, 0))
       .localMember(true)
+      .addressMap(
+        createAddressMap(
+          buildAdvertisedRestEndpoint(this._config, this._localAddress),
+        ),
+      )
       .build();
     this._clusterService = new ClusterServiceImpl(this._localMember);
     this._joinManager = new ClusterJoinManager({
@@ -204,6 +268,7 @@ export class HeliosClusterCoordinator {
         clusterName: DEFAULT_CLUSTER_NAME,
         partitionCount: this._partitionService.getPartitionCount(),
         joinerVersion: { major: 1, minor: 0, patch: 0 },
+        joinerRestEndpoint: this._toWireRestEndpoint(this._localMember),
       });
       return;
     }
@@ -307,6 +372,9 @@ export class HeliosClusterCoordinator {
           message.joinerVersion.minor,
           message.joinerVersion.patch,
         ),
+      )
+      .addressMap(
+        createAddressMap(this._fromWireRestEndpoint(message.joinerRestEndpoint)),
       )
       .build();
 
@@ -637,6 +705,7 @@ export class HeliosClusterCoordinator {
         patch: member.getVersion().getPatch(),
       },
       memberListJoinVersion: member.getMemberListJoinVersion(),
+      restEndpoint: this._toWireRestEndpoint(member),
     };
   }
 
@@ -656,8 +725,33 @@ export class HeliosClusterCoordinator {
         .localMember(member.uuid === this._localMember.getUuid())
         .attributes(new Map(Object.entries(member.attributes)))
         .memberListJoinVersion(member.memberListJoinVersion)
+        .addressMap(
+          createAddressMap(this._fromWireRestEndpoint(member.restEndpoint)),
+        )
         .build(),
     );
+  }
+
+  private _toWireRestEndpoint(member: MemberImpl): WireRestEndpointInfo | null {
+    const endpoint = getRestEndpointAddress(member);
+    if (endpoint === null) {
+      return null;
+    }
+
+    return {
+      host: endpoint.getHost(),
+      port: endpoint.getPort(),
+    };
+  }
+
+  private _fromWireRestEndpoint(
+    endpoint: WireRestEndpointInfo | null | undefined,
+  ): Address | null {
+    if (endpoint === null || endpoint === undefined) {
+      return null;
+    }
+
+    return new Address(endpoint.host, endpoint.port);
   }
 
   private _toRuntimeState(

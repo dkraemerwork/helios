@@ -3,6 +3,8 @@
  */
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { Address } from '@zenystx/helios-core/cluster/Address';
+import { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
 import { MembersView } from '@zenystx/helios-core/internal/cluster/impl/MembersView';
 import { describe, expect, test } from 'bun:test';
 import { newMember, newMembers } from './MemberMap.test';
@@ -57,6 +59,23 @@ describe('MembersViewTest', () => {
 
         expect(memberMap.getVersion()).toBe(version);
         assertMembersViewEquals([...memberMap.getMembers()], view);
+    });
+
+    test('toMemberMap preserves authoritative endpoint addresses', () => {
+        const restEndpoint = new Address('public-a.example', 18081);
+        const member = new MemberImpl.Builder(new Address('127.0.0.1', 5701))
+            .uuid('member-a')
+            .version(newMember(5701).getVersion())
+            .addressMap(new Map([[EndpointQualifier.REST, restEndpoint]]))
+            .build();
+
+        const memberMap = MembersView.createNew(2, [member]).toMemberMap();
+        const restoredMember = [...memberMap.getMembers()][0]!;
+        const restoredRestEndpoint = [...restoredMember.getAddressMap().entries()]
+            .find(([qualifier]) => qualifier.type === EndpointQualifier.REST.type)?.[1];
+
+        expect(restoredRestEndpoint?.getHost()).toBe('public-a.example');
+        expect(restoredRestEndpoint?.getPort()).toBe(18081);
     });
 
     test('containsAddress', () => {

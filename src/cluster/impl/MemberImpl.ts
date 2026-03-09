@@ -157,6 +157,11 @@ export class MemberImplBuilder {
         return this;
     }
 
+    addressMap(addressMap: Map<EndpointQualifier, Address>): this {
+        this._addressMap = new Map(addressMap);
+        return this;
+    }
+
     build(): MemberImpl {
         if (this._version == null) {
             throw new Error('version must be set');
