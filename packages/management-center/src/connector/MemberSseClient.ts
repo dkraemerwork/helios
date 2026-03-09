@@ -10,6 +10,7 @@
 import { Logger } from '@nestjs/common';
 import { parseSseStream } from './SseStreamParser.js';
 import type { MonitorPayload, MemberMetricsSample } from '../shared/types.js';
+import { isHeliosPayload, normalizeHeliosPayload } from './normalizePayload.js';
 
 const MAX_BACKOFF_MS = 30_000;
 const BASE_BACKOFF_MS = 1_000;
@@ -107,7 +108,7 @@ export class MemberSseClient {
   }
 
   private async connectAndConsume(): Promise<void> {
-    const sseUrl = `${this.options.restUrl}/monitor/sse`;
+    const sseUrl = `${this.options.restUrl}/helios/monitor/stream`;
     this.logger.log(`Connecting to ${sseUrl}`);
 
     const headers: Record<string, string> = {
@@ -174,11 +175,12 @@ export class MemberSseClient {
         // Detect if this is a metrics sample or a full payload
         if (isMemberMetricsSample(parsed)) {
           this.options.onSample(parsed as MemberMetricsSample);
-        } else if (isMonitorPayload(parsed)) {
+        } else if (isHeliosPayload(parsed)) {
+          const payload = normalizeHeliosPayload(parsed as Record<string, unknown>);
           if (isFirst) {
-            this.options.onInit(parsed as MonitorPayload);
+            this.options.onInit(payload);
           } else {
-            this.options.onPayload(parsed as MonitorPayload);
+            this.options.onPayload(payload);
           }
         }
         break;
@@ -193,8 +195,8 @@ export class MemberSseClient {
 
       case 'payload': {
         if (data === '') return;
-        const payload = JSON.parse(data) as MonitorPayload;
-        this.options.onPayload(payload);
+        const rawPayload = JSON.parse(data) as Record<string, unknown>;
+        this.options.onPayload(normalizeHeliosPayload(rawPayload));
         break;
       }
 
@@ -203,16 +205,6 @@ export class MemberSseClient {
         break;
     }
   }
-}
-
-/**
- * Type guard: checks if an object looks like a MonitorPayload.
- * Presence of `clusterName` and `members` array is the discriminator.
- */
-function isMonitorPayload(obj: unknown): obj is MonitorPayload {
-  if (typeof obj !== 'object' || obj === null) return false;
-  const record = obj as Record<string, unknown>;
-  return typeof record['clusterName'] === 'string' && Array.isArray(record['members']);
 }
 
 /**

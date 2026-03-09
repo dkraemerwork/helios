@@ -29,6 +29,6 @@ import { NotificationService } from './NotificationService.js';
     WebhookNotificationChannel,
     NotificationService,
   ],
-  exports: [AlertEngine, NotificationService],
+  exports: [AlertEngine, NotificationService, EmailNotificationChannel],
 })
 export class AlertsModule {}

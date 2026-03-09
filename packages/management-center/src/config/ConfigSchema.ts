@@ -26,7 +26,7 @@ export const managementCenterConfigSchema = z.object({
     publicUrl: z.string().url().default('http://localhost:8080'),
     trustProxy: z.boolean().default(false),
     secureCookies: z.boolean().default(false),
-  }),
+  }).default({}),
 
   database: z.object({
     url: z.string().min(1).default('file:mc.db'),
@@ -37,7 +37,7 @@ export const managementCenterConfigSchema = z.object({
     backupSecretAccessKey: z.string().optional(),
     backupRoleArn: z.string().optional(),
     backupEncryptionKey: z.string().default(''),
-  }),
+  }).default({}),
 
   auth: z.object({
     issuer: z.string().default('helios-management-center'),
@@ -49,8 +49,8 @@ export const managementCenterConfigSchema = z.object({
       email: z.string().email().default('admin@localhost'),
       password: z.string().min(14).default('changeme-in-prod!'),
       displayName: z.string().default('Admin'),
-    }),
-  }),
+    }).default({}),
+  }).default({}),
 
   smtp: z.object({
     host: z.string().default('localhost'),
@@ -59,13 +59,13 @@ export const managementCenterConfigSchema = z.object({
     username: z.string().default(''),
     password: z.string().default(''),
     from: z.string().default('Helios MC <noreply@localhost>'),
-  }),
+  }).default({}),
 
   rateLimit: z.object({
     authPerMinute: z.number().int().positive().default(10),
     apiPerMinute: z.number().int().positive().default(120),
     wsPerMinute: z.number().int().positive().default(60),
-  }),
+  }).default({}),
 
   retention: z.object({
     rawSamplesHours: z.number().positive().default(6),
@@ -77,7 +77,7 @@ export const managementCenterConfigSchema = z.object({
     alertDays: z.number().positive().default(90),
     auditDays: z.number().positive().default(365),
     jobDays: z.number().positive().default(30),
-  }),
+  }).default({}),
 
   clusters: z.array(clusterConfigSchema).default([]),
 });

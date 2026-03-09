@@ -116,6 +116,7 @@ import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitio
 import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
 import { MigrationQueue } from "@zenystx/helios-core/internal/partition/impl/MigrationQueue";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import { DistributedRingbufferService } from "@zenystx/helios-core/ringbuffer/impl/DistributedRingbufferService";
 import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
 import { StoreLatencyTracker } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
 import { SystemEventLog } from "@zenystx/helios-core/diagnostics/SystemEventLog";
@@ -303,6 +304,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _distributedMultiMapService: DistributedMultiMapService | null = null;
   private _distributedReplicatedMapService: DistributedReplicatedMapService | null = null;
   private _distributedCacheService: DistributedCacheService | null = null;
+  private _distributedRingbufferService: DistributedRingbufferService | null = null;
   private _distributedTopicService: DistributedTopicService | null = null;
   private _reliableTopicService: ReliableTopicService;
   private _ringbufferService!: RingbufferService;
@@ -867,6 +869,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (this._distributedCacheService?.handleMessage(message) === true) {
         return;
       }
+      if (this._distributedRingbufferService?.handleMessage(message) === true) {
+        return;
+      }
       this._distributedTopicService?.handleMessage(message);
     };
 
@@ -914,6 +919,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
       localMemberId,
       this._config,
       this._ss,
+      this._transport,
+      this._clusterCoordinator,
+    );
+    this._distributedRingbufferService = new DistributedRingbufferService(
+      localMemberId,
+      this._config,
+      this._ringbufferService,
       this._transport,
       this._clusterCoordinator,
     );
@@ -2512,18 +2524,54 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const replicatedMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ReplicatedMapServiceOperations = {
-      put: async () => notImplemented(),
-      get: async () => notImplemented(),
-      remove: async () => notImplemented(),
-      size: async () => notImplemented(),
-      containsKey: async () => notImplemented(),
-      containsValue: async () => notImplemented(),
-      clear: async () => notImplemented(),
-      keySet: async () => notImplemented(),
-      values: async () => notImplemented(),
-      entrySet: async () => notImplemented(),
-      putAll: async () => notImplemented(),
-      isEmpty: async () => notImplemented(),
+      put: async (name, key, value) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.put(name, key, value);
+      },
+      get: async (name, key) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.get(name, key);
+      },
+      remove: async (name, key) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.remove(name, key);
+      },
+      size: async (name) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.size(name);
+      },
+      containsKey: async (name, key) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.containsKey(name, key);
+      },
+      containsValue: async (name, value) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.containsValue(name, value);
+      },
+      clear: async (name) => {
+        this._ensureReplicatedMapService();
+        this._distributedReplicatedMapService!.clear(name);
+      },
+      keySet: async (name) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.keySet(name);
+      },
+      values: async (name) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.values(name);
+      },
+      entrySet: async (name) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.entrySet(name);
+      },
+      putAll: async (name, entries) => {
+        this._ensureReplicatedMapService();
+        this._distributedReplicatedMapService!.putAll(name, entries);
+      },
+      isEmpty: async (name) => {
+        this._ensureReplicatedMapService();
+        return this._distributedReplicatedMapService!.isEmpty(name);
+      },
       addEntryListener: async () => notImplemented(),
       removeEntryListener: async () => notImplemented(),
       addEntryListenerWithKey: async () => notImplemented(),
@@ -2532,32 +2580,133 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const ringbufferOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').RingbufferServiceOperations = {
-      capacity: async () => notImplemented(),
-      size: async () => notImplemented(),
-      tailSequence: async () => notImplemented(),
-      headSequence: async () => notImplemented(),
-      remainingCapacity: async () => notImplemented(),
-      add: async () => notImplemented(),
-      addAll: async () => notImplemented(),
-      readOne: async () => notImplemented(),
-      readMany: async () => notImplemented(),
+      capacity: async (name) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.capacity(name));
+      },
+      size: async (name) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.size(name));
+      },
+      tailSequence: async (name) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.tailSequence(name));
+      },
+      headSequence: async (name) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.headSequence(name));
+      },
+      remainingCapacity: async (name) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.remainingCapacity(name));
+      },
+      add: async (name, overflowPolicy, value) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.add(name, value, overflowPolicy));
+      },
+      addAll: async (name, values, overflowPolicy) => {
+        this._ensureRingbufferService();
+        return BigInt(await this._distributedRingbufferService!.addAll(name, values, overflowPolicy));
+      },
+      readOne: async (name, sequence) => {
+        this._ensureRingbufferService();
+        return this._distributedRingbufferService!.readOne(name, Number(sequence));
+      },
+      readMany: async (name, startSequence, minCount, maxCount, filter) => {
+        this._ensureRingbufferService();
+        const items = await this._distributedRingbufferService!.readMany(
+          name,
+          Number(startSequence),
+          minCount,
+          maxCount,
+          filter,
+        );
+        const readCount = items.length;
+        const baseSequence = Number(startSequence);
+        return {
+          readCount,
+          items,
+          itemSeqs: Array.from({ length: readCount }, (_, index) => BigInt(baseSequence + index)),
+          nextSeq: BigInt(baseSequence + readCount),
+        };
+      },
     };
 
     const cacheOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CacheServiceOperations = {
-      get: async () => notImplemented(),
-      put: async () => notImplemented(),
-      remove: async () => notImplemented(),
-      size: async () => notImplemented(),
-      clear: async () => notImplemented(),
-      containsKey: async () => notImplemented(),
-      getAndPut: async () => notImplemented(),
-      getAndRemove: async () => notImplemented(),
-      putIfAbsent: async () => notImplemented(),
-      replace: async () => notImplemented(),
-      getAll: async () => notImplemented(),
-      putAll: async () => notImplemented(),
-      removeAll: async () => notImplemented(),
-      destroy: async () => notImplemented(),
+      get: async (name, key) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.get(name, key);
+      },
+      put: async (name, key, value, _expiryPolicy, isGet) => {
+        this._ensureCacheService();
+        if (isGet) {
+          return this._distributedCacheService!.getAndPut(name, key, value);
+        }
+        await this._distributedCacheService!.put(name, key, value);
+        return null;
+      },
+      remove: async (name, key, currentValue) => {
+        this._ensureCacheService();
+        if (currentValue === null) {
+          return this._distributedCacheService!.remove(name, key);
+        }
+        const existing = await this._distributedCacheService!.get(name, key);
+        if (existing === null || !existing.equals(currentValue)) {
+          return false;
+        }
+        return this._distributedCacheService!.remove(name, key);
+      },
+      size: async (name) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.size(name);
+      },
+      clear: async (name) => {
+        this._ensureCacheService();
+        await this._distributedCacheService!.clear(name);
+      },
+      containsKey: async (name, key) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.containsKey(name, key);
+      },
+      getAndPut: async (name, key, value) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.getAndPut(name, key, value);
+      },
+      getAndRemove: async (name, key) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.getAndRemove(name, key);
+      },
+      putIfAbsent: async (name, key, value) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.putIfAbsent(name, key, value);
+      },
+      replace: async (name, key, oldValue, newValue) => {
+        this._ensureCacheService();
+        if (oldValue === null) {
+          return this._distributedCacheService!.replace(name, key, newValue);
+        }
+        const existing = await this._distributedCacheService!.get(name, key);
+        if (existing === null || !existing.equals(oldValue)) {
+          return false;
+        }
+        return this._distributedCacheService!.replace(name, key, newValue);
+      },
+      getAll: async (name, keys) => {
+        this._ensureCacheService();
+        return this._distributedCacheService!.getAll(name, keys);
+      },
+      putAll: async (name, entries) => {
+        this._ensureCacheService();
+        await this._distributedCacheService!.putAll(name, entries);
+      },
+      removeAll: async (name, keys) => {
+        this._ensureCacheService();
+        await this._distributedCacheService!.removeAll(name, keys ?? undefined);
+      },
+      destroy: async (name) => {
+        this._ensureCacheService();
+        this._distributedCacheService!.destroy(name);
+      },
       addInvalidationListener: async () => notImplemented(),
       removeInvalidationListener: async () => notImplemented(),
     };
@@ -2783,7 +2932,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
   }
 
-
   private _ensureMultiMapService(): void {
     if (this._distributedMultiMapService === null) {
       this._distributedMultiMapService = new DistributedMultiMapService(
@@ -2795,6 +2943,40 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
   }
 
+  private _ensureReplicatedMapService(): void {
+    if (this._distributedReplicatedMapService === null) {
+      this._distributedReplicatedMapService = new DistributedReplicatedMapService(
+        this.getLocalMemberId(),
+        this._config,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
+
+  private _ensureRingbufferService(): void {
+    if (this._distributedRingbufferService === null) {
+      this._distributedRingbufferService = new DistributedRingbufferService(
+        this.getLocalMemberId(),
+        this._config,
+        this._ringbufferService,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
+
+  private _ensureCacheService(): void {
+    if (this._distributedCacheService === null) {
+      this._distributedCacheService = new DistributedCacheService(
+        this.getLocalMemberId(),
+        this._config,
+        this._ss,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
+  }
 
   private _registerClientTopicListener(topicName: string, correlationId: number, session: ClientSession): string {
     this._ensureTopicService();
@@ -3244,7 +3426,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
       registration.session.pushEvent(eventMessage);
     }
   }
-
 
   /**
    * Returns the port the client protocol server is listening on, or 0 if not started.

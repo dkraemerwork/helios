@@ -26,17 +26,17 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
-const RB_SIZE_REQUEST         = 0x190100; const RB_SIZE_RESPONSE         = 0x190101;
-const RB_TAIL_SEQ_REQUEST     = 0x190200; const RB_TAIL_SEQ_RESPONSE     = 0x190201;
-const RB_HEAD_SEQ_REQUEST     = 0x190300; const RB_HEAD_SEQ_RESPONSE     = 0x190301;
-const RB_CAPACITY_REQUEST     = 0x190400; const RB_CAPACITY_RESPONSE     = 0x190401;
-const RB_REMAINING_CAP_REQUEST = 0x190500; const RB_REMAINING_CAP_RESPONSE = 0x190501;
-const RB_ADD_REQUEST          = 0x190600; const RB_ADD_RESPONSE          = 0x190601;
-const RB_READ_ONE_REQUEST     = 0x190700; const RB_READ_ONE_RESPONSE     = 0x190701;
-const RB_ADD_ALL_REQUEST      = 0x190800; const RB_ADD_ALL_RESPONSE      = 0x190801;
-const RB_READ_MANY_REQUEST    = 0x190900; const RB_READ_MANY_RESPONSE    = 0x190901;
+const RB_SIZE_REQUEST         = 0x170100; const RB_SIZE_RESPONSE         = 0x170101;
+const RB_TAIL_SEQ_REQUEST     = 0x170200; const RB_TAIL_SEQ_RESPONSE     = 0x170201;
+const RB_HEAD_SEQ_REQUEST     = 0x170300; const RB_HEAD_SEQ_RESPONSE     = 0x170301;
+const RB_CAPACITY_REQUEST     = 0x170400; const RB_CAPACITY_RESPONSE     = 0x170401;
+const RB_REMAINING_CAP_REQUEST = 0x170500; const RB_REMAINING_CAP_RESPONSE = 0x170501;
+const RB_ADD_REQUEST          = 0x170600; const RB_ADD_RESPONSE          = 0x170601;
+const RB_READ_ONE_REQUEST     = 0x170700; const RB_READ_ONE_RESPONSE     = 0x170701;
+const RB_ADD_ALL_REQUEST      = 0x170800; const RB_ADD_ALL_RESPONSE      = 0x170801;
+const RB_READ_MANY_REQUEST    = 0x170900; const RB_READ_MANY_RESPONSE    = 0x170901;
 
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
 
 // ── Registration ──────────────────────────────────────────────────────────────
 

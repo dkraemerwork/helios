@@ -56,6 +56,7 @@ import { MapConfig } from "@zenystx/helios-core/config/MapConfig";
 import { MapStoreConfig } from "@zenystx/helios-core/config/MapStoreConfig";
 import { NearCacheConfig } from "@zenystx/helios-core/config/NearCacheConfig";
 import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { createManagementCenterExtension } from "@zenystx/helios-management-center";
 import { DynamoDbMapStore } from "@zenystx/helios-dynamodb";
 import { MongoMapStore } from "@zenystx/helios-mongodb";
 import { S3MapStore } from "@zenystx/helios-s3";
@@ -183,6 +184,48 @@ config.getNetworkConfig().getRestApiConfig().setEnabled(true);
 
 const heliosInstance = await Helios.newInstance(config);
 console.log("  Monitoring dashboard: http://localhost:8080/helios/monitor");
+
+// ── Start Management Center (embedded) ────────────────────────────────────────
+
+const mcDbPath = resolve(import.meta.dirname, "..", "data", "mc.db");
+const mcExtension = createManagementCenterExtension({
+  port: 9090,
+  host: "0.0.0.0",
+  publicUrl: "http://localhost:9090",
+  databaseUrl: `file:${mcDbPath}`,
+  csrfSecret: "helios-dev-csrf-secret-change-in-prod",
+  bootstrapAdminEmail: "admin@helios.local",
+  bootstrapAdminPassword: "admin-password-1234",
+  bootstrapAdminDisplayName: "Admin",
+  clusters: [
+    {
+      id: "local",
+      displayName: "Local Development Cluster",
+      memberAddresses: ["localhost"],
+      restPort: 8080,
+      sslEnabled: false,
+      autoDiscover: true,
+      requestTimeoutMs: 5000,
+      stalenessWindowMs: 30000,
+    },
+  ],
+});
+
+try {
+  await mcExtension.start({
+    logger: {
+      info: (msg: string) => console.log(`  [MC] ${msg}`),
+      warn: (msg: string) => console.warn(`  [MC] ${msg}`),
+      error: (msg: string) => console.error(`  [MC] ${msg}`),
+      debug: (msg: string) => console.debug(`  [MC] ${msg}`),
+    },
+    env: process.env as Record<string, string | undefined>,
+    metricsRegistry: (heliosInstance as unknown as HeliosInstanceImpl).getMetricsRegistry() ?? { getSamples: () => [], getLatest: () => null, size: 0 },
+  });
+  console.log("  Management Center: http://localhost:9090");
+} catch (err) {
+  console.error(`  Failed to start Management Center: ${err instanceof Error ? err.message : String(err)}`);
+}
 
 console.log("\n  Starting embedded NATS server (Blitz)...");
 const blitzService = await BlitzService.start({ embedded: {} });
@@ -644,6 +687,12 @@ const shutdown = async (): Promise<void> => {
 
   await quotesSvc.stop();
   console.log("  NATS consumer stopped.");
+
+  // Stop Management Center first
+  try {
+    await mcExtension.stop();
+    console.log("  Management Center stopped.");
+  } catch { /* ignore */ }
 
   await app.close();
   console.log("  NestJS context closed.");

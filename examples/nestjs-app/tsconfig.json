@@ -24,7 +24,8 @@
       "@zenystx/helios-mongodb": ["../../packages/mongodb/src/index.ts"],
       "@zenystx/helios-s3": ["../../packages/s3/src/index.ts"],
       "@zenystx/helios-turso": ["../../packages/turso/src/index.ts"],
-      "@zenystx/helios-dynamodb": ["../../packages/dynamodb/src/index.ts"]
+      "@zenystx/helios-dynamodb": ["../../packages/dynamodb/src/index.ts"],
+      "@zenystx/helios-management-center": ["../../packages/management-center/src/index.ts"]
     },
 
     "types": ["bun"]

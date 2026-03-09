@@ -21,6 +21,7 @@ import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpCluster
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import { OverflowPolicy } from "@zenystx/helios-core/ringbuffer/OverflowPolicy";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 
 // ── Wire types (local discriminated union for ringbuffer protocol) ─────
@@ -34,7 +35,9 @@ interface RbRequestMsg {
   sequence?: number;
   minCount?: number;
   maxCount?: number;
+  overflowPolicy?: number;
   data?: EncodedData;
+  dataList?: EncodedData[];
 }
 
 interface RbResponseMsg {
@@ -73,7 +76,9 @@ interface PendingRemoteRequest {
 
 type RbOperation =
   | "add"
+  | "addAll"
   | "readOne"
+  | "readMany"
   | "capacity"
   | "size"
   | "tailSequence"
@@ -129,8 +134,13 @@ export class DistributedRingbufferService {
 
   // ── Public API ───────────────────────────────────────────────────────
 
-  async add(name: string, data: Data): Promise<number> {
-    const r = await this._invoke(name, "add", { data });
+  async add(name: string, data: Data, overflowPolicy = OverflowPolicy.OVERWRITE.getId()): Promise<number> {
+    const r = await this._invoke(name, "add", { data, overflowPolicy });
+    return r.numberResult ?? -1;
+  }
+
+  async addAll(name: string, dataList: Data[], overflowPolicy = OverflowPolicy.OVERWRITE.getId()): Promise<number> {
+    const r = await this._invoke(name, "addAll", { dataList, overflowPolicy });
     return r.numberResult ?? -1;
   }
 
@@ -144,6 +154,7 @@ export class DistributedRingbufferService {
     startSequence: number,
     minCount: number,
     maxCount: number,
+    _filter: Data | null = null,
   ): Promise<Data[]> {
     // If local owner: wait until minCount items available
     const ownerId = this._resolveOwnerId(name);
@@ -205,7 +216,9 @@ export class DistributedRingbufferService {
       sequence?: number;
       minCount?: number;
       maxCount?: number;
+      overflowPolicy?: number;
       data?: Data;
+      dataList?: Data[];
     },
   ): Promise<RbResponseMsg> {
     const container = this._getContainer(name);
@@ -214,7 +227,28 @@ export class DistributedRingbufferService {
       case "add": {
         const d = options?.data;
         if (d === undefined) throw new Error("NullPointerException");
+        const overflowPolicy = options?.overflowPolicy ?? OverflowPolicy.OVERWRITE.getId();
+        if (overflowPolicy === OverflowPolicy.FAIL.getId() && container.remainingCapacity() < 1) {
+          return this._numberResponse(-1);
+        }
         const seq = container.add(d as unknown as never);
+        await this._replicateBackup(name, container);
+        this._notifyWaiters(name, seq);
+        return this._numberResponse(seq);
+      }
+      case "addAll": {
+        const list = options?.dataList ?? [];
+        if (list.length === 0) {
+          return this._numberResponse(container.tailSequence());
+        }
+        const overflowPolicy = options?.overflowPolicy ?? OverflowPolicy.OVERWRITE.getId();
+        if (
+          overflowPolicy === OverflowPolicy.FAIL.getId()
+          && container.remainingCapacity() < list.length
+        ) {
+          return this._numberResponse(-1);
+        }
+        const seq = container.addAll(list as never[]);
         await this._replicateBackup(name, container);
         this._notifyWaiters(name, seq);
         return this._numberResponse(seq);
@@ -309,7 +343,9 @@ export class DistributedRingbufferService {
       sequence?: number;
       minCount?: number;
       maxCount?: number;
+      overflowPolicy?: number;
       data?: Data;
+      dataList?: Data[];
     },
   ): Promise<RbResponseMsg> {
     const ownerId = this._resolveOwnerId(name);
@@ -343,7 +379,9 @@ export class DistributedRingbufferService {
       sequence: options?.sequence,
       minCount: options?.minCount,
       maxCount: options?.maxCount,
+      overflowPolicy: options?.overflowPolicy,
       data: options?.data ? encodeData(options.data) : undefined,
+      dataList: options?.dataList?.map(encodeData),
     };
     (this._transport as unknown as { send(id: string, msg: unknown): void }).send(ownerId, msg);
 
@@ -355,7 +393,9 @@ export class DistributedRingbufferService {
       sequence: msg.sequence,
       minCount: msg.minCount,
       maxCount: msg.maxCount,
+      overflowPolicy: msg.overflowPolicy,
       data: msg.data ? decodeData(msg.data) : undefined,
+      dataList: msg.dataList?.map(decodeData),
     })
       .then((response) => {
         const resp = { ...response, requestId: msg.requestId };

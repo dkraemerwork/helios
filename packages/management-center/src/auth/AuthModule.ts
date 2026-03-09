@@ -45,6 +45,7 @@ import { RateLimitMiddleware } from './RateLimitMiddleware.js';
     CsrfGuard,
     RbacGuard,
     PasswordHasher,
+    PasswordDenylistService,
   ],
 })
 export class AuthModule implements NestModule {

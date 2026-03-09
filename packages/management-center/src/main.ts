@@ -9,14 +9,22 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { ManagementCenterModule } from './app/ManagementCenterModule.js';
 import { ConfigService } from './config/ConfigService.js';
 import { Logger } from '@nestjs/common';
 
 async function bootstrap(): Promise<void> {
+  const adapter = new FastifyAdapter({ trustProxy: true });
+
+  // Register @fastify/cookie so request.cookies and reply.setCookie() work.
+  const fastifyCookie = await import('@fastify/cookie');
+  const fastifyInstance = adapter.getInstance();
+  await fastifyInstance.register(fastifyCookie.default ?? fastifyCookie);
+
   const app = await NestFactory.create<NestFastifyApplication>(
     ManagementCenterModule,
-    new FastifyAdapter({ trustProxy: true }),
+    adapter,
     { bufferLogs: true },
   );
 
@@ -24,6 +32,10 @@ async function bootstrap(): Promise<void> {
   const host = config.serverHost;
   const port = config.serverPort;
 
+  // Pass the raw Node.js http.Server so the WsAdapter 'upgrade' listener
+  // attaches correctly — avoids Bun's multi-copy instanceof mismatch.
+  const rawHttpServer = app.getHttpServer();
+  app.useWebSocketAdapter(new WsAdapter(rawHttpServer));
   app.enableShutdownHooks();
 
   await app.listen(port, host);

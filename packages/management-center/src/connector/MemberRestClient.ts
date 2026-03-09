@@ -11,6 +11,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConnectorError } from '../shared/errors.js';
 import type { MonitorPayload } from '../shared/types.js';
+import { normalizeHeliosPayload } from './normalizePayload.js';
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 
@@ -26,23 +27,24 @@ export class MemberRestClient {
   // ── Read Operations ─────────────────────────────────────────────────────
 
   async fetchMonitorData(restUrl: string, authToken?: string): Promise<MonitorPayload> {
-    return this.get<MonitorPayload>(`${restUrl}/monitor`, authToken);
+    const raw = await this.get<Record<string, unknown>>(`${restUrl}/helios/monitor/data`, authToken);
+    return normalizeHeliosPayload(raw);
   }
 
   async fetchJobs(restUrl: string, authToken?: string): Promise<unknown> {
-    return this.get<unknown>(`${restUrl}/jobs`, authToken);
+    return this.get<unknown>(`${restUrl}/helios/monitor/jobs`, authToken);
   }
 
   async fetchConfig(restUrl: string, authToken?: string): Promise<unknown> {
-    return this.get<unknown>(`${restUrl}/config`, authToken);
+    return this.get<unknown>(`${restUrl}/helios/monitor/config`, authToken);
   }
 
-  async fetchHealth(restUrl: string): Promise<{ status: string }> {
-    return this.get<{ status: string }>(`${restUrl}/health`);
+  async fetchHealth(restUrl: string, authToken?: string): Promise<{ status: string }> {
+    return this.get<{ status: string }>(`${restUrl}/hazelcast/health`, authToken);
   }
 
-  async fetchHealthReady(restUrl: string): Promise<{ status: string }> {
-    return this.get<{ status: string }>(`${restUrl}/health/ready`);
+  async fetchHealthReady(restUrl: string, authToken?: string): Promise<{ status: string }> {
+    return this.get<{ status: string }>(`${restUrl}/hazelcast/health/ready`, authToken);
   }
 
   // ── Write Operations ────────────────────────────────────────────────────
@@ -52,7 +54,7 @@ export class MemberRestClient {
     state: string,
     authToken?: string,
   ): Promise<unknown> {
-    return this.post(`${restUrl}/cluster/state`, { state }, authToken);
+    return this.post(`${restUrl}/helios/admin/cluster-state`, { state }, authToken);
   }
 
   async postJobCancel(
@@ -60,7 +62,7 @@ export class MemberRestClient {
     jobId: string,
     authToken?: string,
   ): Promise<unknown> {
-    return this.post(`${restUrl}/jobs/${encodeURIComponent(jobId)}/cancel`, {}, authToken);
+    return this.post(`${restUrl}/helios/admin/job/${encodeURIComponent(jobId)}/cancel`, {}, authToken);
   }
 
   async postJobRestart(
@@ -68,7 +70,7 @@ export class MemberRestClient {
     jobId: string,
     authToken?: string,
   ): Promise<unknown> {
-    return this.post(`${restUrl}/jobs/${encodeURIComponent(jobId)}/restart`, {}, authToken);
+    return this.post(`${restUrl}/helios/admin/job/${encodeURIComponent(jobId)}/restart`, {}, authToken);
   }
 
   async postMapClear(
@@ -76,7 +78,7 @@ export class MemberRestClient {
     mapName: string,
     authToken?: string,
   ): Promise<unknown> {
-    return this.post(`${restUrl}/maps/${encodeURIComponent(mapName)}/clear`, {}, authToken);
+    return this.post(`${restUrl}/helios/admin/object/map/${encodeURIComponent(mapName)}/clear`, {}, authToken);
   }
 
   async postMapEvict(
@@ -84,11 +86,11 @@ export class MemberRestClient {
     mapName: string,
     authToken?: string,
   ): Promise<unknown> {
-    return this.post(`${restUrl}/maps/${encodeURIComponent(mapName)}/evict`, {}, authToken);
+    return this.post(`${restUrl}/helios/admin/object/map/${encodeURIComponent(mapName)}/evict`, {}, authToken);
   }
 
   async postGc(restUrl: string, authToken?: string): Promise<unknown> {
-    return this.post(`${restUrl}/gc`, {}, authToken);
+    return this.post(`${restUrl}/helios/admin/gc`, {}, authToken);
   }
 
   // ── HTTP Primitives ─────────────────────────────────────────────────────

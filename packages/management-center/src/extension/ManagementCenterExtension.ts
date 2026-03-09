@@ -8,6 +8,7 @@
 
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { WsAdapter } from '@nestjs/platform-ws';
 import type { ManagementCenterExtensionConfig } from './ManagementCenterExtensionConfig.js';
 
 /**
@@ -79,6 +80,11 @@ export class ManagementCenterExtension implements HeliosExtension {
       trustProxy: this._config.trustProxy ?? false,
     });
 
+    // Register @fastify/cookie so request.cookies and reply.setCookie() work.
+    const fastifyCookie = await import('@fastify/cookie');
+    const fastifyInstance = adapter.getInstance();
+    await fastifyInstance.register(fastifyCookie.default ?? fastifyCookie);
+
     this._app = await NestFactory.create<NestFastifyApplication>(
       ManagementCenterModule,
       adapter,
@@ -88,6 +94,14 @@ export class ManagementCenterExtension implements HeliosExtension {
       },
     );
 
+    // Pass the raw Node.js http.Server to WsAdapter so the 'upgrade'
+    // listener is registered correctly.  With Fastify the underlying
+    // server is available immediately after NestFactory.create() —
+    // passing the app object fails because Bun may resolve a different
+    // copy of NestApplication and the `instanceof` check in
+    // AbstractWsAdapter falls through.
+    const rawHttpServer = this._app.getHttpServer();
+    this._app.useWebSocketAdapter(new WsAdapter(rawHttpServer));
     this._app.enableShutdownHooks();
 
     const host = this._config.host ?? '0.0.0.0';
