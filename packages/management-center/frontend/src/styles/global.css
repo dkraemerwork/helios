@@ -1,0 +1,236 @@
+@import 'tailwindcss';
+
+/* ── Base resets and dark theme ───────────────────────────────────────────── */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #0a0e14;
+  color: #e2e8f0;
+  font-family:
+    'Inter',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar styling ────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(14, 20, 30, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+/* ── Focus ring ───────────────────────────────────────────────────────────── */
+
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* ── Selection ────────────────────────────────────────────────────────────── */
+
+::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: #e2e8f0;
+}
+
+/* ── Panel base class ─────────────────────────────────────────────────────── */
+
+.mc-panel {
+  background: rgba(14, 20, 30, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 0.5rem;
+}
+
+.mc-panel-hover:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* ── Button base ──────────────────────────────────────────────────────────── */
+
+.mc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: all 150ms ease;
+  cursor: pointer;
+  border: none;
+}
+
+.mc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mc-btn-primary {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.mc-btn-primary:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.mc-btn-danger {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.mc-btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.mc-btn-ghost {
+  background-color: transparent;
+  color: #94a3b8;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.mc-btn-ghost:hover:not(:disabled) {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #e2e8f0;
+}
+
+/* ── Input base ───────────────────────────────────────────────────────────── */
+
+.mc-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: rgba(14, 20, 30, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 0.375rem;
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  transition: border-color 150ms ease;
+}
+
+.mc-input:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+.mc-input::placeholder {
+  color: #64748b;
+}
+
+/* ── Status indicators ────────────────────────────────────────────────────── */
+
+.mc-status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.mc-status-healthy {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.mc-status-warning {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.mc-status-critical {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.mc-status-unknown {
+  background-color: #64748b;
+}
+
+/* ── Table base ───────────────────────────────────────────────────────────── */
+
+.mc-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mc-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.mc-table td {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+}
+
+.mc-table tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* ── Badge ────────────────────────────────────────────────────────────────── */
+
+.mc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+}
+
+.mc-badge-blue {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.mc-badge-emerald {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.mc-badge-amber {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.mc-badge-red {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.mc-badge-purple {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
