@@ -5,6 +5,7 @@
  */
 import type {
   ClusterMessage,
+  SetEventMsg,
   SetResponseMsg,
   SetStateAckMsg,
   SetStateSyncMsg,
@@ -14,9 +15,12 @@ import {
   encodeData,
 } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import { ItemEvent } from "@zenystx/helios-core/collection/ItemEvent";
+import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
 
 // ── Container ─────────────────────────────────────────────────────────
 
@@ -37,6 +41,11 @@ interface PendingRemoteRequest {
   resolve: (msg: SetResponseMsg | SetStateAckMsg) => void;
   reject: (err: Error) => void;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
+}
+
+interface SetListenerRegistration<E = unknown> {
+  listener: ItemListener<E>;
+  includeValue: boolean;
 }
 
 type SetOperation =
@@ -60,10 +69,16 @@ export class DistributedSetService {
     string,
     PendingRemoteRequest
   >();
+  private readonly _listeners = new Map<
+    string,
+    Map<string, SetListenerRegistration>
+  >();
+  private readonly _listenerCounters = new Map<string, number>();
 
   constructor(
     private readonly _instanceName: string,
     private readonly _config: HeliosConfig,
+    private readonly _serializationService: SerializationService,
     private readonly _transport: TcpClusterTransport | null,
     private readonly _coordinator: HeliosClusterCoordinator | null,
   ) {
@@ -85,6 +100,9 @@ export class DistributedSetService {
         return true;
       case "SET_STATE_SYNC":
         this._handleStateSync(message);
+        return true;
+      case "SET_EVENT":
+        this._dispatchSetEvent(message);
         return true;
       default:
         return false;
@@ -147,6 +165,28 @@ export class DistributedSetService {
     await this._invoke(name, "clear");
   }
 
+  addItemListener<E>(
+    name: string,
+    listener: ItemListener<E>,
+    includeValue = true,
+  ): string {
+    if (listener === null || listener === undefined) {
+      throw new Error("NullPointerException: listener is null");
+    }
+    const registrations =
+      this._listeners.get(name) ?? new Map<string, SetListenerRegistration>();
+    this._listeners.set(name, registrations);
+    const nextCounter = (this._listenerCounters.get(name) ?? 0) + 1;
+    this._listenerCounters.set(name, nextCounter);
+    const id = `listener-${nextCounter}`;
+    registrations.set(id, { listener, includeValue });
+    return id;
+  }
+
+  removeItemListener(name: string, registrationId: string): boolean {
+    return this._listeners.get(name)?.delete(registrationId) ?? false;
+  }
+
   // ── Routing ──────────────────────────────────────────────────────────
 
   private async _invoke(
@@ -202,22 +242,28 @@ export class DistributedSetService {
           container.items.set(fp, d);
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "ADDED", d);
           return this._boolResponse(true);
         }
         case "addAll": {
           const list = options?.dataList ?? [];
           if (list.length === 0) return this._boolResponse(false);
           let changed = false;
+          const added: Data[] = [];
           for (const d of list) {
             const fp = dataFingerprint(d);
             if (!container.items.has(fp)) {
               container.items.set(fp, d);
               changed = true;
+              added.push(d);
             }
           }
           if (changed) {
             container.version++;
             await this._replicateState(name, container);
+            for (const item of added) {
+              this._broadcastEvent(name, "ADDED", item);
+            }
           }
           return this._boolResponse(changed);
         }
@@ -229,17 +275,25 @@ export class DistributedSetService {
           container.items.delete(fp);
           container.version++;
           await this._replicateState(name, container);
+          this._broadcastEvent(name, "REMOVED", d);
           return this._boolResponse(true);
         }
         case "removeAll": {
           const list = options?.dataList ?? [];
           let changed = false;
+          const removed: Data[] = [];
           for (const d of list) {
-            if (container.items.delete(dataFingerprint(d))) changed = true;
+            if (container.items.delete(dataFingerprint(d))) {
+              changed = true;
+              removed.push(d);
+            }
           }
           if (changed) {
             container.version++;
             await this._replicateState(name, container);
+            for (const item of removed) {
+              this._broadcastEvent(name, "REMOVED", item);
+            }
           }
           return this._boolResponse(changed);
         }
@@ -248,15 +302,23 @@ export class DistributedSetService {
             (options?.dataList ?? []).map(dataFingerprint),
           );
           let changed = false;
+          const removed: Data[] = [];
           for (const fp of Array.from(container.items.keys())) {
             if (!retain.has(fp)) {
+              const item = container.items.get(fp);
               container.items.delete(fp);
               changed = true;
+              if (item !== undefined) {
+                removed.push(item);
+              }
             }
           }
           if (changed) {
             container.version++;
             await this._replicateState(name, container);
+            for (const item of removed) {
+              this._broadcastEvent(name, "REMOVED", item);
+            }
           }
           return this._boolResponse(changed);
         }
@@ -286,9 +348,13 @@ export class DistributedSetService {
           };
         case "clear":
           if (container.items.size > 0) {
+            const removedItems = Array.from(container.items.values());
             container.items.clear();
             container.version++;
             await this._replicateState(name, container);
+            for (const item of removedItems) {
+              this._broadcastEvent(name, "REMOVED", item);
+            }
           }
           return this._voidResponse();
       }
@@ -364,6 +430,31 @@ export class DistributedSetService {
     }
   }
 
+  private _dispatchSetEvent(message: SetEventMsg): void {
+    const registrations = this._listeners.get(message.setName);
+    if (registrations === undefined) {
+      return;
+    }
+
+    for (const registration of Array.from(registrations.values())) {
+      const value =
+        registration.includeValue && message.data !== null
+          ? this._serializationService.toObject(decodeData(message.data))
+          : null;
+      const event = new ItemEvent(
+        message.setName,
+        value,
+        message.eventType,
+        message.sourceNodeId,
+      );
+      if (message.eventType === "ADDED") {
+        registration.listener.itemAdded?.(event);
+      } else {
+        registration.listener.itemRemoved?.(event);
+      }
+    }
+  }
+
   // ── Replication ──────────────────────────────────────────────────────
 
   private async _replicateState(
@@ -422,6 +513,22 @@ export class DistributedSetService {
     this._transport.send(backupId, msg);
 
     if (ackPromise !== null) await ackPromise;
+  }
+
+  private _broadcastEvent(
+    name: string,
+    eventType: "ADDED" | "REMOVED",
+    data: Data | null,
+  ): void {
+    const message: SetEventMsg = {
+      type: "SET_EVENT",
+      setName: name,
+      eventType,
+      sourceNodeId: this._instanceName,
+      data: data === null ? null : encodeData(data),
+    };
+    this._dispatchSetEvent(message);
+    this._transport?.broadcast(message);
   }
 
   private _resyncAll(): void {

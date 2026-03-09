@@ -218,7 +218,7 @@ describe('set and multimap protocol adapter', () => {
         }
     });
 
-    test('set listener registration uses real item events and UUID removal', async () => {
+    test('set listener registration observes proxy and distributed service item events', async () => {
         const config = new HeliosConfig('set-protocol-listener');
         config.setClusterName('set-protocol-listener');
         config.getNetworkConfig().setClientProtocolPort(0);
@@ -244,12 +244,8 @@ describe('set and multimap protocol adapter', () => {
 
             expect(registrationId).toBeTruthy();
 
-            expect(
-                decodeBooleanResponse((await dispatcher.dispatch(
-                    buildNameDataRequest(SET_ADD_REQUEST_TYPE, 31, setName, ss.toData('first')!),
-                    session,
-                ))!),
-            ).toBe(true);
+            const set = instance.getSet<string>(setName);
+            expect(await set.add('first')).toBe(true);
 
             expect(session.events).toHaveLength(1);
             expect(session.events[0].getMessageType()).toBe(SetAddListenerCodec.EVENT_ITEM_MESSAGE_TYPE);
@@ -260,12 +256,7 @@ describe('set and multimap protocol adapter', () => {
             expect(addedEvent.uuid).toBe(memberUuid);
 
             session.events.length = 0;
-            expect(
-                decodeBooleanResponse((await dispatcher.dispatch(
-                    buildNameDataRequest(SET_REMOVE_REQUEST_TYPE, 32, setName, ss.toData('first')!),
-                    session,
-                ))!),
-            ).toBe(true);
+            expect(await (instance as any)._distributedSetService.remove(setName, ss.toData('first')!)).toBe(true);
 
             expect(session.events).toHaveLength(1);
             const removedEvent = SetAddListenerCodec.decodeItemEvent(session.events[0]);
@@ -280,12 +271,7 @@ describe('set and multimap protocol adapter', () => {
             expect(decodeBooleanResponse(removeResponse!)).toBe(true);
 
             session.events.length = 0;
-            expect(
-                decodeBooleanResponse((await dispatcher.dispatch(
-                    buildNameDataRequest(SET_ADD_REQUEST_TYPE, 34, setName, ss.toData('second')!),
-                    session,
-                ))!),
-            ).toBe(true);
+            expect(await set.add('second')).toBe(true);
             expect(session.events).toHaveLength(0);
         } finally {
             ss.destroy();
@@ -338,7 +324,7 @@ describe('set and multimap protocol adapter', () => {
         }
     });
 
-    test('multimap listener registration uses real entry events and UUID removal', async () => {
+    test('multimap listener registration observes proxy and distributed service entry events', async () => {
         const config = new HeliosConfig('multimap-protocol-listener');
         config.setClusterName('multimap-protocol-listener');
         config.getNetworkConfig().setClientProtocolPort(0);
@@ -364,12 +350,8 @@ describe('set and multimap protocol adapter', () => {
 
             expect(registrationId).toBeTruthy();
 
-            expect(
-                decodeBooleanResponse((await dispatcher.dispatch(
-                    buildMultiMapKeyValueRequest(MM_PUT_REQUEST_TYPE, 41, mapName, ss.toData('key')!, ss.toData('value')!),
-                    session,
-                ))!),
-            ).toBe(true);
+            const multiMap = instance.getMultiMap<string, string>(mapName);
+            expect(await multiMap.put('key', 'value')).toBe(true);
 
             expect(session.events).toHaveLength(1);
             expect(session.events[0].getMessageType()).toBe(MultiMapAddEntryListenerCodec.EVENT_ENTRY_MESSAGE_TYPE);
@@ -382,7 +364,7 @@ describe('set and multimap protocol adapter', () => {
             expect(addedEvent.numberOfAffectedEntries).toBe(1);
 
             session.events.length = 0;
-            await dispatcher.dispatch(buildNameRequest(MM_CLEAR_REQUEST_TYPE, 42, mapName), session);
+            await (instance as any)._distributedMultiMapService.clear(mapName);
 
             expect(session.events).toHaveLength(1);
             const clearEvent = MultiMapAddEntryListenerCodec.decodeEntryEvent(session.events[0]);
@@ -397,12 +379,7 @@ describe('set and multimap protocol adapter', () => {
             expect(decodeBooleanResponse(removeResponse!)).toBe(true);
 
             session.events.length = 0;
-            expect(
-                decodeBooleanResponse((await dispatcher.dispatch(
-                    buildMultiMapKeyValueRequest(MM_PUT_REQUEST_TYPE, 44, mapName, ss.toData('key')!, ss.toData('second')!),
-                    session,
-                ))!),
-            ).toBe(true);
+            expect(await multiMap.put('key', 'second')).toBe(true);
             expect(session.events).toHaveLength(0);
         } finally {
             ss.destroy();

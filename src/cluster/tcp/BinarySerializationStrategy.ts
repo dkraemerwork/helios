@@ -8,6 +8,7 @@ import type {
     ListResponseMsg,
     ListStateSyncMsg,
     MembersUpdateMsg,
+    MultiMapEventMsg,
     MultiMapResponseMsg,
     MultiMapStateSyncMsg,
     OperationMsg,
@@ -19,6 +20,7 @@ import type {
     ReliableTopicBackupMsg,
     ReliableTopicMessageMsg,
     ReplicatedMapStateSyncMsg,
+    SetEventMsg,
     SetResponseMsg,
     SetStateSyncMsg,
     WireMemberInfo,
@@ -92,11 +94,13 @@ const MESSAGE_TYPE_TO_ID = {
     MULTIMAP_RESPONSE: 49,
     MULTIMAP_STATE_SYNC: 50,
     MULTIMAP_STATE_ACK: 51,
-    REPLICATED_MAP_PUT: 52,
-    REPLICATED_MAP_REMOVE: 53,
-    REPLICATED_MAP_CLEAR: 54,
-    REPLICATED_MAP_STATE_SYNC: 55,
-    REPLICATED_MAP_STATE_ACK: 56,
+    SET_EVENT: 52,
+    MULTIMAP_EVENT: 53,
+    REPLICATED_MAP_PUT: 54,
+    REPLICATED_MAP_REMOVE: 55,
+    REPLICATED_MAP_CLEAR: 56,
+    REPLICATED_MAP_STATE_SYNC: 57,
+    REPLICATED_MAP_STATE_ACK: 58,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -367,6 +371,9 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.setName);
                 out.writeLong(BigInt(message.version));
                 return;
+            case 'SET_EVENT':
+                writeSetEvent(out, message);
+                return;
             case 'MULTIMAP_REQUEST':
                 out.writeString(message.requestId);
                 out.writeString(message.sourceNodeId);
@@ -386,6 +393,9 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.requestId);
                 out.writeString(message.mapName);
                 out.writeLong(BigInt(message.version));
+                return;
+            case 'MULTIMAP_EVENT':
+                writeMultiMapEvent(out, message);
                 return;
             case 'REPLICATED_MAP_PUT':
                 out.writeString(message.mapName);
@@ -605,6 +615,8 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return readSetStateSync(inp);
             case 'SET_STATE_ACK':
                 return { type: 'SET_STATE_ACK', requestId: readRequiredString(inp), setName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'SET_EVENT':
+                return readSetEvent(inp);
             case 'MULTIMAP_REQUEST': {
                 const requestId = readRequiredString(inp);
                 const sourceNodeId = readRequiredString(inp);
@@ -621,6 +633,8 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return readMultiMapStateSync(inp);
             case 'MULTIMAP_STATE_ACK':
                 return { type: 'MULTIMAP_STATE_ACK', requestId: readRequiredString(inp), mapName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'MULTIMAP_EVENT':
+                return readMultiMapEvent(inp);
             case 'REPLICATED_MAP_PUT': {
                 const mapName = readRequiredString(inp);
                 const version = Number(inp.readLong());
@@ -941,6 +955,46 @@ function readListEvent(inp: ByteArrayObjectDataInput): ListEventMsg {
         eventType: readRequiredString(inp) as ListEventMsg['eventType'],
         sourceNodeId: readRequiredString(inp),
         data: readOptionalEncodedData(inp),
+    };
+}
+
+function writeSetEvent(out: ByteArrayObjectDataOutput, message: SetEventMsg): void {
+    out.writeString(message.setName);
+    out.writeString(message.eventType);
+    out.writeString(message.sourceNodeId);
+    writeOptionalEncodedData(out, message.data);
+}
+
+function readSetEvent(inp: ByteArrayObjectDataInput): SetEventMsg {
+    return {
+        type: 'SET_EVENT',
+        setName: readRequiredString(inp),
+        eventType: readRequiredString(inp) as SetEventMsg['eventType'],
+        sourceNodeId: readRequiredString(inp),
+        data: readOptionalEncodedData(inp),
+    };
+}
+
+function writeMultiMapEvent(out: ByteArrayObjectDataOutput, message: MultiMapEventMsg): void {
+    out.writeString(message.mapName);
+    out.writeString(message.eventType);
+    out.writeString(message.sourceNodeId);
+    writeOptionalEncodedData(out, message.keyData);
+    writeOptionalEncodedData(out, message.valueData);
+    writeOptionalEncodedData(out, message.oldValueData);
+    out.writeInt(message.numberOfAffectedEntries);
+}
+
+function readMultiMapEvent(inp: ByteArrayObjectDataInput): MultiMapEventMsg {
+    return {
+        type: 'MULTIMAP_EVENT',
+        mapName: readRequiredString(inp),
+        eventType: readRequiredString(inp) as MultiMapEventMsg['eventType'],
+        sourceNodeId: readRequiredString(inp),
+        keyData: readOptionalEncodedData(inp),
+        valueData: readOptionalEncodedData(inp),
+        oldValueData: readOptionalEncodedData(inp),
+        numberOfAffectedEntries: inp.readInt(),
     };
 }
 

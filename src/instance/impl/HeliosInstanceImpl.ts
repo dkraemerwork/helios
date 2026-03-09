@@ -260,6 +260,7 @@ interface ItemClientListenerRegistration {
 interface MultiMapClientListenerRegistration {
   name: string;
   registrationId: string;
+  entryListenerId?: string;
   includeValue: boolean;
   correlationId: number;
   session: ClientSession;
@@ -900,12 +901,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._distributedSetService = new DistributedSetService(
       localMemberId,
       this._config,
+      this._ss,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedMultiMapService = new DistributedMultiMapService(
       localMemberId,
       this._config,
+      this._ss,
       this._transport,
       this._clusterCoordinator,
     );
@@ -2336,17 +2339,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
       add: async (name, value) => {
         this._ensureSetService();
         const added = await this._distributedSetService!.add(name, value);
-        if (added) {
-          this._publishClientSetEvent(name, value, 1);
-        }
         return added;
       },
       remove: async (name, value) => {
         this._ensureSetService();
         const removed = await this._distributedSetService!.remove(name, value);
-        if (removed) {
-          this._publishClientSetEvent(name, value, 2);
-        }
         return removed;
       },
       size: async (name) => {
@@ -2363,52 +2360,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       addAll: async (name, values) => {
         this._ensureSetService();
-        const previous = await this._distributedSetService!.toArray(name);
-        const added = await this._distributedSetService!.addAll(name, values);
-        if (added) {
-          const previousFingerprints = new Set(previous.map(clientDataFingerprint));
-          for (const value of values) {
-            if (!previousFingerprints.has(clientDataFingerprint(value))) {
-              this._publishClientSetEvent(name, value, 1);
-            }
-          }
-        }
-        return added;
+        return this._distributedSetService!.addAll(name, values);
       },
       removeAll: async (name, values) => {
         this._ensureSetService();
-        const previous = await this._distributedSetService!.toArray(name);
-        const removed = await this._distributedSetService!.removeAll(name, values);
-        if (removed) {
-          const previousFingerprints = new Set(previous.map(clientDataFingerprint));
-          for (const value of values) {
-            if (previousFingerprints.has(clientDataFingerprint(value))) {
-              this._publishClientSetEvent(name, value, 2);
-            }
-          }
-        }
-        return removed;
+        return this._distributedSetService!.removeAll(name, values);
       },
       retainAll: async (name, values) => {
         this._ensureSetService();
-        const previous = await this._distributedSetService!.toArray(name);
-        const changed = await this._distributedSetService!.retainAll(name, values);
-        if (changed) {
-          for (const value of previous) {
-            if (!values.some((item) => item.equals(value))) {
-              this._publishClientSetEvent(name, value, 2);
-            }
-          }
-        }
-        return changed;
+        return this._distributedSetService!.retainAll(name, values);
       },
       clear: async (name) => {
         this._ensureSetService();
-        const previous = await this._distributedSetService!.toArray(name);
         await this._distributedSetService!.clear(name);
-        for (const value of previous) {
-          this._publishClientSetEvent(name, value, 2);
-        }
       },
       iterator: async (name) => {
         this._ensureSetService();
@@ -2428,9 +2392,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
       put: async (name, key, value) => {
         this._ensureMultiMapService();
         const added = await this._distributedMultiMapService!.put(name, key, value);
-        if (added) {
-          this._publishClientMultiMapEvent(name, key, value, null, 1, 1);
-        }
         return added;
       },
       get: async (name, key) => {
@@ -2439,18 +2400,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       remove: async (name, key) => {
         this._ensureMultiMapService();
-        const removedValues = await this._distributedMultiMapService!.removeAll(name, key);
-        for (const value of removedValues) {
-          this._publishClientMultiMapEvent(name, key, null, value, 2, 1);
-        }
-        return removedValues;
+        return this._distributedMultiMapService!.removeAll(name, key);
       },
       removeEntry: async (name, key, value) => {
         this._ensureMultiMapService();
         const removed = await this._distributedMultiMapService!.remove(name, key, value);
-        if (removed) {
-          this._publishClientMultiMapEvent(name, key, null, value, 2, 1);
-        }
         return removed;
       },
       size: async (name) => {
@@ -2471,11 +2425,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       clear: async (name) => {
         this._ensureMultiMapService();
-        const previousEntries = await this._distributedMultiMapService!.entrySet(name);
         await this._distributedMultiMapService!.clear(name);
-        if (previousEntries.length > 0) {
-          this._publishClientMultiMapEvent(name, null, null, null, 64, previousEntries.length);
-        }
       },
       keySet: async (name) => {
         this._ensureMultiMapService();
@@ -2515,10 +2465,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       putAll: async (name, key, values) => {
         this._ensureMultiMapService();
         for (const value of values) {
-          const added = await this._distributedMultiMapService!.put(name, key, value);
-          if (added) {
-            this._publishClientMultiMapEvent(name, key, value, null, 1, 1);
-          }
+          await this._distributedMultiMapService!.put(name, key, value);
         }
       },
     };
@@ -2926,6 +2873,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._distributedSetService = new DistributedSetService(
         this.getLocalMemberId(),
         this._config,
+        this._ss,
         this._transport,
         this._clusterCoordinator,
       );
@@ -2937,6 +2885,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._distributedMultiMapService = new DistributedMultiMapService(
         this.getLocalMemberId(),
         this._config,
+        this._ss,
         this._transport,
         this._clusterCoordinator,
       );
@@ -3283,10 +3232,27 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   private _registerClientSetListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
+    this._ensureSetService();
+    const memberUuid = this._cluster.getLocalMember().getUuid();
     const registrationId = crypto.randomUUID();
+    const itemListenerId = this._distributedSetService!.addItemListener(name, {
+      itemAdded: (event) => {
+        const item = includeValue ? this._ss.toData(event.getItem()) : null;
+        const eventMessage = SetAddListenerCodec.encodeItemEvent(item, memberUuid, 1);
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      itemRemoved: (event) => {
+        const item = includeValue ? this._ss.toData(event.getItem()) : null;
+        const eventMessage = SetAddListenerCodec.encodeItemEvent(item, memberUuid, 2);
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+    }, includeValue);
     this._clientSetListenerRegistrations.set(registrationId, {
       name,
       registrationId,
+      itemListenerId,
       includeValue,
       correlationId,
       session,
@@ -3311,7 +3277,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (registrations !== undefined && registrations.size === 0) {
       this._clientSessionSetListeners.delete(sessionId);
     }
-    return true;
+    this._ensureSetService();
+    return this._distributedSetService!.removeItemListener(
+      registration.name,
+      registration.itemListenerId ?? registration.registrationId,
+    );
   }
 
   private _removeClientSetListenersForSession(sessionId: string): void {
@@ -3324,36 +3294,59 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
   }
 
-  private _publishClientSetEvent(name: string, item: Data, eventType: number): void {
-    const memberUuid = this._cluster.getLocalMember().getUuid();
-    for (const [registrationId, registration] of this._clientSetListenerRegistrations) {
-      if (registration.name !== name) {
-        continue;
-      }
-      const sessionId = [...this._clientSessionSetListeners.entries()]
-        .find(([, registrations]) => registrations.has(registrationId))?.[0];
-      if (sessionId === undefined) {
-        continue;
-      }
-      if (!registration.session.isAuthenticated()) {
-        this._removeClientSetListener(sessionId, registrationId);
-        continue;
-      }
-      const eventMessage = SetAddListenerCodec.encodeItemEvent(
-        registration.includeValue ? item : null,
-        memberUuid,
-        eventType,
-      );
-      eventMessage.setCorrelationId(registration.correlationId);
-      registration.session.pushEvent(eventMessage);
-    }
-  }
-
   private _registerClientMultiMapListener(name: string, includeValue: boolean, correlationId: number, session: ClientSession): string {
+    this._ensureMultiMapService();
+    const memberUuid = this._cluster.getLocalMember().getUuid();
     const registrationId = crypto.randomUUID();
+    const entryListenerId = this._distributedMultiMapService!.addEntryListener(name, {
+      entryAdded: (event) => {
+        const key = this._ss.toData(event.getKey());
+        const value = includeValue ? this._ss.toData(event.getValue()) : null;
+        const eventMessage = MultiMapAddEntryListenerCodec.encodeEntryEvent(
+          key,
+          value,
+          null,
+          null,
+          1,
+          memberUuid,
+          1,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      entryRemoved: (event) => {
+        const key = this._ss.toData(event.getKey());
+        const oldValue = includeValue ? this._ss.toData(event.getOldValue()) : null;
+        const eventMessage = MultiMapAddEntryListenerCodec.encodeEntryEvent(
+          key,
+          null,
+          oldValue,
+          null,
+          2,
+          memberUuid,
+          1,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+      mapCleared: (event) => {
+        const eventMessage = MultiMapAddEntryListenerCodec.encodeEntryEvent(
+          null,
+          null,
+          null,
+          null,
+          64,
+          memberUuid,
+          event.numberOfAffectedEntries,
+        );
+        eventMessage.setCorrelationId(correlationId);
+        session.pushEvent(eventMessage);
+      },
+    }, includeValue);
     this._clientMultiMapListenerRegistrations.set(registrationId, {
       name,
       registrationId,
+      entryListenerId,
       includeValue,
       correlationId,
       session,
@@ -3378,7 +3371,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (registrations !== undefined && registrations.size === 0) {
       this._clientSessionMultiMapListeners.delete(sessionId);
     }
-    return true;
+    this._ensureMultiMapService();
+    return this._distributedMultiMapService!.removeEntryListener(
+      registration.name,
+      registration.entryListenerId ?? registration.registrationId,
+    );
   }
 
   private _removeClientMultiMapListenersForSession(sessionId: string): void {
@@ -3388,42 +3385,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     for (const registrationId of Array.from(registrations)) {
       this._removeClientMultiMapListener(sessionId, registrationId);
-    }
-  }
-
-  private _publishClientMultiMapEvent(
-    name: string,
-    key: Data | null,
-    value: Data | null,
-    oldValue: Data | null,
-    eventType: number,
-    numberOfAffectedEntries: number,
-  ): void {
-    const memberUuid = this._cluster.getLocalMember().getUuid();
-    for (const [registrationId, registration] of this._clientMultiMapListenerRegistrations) {
-      if (registration.name !== name) {
-        continue;
-      }
-      const sessionId = [...this._clientSessionMultiMapListeners.entries()]
-        .find(([, registrations]) => registrations.has(registrationId))?.[0];
-      if (sessionId === undefined) {
-        continue;
-      }
-      if (!registration.session.isAuthenticated()) {
-        this._removeClientMultiMapListener(sessionId, registrationId);
-        continue;
-      }
-      const eventMessage = MultiMapAddEntryListenerCodec.encodeEntryEvent(
-        key,
-        registration.includeValue ? value : null,
-        registration.includeValue ? oldValue : null,
-        null,
-        eventType,
-        memberUuid,
-        numberOfAffectedEntries,
-      );
-      eventMessage.setCorrelationId(registration.correlationId);
-      registration.session.pushEvent(eventMessage);
     }
   }
 

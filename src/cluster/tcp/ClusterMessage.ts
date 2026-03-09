@@ -416,6 +416,14 @@ export interface SetStateAckMsg {
   readonly version: number;
 }
 
+export interface SetEventMsg {
+  readonly type: "SET_EVENT";
+  readonly setName: string;
+  readonly eventType: "ADDED" | "REMOVED";
+  readonly sourceNodeId: string;
+  readonly data: EncodedData | null;
+}
+
 // ── Distributed MultiMap messages ─────────────────────────────────────
 
 export interface MultiMapRequestMsg {
@@ -456,6 +464,17 @@ export interface MultiMapStateAckMsg {
   readonly requestId: string;
   readonly mapName: string;
   readonly version: number;
+}
+
+export interface MultiMapEventMsg {
+  readonly type: "MULTIMAP_EVENT";
+  readonly mapName: string;
+  readonly eventType: "ADDED" | "REMOVED" | "CLEARED";
+  readonly sourceNodeId: string;
+  readonly keyData: EncodedData | null;
+  readonly valueData: EncodedData | null;
+  readonly oldValueData: EncodedData | null;
+  readonly numberOfAffectedEntries: number;
 }
 
 // ── Distributed ReplicatedMap messages ───────────────────────────────
@@ -580,10 +599,12 @@ export type ClusterMessage =
   | SetResponseMsg
   | SetStateSyncMsg
   | SetStateAckMsg
+  | SetEventMsg
   | MultiMapRequestMsg
   | MultiMapResponseMsg
   | MultiMapStateSyncMsg
   | MultiMapStateAckMsg
+  | MultiMapEventMsg
   | ReplicatedMapPutMsg
   | ReplicatedMapRemoveMsg
   | ReplicatedMapClearMsg

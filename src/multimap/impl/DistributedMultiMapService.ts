@@ -5,6 +5,7 @@
  */
 import type {
   ClusterMessage,
+  MultiMapEventMsg,
   MultiMapResponseMsg,
   MultiMapStateAckMsg,
   MultiMapStateSyncMsg,
@@ -18,6 +19,8 @@ import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpCluster
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
+import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import { EntryEventImpl } from "@zenystx/helios-core/map/EntryListener";
 import { ValueCollectionType } from "@zenystx/helios-core/multimap/MultiMapConfig";
 
 // ── Container helpers ─────────────────────────────────────────────────
@@ -78,6 +81,23 @@ interface PendingRemoteRequest {
   timeoutHandle: ReturnType<typeof setTimeout> | null;
 }
 
+interface MultiMapClearEvent {
+  name: string;
+  sourceNodeId: string;
+  numberOfAffectedEntries: number;
+}
+
+interface MultiMapEntryListener<K = unknown, V = unknown> {
+  entryAdded?(event: EntryEventImpl<K, V>): void;
+  entryRemoved?(event: EntryEventImpl<K, V>): void;
+  mapCleared?(event: MultiMapClearEvent): void;
+}
+
+interface MultiMapListenerRegistration<K = unknown, V = unknown> {
+  listener: MultiMapEntryListener<K, V>;
+  includeValue: boolean;
+}
+
 type MultiMapOperation =
   | "put"
   | "get"
@@ -101,10 +121,16 @@ export class DistributedMultiMapService {
     string,
     PendingRemoteRequest
   >();
+  private readonly _listeners = new Map<
+    string,
+    Map<string, MultiMapListenerRegistration>
+  >();
+  private readonly _listenerCounters = new Map<string, number>();
 
   constructor(
     private readonly _instanceName: string,
     private readonly _config: HeliosConfig,
+    private readonly _serializationService: SerializationService,
     private readonly _transport: TcpClusterTransport | null,
     private readonly _coordinator: HeliosClusterCoordinator | null,
   ) {
@@ -126,6 +152,9 @@ export class DistributedMultiMapService {
         return true;
       case "MULTIMAP_STATE_SYNC":
         this._handleStateSync(message);
+        return true;
+      case "MULTIMAP_EVENT":
+        this._dispatchMultiMapEvent(message);
         return true;
       default:
         return false;
@@ -207,6 +236,29 @@ export class DistributedMultiMapService {
     await this._invoke(name, "clear");
   }
 
+  addEntryListener<K, V>(
+    name: string,
+    listener: MultiMapEntryListener<K, V>,
+    includeValue = true,
+  ): string {
+    if (listener === null || listener === undefined) {
+      throw new Error("NullPointerException: listener is null");
+    }
+    const registrations =
+      this._listeners.get(name) ??
+      new Map<string, MultiMapListenerRegistration>();
+    this._listeners.set(name, registrations);
+    const nextCounter = (this._listenerCounters.get(name) ?? 0) + 1;
+    this._listenerCounters.set(name, nextCounter);
+    const id = `listener-${nextCounter}`;
+    registrations.set(id, { listener, includeValue });
+    return id;
+  }
+
+  removeEntryListener(name: string, registrationId: string): boolean {
+    return this._listeners.get(name)?.delete(registrationId) ?? false;
+  }
+
   // ── Routing ──────────────────────────────────────────────────────────
 
   private async _invoke(
@@ -277,6 +329,7 @@ export class DistributedMultiMapService {
             if (changed) {
               container.version++;
               await this._replicateState(name, container);
+              this._broadcastEvent(name, "ADDED", key, val, null, 1);
             }
             return this._boolResponse(changed);
           }
@@ -306,6 +359,7 @@ export class DistributedMultiMapService {
               if (entry.col.size === 0) container.entries.delete(fp);
               container.version++;
               await this._replicateState(name, container);
+              this._broadcastEvent(name, "REMOVED", key, null, val, 1);
             }
             return this._boolResponse(removed);
           }
@@ -323,16 +377,19 @@ export class DistributedMultiMapService {
                 dataList: [],
               };
             }
-            const old = entry.col.toArray().map(encodeData);
+            const oldValues = entry.col.toArray();
             container.entries.delete(fp);
             container.version++;
             await this._replicateState(name, container);
+            for (const oldValue of oldValues) {
+              this._broadcastEvent(name, "REMOVED", key, null, oldValue, 1);
+            }
             return {
               type: "MULTIMAP_RESPONSE",
               requestId: "local",
               success: true,
               resultType: "data-array",
-              dataList: old,
+              dataList: oldValues.map(encodeData),
             };
           }
           case "containsKey": {
@@ -415,9 +472,21 @@ export class DistributedMultiMapService {
           }
           case "clear":
             if (container.entries.size > 0) {
+              let numberOfAffectedEntries = 0;
+              for (const { col } of Array.from(container.entries.values())) {
+                numberOfAffectedEntries += col.size;
+              }
               container.entries.clear();
               container.version++;
               await this._replicateState(name, container);
+              this._broadcastEvent(
+                name,
+                "CLEARED",
+                null,
+                null,
+                null,
+                numberOfAffectedEntries,
+              );
             }
             return this._voidResponse();
         }
@@ -504,6 +573,48 @@ export class DistributedMultiMapService {
     }
   }
 
+  private _dispatchMultiMapEvent(message: MultiMapEventMsg): void {
+    const registrations = this._listeners.get(message.mapName);
+    if (registrations === undefined) {
+      return;
+    }
+
+    for (const registration of Array.from(registrations.values())) {
+      if (message.eventType === "CLEARED") {
+        registration.listener.mapCleared?.({
+          name: message.mapName,
+          sourceNodeId: message.sourceNodeId,
+          numberOfAffectedEntries: message.numberOfAffectedEntries,
+        });
+        continue;
+      }
+      const key =
+        message.keyData === null
+          ? null
+          : this._serializationService.toObject(decodeData(message.keyData));
+      const value =
+        registration.includeValue && message.valueData !== null
+          ? this._serializationService.toObject(decodeData(message.valueData))
+          : null;
+      const oldValue =
+        registration.includeValue && message.oldValueData !== null
+          ? this._serializationService.toObject(decodeData(message.oldValueData))
+          : null;
+      const event = new EntryEventImpl(
+        message.mapName,
+        key,
+        value,
+        oldValue,
+        message.eventType,
+      );
+      if (message.eventType === "ADDED") {
+        registration.listener.entryAdded?.(event);
+      } else {
+        registration.listener.entryRemoved?.(event);
+      }
+    }
+  }
+
   // ── Replication ──────────────────────────────────────────────────────
 
   private async _replicateState(
@@ -572,6 +683,28 @@ export class DistributedMultiMapService {
     this._transport.send(backupId, msg);
 
     if (ackPromise !== null) await ackPromise;
+  }
+
+  private _broadcastEvent(
+    name: string,
+    eventType: "ADDED" | "REMOVED" | "CLEARED",
+    key: Data | null,
+    value: Data | null,
+    oldValue: Data | null,
+    numberOfAffectedEntries: number,
+  ): void {
+    const message: MultiMapEventMsg = {
+      type: "MULTIMAP_EVENT",
+      mapName: name,
+      eventType,
+      sourceNodeId: this._instanceName,
+      keyData: key === null ? null : encodeData(key),
+      valueData: value === null ? null : encodeData(value),
+      oldValueData: oldValue === null ? null : encodeData(oldValue),
+      numberOfAffectedEntries,
+    };
+    this._dispatchMultiMapEvent(message);
+    this._transport?.broadcast(message);
   }
 
   private _resyncAll(): void {
