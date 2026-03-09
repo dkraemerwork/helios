@@ -25,6 +25,7 @@ import type {
 export class ClusterStateStore {
   private readonly logger = new Logger(ClusterStateStore.name);
   private readonly clusters = new Map<string, ClusterState>();
+  private readonly memberClusterData = new Map<string, Map<string, MemberClusterData>>();
 
   /** Returns the state for a single cluster, or undefined if not tracked. */
   getClusterState(clusterId: string): ClusterState | undefined {
@@ -63,6 +64,7 @@ export class ClusterStateStore {
   /** Removes a cluster and all its member state from the store. */
   removeCluster(clusterId: string): void {
     this.clusters.delete(clusterId);
+    this.memberClusterData.delete(clusterId);
     this.logger.log(`Removed cluster state for ${clusterId}`);
   }
 
@@ -85,22 +87,16 @@ export class ClusterStateStore {
     // Update cluster-level fields
     state.clusterState = payload.clusterState;
     state.clusterSize = payload.clusterSize;
-    state.distributedObjects = payload.distributedObjects;
     state.partitions = payload.partitions;
     state.lastUpdated = now;
+    state.blitz = payload.blitz ?? state.blitz;
 
-    if (payload.blitz) {
-      state.blitz = payload.blitz;
-    }
-    if (payload.mapStats) {
-      state.mapStats = payload.mapStats;
-    }
-    if (payload.queueStats) {
-      state.queueStats = payload.queueStats;
-    }
-    if (payload.topicStats) {
-      state.topicStats = payload.topicStats;
-    }
+    this.storeMemberClusterData(clusterId, memberAddr, payload);
+    const aggregatedData = this.aggregateClusterData(clusterId);
+    state.distributedObjects = aggregatedData.distributedObjects;
+    state.mapStats = aggregatedData.mapStats;
+    state.queueStats = aggregatedData.queueStats;
+    state.topicStats = aggregatedData.topicStats;
 
     // Update member info from the payload's member list
     for (const memberInfo of payload.members) {
@@ -151,9 +147,22 @@ export class ClusterStateStore {
     const current = state.members.get(currentAddr);
     const canonical = state.members.get(canonicalAddr);
     const merged = mergeMemberState(current, canonical, restAddress ?? null);
+    const currentData = this.memberClusterData.get(clusterId)?.get(currentAddr);
+    const canonicalData = this.memberClusterData.get(clusterId)?.get(canonicalAddr);
+    const clusterData = this.memberClusterData.get(clusterId);
 
     state.members.set(canonicalAddr, merged);
     state.members.delete(currentAddr);
+
+    if (clusterData && currentData) {
+      clusterData.set(canonicalAddr, canonicalData ? mergeMemberClusterData(canonicalData, currentData) : currentData);
+      clusterData.delete(currentAddr);
+      const aggregatedData = this.aggregateClusterData(clusterId);
+      state.distributedObjects = aggregatedData.distributedObjects;
+      state.mapStats = aggregatedData.mapStats;
+      state.queueStats = aggregatedData.queueStats;
+      state.topicStats = aggregatedData.topicStats;
+    }
   }
 
   /**
@@ -211,6 +220,7 @@ export class ClusterStateStore {
     if (!member) return;
 
     member.connected = false;
+    this.pruneMemberClusterData(clusterId, memberAddr);
   }
 
   /** Records an error for a specific member. */
@@ -237,6 +247,7 @@ export class ClusterStateStore {
     for (const [addr, member] of state.members) {
       if (member.connected && member.lastSeen < cutoff) {
         member.connected = false;
+        this.pruneMemberClusterData(clusterId, addr);
         this.logger.warn(
           `Member ${addr} in cluster ${clusterId} marked stale ` +
             `(last seen ${Math.round((nowMs() - member.lastSeen) / 1000)}s ago)`,
@@ -255,7 +266,101 @@ export class ClusterStateStore {
 
     return state;
   }
+
+  private storeMemberClusterData(
+    clusterId: string,
+    memberAddr: string,
+    payload: MonitorPayload,
+  ): void {
+    let clusterData = this.memberClusterData.get(clusterId);
+    if (!clusterData) {
+      clusterData = new Map();
+      this.memberClusterData.set(clusterId, clusterData);
+    }
+
+    clusterData.set(memberAddr, {
+      distributedObjects: payload.distributedObjects,
+      mapStats: normalizeStats(payload.mapStats),
+      queueStats: normalizeStats(payload.queueStats),
+      topicStats: normalizeStats(payload.topicStats),
+    });
+  }
+
+  private aggregateClusterData(clusterId: string): AggregatedClusterData {
+    const clusterData = this.memberClusterData.get(clusterId);
+    if (!clusterData) {
+      return EMPTY_AGGREGATED_CLUSTER_DATA;
+    }
+
+    const distributedObjects = new Map<string, DistributedObjectInfo>();
+    let mapStats: Record<string, unknown> = {};
+    let queueStats: Record<string, unknown> = {};
+    let topicStats: Record<string, unknown> = {};
+
+    for (const memberData of clusterData.values()) {
+      for (const distributedObject of memberData.distributedObjects) {
+        distributedObjects.set(
+          `${distributedObject.serviceName}:${distributedObject.name}`,
+          distributedObject,
+        );
+      }
+
+      mapStats = mergeStatsRecord(mapStats, memberData.mapStats);
+      queueStats = mergeStatsRecord(queueStats, memberData.queueStats);
+      topicStats = mergeStatsRecord(topicStats, memberData.topicStats);
+    }
+
+    return {
+      distributedObjects: Array.from(distributedObjects.values()).sort(compareDistributedObjects),
+      mapStats,
+      queueStats,
+      topicStats,
+    };
+  }
+
+  private pruneMemberClusterData(clusterId: string, memberAddr: string): void {
+    const clusterData = this.memberClusterData.get(clusterId);
+    const state = this.clusters.get(clusterId);
+    if (!clusterData || !state) {
+      return;
+    }
+
+    if (!clusterData.delete(memberAddr)) {
+      return;
+    }
+
+    const aggregatedData = this.aggregateClusterData(clusterId);
+    state.distributedObjects = aggregatedData.distributedObjects;
+    state.mapStats = aggregatedData.mapStats;
+    state.queueStats = aggregatedData.queueStats;
+    state.topicStats = aggregatedData.topicStats;
+
+    if (clusterData.size === 0) {
+      this.memberClusterData.delete(clusterId);
+    }
+  }
 }
+
+interface MemberClusterData {
+  distributedObjects: DistributedObjectInfo[];
+  mapStats: Record<string, unknown>;
+  queueStats: Record<string, unknown>;
+  topicStats: Record<string, unknown>;
+}
+
+interface AggregatedClusterData {
+  distributedObjects: DistributedObjectInfo[];
+  mapStats: Record<string, unknown>;
+  queueStats: Record<string, unknown>;
+  topicStats: Record<string, unknown>;
+}
+
+const EMPTY_AGGREGATED_CLUSTER_DATA: AggregatedClusterData = {
+  distributedObjects: [],
+  mapStats: {},
+  queueStats: {},
+  topicStats: {},
+};
 
 function createEmptyMember(address: string, restAddress: string): MemberState {
   return {
@@ -311,4 +416,91 @@ function pickLatestSample(
     return left;
   }
   return left.timestamp >= right.timestamp ? left : right;
+}
+
+function normalizeStats(stats: Record<string, unknown> | undefined): Record<string, unknown> {
+  return isRecord(stats) ? stats : {};
+}
+
+function mergeStatsRecord(
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  if (Object.keys(incoming).length === 0) {
+    return current;
+  }
+
+  const merged: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(incoming)) {
+    merged[key] = mergeStatsValue(key, merged[key], value);
+  }
+  return merged;
+}
+
+function mergeStatsValue(key: string, left: unknown, right: unknown): unknown {
+  if (left === undefined) {
+    return cloneStatsValue(right);
+  }
+  if (right === undefined) {
+    return left;
+  }
+  if (typeof left === 'number' && typeof right === 'number') {
+    return shouldUseMaxForNumericField(key) ? Math.max(left, right) : left + right;
+  }
+  if (isRecord(left) && isRecord(right)) {
+    const merged: Record<string, unknown> = { ...left };
+    for (const [nestedKey, nestedValue] of Object.entries(right)) {
+      merged[nestedKey] = mergeStatsValue(nestedKey, merged[nestedKey], nestedValue);
+    }
+    return merged;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return [...left, ...right];
+  }
+  return cloneStatsValue(right);
+}
+
+function cloneStatsValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(entry => cloneStatsValue(entry));
+  }
+  if (isRecord(value)) {
+    const clone: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      clone[key] = cloneStatsValue(entry);
+    }
+    return clone;
+  }
+  return value;
+}
+
+function shouldUseMaxForNumericField(key: string): boolean {
+  return /(time|timestamp)$/i.test(key) || /^last[A-Z_]/.test(key) || /^creationTime$/i.test(key);
+}
+
+function compareDistributedObjects(left: DistributedObjectInfo, right: DistributedObjectInfo): number {
+  return left.name.localeCompare(right.name) || left.serviceName.localeCompare(right.serviceName);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function mergeMemberClusterData(
+  existing: MemberClusterData,
+  incoming: MemberClusterData,
+): MemberClusterData {
+  return {
+    distributedObjects: Array.from(
+      new Map(
+        [...existing.distributedObjects, ...incoming.distributedObjects].map(distributedObject => [
+          `${distributedObject.serviceName}:${distributedObject.name}`,
+          distributedObject,
+        ]),
+      ).values(),
+    ),
+    mapStats: mergeStatsRecord(existing.mapStats, incoming.mapStats),
+    queueStats: mergeStatsRecord(existing.queueStats, incoming.queueStats),
+    topicStats: mergeStatsRecord(existing.topicStats, incoming.topicStats),
+  };
 }
