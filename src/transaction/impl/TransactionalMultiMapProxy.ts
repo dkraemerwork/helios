@@ -17,6 +17,17 @@ import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/
 
 type MultiMapOpType = 'put' | 'remove' | 'removeAll';
 
+type MaybePromise<T> = T | Promise<T>;
+
+interface MultiMapBackend<K, V> {
+    put(key: K, value: V): MaybePromise<boolean>;
+    get(key: K): MaybePromise<Iterable<V>>;
+    remove(key: K, value: V): MaybePromise<boolean>;
+    removeAll(key: K): MaybePromise<Iterable<V>>;
+    valueCount(key: K): MaybePromise<number>;
+    size(): MaybePromise<number>;
+}
+
 class NoopMultiMapOperation extends Operation {
     async run(): Promise<void> { this.sendResponse(null); }
 }
@@ -25,14 +36,14 @@ class CommitMultiMapOperation<K, V> extends Operation {
     private readonly _mmOpType: MultiMapOpType;
     private readonly _mmKeyData: Data;
     private readonly _mmValueData: Data | null;
-    private readonly _mmBackend: MultiMap<K, V>;
+    private readonly _mmBackend: MultiMapBackend<K, V>;
     private readonly _mmNodeEngine: NodeEngine;
 
     constructor(
         opType: MultiMapOpType,
         keyData: Data,
         valueData: Data | null,
-        backend: MultiMap<K, V>,
+        backend: MultiMapBackend<K, V>,
         nodeEngine: NodeEngine,
     ) {
         super();
@@ -44,24 +55,21 @@ class CommitMultiMapOperation<K, V> extends Operation {
     }
 
     async run(): Promise<void> {
-        const key = this._mmNodeEngine.toObject<K>(this._mmKeyData);
-        if (key === null) { this.sendResponse(null); return; }
+        const key = this._mmKeyData as unknown as K;
 
         switch (this._mmOpType) {
             case 'put':
                 if (this._mmValueData !== null) {
-                    const value = this._mmNodeEngine.toObject<V>(this._mmValueData);
-                    if (value !== null) this._mmBackend.put(key, value);
+                    await this._mmBackend.put(key, this._mmValueData as unknown as V);
                 }
                 break;
             case 'remove':
                 if (this._mmValueData !== null) {
-                    const value = this._mmNodeEngine.toObject<V>(this._mmValueData);
-                    if (value !== null) this._mmBackend.remove(key, value);
+                    await this._mmBackend.remove(key, this._mmValueData as unknown as V);
                 }
                 break;
             case 'removeAll':
-                this._mmBackend.removeAll(key);
+                await this._mmBackend.removeAll(key);
                 break;
         }
 
@@ -74,7 +82,7 @@ class TransactionalMultiMapLogRecord<K, V> implements TransactionLogRecord {
     private readonly _opType: MultiMapOpType;
     private readonly _keyData: Data;
     private readonly _valueData: Data | null;
-    private readonly _backend: MultiMap<K, V>;
+    private readonly _backend: MultiMapBackend<K, V>;
     private readonly _nodeEngine: NodeEngine;
 
     constructor(
@@ -82,7 +90,7 @@ class TransactionalMultiMapLogRecord<K, V> implements TransactionLogRecord {
         opType: MultiMapOpType,
         keyData: Data,
         valueData: Data | null,
-        backend: MultiMap<K, V>,
+        backend: MultiMapBackend<K, V>,
         nodeEngine: NodeEngine,
     ) {
         this._recordId = recordId;
@@ -113,10 +121,13 @@ export class TransactionalMultiMapProxy<K, V> {
     private readonly _multiMapName: string;
     private readonly _tx: TransactionImpl;
     private readonly _nodeEngine: NodeEngine;
-    private readonly _backend: MultiMap<K, V>;
+    private readonly _backend: MultiMapBackend<K, V>;
 
     /** Pending puts: key-string → array of pending values. */
-    private readonly _pendingPuts = new Map<string, { keyData: Data; values: V[] }>();
+    private readonly _pendingPuts = new Map<string, {
+        keyData: Data;
+        values: Array<{ value: V; valueData: Data; recordId: string }>;
+    }>();
     /** Pending removes by (key, value) pair. */
     private readonly _pendingRemoves = new Map<string, { keyData: Data; valueData: Data }[]>();
     /** Pending removeAll: key-strings with all values removed. */
@@ -126,7 +137,7 @@ export class TransactionalMultiMapProxy<K, V> {
         multiMapName: string,
         tx: TransactionImpl,
         nodeEngine: NodeEngine,
-        backend: MultiMap<K, V>,
+        backend: MultiMapBackend<K, V>,
     ) {
         this._multiMapName = multiMapName;
         this._tx = tx;
@@ -145,11 +156,12 @@ export class TransactionalMultiMapProxy<K, V> {
             entry = { keyData: kd, values: [] };
             this._pendingPuts.set(ks, entry);
         }
-        entry.values.push(value);
+        const recordId = `${this._multiMapName}:put:${ks}:${crypto.randomUUID()}`;
+        entry.values.push({ value, valueData: vd, recordId });
         this._pendingRemoveAlls.delete(ks);
 
         const record = new TransactionalMultiMapLogRecord(
-            `${this._multiMapName}:put:${ks}:${crypto.randomUUID()}`,
+            recordId,
             'put',
             kd,
             vd,
@@ -160,17 +172,17 @@ export class TransactionalMultiMapProxy<K, V> {
         return true;
     }
 
-    get(key: K): V[] {
+    async get(key: K): Promise<V[]> {
         this._checkActive();
         const kd = this._toData(key);
         const ks = this._keyStr(kd);
 
         if (this._pendingRemoveAlls.has(ks)) {
-            return [...(this._pendingPuts.get(ks)?.values ?? [])];
+            return (this._pendingPuts.get(ks)?.values ?? []).map((entry) => entry.value);
         }
 
         const committed: V[] = [];
-        const committedCollection = this._backend.get(key);
+        const committedCollection = await this._backend.get(key);
         for (const v of committedCollection) {
             committed.push(v);
         }
@@ -185,7 +197,7 @@ export class TransactionalMultiMapProxy<K, V> {
             return !pendingRemoves.some((r) => this._keyStr(r.valueData) === vStr);
         });
 
-        return [...filtered, ...(pendingEntry?.values ?? [])];
+        return [...filtered, ...((pendingEntry?.values ?? []).map((entry) => entry.value))];
     }
 
     remove(key: K, value: V): boolean {
@@ -197,11 +209,15 @@ export class TransactionalMultiMapProxy<K, V> {
         // Check if it's in pending puts first
         const pendingEntry = this._pendingPuts.get(ks);
         if (pendingEntry) {
-            const idx = pendingEntry.values.findIndex((v) => {
-                try { return JSON.stringify(v) === JSON.stringify(value); } catch { return false; }
+            const idx = pendingEntry.values.findIndex((entry) => {
+                try { return JSON.stringify(entry.value) === JSON.stringify(value); } catch { return false; }
             });
             if (idx !== -1) {
-                pendingEntry.values.splice(idx, 1);
+                const [removedPending] = pendingEntry.values.splice(idx, 1);
+                this._tx.remove(removedPending.recordId);
+                if (pendingEntry.values.length === 0) {
+                    this._pendingPuts.delete(ks);
+                }
                 return true;
             }
         }
@@ -226,9 +242,9 @@ export class TransactionalMultiMapProxy<K, V> {
         return true;
     }
 
-    removeAll(key: K): V[] {
+    async removeAll(key: K): Promise<V[]> {
         this._checkActive();
-        const existing = this.get(key);
+        const existing = await this.get(key);
         const kd = this._toData(key);
         const ks = this._keyStr(kd);
 
@@ -248,14 +264,14 @@ export class TransactionalMultiMapProxy<K, V> {
         return existing;
     }
 
-    valueCount(key: K): number {
+    async valueCount(key: K): Promise<number> {
         this._checkActive();
-        return this.get(key).length;
+        return (await this.get(key)).length;
     }
 
-    size(): number {
+    async size(): Promise<number> {
         this._checkActive();
-        let total = this._backend.size();
+        let total = await this._backend.size();
         for (const [, entry] of this._pendingPuts) {
             total += entry.values.length;
         }
@@ -269,7 +285,7 @@ export class TransactionalMultiMapProxy<K, V> {
                 // committed entries for this key
                 const key = this._nodeEngine.toObject<K>(kd);
                 if (key !== null) {
-                    total -= this._backend.valueCount(key);
+                    total -= await this._backend.valueCount(key);
                 }
             }
         }
@@ -283,6 +299,14 @@ export class TransactionalMultiMapProxy<K, V> {
     }
 
     private _toData(obj: unknown): Data {
+        if (
+            obj !== null
+            && typeof obj === 'object'
+            && typeof (obj as { toByteArray?: unknown }).toByteArray === 'function'
+            && typeof (obj as { equals?: unknown }).equals === 'function'
+        ) {
+            return obj as Data;
+        }
         const d = this._nodeEngine.toData(obj);
         if (d === null) throw new Error('Cannot serialize null');
         return d;

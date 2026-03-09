@@ -15,11 +15,13 @@ import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/
 
 type SetOpType = 'add' | 'remove';
 
+type MaybePromise<T> = T | Promise<T>;
+
 interface SetBackend<E> {
-    add(element: E): boolean;
-    remove(element: E): boolean;
-    size(): number;
-    contains(element: E): boolean;
+    add(element: E): MaybePromise<boolean>;
+    remove(element: E): MaybePromise<boolean>;
+    size(): MaybePromise<number>;
+    contains(element: E): MaybePromise<boolean>;
 }
 
 class NoopSetOperation extends Operation {
@@ -41,12 +43,10 @@ class CommitSetOperation<E> extends Operation {
     }
 
     async run(): Promise<void> {
-        const value = this._sNodeEngine.toObject<E>(this._sValueData);
-        if (value !== null) {
-            switch (this._sOpType) {
-                case 'add': this._sBackend.add(value); break;
-                case 'remove': this._sBackend.remove(value); break;
-            }
+        const value = this._sValueData as unknown as E;
+        switch (this._sOpType) {
+            case 'add': await this._sBackend.add(value); break;
+            case 'remove': await this._sBackend.remove(value); break;
         }
         this.sendResponse(null);
     }
@@ -143,9 +143,9 @@ export class TransactionalSetProxy<E> {
         return true;
     }
 
-    size(): number {
+    async size(): Promise<number> {
         this._checkActive();
-        return this._backend.size() + this._pendingAdds.size - this._pendingRemoves.size;
+        return await this._backend.size() + this._pendingAdds.size - this._pendingRemoves.size;
     }
 
     private _checkActive(): void {
@@ -155,6 +155,14 @@ export class TransactionalSetProxy<E> {
     }
 
     private _toData(obj: unknown): Data {
+        if (
+            obj !== null
+            && typeof obj === 'object'
+            && typeof (obj as { toByteArray?: unknown }).toByteArray === 'function'
+            && typeof (obj as { equals?: unknown }).equals === 'function'
+        ) {
+            return obj as Data;
+        }
         const d = this._nodeEngine.toData(obj);
         if (d === null) throw new Error('Cannot serialize null');
         return d;

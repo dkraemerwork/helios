@@ -16,12 +16,14 @@ import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/
 
 type QueueOpType = 'offer' | 'poll';
 
+type MaybePromise<T> = T | Promise<T>;
+
 /** Delegate queue operations the transaction log record commits/rolls back against. */
 interface QueueBackend<E> {
-    offer(element: E): boolean;
-    poll(): E | null;
-    peek(): E | null;
-    size(): number;
+    offer(element: E): MaybePromise<boolean>;
+    poll(): MaybePromise<E | null>;
+    peek(): MaybePromise<E | null>;
+    size(): MaybePromise<number>;
 }
 
 // ── Noop operation for prepare ────────────────────────────────────────────────
@@ -104,14 +106,11 @@ class CommitQueueOperation<E> extends Operation {
         switch (this._qOpType) {
             case 'offer':
                 if (this._qValueData !== null) {
-                    const value = this._qNodeEngine.toObject<E>(this._qValueData);
-                    if (value !== null) {
-                        this._qBackend.offer(value);
-                    }
+                    await this._qBackend.offer(this._qValueData as unknown as E);
                 }
                 break;
             case 'poll':
-                this._qBackend.poll();
+                await this._qBackend.poll();
                 break;
         }
         this.sendResponse(null);
@@ -158,7 +157,7 @@ export class TransactionalQueueProxy<E> {
         return true;
     }
 
-    poll(): E | null {
+    async poll(): Promise<E | null> {
         this._checkActive();
         // Take from pending offers first (LIFO in transaction scope = FIFO since offers prepend-to-tail)
         if (this._pendingOffers.length > 0) {
@@ -167,7 +166,7 @@ export class TransactionalQueueProxy<E> {
         }
 
         // Deferred poll from committed queue — mark it in the log
-        const peeked = this._backend.peek();
+        const peeked = await this._backend.peek();
         if (peeked === null) return null;
 
         this._pendingPolls++;
@@ -182,7 +181,7 @@ export class TransactionalQueueProxy<E> {
         return peeked;
     }
 
-    peek(): E | null {
+    async peek(): Promise<E | null> {
         this._checkActive();
         // Peek at pending offers first
         if (this._pendingOffers.length > 0) {
@@ -191,9 +190,9 @@ export class TransactionalQueueProxy<E> {
         return this._backend.peek();
     }
 
-    size(): number {
+    async size(): Promise<number> {
         this._checkActive();
-        return this._backend.size() - this._pendingPolls + this._pendingOffers.length;
+        return await this._backend.size() - this._pendingPolls + this._pendingOffers.length;
     }
 
     private _checkActive(): void {
@@ -203,6 +202,14 @@ export class TransactionalQueueProxy<E> {
     }
 
     private _toData(obj: unknown): Data {
+        if (
+            obj !== null
+            && typeof obj === 'object'
+            && typeof (obj as { toByteArray?: unknown }).toByteArray === 'function'
+            && typeof (obj as { equals?: unknown }).equals === 'function'
+        ) {
+            return obj as Data;
+        }
         const d = this._nodeEngine.toData(obj);
         if (d === null) throw new Error('Cannot serialize null');
         return d;

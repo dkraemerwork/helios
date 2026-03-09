@@ -244,10 +244,12 @@ export interface TransactionServiceOperations {
     listSet(txId: string, name: string, index: number, value: Data, threadId: bigint): Promise<Data | null>;
     setAdd(txId: string, name: string, value: Data, threadId: bigint): Promise<boolean>;
     setRemove(txId: string, name: string, value: Data, threadId: bigint): Promise<boolean>;
+    setSize(txId: string, name: string, threadId: bigint): Promise<number>;
     multimapPut(txId: string, name: string, key: Data, value: Data, threadId: bigint): Promise<boolean>;
     multimapRemove(txId: string, name: string, key: Data, value: Data, threadId: bigint): Promise<boolean>;
     multimapGet(txId: string, name: string, key: Data, threadId: bigint): Promise<Data[]>;
     multimapValueCount(txId: string, name: string, key: Data, threadId: bigint): Promise<number>;
+    multimapSize(txId: string, name: string): Promise<number>;
 }
 
 // ── SQL ───────────────────────────────────────────────────────────────────────

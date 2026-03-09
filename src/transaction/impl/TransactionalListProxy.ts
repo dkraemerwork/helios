@@ -15,11 +15,13 @@ import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/
 
 type ListOpType = 'add' | 'remove';
 
+type MaybePromise<T> = T | Promise<T>;
+
 interface ListBackend<E> {
-    add(element: E): boolean;
-    remove(element: E): boolean;
-    size(): number;
-    toArray(): E[];
+    add(element: E): MaybePromise<boolean>;
+    remove(element: E): MaybePromise<boolean>;
+    size(): MaybePromise<number>;
+    toArray(): MaybePromise<E[]>;
 }
 
 class NoopListOperation extends Operation {
@@ -41,12 +43,10 @@ class CommitListOperation<E> extends Operation {
     }
 
     async run(): Promise<void> {
-        const value = this._lNodeEngine.toObject<E>(this._lValueData);
-        if (value !== null) {
-            switch (this._lOpType) {
-                case 'add': this._lBackend.add(value); break;
-                case 'remove': this._lBackend.remove(value); break;
-            }
+        const value = this._lValueData as unknown as E;
+        switch (this._lOpType) {
+            case 'add': await this._lBackend.add(value); break;
+            case 'remove': await this._lBackend.remove(value); break;
         }
         this.sendResponse(null);
     }
@@ -125,9 +125,46 @@ export class TransactionalListProxy<E> {
         return true;
     }
 
-    size(): number {
+    async size(): Promise<number> {
         this._checkActive();
-        return this._backend.size() + this._pendingAdds.length - this._pendingRemoves.length;
+        return await this._backend.size() + this._pendingAdds.length - this._pendingRemoves.length;
+    }
+
+    async get(index: number): Promise<E | null> {
+        this._checkActive();
+        const snapshot = await this._snapshot();
+        return snapshot[index] ?? null;
+    }
+
+    async set(index: number, element: E): Promise<E | null> {
+        this._checkActive();
+        const previous = await this.get(index);
+        if (previous === null) {
+            return null;
+        }
+        this.remove(previous);
+        this.add(element);
+        return previous;
+    }
+
+    private async _snapshot(): Promise<E[]> {
+        const committed = [...await this._backend.toArray()];
+
+        for (const value of this._pendingRemoves) {
+            const index = committed.findIndex((entry) => this._equals(entry, value));
+            if (index !== -1) {
+                committed.splice(index, 1);
+            }
+        }
+
+        committed.push(...this._pendingAdds);
+        return committed;
+    }
+
+    private _equals(left: E, right: E): boolean {
+        const leftData = this._toData(left);
+        const rightData = this._toData(right);
+        return leftData.equals(rightData);
     }
 
     private _checkActive(): void {
@@ -137,6 +174,14 @@ export class TransactionalListProxy<E> {
     }
 
     private _toData(obj: unknown): Data {
+        if (
+            obj !== null
+            && typeof obj === 'object'
+            && typeof (obj as { toByteArray?: unknown }).toByteArray === 'function'
+            && typeof (obj as { equals?: unknown }).equals === 'function'
+        ) {
+            return obj as Data;
+        }
         const d = this._nodeEngine.toData(obj);
         if (d === null) throw new Error('Cannot serialize null');
         return d;

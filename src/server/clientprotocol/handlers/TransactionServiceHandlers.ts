@@ -235,7 +235,7 @@ export function registerTransactionServiceHandlers(
         const oldValue = DataCodec.decode(iter);
         const newValue = DataCodec.decode(iter);
         const current = await operations.mapGet(txId, name, key, threadId);
-        if (current !== null) {
+        if (current !== null && current.equals(oldValue)) {
             await operations.mapPut(txId, name, key, newValue, threadId, BigInt(-1));
             return _bool(TXM_REPLACE_IF_SAME_RESPONSE, true);
         }
@@ -275,7 +275,7 @@ export function registerTransactionServiceHandlers(
         const key = DataCodec.decode(iter);
         const value = DataCodec.decode(iter);
         const current = await operations.mapGet(txId, name, key, threadId);
-        if (current !== null) {
+        if (current !== null && current.equals(value)) {
             await operations.mapDelete(txId, name, key, threadId);
             return _bool(TXM_REMOVE_IF_SAME_RESPONSE, true);
         }
@@ -434,8 +434,7 @@ export function registerTransactionServiceHandlers(
         const threadId = f.content.readBigInt64LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
         const txId = StringCodec.decode(iter);
         const name = StringCodec.decode(iter);
-        // Reuse listSize for set size
-        return _int(TXS_SIZE_RESPONSE, await operations.listSize(txId, name, threadId));
+        return _int(TXS_SIZE_RESPONSE, await operations.setSize(txId, name, threadId));
     });
 
     // ── TransactionalMultiMap ops ─────────────────────────────────────────────
@@ -497,7 +496,7 @@ export function registerTransactionServiceHandlers(
         const iter = msg.forwardFrameIterator(); iter.next();
         const txId = StringCodec.decode(iter);
         const name = StringCodec.decode(iter);
-        return _int(TXMM_SIZE_RESPONSE, 0); // size in tx context
+        return _int(TXMM_SIZE_RESPONSE, await operations.multimapSize(txId, name));
     });
 }
 

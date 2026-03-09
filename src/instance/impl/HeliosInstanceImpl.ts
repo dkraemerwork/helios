@@ -40,6 +40,16 @@ import { DistributedSetService } from "@zenystx/helios-core/collection/impl/set/
 import { SetProxyImpl } from "@zenystx/helios-core/collection/impl/set/SetProxyImpl";
 import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
 import { QueueProxyImpl } from "@zenystx/helios-core/collection/impl/queue/QueueProxyImpl";
+import { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
+import { TransactionManagerServiceImpl } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
+import { TransactionalListProxy } from "@zenystx/helios-core/transaction/impl/TransactionalListProxy";
+import { TransactionalMapProxy } from "@zenystx/helios-core/transaction/impl/TransactionalMapProxy";
+import { TransactionalMultiMapProxy } from "@zenystx/helios-core/transaction/impl/TransactionalMultiMapProxy";
+import { TransactionalQueueProxy } from "@zenystx/helios-core/transaction/impl/TransactionalQueueProxy";
+import { TransactionalSetProxy } from "@zenystx/helios-core/transaction/impl/TransactionalSetProxy";
+import { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
+import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
+import { TransactionOptions, TransactionType } from "@zenystx/helios-core/transaction/TransactionOptions";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { MapConfig } from "@zenystx/helios-core/config/MapConfig";
@@ -283,6 +293,15 @@ interface CacheClientInvalidationListenerRegistration {
   session: ClientSession;
 }
 
+interface ClientTransactionContext {
+  transaction: TransactionImpl;
+  mapProxies: Map<string, TransactionalMapProxy<Data, Data>>;
+  queueProxies: Map<string, TransactionalQueueProxy<Data>>;
+  listProxies: Map<string, TransactionalListProxy<Data>>;
+  setProxies: Map<string, TransactionalSetProxy<Data>>;
+  multiMapProxies: Map<string, TransactionalMultiMapProxy<Data, Data>>;
+}
+
 /** Parse "host:port" or "host" (default port 5701). */
 function parseMemberAddress(member: string): [string, number] {
   const trimmed = member.trim();
@@ -414,6 +433,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Built-in REST server — non-null when REST API is configured. */
   private readonly _restServer: HeliosRestServer;
+  private readonly _transactionManagerService: TransactionManagerServiceImpl;
+  private readonly _transactionCoordinator: TransactionCoordinator;
 
   /** Near-cache manager — creates/manages near-caches per map name. */
   private readonly _nearCacheManager: DefaultNearCacheManager;
@@ -452,6 +473,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionReplicatedMapListeners = new Map<string, Set<string>>();
   private readonly _clientCacheInvalidationListenerRegistrations = new Map<string, CacheClientInvalidationListenerRegistration>();
   private readonly _clientSessionCacheInvalidationListeners = new Map<string, Set<string>>();
+  private readonly _clientTransactions = new Map<string, ClientTransactionContext>();
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
@@ -514,7 +536,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // or create default single-node NodeEngine
     this._startNetworking();
 
-    // RingbufferService — backs reliable topic storage through service containers
+    this._transactionManagerService = new TransactionManagerServiceImpl(this._nodeEngine);
+    this._transactionCoordinator = new TransactionCoordinator(
+      this._nodeEngine,
+      this._transactionManagerService,
+    );
+
+    // RingbufferService — must be initialized after _startNetworking() (needs _nodeEngine)
+    // and before DistributedRingbufferService / ReliableTopicService (both depend on it).
     this._ringbufferService = new RingbufferService(this._nodeEngine);
 
     // Reliable topic service — always available (single-node ringbuffer-backed via RingbufferService)
@@ -526,6 +555,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._transport,
       this._clusterCoordinator,
     );
+
+    // DistributedRingbufferService — needs both _ringbufferService (above) and
+    // _transport/_clusterCoordinator (set inside _startNetworking). Constructed here
+    // so _rbService is never undefined when membership-change callbacks fire.
+    if (this._transport !== null && this._clusterCoordinator !== null) {
+      this._distributedRingbufferService = new DistributedRingbufferService(
+        this.getLocalMemberId(),
+        this._config,
+        this._ringbufferService,
+        this._transport,
+        this._clusterCoordinator,
+      );
+    }
 
     // Initialize Blitz lifecycle manager if configured
     this._initBlitzLifecycle();
@@ -940,13 +982,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._clusterCoordinator,
     );
     this._distributedCacheService = this._createDistributedCacheService(localMemberId);
-    this._distributedRingbufferService = new DistributedRingbufferService(
-      localMemberId,
-      this._config,
-      this._ringbufferService,
-      this._transport,
-      this._clusterCoordinator,
-    );
+    // NOTE: DistributedRingbufferService is constructed after _startNetworking() returns,
+    // once _ringbufferService is initialised. See constructor body.
     this._distributedTopicService = new DistributedTopicService(
       localMemberId,
       this._config,
@@ -2721,32 +2758,51 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const transactionOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').TransactionServiceOperations = {
-      create: async () => notImplemented(),
-      commit: async () => notImplemented(),
-      rollback: async () => notImplemented(),
-      mapGet: async () => notImplemented(),
-      mapPut: async () => notImplemented(),
-      mapSet: async () => notImplemented(),
-      mapPutIfAbsent: async () => notImplemented(),
-      mapRemove: async () => notImplemented(),
-      mapDelete: async () => notImplemented(),
-      mapKeySet: async () => notImplemented(),
-      mapValues: async () => notImplemented(),
-      queueOffer: async () => notImplemented(),
-      queuePoll: async () => notImplemented(),
-      queuePeek: async () => notImplemented(),
-      queueSize: async () => notImplemented(),
-      listAdd: async () => notImplemented(),
-      listRemove: async () => notImplemented(),
-      listSize: async () => notImplemented(),
-      listGet: async () => notImplemented(),
-      listSet: async () => notImplemented(),
-      setAdd: async () => notImplemented(),
-      setRemove: async () => notImplemented(),
-      multimapPut: async () => notImplemented(),
-      multimapRemove: async () => notImplemented(),
-      multimapGet: async () => notImplemented(),
-      multimapValueCount: async () => notImplemented(),
+      create: async (timeoutMs, durability, transactionType, threadId) =>
+        this._createClientTransaction(timeoutMs, durability, transactionType, threadId),
+      commit: async (txId) => {
+        try {
+          await this._transactionCoordinator.commitTransaction(txId);
+        } finally {
+          this._clientTransactions.delete(txId);
+        }
+      },
+      rollback: async (txId) => {
+        try {
+          await this._transactionCoordinator.rollbackTransaction(txId);
+        } finally {
+          this._clientTransactions.delete(txId);
+        }
+      },
+      mapGet: async (txId, name, key) => this._toClientData(this._getTransactionalMap(txId, name).get(key)),
+      mapPut: async (txId, name, key, value) => this._toClientData(this._getTransactionalMap(txId, name).put(key, value)),
+      mapSet: async (txId, name, key, value) => {
+        this._getTransactionalMap(txId, name).set(key, value);
+      },
+      mapPutIfAbsent: async (txId, name, key, value) => this._toClientData(this._getTransactionalMap(txId, name).putIfAbsent(key, value)),
+      mapRemove: async (txId, name, key) => this._toClientData(this._getTransactionalMap(txId, name).remove(key)),
+      mapDelete: async (txId, name, key) => {
+        this._getTransactionalMap(txId, name).delete(key);
+      },
+      mapKeySet: async (txId, name) => this._toClientDataList([...this._getTransactionalMap(txId, name).keySet()]),
+      mapValues: async (txId, name) => this._toClientDataList(this._getTransactionalMap(txId, name).values()),
+      queueOffer: async (txId, name, value) => this._getTransactionalQueue(txId, name).offer(value),
+      queuePoll: async (txId, name) => this._toClientData(await this._getTransactionalQueue(txId, name).poll()),
+      queuePeek: async (txId, name) => this._toClientData(await this._getTransactionalQueue(txId, name).peek()),
+      queueSize: async (txId, name) => this._getTransactionalQueue(txId, name).size(),
+      listAdd: async (txId, name, value) => this._getTransactionalList(txId, name).add(value),
+      listRemove: async (txId, name, value) => this._getTransactionalList(txId, name).remove(value),
+      listSize: async (txId, name) => this._getTransactionalList(txId, name).size(),
+      listGet: async (txId, name, index) => this._toClientData(await this._getTransactionalList(txId, name).get(index)),
+      listSet: async (txId, name, index, value) => this._toClientData(await this._getTransactionalList(txId, name).set(index, value)),
+      setAdd: async (txId, name, value) => this._getTransactionalSet(txId, name).add(value),
+      setRemove: async (txId, name, value) => this._getTransactionalSet(txId, name).remove(value),
+      setSize: async (txId, name) => this._getTransactionalSet(txId, name).size(),
+      multimapPut: async (txId, name, key, value) => this._getTransactionalMultiMap(txId, name).put(key, value),
+      multimapRemove: async (txId, name, key, value) => this._getTransactionalMultiMap(txId, name).remove(key, value),
+      multimapGet: async (txId, name, key) => this._toClientDataList(await this._getTransactionalMultiMap(txId, name).get(key)),
+      multimapValueCount: async (txId, name, key) => this._getTransactionalMultiMap(txId, name).valueCount(key),
+      multimapSize: async (txId, name) => this._getTransactionalMultiMap(txId, name).size(),
     };
 
     const sqlOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlServiceOperations = {
@@ -2895,6 +2951,158 @@ export class HeliosInstanceImpl implements HeliosInstance {
       invalidationManager: this._nearCacheInvalidationManager,
       sessionRegistry: srv.getSessionRegistry(),
     });
+  }
+
+  private _createClientTransaction(
+    timeoutMs: bigint,
+    durability: number,
+    transactionType: number,
+    threadId: bigint,
+  ): Promise<string> {
+    const options = new TransactionOptions()
+      .setTimeout(Number(timeoutMs))
+      .setDurability(durability)
+      .setTransactionType(TransactionType.getById(transactionType));
+    const tx = this._transactionCoordinator.newTransaction(
+      options,
+      `client-thread:${threadId.toString()}`,
+    );
+
+    return this._transactionCoordinator.beginTransaction(tx).then(() => {
+      this._clientTransactions.set(tx.getTxnId(), {
+        transaction: tx,
+        mapProxies: new Map(),
+        queueProxies: new Map(),
+        listProxies: new Map(),
+        setProxies: new Map(),
+        multiMapProxies: new Map(),
+      });
+      return tx.getTxnId();
+    });
+  }
+
+  private _getClientTransactionContext(txId: string): ClientTransactionContext {
+    const context = this._clientTransactions.get(txId);
+    if (context === undefined) {
+      throw new TransactionException(`No active transaction found with id: ${txId}`);
+    }
+    return context;
+  }
+
+  private _toClientData(value: unknown): Data | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (
+      typeof value === 'object'
+      && typeof (value as { toByteArray?: unknown }).toByteArray === 'function'
+      && typeof (value as { equals?: unknown }).equals === 'function'
+    ) {
+      return value as Data;
+    }
+    return this._ss.toData(value);
+  }
+
+  private _toClientDataList(values: Iterable<unknown>): Data[] {
+    const items: Data[] = [];
+    for (const value of values) {
+      const data = this._toClientData(value);
+      if (data !== null) {
+        items.push(data);
+      }
+    }
+    return items;
+  }
+
+  private _getTransactionalMap(
+    txId: string,
+    name: string,
+  ): TransactionalMapProxy<Data, Data> {
+    const context = this._getClientTransactionContext(txId);
+    let proxy = context.mapProxies.get(name);
+    if (proxy === undefined) {
+      proxy = new TransactionalMapProxy(name, context.transaction, this._nodeEngine, this._mapService);
+      context.mapProxies.set(name, proxy);
+    }
+    return proxy;
+  }
+
+  private _getTransactionalQueue(
+    txId: string,
+    name: string,
+  ): TransactionalQueueProxy<Data> {
+    const context = this._getClientTransactionContext(txId);
+    let proxy = context.queueProxies.get(name);
+    if (proxy === undefined) {
+      this._ensureQueueService();
+      proxy = new TransactionalQueueProxy(name, context.transaction, this._nodeEngine, {
+        offer: (value) => this._distributedQueueService!.offer(name, value, 0),
+        poll: () => this._distributedQueueService!.poll(name, 0),
+        peek: () => this._distributedQueueService!.peek(name),
+        size: () => this._distributedQueueService!.size(name),
+      });
+      context.queueProxies.set(name, proxy);
+    }
+    return proxy;
+  }
+
+  private _getTransactionalList(
+    txId: string,
+    name: string,
+  ): TransactionalListProxy<Data> {
+    const context = this._getClientTransactionContext(txId);
+    let proxy = context.listProxies.get(name);
+    if (proxy === undefined) {
+      this._ensureListService();
+      proxy = new TransactionalListProxy(name, context.transaction, this._nodeEngine, {
+        add: (value) => this._distributedListService!.add(name, value),
+        remove: (value) => this._distributedListService!.remove(name, value),
+        size: () => this._distributedListService!.size(name),
+        toArray: () => this._distributedListService!.toArray(name),
+      });
+      context.listProxies.set(name, proxy);
+    }
+    return proxy;
+  }
+
+  private _getTransactionalSet(
+    txId: string,
+    name: string,
+  ): TransactionalSetProxy<Data> {
+    const context = this._getClientTransactionContext(txId);
+    let proxy = context.setProxies.get(name);
+    if (proxy === undefined) {
+      this._ensureSetService();
+      proxy = new TransactionalSetProxy(name, context.transaction, this._nodeEngine, {
+        add: (value) => this._distributedSetService!.add(name, value),
+        remove: (value) => this._distributedSetService!.remove(name, value),
+        size: () => this._distributedSetService!.size(name),
+        contains: (value) => this._distributedSetService!.contains(name, value),
+      });
+      context.setProxies.set(name, proxy);
+    }
+    return proxy;
+  }
+
+  private _getTransactionalMultiMap(
+    txId: string,
+    name: string,
+  ): TransactionalMultiMapProxy<Data, Data> {
+    const context = this._getClientTransactionContext(txId);
+    let proxy = context.multiMapProxies.get(name);
+    if (proxy === undefined) {
+      this._ensureMultiMapService();
+      proxy = new TransactionalMultiMapProxy(name, context.transaction, this._nodeEngine, {
+        put: (key, value) => this._distributedMultiMapService!.put(name, key, value),
+        get: (key) => this._distributedMultiMapService!.get(name, key),
+        remove: (key, value) => this._distributedMultiMapService!.remove(name, key, value),
+        removeAll: (key) => this._distributedMultiMapService!.removeAll(name, key),
+        valueCount: (key) => this._distributedMultiMapService!.valueCount(name, key),
+        size: () => this._distributedMultiMapService!.size(name),
+      });
+      context.multiMapProxies.set(name, proxy);
+    }
+    return proxy;
   }
 
   private _ensureQueueService(): void {
@@ -3866,6 +4074,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     this._scheduledExecutors.clear();
     this._scheduledExecutorContainers.clear();
+    this._transactionCoordinator.shutdown();
+    this._transactionManagerService.shutdown(false);
+    this._clientTransactions.clear();
     for (const topic of Array.from(this._topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
     this._distributedReplicatedMapService?.shutdown();

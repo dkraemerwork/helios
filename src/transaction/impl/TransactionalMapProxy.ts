@@ -296,6 +296,14 @@ export class TransactionalMapProxy<K, V> {
                 if (v !== null) result.push(v);
             }
         }
+        for (const [, { keyData, pending }] of this._pendingEntries) {
+            const partitionId = this._partitionId(keyData);
+            const store = this._containerService.getOrCreateRecordStore(this._mapName, partitionId);
+            if (!store.containsKey(keyData) && pending.value !== null) {
+                const value = this._toObject<V>(pending.value);
+                if (value !== null) result.push(value);
+            }
+        }
         return result;
     }
 
@@ -361,6 +369,14 @@ export class TransactionalMapProxy<K, V> {
     }
 
     private _toData(obj: unknown): Data {
+        if (
+            obj !== null
+            && typeof obj === 'object'
+            && typeof (obj as { toByteArray?: unknown }).toByteArray === 'function'
+            && typeof (obj as { equals?: unknown }).equals === 'function'
+        ) {
+            return obj as Data;
+        }
         const d = this._nodeEngine.toData(obj);
         if (d === null) throw new Error('Cannot serialize null');
         return d;
