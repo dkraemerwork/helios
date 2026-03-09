@@ -371,4 +371,38 @@ describe('transaction protocol adapter', () => {
             ss.destroy();
         }
     });
+
+    test('queue poll and peek advance across committed contents in protocol transactions', async () => {
+        const config = new HeliosConfig('transaction-protocol-queue-cursor');
+        config.setClusterName('transaction-protocol-queue-cursor');
+        config.getNetworkConfig().setClientProtocolPort(0);
+        const instance = new HeliosInstanceImpl(config);
+        instances.push(instance);
+
+        const dispatcher = (instance as any)._clientProtocolServer.getDispatcher();
+        const session = new TestClientSession('transaction-queue-cursor') as any;
+        const ss = new SerializationServiceImpl(new SerializationConfig());
+
+        try {
+            (instance as any)._ensureQueueService();
+
+            await instance.getQueue<string>('cursor-queue').offer('first');
+            await instance.getQueue<string>('cursor-queue').offer('second');
+            await instance.getQueue<string>('cursor-queue').offer('third');
+
+            const txId = decodeStringResponse((await dispatcher.dispatch(buildCreateTxRequest(50, 30_000n, 1, 2), session))!);
+
+            expect(decodeNullableDataResponse<string>((await dispatcher.dispatch(buildTxQueuePollPeekRequest(TX_QUEUE_POLL_REQUEST_TYPE, 51, txId, 'cursor-queue'), session))!, ss)).toBe('first');
+            expect(decodeNullableDataResponse<string>((await dispatcher.dispatch(buildTxQueuePollPeekRequest(TX_QUEUE_POLL_REQUEST_TYPE, 52, txId, 'cursor-queue'), session))!, ss)).toBe('second');
+            expect(decodeNullableDataResponse<string>((await dispatcher.dispatch(buildTxQueuePollPeekRequest(TX_QUEUE_PEEK_REQUEST_TYPE, 53, txId, 'cursor-queue'), session))!, ss)).toBe('third');
+            expect(decodeIntResponse((await dispatcher.dispatch(buildTxThreadNameRequest(TX_QUEUE_SIZE_REQUEST_TYPE, 54, txId, 'cursor-queue'), session))!)).toBe(1);
+
+            await dispatcher.dispatch(buildCommitTxRequest(55, txId, false), session);
+
+            expect(await instance.getQueue<string>('cursor-queue').poll()).toBe('third');
+            expect(await instance.getQueue<string>('cursor-queue').poll()).toBeNull();
+        } finally {
+            ss.destroy();
+        }
+    });
 });

@@ -24,6 +24,7 @@ interface QueueBackend<E> {
     poll(): MaybePromise<E | null>;
     peek(): MaybePromise<E | null>;
     size(): MaybePromise<number>;
+    toArray(): MaybePromise<E[]>;
 }
 
 // ── Noop operation for prepare ────────────────────────────────────────────────
@@ -166,7 +167,7 @@ export class TransactionalQueueProxy<E> {
         }
 
         // Deferred poll from committed queue — mark it in the log
-        const peeked = await this._backend.peek();
+        const peeked = await this._peekCommitted();
         if (peeked === null) return null;
 
         this._pendingPolls++;
@@ -187,7 +188,8 @@ export class TransactionalQueueProxy<E> {
         if (this._pendingOffers.length > 0) {
             return this._nodeEngine.toObject<E>(this._pendingOffers[0]);
         }
-        return this._backend.peek();
+
+        return this._peekCommitted();
     }
 
     async size(): Promise<number> {
@@ -199,6 +201,11 @@ export class TransactionalQueueProxy<E> {
         if (this._tx.getState() !== State.ACTIVE) {
             throw new TransactionNotActiveException('Transaction is not active');
         }
+    }
+
+    private async _peekCommitted(): Promise<E | null> {
+        const committedItems = await this._backend.toArray();
+        return committedItems[this._pendingPolls] ?? null;
     }
 
     private _toData(obj: unknown): Data {

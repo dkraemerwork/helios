@@ -3040,6 +3040,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         poll: () => this._distributedQueueService!.poll(name, 0),
         peek: () => this._distributedQueueService!.peek(name),
         size: () => this._distributedQueueService!.size(name),
+        toArray: () => this._distributedQueueService!.toArray(name),
       });
       context.queueProxies.set(name, proxy);
     }
