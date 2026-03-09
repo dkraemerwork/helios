@@ -54,9 +54,9 @@ export const DEFAULT_CLIENT_CONNECTION_TIMEOUT_MS = 5_000;
  * Maximum time (ms) the client will keep trying to connect to the cluster
  * before giving up entirely.  -1 means try forever.
  * @source {@code com.hazelcast.client.config.ConnectionRetryConfig} —
- *   {@code hazelcast.client.cluster.connect.timeout.millis = 20000}
+ *   {@code hazelcast.client.cluster.connect.timeout.millis = -1}
  */
-export const DEFAULT_CLUSTER_CONNECT_TIMEOUT_MS = 20_000;
+export const DEFAULT_CLUSTER_CONNECT_TIMEOUT_MS = -1;
 
 // ── Retry / backoff ───────────────────────────────────────────────────────────
 

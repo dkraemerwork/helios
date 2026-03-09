@@ -242,7 +242,7 @@ describe("ClientConnectionManager", () => {
         await mgr.shutdown();
     });
 
-    test("reconnect rejects a different cluster identity loudly and keeps the original cluster id", async () => {
+    test("automatic reconnect accepts a restarted cluster with a different cluster id", async () => {
         const { ClientConnectionManager } = await import(
             "@zenystx/helios-core/client/connection/ClientConnectionManager"
         );
@@ -261,7 +261,7 @@ describe("ClientConnectionManager", () => {
         const config = new ClientConfig();
         config.getNetworkConfig().addAddress(`127.0.0.1:${initialServer.getPort()}`);
         config.getConnectionStrategyConfig().getConnectionRetryConfig()
-            .setClusterConnectTimeoutMillis(750);
+            .setClusterConnectTimeoutMillis(5000);
 
         const mgr = new ClientConnectionManager(config);
         await mgr.start();
@@ -270,24 +270,29 @@ describe("ClientConnectionManager", () => {
         const reconnectPort = initialServer.getPort();
         expect(mgr.getClusterId()).toBe("11111111-1111-1111-1111-111111111111");
 
+        // Trigger automatic reconnect by closing the connection
         mgr.getRandomConnection()?.close();
         await initialServer.shutdown();
         await Bun.sleep(100);
 
-        const wrongClusterServer = new ClientProtocolServer({
+        const replacementServer = new ClientProtocolServer({
             clusterName: "dev",
             clusterId: "22222222-2222-2222-2222-222222222222",
             port: reconnectPort,
             host: "127.0.0.1",
         });
-        await wrongClusterServer.start();
+        await replacementServer.start();
+
+        // Wait for automatic reconnect to complete with the new cluster
+        await Bun.sleep(2000);
 
         try {
-            await expect(mgr.connectToCluster()).rejects.toThrow(/cluster identity mismatch/i);
-            expect(mgr.getClusterId()).toBe("11111111-1111-1111-1111-111111111111");
+            // Automatic reconnect should succeed and update the cluster id
+            expect(mgr.getClusterId()).toBe("22222222-2222-2222-2222-222222222222");
+            expect(mgr.getRandomConnection()).not.toBeNull();
         } finally {
             await mgr.shutdown();
-            await wrongClusterServer.shutdown();
+            await replacementServer.shutdown();
         }
     });
 

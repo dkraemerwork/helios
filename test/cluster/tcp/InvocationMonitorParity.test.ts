@@ -78,7 +78,8 @@ describe('Invocation monitor parity', () => {
         await waitForClusterSize(owner, 2);
         await waitForClusterSize(caller, 2);
 
-        const key = findKeyOwnedBy(caller, owner.getName());
+        const ownerMemberId = owner.getCluster().getLocalMember().getUuid();
+        const key = findKeyOwnedBy(caller, ownerMemberId);
         await owner.getMap<string, string>('invocation-monitor-map').put(key, 'value');
 
         const originalHandleRemoteOperation = (owner as any)._handleRemoteOperation.bind(owner);
@@ -97,7 +98,7 @@ describe('Invocation monitor parity', () => {
         const startedAt = Date.now();
         owner.shutdown();
 
-        await expect(invocationPromise).rejects.toThrow(`Target member ${owner.getName()} left before invocation completed`);
+        await expect(invocationPromise).rejects.toThrow(`Target member ${ownerMemberId} left before invocation completed`);
         expect(Date.now() - startedAt).toBeLessThan(3000);
         await waitUntil(() => (caller as any)._invocationMonitor.activeCount() === 0, 2000);
     });

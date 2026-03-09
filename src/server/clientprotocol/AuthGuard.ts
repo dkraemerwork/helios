@@ -135,13 +135,33 @@ export class AuthGuard {
     ): Promise<GuardedDispatchResult> {
         const msgType = msg.getMessageType();
 
-        // Reconnect validation: if the session is already authenticated and the
-        // client sends another auth request, check the cluster name matches.
+        // Reconnect cluster-name validation: if the session is already
+        // authenticated and the client sends another auth request WITH a
+        // mismatched cluster name, reject early.
         if (
             msgType === ClientAuthenticationCodec.REQUEST_MESSAGE_TYPE &&
             session.isAuthenticated()
         ) {
-            return this._handleReauthentication(msg, session);
+            const req = ClientAuthenticationCodec.decodeRequest(msg);
+            if (req.clusterName !== this._clusterName) {
+                this._audit({
+                    kind: 'reconnect_rejected',
+                    sessionId: session.getSessionId(),
+                    clientUuid: session.getClientUuid(),
+                    remoteInfo: session.getClientName() ?? 'unknown',
+                    timestampMs: Date.now(),
+                    detail: `clusterName=${req.clusterName}`,
+                });
+                this._logWarn(
+                    `[AuthGuard] Reconnect rejected: cluster name mismatch ` +
+                    `(expected='${this._clusterName}', got='${req.clusterName}') ` +
+                    `session=${session.getSessionId()}`,
+                );
+                const errResp = ErrorCodec.encodeClusterNameMismatch(this._clusterName, req.clusterName);
+                return { response: errResp, closeAfterSend: true, closeImmediately: false };
+            }
+            // Same cluster name — fall through to auth handler which will
+            // return NOT_ALLOWED_IN_CLUSTER for duplicate auth.
         }
 
         // Pre-auth check — the dispatcher will throw if the session is not
@@ -179,10 +199,10 @@ export class AuthGuard {
                     });
                     this._logWarn(
                         `[AuthGuard] Unknown opcode 0x${error.messageType.toString(16)} ` +
-                        `from session ${session.getSessionId()}`,
+                        `from session ${session.getSessionId()} — closing`,
                     );
-                    const errResp = ErrorCodec.encodeUnknownOpcode(error.messageType);
-                    return { response: errResp, closeAfterSend: false, closeImmediately: false };
+                    // Close immediately without sending a response — fail closed on protocol violation.
+                    return { response: null, closeAfterSend: false, closeImmediately: true };
                 }
                 // Illegal opcode (not a request type) — close without response
                 this._logWarn(
@@ -268,52 +288,6 @@ export class AuthGuard {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
-
-    private _handleReauthentication(
-        msg: ClientMessage,
-        session: ClientSession,
-    ): GuardedDispatchResult {
-        // Client is already authenticated but sent another auth request.
-        // Validate that the cluster name still matches (reconnect case).
-        const req = ClientAuthenticationCodec.decodeRequest(msg);
-
-        if (req.clusterName !== this._clusterName) {
-            this._audit({
-                kind: 'reconnect_rejected',
-                sessionId: session.getSessionId(),
-                clientUuid: session.getClientUuid(),
-                remoteInfo: session.getClientName() ?? 'unknown',
-                timestampMs: Date.now(),
-                detail: `clusterName=${req.clusterName}`,
-            });
-            this._logWarn(
-                `[AuthGuard] Reconnect rejected: cluster name mismatch ` +
-                `(expected='${this._clusterName}', got='${req.clusterName}') ` +
-                `session=${session.getSessionId()}`,
-            );
-            const errResp = ErrorCodec.encodeClusterNameMismatch(this._clusterName, req.clusterName);
-            return { response: errResp, closeAfterSend: true, closeImmediately: false };
-        }
-
-        this._audit({
-            kind: 'reconnect_validated',
-            sessionId: session.getSessionId(),
-            clientUuid: session.getClientUuid(),
-            remoteInfo: session.getClientName() ?? 'unknown',
-            timestampMs: Date.now(),
-        });
-        this._logInfo(
-            `[AuthGuard] Reconnect validated: session=${session.getSessionId()}`,
-        );
-
-        // Re-auth on an already-authenticated session is "not allowed"
-        // (separate from credential failure). Return NOT_ALLOWED status.
-        return {
-            response: null, // caller handles via _encodeAuthenticationNotAllowedResponse
-            closeAfterSend: false,
-            closeImmediately: false,
-        };
-    }
 
     private _audit(event: AuthAuditEvent): void {
         this._auditListener?.(event);

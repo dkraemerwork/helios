@@ -3,17 +3,17 @@
  *
  * Registers handlers for all CP subsystem opcodes required by hazelcast-client@5.6.x:
  *
- * AtomicLong:
- *   AtomicLong.Apply              (0x0b0100)
- *   AtomicLong.Alter              (0x0b0200)
- *   AtomicLong.GetAndAlter        (0x0b0300)
- *   AtomicLong.AlterAndGet        (0x0b0400)
- *   AtomicLong.AddAndGet          (0x0b0500)
- *   AtomicLong.CompareAndSet      (0x0b0600)
- *   AtomicLong.Get                (0x0b0700)
- *   AtomicLong.GetAndAdd          (0x0b0800)
- *   AtomicLong.GetAndSet          (0x0b0900)
- *   AtomicLong.Set                (0x0b0a00)
+ * AtomicLong (service ID=9, 0x09):
+ *   AtomicLong.Apply              (0x090100)
+ *   AtomicLong.Alter              (0x090200)
+ *   AtomicLong.AddAndGet          (0x090300)
+ *   AtomicLong.CompareAndSet      (0x090400)
+ *   AtomicLong.Get                (0x090500)
+ *   AtomicLong.GetAndAdd          (0x090600)
+ *   AtomicLong.GetAndSet          (0x090700)
+ *   AtomicLong.GetAndAlter        (0x090800)
+ *   AtomicLong.AlterAndGet        (0x090900)
+ *   AtomicLong.Set                (0x090a00)
  *
  * AtomicRef:
  *   AtomicRef.Apply               (0x0c0100)
@@ -61,17 +61,21 @@ import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/built
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── AtomicLong message type constants ──────────────────────────────────────────
+// AtomicLong service ID = 9 (0x09). Opcodes: (serviceId << 16) | (methodId << 8)
+// Methods per protocol spec: apply=1, alter=2, addAndGet=3, compareAndSet=4,
+//   get=5, getAndAdd=6, getAndSet=7. Non-spec methods use 0x09 prefix with
+//   higher method IDs to avoid collision with other services.
 
-const AL_APPLY_REQUEST           = 0x0b0100; const AL_APPLY_RESPONSE           = 0x0b0101;
-const AL_ALTER_REQUEST           = 0x0b0200; const AL_ALTER_RESPONSE           = 0x0b0201;
-const AL_GET_AND_ALTER_REQUEST   = 0x0b0300; const AL_GET_AND_ALTER_RESPONSE   = 0x0b0301;
-const AL_ALTER_AND_GET_REQUEST   = 0x0b0400; const AL_ALTER_AND_GET_RESPONSE   = 0x0b0401;
-const AL_ADD_AND_GET_REQUEST     = 0x0b0500; const AL_ADD_AND_GET_RESPONSE     = 0x0b0501;
-const AL_COMPARE_AND_SET_REQUEST = 0x0b0600; const AL_COMPARE_AND_SET_RESPONSE = 0x0b0601;
-const AL_GET_REQUEST             = 0x0b0700; const AL_GET_RESPONSE             = 0x0b0701;
-const AL_GET_AND_ADD_REQUEST     = 0x0b0800; const AL_GET_AND_ADD_RESPONSE     = 0x0b0801;
-const AL_GET_AND_SET_REQUEST     = 0x0b0900; const AL_GET_AND_SET_RESPONSE     = 0x0b0901;
-const AL_SET_REQUEST             = 0x0b0a00; const AL_SET_RESPONSE             = 0x0b0a01;
+const AL_APPLY_REQUEST           = 0x090100; const AL_APPLY_RESPONSE           = 0x090101;
+const AL_ALTER_REQUEST           = 0x090200; const AL_ALTER_RESPONSE           = 0x090201;
+const AL_GET_AND_ALTER_REQUEST   = 0x090800; const AL_GET_AND_ALTER_RESPONSE   = 0x090801;
+const AL_ALTER_AND_GET_REQUEST   = 0x090900; const AL_ALTER_AND_GET_RESPONSE   = 0x090901;
+const AL_ADD_AND_GET_REQUEST     = 0x090300; const AL_ADD_AND_GET_RESPONSE     = 0x090301;
+const AL_COMPARE_AND_SET_REQUEST = 0x090400; const AL_COMPARE_AND_SET_RESPONSE = 0x090401;
+const AL_GET_REQUEST             = 0x090500; const AL_GET_RESPONSE             = 0x090501;
+const AL_GET_AND_ADD_REQUEST     = 0x090600; const AL_GET_AND_ADD_RESPONSE     = 0x090601;
+const AL_GET_AND_SET_REQUEST     = 0x090700; const AL_GET_AND_SET_RESPONSE     = 0x090701;
+const AL_SET_REQUEST             = 0x090a00; const AL_SET_RESPONSE             = 0x090a01;
 
 // ── AtomicRef message type constants ──────────────────────────────────────────
 

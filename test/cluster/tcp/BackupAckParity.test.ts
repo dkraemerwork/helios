@@ -79,8 +79,10 @@ function readBackupValue(instance: HeliosInstanceImpl, mapName: string, partitio
     return dataValue === null || dataValue === undefined ? dataValue : (instance as any)._ss.toObject(dataValue);
 }
 
-function requireInstanceByName(instances: HeliosInstanceImpl[], memberId: string): HeliosInstanceImpl {
-    const instance = instances.find((candidate) => candidate.getName() === memberId);
+function requireInstanceByMemberId(instances: HeliosInstanceImpl[], memberId: string): HeliosInstanceImpl {
+    const instance = instances.find(
+        (candidate) => candidate.getCluster().getLocalMember().getUuid() === memberId,
+    );
     if (instance === undefined) {
         throw new Error(`No instance found for member ${memberId}`);
     }
@@ -116,10 +118,11 @@ describe('Backup ack parity', () => {
         await waitForClusterSize(spare, 4);
         await waitForClusterSize(caller, 4);
 
-        const selected = findKeyWithDistinctBackup(caller, caller.getName());
+        const callerMemberId = caller.getCluster().getLocalMember().getUuid();
+        const selected = findKeyWithDistinctBackup(caller, callerMemberId);
         const key = selected.key;
         const partitionId = caller.getPartitionIdForName(key);
-        const backupTarget = requireInstanceByName([owner, backup, spare], selected.backupId);
+        const backupTarget = requireInstanceByMemberId([owner, backup, spare], selected.backupId);
 
         const originalHandleBackup = (backupTarget as any)._handleBackup.bind(backupTarget);
         (backupTarget as any)._handleBackup = (message: unknown) => {
@@ -153,9 +156,10 @@ describe('Backup ack parity', () => {
         await waitForClusterSize(spare, 4);
         await waitForClusterSize(caller, 4);
 
-        const selected = findKeyWithDistinctBackup(caller, caller.getName());
+        const callerMemberId2 = caller.getCluster().getLocalMember().getUuid();
+        const selected = findKeyWithDistinctBackup(caller, callerMemberId2);
         const key = selected.key;
-        const backupTarget = requireInstanceByName([owner, backup, spare], selected.backupId);
+        const backupTarget = requireInstanceByMemberId([owner, backup, spare], selected.backupId);
         (backupTarget as any)._handleBackup = () => {};
 
         const startedAt = Date.now();
@@ -181,9 +185,10 @@ describe('Backup ack parity', () => {
         await waitForClusterSize(spare, 4);
         await waitForClusterSize(caller, 4);
 
-        const selected = findKeyWithDistinctBackup(caller, caller.getName());
+        const callerMemberId3 = caller.getCluster().getLocalMember().getUuid();
+        const selected = findKeyWithDistinctBackup(caller, callerMemberId3);
         const key = selected.key;
-        const backupTarget = requireInstanceByName([owner, backup, spare], selected.backupId);
+        const backupTarget = requireInstanceByMemberId([owner, backup, spare], selected.backupId);
         const originalHandleBackup = (backupTarget as any)._handleBackup.bind(backupTarget);
         (backupTarget as any)._handleBackup = (message: unknown) => {
             void (async () => {
@@ -200,7 +205,7 @@ describe('Backup ack parity', () => {
         const startedAt = Date.now();
         backupTarget.shutdown();
 
-        await expect(invocation).rejects.toThrow(`Backup member ${backupTarget.getName()} left before acknowledgement completed`);
+        await expect(invocation).rejects.toThrow(`Backup member ${backupTarget.getCluster().getLocalMember().getUuid()} left before acknowledgement completed`);
         expect(Date.now() - startedAt).toBeLessThan(3000);
         await waitUntil(() => (caller as any)._invocationMonitor.activeCount() === 0, 2000);
     });

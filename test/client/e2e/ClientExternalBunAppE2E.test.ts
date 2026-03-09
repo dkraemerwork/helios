@@ -46,6 +46,7 @@ describe("P20-EXTERNAL-BUN-APP — External Bun app E2E", () => {
 
     test("separate Bun process runs the real public client example against a cluster", async () => {
         const config = new HeliosConfig("external-app-e2e");
+        config.setClusterName("external-app-e2e");
         config.getNetworkConfig().setClientProtocolPort(0);
         instance = new HeliosInstanceImpl(config);
         await Bun.sleep(100);

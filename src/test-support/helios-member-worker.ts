@@ -37,7 +37,7 @@ interface ProvenanceRecord {
 class ProvenanceMapStore implements MapStore<string, string> {
     readonly records: ProvenanceRecord[] = [];
     private readonly _data = new Map<string, string>();
-    private readonly _memberId: string;
+    private _memberId: string;
     private _instance: HeliosInstanceImpl | null = null;
 
     constructor(memberId: string) {
@@ -46,6 +46,7 @@ class ProvenanceMapStore implements MapStore<string, string> {
 
     setInstance(instance: HeliosInstanceImpl): void {
         this._instance = instance;
+        this._memberId = instance.getLocalMemberId();
     }
 
     private _record(kind: OperationKind, keys: string[]): void {
@@ -126,7 +127,7 @@ class ProvenanceMapStore implements MapStore<string, string> {
 
 class ProvenanceMongoMapStore implements MapStore<string, string> {
     readonly records: ProvenanceRecord[] = [];
-    private readonly _memberId: string;
+    private _memberId: string;
     private readonly _inner: MongoMapStore<string>;
     private _instance: HeliosInstanceImpl | null = null;
 
@@ -137,6 +138,7 @@ class ProvenanceMongoMapStore implements MapStore<string, string> {
 
     setInstance(instance: HeliosInstanceImpl): void {
         this._instance = instance;
+        this._memberId = instance.getLocalMemberId();
     }
 
     private _record(kind: OperationKind, keys: string[]): void {
@@ -219,7 +221,7 @@ class ProvenanceMongoMapStore implements MapStore<string, string> {
 
 class ProvenanceDynamoDbMapStore implements MapStore<string, string> {
     readonly records: ProvenanceRecord[] = [];
-    private readonly _memberId: string;
+    private _memberId: string;
     private readonly _inner: DynamoDbMapStore<string>;
     private _instance: HeliosInstanceImpl | null = null;
 
@@ -230,6 +232,7 @@ class ProvenanceDynamoDbMapStore implements MapStore<string, string> {
 
     setInstance(instance: HeliosInstanceImpl): void {
         this._instance = instance;
+        this._memberId = instance.getLocalMemberId();
     }
 
     private _record(kind: OperationKind, keys: string[]): void {
@@ -350,7 +353,7 @@ interface CommandMessage {
 interface QueryMessage {
     type: 'query';
     id: string;
-    query: 'provenance' | 'clusterSize' | 'partitionOwner' | 'partitionId' | 'isRunning' | 'storeData' | 'reliableTopicMessages' | 'reliableTopicState' | 'reliableTopicOwner';
+    query: 'provenance' | 'clusterSize' | 'partitionOwner' | 'partitionId' | 'isRunning' | 'storeData' | 'reliableTopicMessages' | 'reliableTopicState' | 'reliableTopicOwner' | 'localMemberId';
     key?: string;
     topicName?: string;
 }
@@ -531,6 +534,9 @@ async function handleMessage(msg: WorkerMessage): Promise<void> {
                     }
                     case 'isRunning':
                         reply(msg.id, { running: instance.isRunning() });
+                        break;
+                    case 'localMemberId':
+                        reply(msg.id, { memberId: instance.getLocalMemberId() });
                         break;
                     case 'storeData':
                         reply(msg.id, { data: [...store!.getData().entries()] });

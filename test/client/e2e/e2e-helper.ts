@@ -24,6 +24,7 @@ export async function startE2E(clusterName?: string): Promise<E2EContext> {
 
     // Start member
     const heliosConfig = new HeliosConfig(name);
+    heliosConfig.setClusterName(name);
     heliosConfig.getNetworkConfig().setClientProtocolPort(0); // ephemeral
     const instance = new HeliosInstanceImpl(heliosConfig);
     await Bun.sleep(100); // wait for async server start

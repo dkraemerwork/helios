@@ -154,7 +154,7 @@ describe("ReliableTopicService - distributed path", () => {
     const rbName = TOPIC_RB_PREFIX + "events";
     const partitionId = a.getRingbufferService().getRingbufferPartitionId(rbName);
     const ownerId = a.getPartitionOwnerId(partitionId)!;
-    const owner = ownerId === a.getName() ? a : b;
+    const owner = ownerId === a.getLocalMemberId() ? a : b;
     const publisher = owner === a ? topicB : topicA;
     const backup = owner === a ? b : a;
 
@@ -172,7 +172,7 @@ describe("ReliableTopicService - distributed path", () => {
     const rbName = TOPIC_RB_PREFIX + "failover";
     const partitionId = a.getRingbufferService().getRingbufferPartitionId(rbName);
     const ownerId = a.getPartitionOwnerId(partitionId)!;
-    const owner = ownerId === a.getName() ? a : b;
+    const owner = ownerId === a.getLocalMemberId() ? a : b;
     const survivor = owner === a ? b : a;
     const survivorTopic = survivor.getReliableTopic<string>("failover");
     const ownerTopic = owner.getReliableTopic<string>("failover");

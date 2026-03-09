@@ -1032,6 +1032,7 @@ describe("HeliosInstanceImpl integration", () => {
         );
 
         const config = new HeliosConfig("secured-cluster");
+        config.setClusterName("secured-cluster");
         config.getNetworkConfig().setClientProtocolPort(0);
         config.getNetworkConfig().setClientProtocolUsernamePasswordAuth("admin", "secret");
         const instance = new HeliosInstanceImpl(config);
@@ -1069,6 +1070,7 @@ describe("E2E verification", () => {
         );
 
         const config = new HeliosConfig("e2e-cluster");
+        config.setClusterName("e2e-cluster");
         config.getNetworkConfig().setClientProtocolPort(0);
         const instance = new HeliosInstanceImpl(config);
         await Bun.sleep(50);
@@ -1158,6 +1160,7 @@ describe("E2E verification", () => {
         );
 
         const config = new HeliosConfig("guard-cluster");
+        config.setClusterName("guard-cluster");
         config.getNetworkConfig().setClientProtocolPort(0);
         const instance = new HeliosInstanceImpl(config);
         await Bun.sleep(50);
@@ -1196,6 +1199,7 @@ describe("E2E verification", () => {
         );
 
         const config = new HeliosConfig("reauth-guard-cluster");
+        config.setClusterName("reauth-guard-cluster");
         config.getNetworkConfig().setClientProtocolPort(0);
         const instance = new HeliosInstanceImpl(config);
         await Bun.sleep(50);
@@ -1253,6 +1257,7 @@ describe("E2E verification", () => {
         );
 
         const config = new HeliosConfig("pipe-guard-cluster");
+        config.setClusterName("pipe-guard-cluster");
         config.getNetworkConfig().setClientProtocolPort(0);
         const instance = new HeliosInstanceImpl(config);
         await Bun.sleep(50);

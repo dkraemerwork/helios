@@ -280,15 +280,35 @@ export class MultiProcessCluster {
     }
 
     /**
+     * Get the cluster member UUID for a specific member process.
+     * The UUID is generated at runtime and differs from the human-readable member name.
+     */
+    async getMemberId(memberName: string): Promise<string> {
+        const result = await this._send(memberName, {
+            type: 'query',
+            query: 'localMemberId',
+        });
+        return result.memberId as string;
+    }
+
+    /**
      * Find a key owned by a specific member.
+     * @param ownerName — either the human-readable member name (e.g. 'A') or the
+     *   cluster member UUID.  If a member with that name is registered in this
+     *   cluster, its UUID is resolved automatically.
      */
     async findKeyOwnedBy(queryMember: string, ownerName: string, prefix = 'k'): Promise<string> {
+        // Resolve human-readable name → UUID if the member is known to this cluster.
+        const resolvedOwner = this._members.has(ownerName)
+            ? await this.getMemberId(ownerName)
+            : ownerName;
+
         for (let i = 0; i < 1000; i++) {
             const key = `${prefix}-${i}`;
             const info = await this.getPartitionOwner(queryMember, key);
-            if (info.owner === ownerName) return key;
+            if (info.owner === resolvedOwner) return key;
         }
-        throw new Error(`Could not find key owned by ${ownerName}`);
+        throw new Error(`Could not find key owned by ${ownerName} (uuid: ${resolvedOwner})`);
     }
 
     /**

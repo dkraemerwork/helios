@@ -263,7 +263,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         const [a, b] = await startTwoNodeCluster('wb-mig', storeA, storeB, { writeDelay: 2 });
         void b;
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'wbm');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'wbm');
         const mapA = a.getMap<string, string>('wb-mig');
 
         // Write entry — goes to write-behind queue on owner A
@@ -303,7 +303,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         // Populate data on A-owned partitions
         const keys: string[] = [];
         for (let i = 0; i < 10; i++) {
-            const key = findKeyOwnedBy(a, a.getName(), `pc-${i}`);
+            const key = findKeyOwnedBy(a, a.getLocalMemberId(), `pc-${i}`);
             await a.getMap<string, string>('promo-cut').put(key, `v-${i}`);
             keys.push(key);
         }
@@ -335,7 +335,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
 
         const [a, b] = await startTwoNodeCluster('promo-load', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'pl');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'pl');
         // Ensure data is in A's external store
         storeA.seed(keyOwnedByA, 'from-a-store');
 
@@ -373,7 +373,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         // Populate A-owned keys
         const mapA = a.getMap<string, string>('demotion');
         for (let i = 0; i < 5; i++) {
-            const key = findKeyOwnedBy(a, a.getName(), `dm-${i}`);
+            const key = findKeyOwnedBy(a, a.getLocalMemberId(), `dm-${i}`);
             await mapA.put(key, `val-${i}`);
         }
 
@@ -526,11 +526,11 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         // Each delete should be on the owner's store
         for (const k of storeA.deletes) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const k of storeB.deletes) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
     });
 
@@ -543,7 +543,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('wb-shutdown', storeA, storeB, { writeDelay: 5 });
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'wbs');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'wbs');
         const mapA = a.getMap<string, string>('wb-shutdown');
 
         // Write with long write-behind delay
@@ -573,7 +573,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
 
         // Write multiple entries with very long delay
         for (let i = 0; i < 5; i++) {
-            const key = findKeyOwnedBy(a, a.getName(), `wbh-${i}`);
+            const key = findKeyOwnedBy(a, a.getLocalMemberId(), `wbh-${i}`);
             await mapA.put(key, `val-${i}`);
         }
 
@@ -595,7 +595,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         const mapA = a.getMap<string, string>('wb-nodup-sd');
         const keys: string[] = [];
         for (let i = 0; i < 5; i++) {
-            const key = findKeyOwnedBy(a, a.getName(), `nds-${i}`);
+            const key = findKeyOwnedBy(a, a.getLocalMemberId(), `nds-${i}`);
             await mapA.put(key, `v-${i}`);
             keys.push(key);
         }
@@ -654,11 +654,11 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         // Each store call went to the correct owner
         for (const s of storeA.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const s of storeB.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
     });
 
@@ -759,11 +759,11 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         // Each store call happened on exactly the correct owner
         for (const s of storeA.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const s of storeB.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
 
         // Shut down A, write again from B

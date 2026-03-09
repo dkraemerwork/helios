@@ -79,7 +79,7 @@ export class ClientConnectionManager {
         this._alive = true;
     }
 
-    async connectToCluster(): Promise<void> {
+    async connectToCluster(allowClusterIdChange = false): Promise<void> {
         const addresses = this._resolveAddresses();
         if (addresses.length === 0) {
             addresses.push({ host: "127.0.0.1", port: DEFAULT_PORT });
@@ -99,7 +99,7 @@ export class ClientConnectionManager {
         while (this._alive) {
             for (const addr of addresses) {
                 try {
-                    const conn = await this._connectAndAuth(addr.host, addr.port);
+                    const conn = await this._connectAndAuth(addr.host, addr.port, allowClusterIdChange);
                     this._activeConnections.set(conn.getMemberUuid()!, conn);
                     const hadDisconnectedState = this._state === ClientState.DISCONNECTED_FROM_CLUSTER;
                     this._state = ClientState.INITIALIZED_ON_CLUSTER;
@@ -212,7 +212,7 @@ export class ClientConnectionManager {
         return result;
     }
 
-    private async _connectAndAuth(host: string, port: number): Promise<ClientConnection> {
+    private async _connectAndAuth(host: string, port: number, allowClusterIdChange = false): Promise<ClientConnection> {
         const channel = await Eventloop.connect(port, host, {
             onData: (ch, data) => this._onData(ch, data),
             onClose: (ch) => this._onClose(ch),
@@ -254,7 +254,7 @@ export class ClientConnectionManager {
         }
 
         try {
-            this._validateClusterIdentity(authResp.clusterId);
+            this._validateClusterIdentity(authResp.clusterId, allowClusterIdChange);
         } catch (err) {
             conn.close();
             throw err;
@@ -346,7 +346,7 @@ export class ClientConnectionManager {
         return null;
     }
 
-    private _validateClusterIdentity(clusterId: string | null): void {
+    private _validateClusterIdentity(clusterId: string | null, allowChange = false): void {
         if (this._clusterId === null) {
             return;
         }
@@ -358,6 +358,12 @@ export class ClientConnectionManager {
         }
 
         if (clusterId !== this._clusterId) {
+            if (allowChange) {
+                // On automatic reconnect to a restarted cluster (same name, new UUID),
+                // accept the new cluster ID and re-register listeners.
+                this._clusterId = clusterId;
+                return;
+            }
             throw new Error(
                 `Reconnect rejected: cluster identity mismatch; expected ${this._clusterId} but received ${clusterId}`,
             );
@@ -394,6 +400,7 @@ export class ClientConnectionManager {
 
     private _handleIncomingMessage(conn: ClientConnection, msg: ClientMessage): void {
         const correlationId = msg.getCorrelationId();
+        const flags = msg.getStartFrame().flags;
 
         // Check connection-level event handlers first (used during auth)
         const handler = conn.getEventHandler(correlationId);
@@ -403,7 +410,6 @@ export class ClientConnectionManager {
         }
 
         // Check if it's an event message
-        const flags = msg.getStartFrame().flags;
         if (ClientMessage.isFlagSet(flags, ClientMessage.IS_EVENT_FLAG)) {
             // Route to listener service
             if (this._listenerService) {
@@ -463,7 +469,7 @@ export class ClientConnectionManager {
         if (reconnectMode === "OFF") {
             return;
         }
-        this._reconnectPromise = this.connectToCluster().catch((err) => {
+        this._reconnectPromise = this.connectToCluster(true).catch((err) => {
             this._disconnectCause = err instanceof Error
                 ? err
                 : new Error(String(err));

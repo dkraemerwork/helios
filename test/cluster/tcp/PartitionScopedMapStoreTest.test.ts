@@ -184,7 +184,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-put', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapB = b.getMap<string, string>('store-put');
 
         // Put from B (non-owner) → should trigger store on A's MapStore only
@@ -206,7 +206,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-remove', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapA = a.getMap<string, string>('store-remove');
         const mapB = b.getMap<string, string>('store-remove');
 
@@ -233,7 +233,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-delete', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapA = a.getMap<string, string>('store-delete');
         const mapB = b.getMap<string, string>('store-delete');
 
@@ -261,7 +261,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
 
         // Find key owned by A and use 'preloaded' if possible
         // Pre-store the value directly in storeA's backing data
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'load');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'load');
         await storeA.store(keyOwnedByA, 'external-data');
         storeA.reset();
 
@@ -284,7 +284,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-set', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapB = b.getMap<string, string>('store-set');
 
         await mapB.set(keyOwnedByA, 'set-value');
@@ -301,7 +301,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-pia', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapB = b.getMap<string, string>('store-pia');
 
         const existing = await mapB.putIfAbsent(keyOwnedByA, 'first');
@@ -324,7 +324,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-backup', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapA = a.getMap<string, string>('store-backup');
 
         await mapA.put(keyOwnedByA, 'backed-up');
@@ -356,7 +356,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
             const key = `pa-${i}`;
             const pid = a.getPartitionIdForName(key);
             const owner = a.getPartitionOwnerId(pid);
-            if (owner === a.getName()) aOwnedCount++;
+            if (owner === a.getLocalMemberId()) aOwnedCount++;
             else bOwnedCount++;
             entries.push([key, `val-${i}`]);
         }
@@ -376,11 +376,11 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         // Each node should only have store calls for keys it owns
         for (const s of storeA.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const s of storeB.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
     });
 
@@ -398,7 +398,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
             const key = `ga-${i}`;
             const pid = a.getPartitionIdForName(key);
             const owner = a.getPartitionOwnerId(pid);
-            if (owner === a.getName()) {
+            if (owner === a.getLocalMemberId()) {
                 await storeA.store(key, `ext-${i}`);
                 keysOwnedByA.push(key);
             } else {
@@ -425,11 +425,11 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
 
         for (const k of aLoadedKeys) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const k of bLoadedKeys) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
     });
 
@@ -440,7 +440,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-multi', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName());
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId());
         const mapB = b.getMap<string, string>('store-multi');
 
         await mapB.put(keyOwnedByA, 'v1');
@@ -464,11 +464,11 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const mapB = b.getMap<string, string>('store-ctx');
 
         // Write keys owned by A
-        const k1 = findKeyOwnedBy(a, a.getName(), 'ctx1');
+        const k1 = findKeyOwnedBy(a, a.getLocalMemberId(), 'ctx1');
         await mapA.put(k1, 'val1');
 
         // Write keys owned by B
-        const k2 = findKeyOwnedBy(a, b.getName(), 'ctx2');
+        const k2 = findKeyOwnedBy(a, b.getLocalMemberId(), 'ctx2');
         await mapB.put(k2, 'val2');
 
         // Each owner stored to its own MapStore
@@ -506,7 +506,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-mixed', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'mix');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'mix');
         const mapB = b.getMap<string, string>('store-mixed');
 
         await mapB.put(keyOwnedByA, 'v1');
@@ -530,8 +530,8 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
 
         const mapA = a.getMap<string, string>('store-bidir');
 
-        const keyA = findKeyOwnedBy(a, a.getName(), 'biA');
-        const keyB = findKeyOwnedBy(a, b.getName(), 'biB');
+        const keyA = findKeyOwnedBy(a, a.getLocalMemberId(), 'biA');
+        const keyB = findKeyOwnedBy(a, b.getLocalMemberId(), 'biB');
 
         await mapA.put(keyA, 'on-A');
         await mapA.put(keyB, 'on-B');
@@ -582,7 +582,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'wb');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'wb');
         const mapA = a.getMap<string, string>('store-wb');
         await mapA.put(keyOwnedByA, 'wb-value');
 
@@ -604,7 +604,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, b] = await startTwoNodeCluster('store-load2', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'ld2');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'ld2');
 
         // Put data only in owner's external store
         await storeA.store(keyOwnedByA, 'from-owner-store');
@@ -641,11 +641,11 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
 
         for (const key of allAStores) {
             const pid = a.getPartitionIdForName(key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const key of allBStores) {
             const pid = a.getPartitionIdForName(key);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
 
         // Total should be all entries
@@ -666,7 +666,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
             keys.push(key);
             const pid = a.getPartitionIdForName(key);
             const owner = a.getPartitionOwnerId(pid);
-            if (owner === a.getName()) {
+            if (owner === a.getLocalMemberId()) {
                 await storeA.store(key, `ext-${i}`);
             } else {
                 await storeB.store(key, `ext-${i}`);
@@ -685,11 +685,11 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const bLoads = [...storeB.loads, ...storeB.loadAlls.flat()];
         for (const k of aLoads) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
         for (const k of bLoads) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
     });
 
@@ -700,7 +700,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         const storeB = new CountingMapStore();
         const [a, _b] = await startTwoNodeCluster('store-replace', storeA, storeB);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'rep');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'rep');
         const mapA = a.getMap<string, string>('store-replace');
 
         // Put from owner so containsKey succeeds on the owner's local RecordStore
@@ -772,25 +772,25 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         // Verify ALL store calls on A are for A-owned keys
         for (const s of storeA.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
 
         // Verify ALL store calls on B are for B-owned keys
         for (const s of storeB.stores) {
             const pid = a.getPartitionIdForName(s.key);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
 
         // Verify ALL delete calls on A are for A-owned keys
         for (const k of storeA.deletes) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(a.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(a.getLocalMemberId());
         }
 
         // Verify ALL delete calls on B are for B-owned keys
         for (const k of storeB.deletes) {
             const pid = a.getPartitionIdForName(k);
-            expect(a.getPartitionOwnerId(pid)).toBe(b.getName());
+            expect(a.getPartitionOwnerId(pid)).toBe(b.getLocalMemberId());
         }
 
         // Total stores should equal total puts (20)

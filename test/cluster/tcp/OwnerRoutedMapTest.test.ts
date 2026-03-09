@@ -91,10 +91,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
         // Find a key whose partition is owned by node A
         let keyOwnedByA = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const key = `key-${i}`;
             const partitionId = a.getPartitionIdForName(key);
-            if (a.getPartitionOwnerId(partitionId) === a.getName()) {
+            if (a.getPartitionOwnerId(partitionId) === aMemberId) {
                 keyOwnedByA = key;
                 break;
             }
@@ -123,10 +124,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
         // Find a key owned by A
         let key = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `gkey-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
         expect(key).not.toBe('');
 
@@ -144,10 +146,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         const mapB = b.getMap<string, string>('routed-remove');
 
         let key = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `rkey-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
 
         await mapA.put(key, 'to-remove');
@@ -187,10 +190,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         const mapB = b.getMap<string, string>('routed-set');
 
         let key = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `skey-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
 
         await mapB.set(key, 'set-value');
@@ -206,10 +210,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         const mapB = b.getMap<string, string>('routed-delete');
 
         let key = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `dkey-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
 
         await mapA.put(key, 'to-delete');
@@ -225,10 +230,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         const mapB = b.getMap<string, string>('routed-pia');
 
         let key = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `pkey-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
 
         // First putIfAbsent from B (non-owner) — should succeed
@@ -260,10 +266,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         // Find key owned by A
         let key = '';
         let partitionId = -1;
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `os-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) {
+            if (a.getPartitionOwnerId(pid) === aMemberId) {
                 key = k;
                 partitionId = pid;
                 break;
@@ -297,11 +304,12 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
         let aOwns = 0;
         let bOwns = 0;
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 50; i++) {
             const key = `bidir-${i}`;
             const pid = a.getPartitionIdForName(key);
             const owner = a.getPartitionOwnerId(pid);
-            if (owner === a.getName()) aOwns++;
+            if (owner === aMemberId) aOwns++;
             else bOwns++;
         }
 
@@ -397,11 +405,12 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
         // Find a key owned by A so B must route remotely
         const mapB = b.getMap<string, string>('op-msg');
+        const aMemberId = a.getLocalMemberId();
         let key = '';
         for (let i = 0; i < 1000; i++) {
             const k = `om-${i}`;
             const pid = b.getPartitionIdForName(k);
-            if (b.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (b.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
 
         if (key !== '') {
@@ -437,10 +446,11 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         const mapA = a.getMap<string, string>('contains');
 
         let key = '';
+        const aMemberId = a.getLocalMemberId();
         for (let i = 0; i < 1000; i++) {
             const k = `ck-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
 
         await mapA.put(key, 'exists');
@@ -494,11 +504,13 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         expect(mapB).not.toBeInstanceOf(NetworkedMapProxy);
 
         // 4. End-to-end proof: write from B, read from A for owner-A key
+        const aMemberId = a.getLocalMemberId();
+        const bMemberId = b.getLocalMemberId();
         let key = '';
         for (let i = 0; i < 1000; i++) {
             const k = `v-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === a.getName()) { key = k; break; }
+            if (a.getPartitionOwnerId(pid) === aMemberId) { key = k; break; }
         }
         await mapB.put(key, 'verified');
         expect(await mapA.get(key)).toBe('verified');
@@ -508,7 +520,7 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         for (let i = 0; i < 1000; i++) {
             const k = `vb-${i}`;
             const pid = a.getPartitionIdForName(k);
-            if (a.getPartitionOwnerId(pid) === b.getName()) { keyB = k; break; }
+            if (a.getPartitionOwnerId(pid) === bMemberId) { keyB = k; break; }
         }
         await mapA.put(keyB, 'verified-b');
         expect(await mapB.get(keyB)).toBe('verified-b');

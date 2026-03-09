@@ -66,6 +66,7 @@ export class HeliosClusterCoordinator {
     private readonly _config: HeliosConfig,
     private readonly _transport: TcpClusterTransport,
     private readonly _serializationService: SerializationService,
+    memberUuid?: string,
   ) {
     const boundPort = this._transport.boundPort();
     if (boundPort === null) {
@@ -76,7 +77,7 @@ export class HeliosClusterCoordinator {
 
     this._localAddress = new Address("127.0.0.1", boundPort);
     this._localMember = new MemberImpl.Builder(this._localAddress)
-      .uuid(crypto.randomUUID())
+      .uuid(memberUuid ?? crypto.randomUUID())
       .version(new MemberVersion(1, 0, 0))
       .localMember(true)
       .build();

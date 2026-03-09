@@ -438,7 +438,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Reliable topic service — always available (single-node ringbuffer-backed via RingbufferService)
     this._reliableTopicService = new ReliableTopicService(
-      this._name,
+      this.getLocalMemberId(),
       this._config,
       this._ringbufferService,
       this._ss,
@@ -542,7 +542,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const port = this._config.getNetworkConfig().getPort();
     const scatterConfig = this._config.getNetworkConfig().getTcpTransportScatterConfig();
-    this._transport = new TcpClusterTransport(this._name, undefined, {
+    // Generate a single RFC 4122 UUID shared by both the transport HELLO handshake
+    // and the cluster coordinator member identity. This is critical: the transport
+    // registers peers by the nodeId from their HELLO message, and the coordinator
+    // sends cluster messages (JOIN_REQUEST, FINALIZE_JOIN, etc.) addressed by member
+    // UUID. Both must use the same identifier or targeted sends will silently drop.
+    const memberUuid = crypto.randomUUID();
+    this._transport = new TcpClusterTransport(memberUuid, undefined, {
       scatterOutboundEncoding: scatterConfig.isEnabled(),
       scatterOutboundEncoder: {
         inputCapacityBytes: scatterConfig.getInputCapacityBytes(),
@@ -557,6 +563,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._config,
       this._transport,
       this._ss,
+      memberUuid,
     );
     if (!multicast.isEnabled()) {
       this._clusterCoordinator.bootstrap();
@@ -813,46 +820,47 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._transport.onRemoteRemove = () => {};
     this._transport.onRemoteClear = () => {};
 
+    const localMemberId = this.getLocalMemberId();
     this._distributedQueueService = new DistributedQueueService(
-      this._name,
+      localMemberId,
       this._config,
       this._ss,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedListService = new DistributedListService(
-      this._name,
+      localMemberId,
       this._config,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedSetService = new DistributedSetService(
-      this._name,
+      localMemberId,
       this._config,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedMultiMapService = new DistributedMultiMapService(
-      this._name,
+      localMemberId,
       this._config,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedReplicatedMapService = new DistributedReplicatedMapService(
-      this._name,
+      localMemberId,
       this._config,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedCacheService = new DistributedCacheService(
-      this._name,
+      localMemberId,
       this._config,
       this._ss,
       this._transport,
       this._clusterCoordinator,
     );
     this._distributedTopicService = new DistributedTopicService(
-      this._name,
+      localMemberId,
       this._config,
       this._ss,
       this._transport,
@@ -1394,7 +1402,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     this._blitzLifecycleManager = new HeliosBlitzLifecycleManager(
       blitzConfig,
-      this._name,
+      // Use the cluster member UUID so that Blitz registration messages carry
+      // the same ID that the coordinator uses in expectedRegistrants. The
+      // HeliosBlitzCoordinator.isRegistrationComplete() compares
+      // registration.memberId against the set of cluster member UUIDs.
+      this.getLocalMemberId(),
     );
 
     // Register Blitz lifecycle cleanup as a shutdown hook
@@ -2225,7 +2237,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _ensureQueueService(): void {
     if (this._distributedQueueService === null) {
       this._distributedQueueService = new DistributedQueueService(
-        this._name,
+        this.getLocalMemberId(),
         this._config,
         this._ss,
         this._transport,
@@ -2429,6 +2441,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   getName(): string {
     return this._name;
+  }
+
+  /**
+   * Returns the local cluster member UUID. In clustered mode this is the
+   * RFC 4122 UUID assigned during startup (used for TCP HELLO handshake and
+   * all cluster protocol messages). In single-node mode returns the instance
+   * name (no cluster coordinator exists).
+   */
+  getLocalMemberId(): string {
+    return this._clusterCoordinator?.getLocalMemberId() ?? this._name;
   }
 
   /**
@@ -2996,7 +3018,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._nodeEngine,
         config,
         registry,
-        this._name,
+        this.getLocalMemberId(),
       );
       // Register shutdown hook so shutdownAsync() drains executors
       this.registerShutdownHook(async () => {

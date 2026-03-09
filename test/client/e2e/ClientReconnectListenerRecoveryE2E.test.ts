@@ -50,6 +50,7 @@ async function waitFor(condition: () => boolean | Promise<boolean>, timeoutMs = 
 
 async function startMember(clusterName: string, clientPort: number): Promise<HeliosInstanceImpl> {
     const config = new HeliosConfig(clusterName);
+    config.setClusterName(clusterName);
     config.getNetworkConfig().setClientProtocolPort(clientPort);
     const started = new HeliosInstanceImpl(config);
     await Bun.sleep(100);

@@ -140,6 +140,19 @@ describe('Block 21.4 — Multi-process clustered MapStore production proof', () 
         proxies = [];
     });
 
+    /**
+     * Find a key owned by the named member, using the member's actual cluster
+     * UUID (resolved at runtime) rather than the human-readable process name.
+     */
+    async function findKeyOwnedByMember(
+        queryMember: string,
+        ownerMember: string,
+        prefix = 'k',
+    ): Promise<string> {
+        const ownerUuid = await cluster.getMemberId(ownerMember);
+        return cluster.findKeyOwnedBy(queryMember, ownerUuid, prefix);
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  SECTION 1: Write-through provenance proof (separate processes)
     // ═══════════════════════════════════════════════════════════
@@ -164,8 +177,9 @@ describe('Block 21.4 — Multi-process clustered MapStore production proof', () 
         expect(totalStoreCount(recB)).toBe(0);
         assertFullProvenance(recA, recB);
 
+        const memberIdA = await cluster.getMemberId('A');
         const rec = recA.find(r => r.operationKind === 'store')!;
-        expect(rec.memberId).toBe('A');
+        expect(rec.memberId).toBe(memberIdA);
         expect(rec.replicaRole).toBe('PRIMARY');
         expect(rec.partitionId).toBeGreaterThanOrEqual(0);
     });
