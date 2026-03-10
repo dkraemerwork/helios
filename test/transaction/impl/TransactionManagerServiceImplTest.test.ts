@@ -31,6 +31,7 @@ describe('TransactionManagerServiceImplTest', () => {
         txService.configureReplication({
             localMemberId: 'local',
             getBackupMemberIds: () => ['backup-a', 'backup-b'],
+            getActiveMemberIds: () => ['local', 'backup-a'],
             validateBackupMembers: async () => ['backup-a'],
             replicate: async () => ['backup-a'],
         }, null);

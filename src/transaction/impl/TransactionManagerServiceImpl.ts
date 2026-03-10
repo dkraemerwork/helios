@@ -21,6 +21,7 @@ const APPLIED_RECORD_CACHE_LIMIT = 16_384;
 export interface TransactionBackupTransport {
     readonly localMemberId: string;
     getBackupMemberIds(count: number): string[];
+    getActiveMemberIds(): readonly string[];
     validateBackupMembers(targets: readonly string[]): Promise<string[]>;
     replicate(message: TransactionBackupMessage, targets: readonly string[]): Promise<string[]>;
 }
@@ -166,12 +167,12 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
         allowedDuringPassiveState = false,
     ): Promise<void> {
         const coordinatorMemberId = this._backupTransport?.localMemberId ?? 'local';
-        const log = new TxBackupLog([], coordinatorMemberId, callerUuid, State.ACTIVE, timeoutMillis, startTime, allowedDuringPassiveState);
+        const backupMemberIds = this._pendingBackupTargets.get(txnId) ?? [];
+        const log = new TxBackupLog([], coordinatorMemberId, callerUuid, State.ACTIVE, timeoutMillis, startTime, allowedDuringPassiveState, backupMemberIds);
         if (this.txBackupLogs.has(txnId)) {
             throw new TransactionException('TxLog already exists!');
         }
         this.txBackupLogs.set(txnId, log);
-        const backupMemberIds = this._pendingBackupTargets.get(txnId) ?? [];
         await this._replicateToPreparedTargets(txnId, {
             type: 'TXN_BEGIN',
             txnId,
@@ -331,6 +332,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             return 0;
         }
 
+        const localMemberId = this._backupTransport?.localMemberId ?? 'local';
         let recovered = 0;
         for (const [txnId, log] of [...this.txBackupLogs.entries()]) {
             if (log.coordinatorMemberId !== coordinatorMemberId) {
@@ -347,12 +349,22 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                 log.recovered = true;
             }
 
-            if (log.recovered && log.recoveryOwnerMemberId !== this._backupTransport?.localMemberId) {
-                continue;
+            if (log.recovered && log.recoveryOwnerMemberId !== null) {
+                if (this._isMemberActive(log.recoveryOwnerMemberId)) {
+                    if (log.recoveryOwnerMemberId !== localMemberId) {
+                        continue;
+                    }
+                } else {
+                    log.recovered = false;
+                    log.recoveryOwnerMemberId = null;
+                }
             }
 
             if (log.state === State.PREPARED || log.state === State.COMMITTING) {
-                const localMemberId = this._backupTransport?.localMemberId ?? 'local';
+                const recoveryOwnerMemberId = this._selectRecoveryOwner(log);
+                if (recoveryOwnerMemberId !== localMemberId) {
+                    continue;
+                }
                 await this._replicateToPreparedTargets(txnId, {
                     type: 'TXN_RECOVERED',
                     txnId,
@@ -368,6 +380,10 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                     this._rememberAppliedRecord(record.recordId);
                 }
                 this._rememberRecoveredTxn(txnId);
+                await this._replicateToPreparedTargets(txnId, {
+                    type: 'TXN_PURGE',
+                    txnId,
+                });
                 recovered++;
             }
 
@@ -449,6 +465,32 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                 this._appliedRecordIdSet.delete(oldest);
             }
         }
+    }
+
+    private _selectRecoveryOwner(log: TxBackupLog): string | null {
+        const localMemberId = this._backupTransport?.localMemberId ?? 'local';
+        if (log.backupMemberIds.length === 0) {
+            return localMemberId;
+        }
+
+        const activeMemberIds = new Set(this._backupTransport?.getActiveMemberIds() ?? [localMemberId]);
+        activeMemberIds.add(localMemberId);
+        for (const backupMemberId of log.backupMemberIds) {
+            if (activeMemberIds.has(backupMemberId)) {
+                return backupMemberId;
+            }
+        }
+        return null;
+    }
+
+    private _isMemberActive(memberId: string): boolean {
+        if (this._backupTransport === null) {
+            return memberId === 'local';
+        }
+        if (memberId === this._backupTransport.localMemberId) {
+            return true;
+        }
+        return this._backupTransport.getActiveMemberIds().includes(memberId);
     }
 }
 

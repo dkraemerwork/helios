@@ -45,48 +45,48 @@ export class TransactionBackupApplier implements TransactionBackupExecutor {
                 }
                 if (record.opType === 'offer') {
                     if (record.valueData !== null) {
-                        await this._services.queueService.offer(record.queueName, decodeData(record.valueData), 0);
+                        await this._services.queueService.offer(record.queueName, decodeData(record.valueData), 0, record.recordId);
                     }
                     return;
                 }
-                await this._services.queueService.poll(record.queueName, 0);
+                await this._services.queueService.poll(record.queueName, 0, record.recordId);
                 return;
             case 'list':
                 if (this._services.listService === null) {
                     return;
                 }
                 if (record.opType === 'add') {
-                    await this._services.listService.add(record.listName, decodeData(record.valueData));
+                    await this._services.listService.add(record.listName, decodeData(record.valueData), record.recordId);
                     return;
                 }
-                await this._services.listService.remove(record.listName, decodeData(record.valueData));
+                await this._services.listService.remove(record.listName, decodeData(record.valueData), record.recordId);
                 return;
             case 'set':
                 if (this._services.setService === null) {
                     return;
                 }
                 if (record.opType === 'add') {
-                    await this._services.setService.add(record.setName, decodeData(record.valueData));
+                    await this._services.setService.add(record.setName, decodeData(record.valueData), record.recordId);
                     return;
                 }
-                await this._services.setService.remove(record.setName, decodeData(record.valueData));
+                await this._services.setService.remove(record.setName, decodeData(record.valueData), record.recordId);
                 return;
             case 'multimap':
                 if (this._services.multiMapService === null) {
                     return;
                 }
                 if (record.opType === 'removeAll') {
-                    await this._services.multiMapService.removeAll(record.mapName, decodeData(record.keyData));
+                    await this._services.multiMapService.removeAll(record.mapName, decodeData(record.keyData), record.recordId);
                     return;
                 }
                 if (record.opType === 'put') {
                     if (record.valueData !== null) {
-                        await this._services.multiMapService.put(record.mapName, decodeData(record.keyData), decodeData(record.valueData));
+                        await this._services.multiMapService.put(record.mapName, decodeData(record.keyData), decodeData(record.valueData), undefined, record.recordId);
                     }
                     return;
                 }
                 if (record.valueData !== null) {
-                    await this._services.multiMapService.remove(record.mapName, decodeData(record.keyData), decodeData(record.valueData));
+                    await this._services.multiMapService.remove(record.mapName, decodeData(record.keyData), decodeData(record.valueData), record.recordId);
                 }
                 return;
         }

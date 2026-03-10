@@ -1398,6 +1398,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
           .filter((memberId) => memberId !== localMemberId)
           .slice(0, count);
       },
+      getActiveMemberIds: () => this._clusterCoordinator!
+        .getCluster()
+        .getMembers()
+        .map((member) => member.getUuid()),
       validateBackupMembers: async (targets) => {
         const confirmedTargets: string[] = [];
         for (const target of targets) {
