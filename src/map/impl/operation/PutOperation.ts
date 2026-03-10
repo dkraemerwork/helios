@@ -27,6 +27,7 @@ export class PutOperation extends MapOperation implements BackupAwareOperation {
     }
 
     async run(): Promise<void> {
+        const startedAt = Date.now();
         this.sendResponse(
             this.recordStore.put(this._key, this._value, this._ttl, this._maxIdle),
         );
@@ -39,6 +40,7 @@ export class PutOperation extends MapOperation implements BackupAwareOperation {
             const value = ne.toObject(this._value);
             await this.mapDataStore.add(key, value, Date.now());
         }
+        this.recordMapPut(Date.now() - startedAt);
     }
 
     shouldBackup(): boolean { return true; }

@@ -38,6 +38,7 @@ export class SetOperation extends MapOperation implements BackupAwareOperation {
             const value = ne.toObject(this._value);
             await this.mapDataStore.add(key, value, Date.now());
         }
+        this.recordMapSet();
     }
 
     shouldBackup(): boolean { return true; }

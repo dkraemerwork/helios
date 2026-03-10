@@ -183,11 +183,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
-        const t0 = Date.now();
         const oldData = await this._invokeOnKeyPartition<Data | null>(
             new PutOperation(this._name, kd, vd, -1, -1), kd,
         );
-        this._containerService.getOrCreateMapStats(this._name).incrementPutCount(Date.now() - t0);
         const oldValue = oldData !== null && oldData !== undefined ? this._toObject<V>(oldData) : null;
         // MapStore write now happens inside PutOperation on the partition owner
         // Index maintenance
@@ -209,7 +207,6 @@ export class MapProxy<K, V> implements IMap<K, V> {
         const oldValue = await this._readCurrentValueByData(kd, partitionId);
         await this._invokeOnPartition<void>(new SetOperation(this._name, kd, vd, -1, -1), partitionId);
         // MapStore write now happens inside SetOperation on the partition owner
-        this._containerService.getOrCreateMapStats(this._name).incrementSetCount();
         this._updateIndex(key, value, oldValue);
         if (oldValue === null) {
             this._fireAdded(key, value);
@@ -221,12 +218,10 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async get(key: K): Promise<V | null> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
-        const t0 = Date.now();
         // GetOperation now handles load-on-miss on the partition owner
         const data = await this._invokeOnKeyPartition<Data | null>(
             new GetOperation(this._name, kd), kd,
         );
-        this._containerService.getOrCreateMapStats(this._name).incrementGetCount(Date.now() - t0);
         if (data !== null && data !== undefined) {
             return this._toObject<V>(data);
         }
@@ -236,11 +231,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async remove(key: K): Promise<V | null> {
         await this._ensureMapDataStore();
         const kd = this._toData(key);
-        const t0 = Date.now();
         const oldData = await this._invokeOnKeyPartition<Data | null>(
             new RemoveOperation(this._name, kd), kd,
         );
-        this._containerService.getOrCreateMapStats(this._name).incrementRemoveCount(Date.now() - t0);
         // MapStore delete now happens inside RemoveOperation on the partition owner
         if (oldData === null || oldData === undefined) return null;
         const oldValue = this._toObject<V>(oldData);

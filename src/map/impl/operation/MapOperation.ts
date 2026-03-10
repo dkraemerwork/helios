@@ -55,4 +55,20 @@ export abstract class MapOperation extends Operation {
         } | undefined;
         partitionService?.applyNamespaceBackupMutation?.(this.partitionId, this.mapName, this.replicaIndex);
     }
+
+    protected recordMapGet(latencyMs: number): void {
+        this.containerService.getOrCreateMapStats(this.mapName).incrementGetCount(latencyMs);
+    }
+
+    protected recordMapPut(latencyMs: number): void {
+        this.containerService.getOrCreateMapStats(this.mapName).incrementPutCount(latencyMs);
+    }
+
+    protected recordMapSet(): void {
+        this.containerService.getOrCreateMapStats(this.mapName).incrementSetCount();
+    }
+
+    protected recordMapRemove(latencyMs: number): void {
+        this.containerService.getOrCreateMapStats(this.mapName).incrementRemoveCount(latencyMs);
+    }
 }

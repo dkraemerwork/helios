@@ -108,4 +108,22 @@ describe('Map Operations via NodeEngine', () => {
     test('DeleteOperation returns false when key missing', async () => {
         expect(await invoke<boolean>(new DeleteOperation(MAP_NAME, d('k')))).toBe(false);
     });
+
+    test('owner-routed operations update map stats in the container service', async () => {
+        const mapService = nodeEngine.getService<MapContainerService>(MapService.SERVICE_NAME);
+
+        await invoke<Data | null>(new PutOperation(MAP_NAME, d('k'), d('v'), -1, -1));
+        await invoke<Data | null>(new GetOperation(MAP_NAME, d('k')));
+        await invoke<void>(new SetOperation(MAP_NAME, d('k'), d('v2'), -1, -1));
+        await invoke<boolean>(new DeleteOperation(MAP_NAME, d('k')));
+
+        const stats = mapService.getAllMapStats().get(MAP_NAME);
+        expect(stats).toBeDefined();
+        expect(stats).toEqual(expect.objectContaining({
+            putCount: 1,
+            getCount: 1,
+            setCount: 1,
+            removeCount: 1,
+        }));
+    });
 });

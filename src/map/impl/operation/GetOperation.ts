@@ -18,8 +18,10 @@ export class GetOperation extends MapOperation {
     }
 
     async run(): Promise<void> {
+        const startedAt = Date.now();
         const data = this.recordStore.get(this._key);
         if (data !== null) {
+            this.recordMapGet(Date.now() - startedAt);
             this.sendResponse(data);
             return;
         }
@@ -34,11 +36,13 @@ export class GetOperation extends MapOperation {
                 if (loadedData !== null) {
                     // Store loaded value back into RecordStore
                     this.recordStore.put(this._key, loadedData, -1, -1);
+                    this.recordMapGet(Date.now() - startedAt);
                     this.sendResponse(loadedData);
                     return;
                 }
             }
         }
+        this.recordMapGet(Date.now() - startedAt);
         this.sendResponse(null);
     }
 }

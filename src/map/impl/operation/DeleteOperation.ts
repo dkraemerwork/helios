@@ -22,6 +22,7 @@ export class DeleteOperation extends MapOperation implements BackupAwareOperatio
     }
 
     async run(): Promise<void> {
+        const startedAt = Date.now();
         const deleted = this.recordStore.delete(this._key);
         this.sendResponse(deleted);
         if (deleted) {
@@ -34,6 +35,7 @@ export class DeleteOperation extends MapOperation implements BackupAwareOperatio
             const key = ne.toObject(this._key);
             await this.mapDataStore.remove(key, Date.now());
         }
+        this.recordMapRemove(Date.now() - startedAt);
     }
 
     shouldBackup(): boolean { return true; }
