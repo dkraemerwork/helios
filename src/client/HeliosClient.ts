@@ -30,6 +30,7 @@ import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 
 const MAP_SERVICE = "hz:impl:mapService";
+const CACHE_SERVICE = "hz:impl:cacheService";
 const QUEUE_SERVICE = "hz:impl:queueService";
 const TOPIC_SERVICE = "hz:impl:topicService";
 const RELIABLE_TOPIC_SERVICE = "hz:impl:reliableTopicService";
@@ -42,6 +43,7 @@ const RETAINED_DISTRIBUTED_OBJECT_SERVICES = new Set<string>([
 ]);
 
 const NOT_RETAINED_DISTRIBUTED_OBJECT_SERVICES = new Set<string>([
+    CACHE_SERVICE,
     RELIABLE_TOPIC_SERVICE,
     EXECUTOR_SERVICE,
 ]);

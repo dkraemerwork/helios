@@ -191,6 +191,16 @@ describe('Advanced client surfaces — explicit deferral', () => {
         expect('getCacheManager' in HeliosClient.prototype).toBeFalse();
     });
 
+    test('HeliosClient.getDistributedObject() rejects cacheService as not retained', async () => {
+        const { HeliosClient } = await import(
+            '@zenystx/helios-core/client'
+        );
+        const client = new HeliosClient();
+        expect(() => client.getDistributedObject('hz:impl:cacheService', 'cache-a'))
+            .toThrow(/not retained on the remote-client contract/);
+        client.shutdown();
+    });
+
     test('HeliosClient does not expose getTransactionContext (transactions deferred)', async () => {
         const { HeliosClient } = await import(
             '@zenystx/helios-core/client'

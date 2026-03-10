@@ -17,8 +17,9 @@
  *
  * Note: JCache does not support null values; CACHED_AS_NULL is not used here.
  *
- * This proxy is deferred — the full JCache client surface is not yet wired.
- * This class provides the near-cache pattern for when it is enabled.
+ * Internal near-cache adapter for cache protocol flows.
+ * HeliosClient does not construct or expose cache proxies on the retained
+ * remote-client surface; cache remains an explicit out-of-scope capability.
  */
 import { LocalUpdatePolicy } from '@zenystx/helios-core/config/NearCacheConfig';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';

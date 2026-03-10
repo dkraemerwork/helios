@@ -390,10 +390,12 @@ describe("HeliosClient proxy integration", () => {
         client.shutdown();
     });
 
-    test("HeliosClient.getDistributedObject() rejects not-retained reliable-topic and executor services explicitly", async () => {
+    test("HeliosClient.getDistributedObject() rejects cache, reliable-topic, and executor services explicitly", async () => {
         const { HeliosClient } = await import("@zenystx/helios-core/client");
         const client = new HeliosClient();
 
+        expect(() => client.getDistributedObject("hz:impl:cacheService", "do-test"))
+            .toThrow(/not retained on the remote-client contract/);
         expect(() => client.getDistributedObject("hz:impl:reliableTopicService", "do-test"))
             .toThrow(/not retained on the remote-client contract/);
         expect(() => client.getDistributedObject("hz:impl:executorService", "do-test"))
