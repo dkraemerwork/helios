@@ -11,6 +11,14 @@
     "typecheck": "bun run tsc --noEmit"
   },
   "dependencies": {
+    "@zenystx/helios-blitz": "file:../../packages/blitz",
+    "@zenystx/helios-core": "file:../..",
+    "@zenystx/helios-dynamodb": "file:../../packages/dynamodb",
+    "@zenystx/helios-management-center": "file:../../packages/management-center",
+    "@zenystx/helios-mongodb": "file:../../packages/mongodb",
+    "@zenystx/helios-nestjs": "file:../../packages/nestjs",
+    "@zenystx/helios-s3": "file:../../packages/s3",
+    "@zenystx/helios-turso": "file:../../packages/turso",
     "reflect-metadata": "^0.2.2",
     "@nestjs/common": "^11.1.14",
     "@nestjs/core": "^11.1.14",
