@@ -6,11 +6,11 @@
  *   Map.Put                 (0x010100)
  *   Map.Get                 (0x010200)
  *   Map.Remove              (0x010300)
- *   Map.Size                (0x010400)
- *   Map.ContainsKey         (0x010500)
- *   Map.Clear               (0x010600)
- *   Map.Delete              (0x010700)
- *   Map.Set                 (0x010800)
+ *   Map.Size                (0x012a00)
+ *   Map.ContainsKey         (0x010600)
+ *   Map.Clear               (0x012d00)
+ *   Map.Delete              (0x010900)
+ *   Map.Set                 (0x010f00)
  *   Map.AddEntryListener    (0x011900)
  *   Map.RemoveEntryListener (0x011a00)
  *   Map.Lock                (0x011200)
@@ -18,32 +18,31 @@
  *   Map.TryLock             (0x011400)
  *   Map.IsLocked            (0x011500)
  *   Map.ForceUnlock         (0x011600)
- *   Map.GetAll              (0x010900)
- *   Map.PutAll              (0x011700)
- *   Map.GetEntryView        (0x010a00)
- *   Map.Evict               (0x010b00)
- *   Map.EvictAll            (0x010c00)
- *   Map.Flush               (0x010d00)
- *   Map.ContainsValue       (0x010e00)
- *   Map.KeySet              (0x010f00)
- *   Map.Values              (0x011000)
- *   Map.EntrySet            (0x011100)
- *   Map.TryPut              (0x011800)
- *   Map.PutIfAbsent         (0x011b00)
- *   Map.Replace             (0x011c00)
- *   Map.ReplaceIfSame       (0x011d00)
- *   Map.RemoveIfSame        (0x011e00)
+ *   Map.GetAll              (0x012300)
+ *   Map.PutAll              (0x012c00)
+ *   Map.GetEntryView        (0x011d00)
+ *   Map.Evict               (0x011e00)
+ *   Map.EvictAll            (0x011f00)
+ *   Map.Flush               (0x010a00)
+ *   Map.ContainsValue       (0x010700)
+ *   Map.KeySet              (0x012200)
+ *   Map.Values              (0x012400)
+ *   Map.EntrySet            (0x012500)
+ *   Map.TryPut              (0x010c00)
+ *   Map.PutIfAbsent         (0x010e00)
+ *   Map.Replace             (0x010400)
+ *   Map.ReplaceIfSame       (0x010500)
+ *   Map.RemoveIfSame        (0x010800)
  *   Map.RemoveInterceptor   (0x012100)
- *   Map.ExecuteOnKey        (0x012200)
- *   Map.SubmitToKey         (0x012300)
- *   Map.ExecuteOnAllKeys    (0x012400)
- *   Map.ExecuteWithPredicate (0x012500)
- *   Map.ExecuteOnKeys       (0x012600)
- *   Map.SetWithMaxIdle      (0x011f00)
- *   Map.PutTransient        (0x012700)
- *   Map.PutTransientWithMaxIdle (0x012800)
- *   Map.PutIfAbsentWithMaxIdle  (0x012900)
- *   Map.SetTtl              (0x012a00)
+ *   Map.ExecuteOnKey        (0x012e00)
+ *   Map.ExecuteOnAllKeys    (0x013000)
+ *   Map.ExecuteWithPredicate (0x013100)
+ *   Map.ExecuteOnKeys       (0x013200)
+ *   Map.SetWithMaxIdle      (0x014700)
+ *   Map.PutTransient        (0x010d00)
+ *   Map.PutTransientWithMaxIdle (0x014500)
+ *   Map.PutIfAbsentWithMaxIdle  (0x014600)
+ *   Map.SetTtl              (0x014300)
  *
  * Each handler: decode → dispatch → encode.
  * Handlers are thin — all business logic is in the service layer.
@@ -75,71 +74,69 @@ import type { MapServiceOperations } from './ServiceOperations.js';
 
 const MAP_REMOVE_ENTRY_LISTENER_REQUEST_TYPE  = 0x011a00;
 const MAP_REMOVE_ENTRY_LISTENER_RESPONSE_TYPE = 0x011a01;
-const MAP_LOCK_REQUEST_TYPE       = 0x011200;
-const MAP_LOCK_RESPONSE_TYPE      = 0x011201;
+const MAP_LOCK_REQUEST_TYPE       = 0x011000;
+const MAP_LOCK_RESPONSE_TYPE      = 0x011001;
 const MAP_UNLOCK_REQUEST_TYPE     = 0x011300;
 const MAP_UNLOCK_RESPONSE_TYPE    = 0x011301;
-const MAP_TRY_LOCK_REQUEST_TYPE   = 0x011400;
-const MAP_TRY_LOCK_RESPONSE_TYPE  = 0x011401;
-const MAP_IS_LOCKED_REQUEST_TYPE  = 0x011500;
-const MAP_IS_LOCKED_RESPONSE_TYPE = 0x011501;
-const MAP_FORCE_UNLOCK_REQUEST_TYPE  = 0x011600;
-const MAP_FORCE_UNLOCK_RESPONSE_TYPE = 0x011601;
-const MAP_GET_ALL_REQUEST_TYPE    = 0x010900;
-const MAP_GET_ALL_RESPONSE_TYPE   = 0x010901;
-const MAP_PUT_ALL_REQUEST_TYPE    = 0x011700;
-const MAP_PUT_ALL_RESPONSE_TYPE   = 0x011701;
-const MAP_GET_ENTRY_VIEW_REQUEST_TYPE  = 0x010a00;
-const MAP_GET_ENTRY_VIEW_RESPONSE_TYPE = 0x010a01;
-const MAP_EVICT_REQUEST_TYPE      = 0x010b00;
-const MAP_EVICT_RESPONSE_TYPE     = 0x010b01;
-const MAP_EVICT_ALL_REQUEST_TYPE  = 0x010c00;
-const MAP_EVICT_ALL_RESPONSE_TYPE = 0x010c01;
-const MAP_FLUSH_REQUEST_TYPE      = 0x010d00;
-const MAP_FLUSH_RESPONSE_TYPE     = 0x010d01;
-const MAP_CONTAINS_VALUE_REQUEST_TYPE  = 0x010e00;
-const MAP_CONTAINS_VALUE_RESPONSE_TYPE = 0x010e01;
-const MAP_KEY_SET_REQUEST_TYPE    = 0x010f00;
-const MAP_KEY_SET_RESPONSE_TYPE   = 0x010f01;
-const MAP_VALUES_REQUEST_TYPE     = 0x011000;
-const MAP_VALUES_RESPONSE_TYPE    = 0x011001;
-const MAP_ENTRY_SET_REQUEST_TYPE  = 0x011100;
-const MAP_ENTRY_SET_RESPONSE_TYPE = 0x011101;
-const MAP_TRY_PUT_REQUEST_TYPE    = 0x011800;
-const MAP_TRY_PUT_RESPONSE_TYPE   = 0x011801;
-const MAP_PUT_IF_ABSENT_REQUEST_TYPE  = 0x011b00;
-const MAP_PUT_IF_ABSENT_RESPONSE_TYPE = 0x011b01;
-const MAP_REPLACE_REQUEST_TYPE    = 0x011c00;
-const MAP_REPLACE_RESPONSE_TYPE   = 0x011c01;
-const MAP_REPLACE_IF_SAME_REQUEST_TYPE  = 0x011d00;
-const MAP_REPLACE_IF_SAME_RESPONSE_TYPE = 0x011d01;
-const MAP_REMOVE_IF_SAME_REQUEST_TYPE   = 0x011e00;
-const MAP_REMOVE_IF_SAME_RESPONSE_TYPE  = 0x011e01;
+const MAP_TRY_LOCK_REQUEST_TYPE   = 0x011100;
+const MAP_TRY_LOCK_RESPONSE_TYPE  = 0x011101;
+const MAP_IS_LOCKED_REQUEST_TYPE  = 0x011200;
+const MAP_IS_LOCKED_RESPONSE_TYPE = 0x011201;
+const MAP_FORCE_UNLOCK_REQUEST_TYPE  = 0x013300;
+const MAP_FORCE_UNLOCK_RESPONSE_TYPE = 0x013301;
+const MAP_GET_ALL_REQUEST_TYPE    = 0x012300;
+const MAP_GET_ALL_RESPONSE_TYPE   = 0x012301;
+const MAP_PUT_ALL_REQUEST_TYPE    = 0x012c00;
+const MAP_PUT_ALL_RESPONSE_TYPE   = 0x012c01;
+const MAP_GET_ENTRY_VIEW_REQUEST_TYPE  = 0x011d00;
+const MAP_GET_ENTRY_VIEW_RESPONSE_TYPE = 0x011d01;
+const MAP_EVICT_REQUEST_TYPE      = 0x011e00;
+const MAP_EVICT_RESPONSE_TYPE     = 0x011e01;
+const MAP_EVICT_ALL_REQUEST_TYPE  = 0x011f00;
+const MAP_EVICT_ALL_RESPONSE_TYPE = 0x011f01;
+const MAP_FLUSH_REQUEST_TYPE      = 0x010a00;
+const MAP_FLUSH_RESPONSE_TYPE     = 0x010a01;
+const MAP_CONTAINS_VALUE_REQUEST_TYPE  = 0x010700;
+const MAP_CONTAINS_VALUE_RESPONSE_TYPE = 0x010701;
+const MAP_KEY_SET_REQUEST_TYPE    = 0x012200;
+const MAP_KEY_SET_RESPONSE_TYPE   = 0x012201;
+const MAP_VALUES_REQUEST_TYPE     = 0x012400;
+const MAP_VALUES_RESPONSE_TYPE    = 0x012401;
+const MAP_ENTRY_SET_REQUEST_TYPE  = 0x012500;
+const MAP_ENTRY_SET_RESPONSE_TYPE = 0x012501;
+const MAP_TRY_PUT_REQUEST_TYPE    = 0x010c00;
+const MAP_TRY_PUT_RESPONSE_TYPE   = 0x010c01;
+const MAP_PUT_IF_ABSENT_REQUEST_TYPE  = 0x010e00;
+const MAP_PUT_IF_ABSENT_RESPONSE_TYPE = 0x010e01;
+const MAP_REPLACE_REQUEST_TYPE    = 0x010400;
+const MAP_REPLACE_RESPONSE_TYPE   = 0x010401;
+const MAP_REPLACE_IF_SAME_REQUEST_TYPE  = 0x010500;
+const MAP_REPLACE_IF_SAME_RESPONSE_TYPE = 0x010501;
+const MAP_REMOVE_IF_SAME_REQUEST_TYPE   = 0x010800;
+const MAP_REMOVE_IF_SAME_RESPONSE_TYPE  = 0x010801;
 const MAP_REMOVE_INTERCEPTOR_REQUEST_TYPE  = 0x012100;
 const MAP_REMOVE_INTERCEPTOR_RESPONSE_TYPE = 0x012101;
-const MAP_EXECUTE_ON_KEY_REQUEST_TYPE      = 0x012200;
-const MAP_EXECUTE_ON_KEY_RESPONSE_TYPE     = 0x012201;
-const MAP_SUBMIT_TO_KEY_REQUEST_TYPE       = 0x012300;
-const MAP_SUBMIT_TO_KEY_RESPONSE_TYPE      = 0x012301;
-const MAP_EXECUTE_ON_ALL_KEYS_REQUEST_TYPE = 0x012400;
-const MAP_EXECUTE_ON_ALL_KEYS_RESPONSE_TYPE = 0x012401;
-const MAP_EXECUTE_WITH_PREDICATE_REQUEST_TYPE  = 0x012500;
-const MAP_EXECUTE_WITH_PREDICATE_RESPONSE_TYPE = 0x012501;
-const MAP_EXECUTE_ON_KEYS_REQUEST_TYPE   = 0x012600;
-const MAP_EXECUTE_ON_KEYS_RESPONSE_TYPE  = 0x012601;
-const MAP_SET_WITH_MAX_IDLE_REQUEST_TYPE = 0x011f00;
-const MAP_SET_WITH_MAX_IDLE_RESPONSE_TYPE = 0x011f01;
-const MAP_PUT_TRANSIENT_REQUEST_TYPE     = 0x012700;
-const MAP_PUT_TRANSIENT_RESPONSE_TYPE    = 0x012701;
-const MAP_PUT_TRANSIENT_MAX_IDLE_REQUEST_TYPE  = 0x012800;
-const MAP_PUT_TRANSIENT_MAX_IDLE_RESPONSE_TYPE = 0x012801;
-const MAP_PUT_IF_ABSENT_MAX_IDLE_REQUEST_TYPE  = 0x012900;
-const MAP_PUT_IF_ABSENT_MAX_IDLE_RESPONSE_TYPE = 0x012901;
+const MAP_EXECUTE_ON_KEY_REQUEST_TYPE      = 0x012e00;
+const MAP_EXECUTE_ON_KEY_RESPONSE_TYPE     = 0x012e01;
+const MAP_EXECUTE_ON_ALL_KEYS_REQUEST_TYPE = 0x013000;
+const MAP_EXECUTE_ON_ALL_KEYS_RESPONSE_TYPE = 0x013001;
+const MAP_EXECUTE_WITH_PREDICATE_REQUEST_TYPE  = 0x013100;
+const MAP_EXECUTE_WITH_PREDICATE_RESPONSE_TYPE = 0x013101;
+const MAP_EXECUTE_ON_KEYS_REQUEST_TYPE   = 0x013200;
+const MAP_EXECUTE_ON_KEYS_RESPONSE_TYPE  = 0x013201;
+const MAP_SET_WITH_MAX_IDLE_REQUEST_TYPE = 0x014700;
+const MAP_SET_WITH_MAX_IDLE_RESPONSE_TYPE = 0x014701;
+const MAP_PUT_TRANSIENT_REQUEST_TYPE     = 0x010d00;
+const MAP_PUT_TRANSIENT_RESPONSE_TYPE    = 0x010d01;
+const MAP_PUT_TRANSIENT_MAX_IDLE_REQUEST_TYPE  = 0x014500;
+const MAP_PUT_TRANSIENT_MAX_IDLE_RESPONSE_TYPE = 0x014501;
+const MAP_PUT_IF_ABSENT_MAX_IDLE_REQUEST_TYPE  = 0x014600;
+const MAP_PUT_IF_ABSENT_MAX_IDLE_RESPONSE_TYPE = 0x014601;
 const MAP_SET_TTL_REQUEST_TYPE    = 0x014300;
 const MAP_SET_TTL_RESPONSE_TYPE   = 0x014301;
 
-// Standard response header (messageType + correlationId + backupAcks) = 16 bytes
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
+// Standard response header (messageType + correlationId + backupAcks) = 13 bytes
+const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES; // 13
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -212,8 +209,12 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
     dispatcher.register(MapAddEntryListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
         const iter = msg.forwardFrameIterator();
         const initialFrame = iter.next();
-        const listenerFlags = initialFrame.content.readInt32LE(MapAddEntryListenerCodec.REQUEST_INITIAL_FRAME_SIZE - BOOLEAN_SIZE_IN_BYTES - INT_SIZE_IN_BYTES);
-        const localOnly = initialFrame.content.readUInt8(MapAddEntryListenerCodec.REQUEST_INITIAL_FRAME_SIZE - BOOLEAN_SIZE_IN_BYTES) !== 0;
+        const listenerFlags = initialFrame.content.readInt32LE(
+            CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES,
+        );
+        const localOnly = initialFrame.content.readUInt8(
+            CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES + INT_SIZE_IN_BYTES,
+        ) !== 0;
         const name = StringCodec.decode(iter);
         const registrationId = await operations.addEntryListener(name, listenerFlags, localOnly, msg.getCorrelationId(), session);
         return _encodeListenerRegistrationResponse(0x011901, registrationId);
@@ -222,8 +223,15 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
     // Map.RemoveEntryListener
     dispatcher.register(MAP_REMOVE_ENTRY_LISTENER_REQUEST_TYPE, async (msg, session) => {
         const iter = msg.forwardFrameIterator();
-        iter.next(); // skip initial frame
-        const registrationId = StringCodec.decode(iter);
+        const initialFrame = iter.next();
+        const registrationId = FixedSizeTypesCodec.decodeUUID(
+            initialFrame.content,
+            CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES,
+        );
+        StringCodec.decode(iter);
+        if (registrationId === null) {
+            throw new Error('registrationId is required');
+        }
         const removed = await operations.removeEntryListener(registrationId, session);
         return _encodeBooleanResponse(MAP_REMOVE_ENTRY_LISTENER_RESPONSE_TYPE, removed);
     });
@@ -473,18 +481,6 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         return _encodeNullableDataResponse(MAP_EXECUTE_ON_KEY_RESPONSE_TYPE, result);
     });
 
-    // Map.SubmitToKey (async version of ExecuteOnKey — same wire protocol)
-    dispatcher.register(MAP_SUBMIT_TO_KEY_REQUEST_TYPE, async (msg, _session) => {
-        const iter = msg.forwardFrameIterator();
-        const initialFrame = iter.next();
-        const threadId = initialFrame.content.readBigInt64LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
-        const name = StringCodec.decode(iter);
-        const entryProcessor = DataCodec.decode(iter);
-        const key = DataCodec.decode(iter);
-        const result = await operations.executeOnKey(name, key, entryProcessor, threadId);
-        return _encodeNullableDataResponse(MAP_SUBMIT_TO_KEY_RESPONSE_TYPE, result);
-    });
-
     // Map.ExecuteOnAllKeys
     dispatcher.register(MAP_EXECUTE_ON_ALL_KEYS_REQUEST_TYPE, async (msg, _session) => {
         const iter = msg.forwardFrameIterator();
@@ -627,12 +623,12 @@ function _encodeNullableDataResponse(responseType: number, data: Data | null): C
 
 function _encodeListenerRegistrationResponse(responseType: number, registrationId: string): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + UUID_SIZE_IN_BYTES);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
+    FixedSizeTypesCodec.encodeUUID(buf, RESPONSE_HEADER_SIZE, registrationId);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
-    StringCodec.encode(msg, registrationId);
     msg.setFinal();
     return msg;
 }
