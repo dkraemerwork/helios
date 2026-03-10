@@ -78,6 +78,8 @@ export type TransactionBackupMessage =
     | {
         readonly type: 'TXN_PURGE';
         readonly txnId: string;
+        readonly recoveryMemberId: string | null;
+        readonly recoveryFenceToken: string | null;
     };
 
 /**
@@ -282,6 +284,8 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
         await this._replicateToPreparedTargets(txnId, {
             type: 'TXN_PURGE',
             txnId,
+            recoveryMemberId: null,
+            recoveryFenceToken: null,
         });
         this._pendingBackupTargets.delete(txnId);
     }
@@ -355,10 +359,27 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                 }
                 return existing === undefined;
             }
-            case 'TXN_PURGE':
+            case 'TXN_PURGE': {
+                const existing = this.txBackupLogs.get(message.txnId);
+                if (existing === undefined) {
+                    this._pendingBackupTargets.delete(message.txnId);
+                    return true;
+                }
+
+                if (message.recoveryMemberId !== null || message.recoveryFenceToken !== null) {
+                    if (
+                        message.recoveryMemberId === null
+                        || message.recoveryFenceToken === null
+                        || !this._matchesRecoveryFence(existing, message.recoveryMemberId, message.recoveryFenceToken)
+                    ) {
+                        return false;
+                    }
+                }
+
                 this.txBackupLogs.delete(message.txnId);
                 this._pendingBackupTargets.delete(message.txnId);
                 return true;
+            }
         }
     }
 
@@ -530,12 +551,9 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
         log.recoveryState = 'IN_PROGRESS';
 
         try {
-            await this._replicateToPreparedTargets(txnId, {
-                type: 'TXN_RECOVERY_STARTED',
-                txnId,
-                recoveryMemberId: localMemberId,
-                recoveryFenceToken,
-            });
+            if (!(await this._establishRecoveryFence(txnId, localMemberId, recoveryFenceToken, log))) {
+                return false;
+            }
 
             if (!this._matchesRecoveryFence(log, localMemberId, recoveryFenceToken)) {
                 return false;
@@ -568,6 +586,8 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             await this._replicateToPreparedTargets(txnId, {
                 type: 'TXN_PURGE',
                 txnId,
+                recoveryMemberId: localMemberId,
+                recoveryFenceToken,
             });
             this.txBackupLogs.delete(txnId);
             this._pendingBackupTargets.delete(txnId);
@@ -596,6 +616,31 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
 
     private _matchesRecoveryFence(log: TxBackupLog, recoveryMemberId: string, recoveryFenceToken: string): boolean {
         return log.recoveryOwnerMemberId === recoveryMemberId && log.recoveryFenceToken === recoveryFenceToken;
+    }
+
+    private async _establishRecoveryFence(
+        txnId: string,
+        recoveryMemberId: string,
+        recoveryFenceToken: string,
+        log: TxBackupLog,
+    ): Promise<boolean> {
+        try {
+            await this._replicateToPreparedTargets(txnId, {
+                type: 'TXN_RECOVERY_STARTED',
+                txnId,
+                recoveryMemberId,
+                recoveryFenceToken,
+            });
+            return this._matchesRecoveryFence(log, recoveryMemberId, recoveryFenceToken);
+        } catch (error) {
+            if (this._matchesRecoveryFence(log, recoveryMemberId, recoveryFenceToken)) {
+                this._clearRecoveryFence(log, 'FAILED');
+            }
+            if (error instanceof TransactionException || error instanceof Error) {
+                return false;
+            }
+            throw error;
+        }
     }
 
     private _shouldAcceptRecoveryFence(log: TxBackupLog, recoveryMemberId: string, recoveryFenceToken: string): boolean {
@@ -641,8 +686,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
     }
 
     private _isBestEffortRecoveryMessage(message: TransactionBackupMessage): boolean {
-        return message.type === 'TXN_RECOVERY_STARTED'
-            || message.type === 'TXN_RECOVERY_FAILED'
+        return message.type === 'TXN_RECOVERY_FAILED'
             || message.type === 'TXN_RECOVERED';
     }
 

@@ -835,6 +835,8 @@ function writeTransactionBackupMessage(out: ByteArrayObjectDataOutput, message: 
             out.writeString(message.recoveryFenceToken);
             return;
         case 'TXN_PURGE':
+            out.writeString(message.recoveryMemberId);
+            out.writeString(message.recoveryFenceToken);
             return;
     }
 }
@@ -882,7 +884,12 @@ function readTransactionBackupMessage(inp: ByteArrayObjectDataInput): Transactio
                 recoveryFenceToken: readRequiredString(inp),
             };
         case 'TXN_PURGE':
-            return { type, txnId };
+            return {
+                type,
+                txnId,
+                recoveryMemberId: inp.readString(),
+                recoveryFenceToken: inp.readString(),
+            };
     }
     throw new Error(`Unsupported transaction backup message type: ${type}`);
 }
