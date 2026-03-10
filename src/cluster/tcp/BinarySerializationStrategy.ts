@@ -441,6 +441,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
             case 'TXN_BACKUP_REPLICATION_ACK':
                 out.writeString(message.requestId);
                 out.writeString(message.txnId);
+                out.writeBoolean(message.applied);
                 return;
         }
     }
@@ -692,6 +693,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     type: 'TXN_BACKUP_REPLICATION_ACK',
                     requestId: readRequiredString(inp),
                     txnId: readRequiredString(inp),
+                    applied: inp.readBoolean(),
                 };
         }
     }
@@ -826,8 +828,11 @@ function writeTransactionBackupMessage(out: ByteArrayObjectDataOutput, message: 
         case 'TXN_STATE':
             out.writeString(message.state);
             return;
+        case 'TXN_RECOVERY_STARTED':
+        case 'TXN_RECOVERY_FAILED':
         case 'TXN_RECOVERED':
             out.writeString(message.recoveryMemberId);
+            out.writeString(message.recoveryFenceToken);
             return;
         case 'TXN_PURGE':
             return;
@@ -867,11 +872,14 @@ function readTransactionBackupMessage(inp: ByteArrayObjectDataInput): Transactio
                 txnId,
                 state: readRequiredString(inp) as Extract<TransactionBackupMessage, { type: 'TXN_STATE' }>['state'],
             };
+        case 'TXN_RECOVERY_STARTED':
+        case 'TXN_RECOVERY_FAILED':
         case 'TXN_RECOVERED':
             return {
                 type,
                 txnId,
                 recoveryMemberId: readRequiredString(inp),
+                recoveryFenceToken: readRequiredString(inp),
             };
         case 'TXN_PURGE':
             return { type, txnId };

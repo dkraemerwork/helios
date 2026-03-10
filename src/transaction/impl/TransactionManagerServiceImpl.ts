@@ -58,9 +58,22 @@ export type TransactionBackupMessage =
         readonly state: State.COMMITTING | State.COMMITTED | State.ROLLING_BACK | State.ROLLED_BACK | State.COMMIT_FAILED;
     }
     | {
+        readonly type: 'TXN_RECOVERY_STARTED';
+        readonly txnId: string;
+        readonly recoveryMemberId: string;
+        readonly recoveryFenceToken: string;
+    }
+    | {
+        readonly type: 'TXN_RECOVERY_FAILED';
+        readonly txnId: string;
+        readonly recoveryMemberId: string;
+        readonly recoveryFenceToken: string;
+    }
+    | {
         readonly type: 'TXN_RECOVERED';
         readonly txnId: string;
         readonly recoveryMemberId: string;
+        readonly recoveryFenceToken: string;
     }
     | {
         readonly type: 'TXN_PURGE';
@@ -73,6 +86,8 @@ export type TransactionBackupMessage =
 export class TxBackupLog {
     state: State;
     recoveryOwnerMemberId: string | null;
+    recoveryFenceToken: string | null;
+    recoveryState: 'IDLE' | 'IN_PROGRESS' | 'FAILED' | 'COMPLETED';
     recovered: boolean;
 
     constructor(
@@ -87,6 +102,8 @@ export class TxBackupLog {
     ) {
         this.state = initialState;
         this.recoveryOwnerMemberId = null;
+        this.recoveryFenceToken = null;
+        this.recoveryState = 'IDLE';
         this.recovered = false;
     }
 
@@ -112,6 +129,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
     private readonly _recoveredTxnIdSet = new Set<string>();
     private readonly _appliedRecordIds: string[] = [];
     private readonly _appliedRecordIdSet = new Set<string>();
+    private readonly _activeRecoveryRuns = new Map<string, Promise<boolean>>();
 
     constructor(
         nodeEngine: NodeEngine,
@@ -268,7 +286,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
         this._pendingBackupTargets.delete(txnId);
     }
 
-    applyBackupMessage(message: TransactionBackupMessage): void {
+    applyBackupMessage(message: TransactionBackupMessage): boolean {
         switch (message.type) {
             case 'TXN_BEGIN':
                 this.txBackupLogs.set(
@@ -284,7 +302,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                         message.backupMemberIds,
                     ),
                 );
-                return;
+                return true;
             case 'TXN_PREPARE':
                 this.txBackupLogs.set(
                     message.txnId,
@@ -299,27 +317,48 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                         message.backupMemberIds,
                     ),
                 );
-                return;
+                return true;
             case 'TXN_STATE': {
                 const existing = this.txBackupLogs.get(message.txnId);
                 if (existing !== undefined) {
                     existing.state = message.state;
                 }
-                return;
+                return true;
+            }
+            case 'TXN_RECOVERY_STARTED': {
+                const existing = this.txBackupLogs.get(message.txnId);
+                if (existing !== undefined && this._shouldAcceptRecoveryFence(existing, message.recoveryMemberId, message.recoveryFenceToken)) {
+                    existing.recoveryOwnerMemberId = message.recoveryMemberId;
+                    existing.recoveryFenceToken = message.recoveryFenceToken;
+                    existing.recoveryState = 'IN_PROGRESS';
+                    return true;
+                }
+                return false;
+            }
+            case 'TXN_RECOVERY_FAILED': {
+                const existing = this.txBackupLogs.get(message.txnId);
+                if (existing !== undefined && this._matchesRecoveryFence(existing, message.recoveryMemberId, message.recoveryFenceToken)) {
+                    this._clearRecoveryFence(existing, 'FAILED');
+                    return true;
+                }
+                return existing === undefined;
             }
             case 'TXN_RECOVERED': {
                 const existing = this.txBackupLogs.get(message.txnId);
-                if (existing !== undefined) {
+                if (existing !== undefined && this._matchesRecoveryFence(existing, message.recoveryMemberId, message.recoveryFenceToken)) {
                     existing.recovered = true;
                     existing.recoveryOwnerMemberId = message.recoveryMemberId;
+                    existing.recoveryFenceToken = message.recoveryFenceToken;
+                    existing.recoveryState = 'COMPLETED';
+                    this._rememberRecoveredTxn(message.txnId);
+                    return true;
                 }
-                this._rememberRecoveredTxn(message.txnId);
-                return;
+                return existing === undefined;
             }
             case 'TXN_PURGE':
                 this.txBackupLogs.delete(message.txnId);
                 this._pendingBackupTargets.delete(message.txnId);
-                return;
+                return true;
         }
     }
 
@@ -347,48 +386,42 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
 
             if (this._recoveredTxnIdSet.has(txnId) && !log.recovered) {
                 log.recovered = true;
+                log.recoveryState = 'COMPLETED';
             }
 
-            if (log.recovered && log.recoveryOwnerMemberId !== null) {
-                if (this._isMemberActive(log.recoveryOwnerMemberId)) {
-                    if (log.recoveryOwnerMemberId !== localMemberId) {
-                        continue;
+            if (log.recovered || log.recoveryState === 'COMPLETED') {
+                continue;
+            }
+
+            if (log.recoveryState === 'IN_PROGRESS') {
+                if (log.recoveryOwnerMemberId === localMemberId) {
+                    const activeRun = this._activeRecoveryRuns.get(txnId);
+                    if (activeRun !== undefined) {
+                        await activeRun;
                     }
-                } else {
-                    log.recovered = false;
-                    log.recoveryOwnerMemberId = null;
                 }
+                continue;
+            }
+
+            if (log.recoveryOwnerMemberId !== null && !this._isMemberActive(log.recoveryOwnerMemberId)) {
+                this._clearRecoveryFence(log, 'FAILED');
             }
 
             if (log.state === State.PREPARED || log.state === State.COMMITTING) {
                 const recoveryOwnerMemberId = this._selectRecoveryOwner(log);
-                if (recoveryOwnerMemberId !== localMemberId) {
+                if (recoveryOwnerMemberId !== localMemberId || this._activeRecoveryRuns.has(txnId)) {
                     continue;
                 }
-                await this._replicateToPreparedTargets(txnId, {
-                    type: 'TXN_RECOVERED',
-                    txnId,
-                    recoveryMemberId: localMemberId,
-                });
-                log.recovered = true;
-                log.recoveryOwnerMemberId = localMemberId;
-                for (const record of log.records) {
-                    if (this._appliedRecordIdSet.has(record.recordId)) {
-                        continue;
+                const recoveryRun = this._recoverBackupLog(txnId, log, localMemberId);
+                this._activeRecoveryRuns.set(txnId, recoveryRun);
+                try {
+                    if (await recoveryRun) {
+                        recovered++;
                     }
-                    await this._backupExecutor.commitRecord(record);
-                    this._rememberAppliedRecord(record.recordId);
+                } finally {
+                    this._activeRecoveryRuns.delete(txnId);
                 }
-                this._rememberRecoveredTxn(txnId);
-                await this._replicateToPreparedTargets(txnId, {
-                    type: 'TXN_PURGE',
-                    txnId,
-                });
-                recovered++;
             }
-
-            this.txBackupLogs.delete(txnId);
-            this._pendingBackupTargets.delete(txnId);
         }
 
         return recovered;
@@ -401,6 +434,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
         this._recoveredTxnIdSet.clear();
         this._appliedRecordIds.length = 0;
         this._appliedRecordIdSet.clear();
+        this._activeRecoveryRuns.clear();
     }
 
     shutdown(_terminate: boolean): void {
@@ -432,6 +466,9 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             return;
         }
         const acknowledgedTargets = await this._backupTransport.replicate(message, targets);
+        if (this._isBestEffortRecoveryMessage(message)) {
+            return;
+        }
         if (acknowledgedTargets.length !== targets.length) {
             throw new TransactionException(
                 `Transaction durability replication incomplete for ${txnId}: required=${targets.length}, confirmed=${acknowledgedTargets.length}`,
@@ -473,14 +510,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             return localMemberId;
         }
 
-        const activeMemberIds = new Set(this._backupTransport?.getActiveMemberIds() ?? [localMemberId]);
-        activeMemberIds.add(localMemberId);
-        for (const backupMemberId of log.backupMemberIds) {
-            if (activeMemberIds.has(backupMemberId)) {
-                return backupMemberId;
-            }
-        }
-        return null;
+        return log.backupMemberIds.includes(localMemberId) ? localMemberId : null;
     }
 
     private _isMemberActive(memberId: string): boolean {
@@ -491,6 +521,136 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             return true;
         }
         return this._backupTransport.getActiveMemberIds().includes(memberId);
+    }
+
+    private async _recoverBackupLog(txnId: string, log: TxBackupLog, localMemberId: string): Promise<boolean> {
+        const recoveryFenceToken = crypto.randomUUID();
+        log.recoveryOwnerMemberId = localMemberId;
+        log.recoveryFenceToken = recoveryFenceToken;
+        log.recoveryState = 'IN_PROGRESS';
+
+        try {
+            await this._replicateToPreparedTargets(txnId, {
+                type: 'TXN_RECOVERY_STARTED',
+                txnId,
+                recoveryMemberId: localMemberId,
+                recoveryFenceToken,
+            });
+
+            if (!this._matchesRecoveryFence(log, localMemberId, recoveryFenceToken)) {
+                return false;
+            }
+
+            for (const record of log.records) {
+                if (!this._matchesRecoveryFence(log, localMemberId, recoveryFenceToken)) {
+                    return false;
+                }
+                if (this._appliedRecordIdSet.has(record.recordId)) {
+                    continue;
+                }
+                await this._backupExecutor!.commitRecord(record);
+                this._rememberAppliedRecord(record.recordId);
+            }
+
+            if (!this._matchesRecoveryFence(log, localMemberId, recoveryFenceToken)) {
+                return false;
+            }
+
+            log.recovered = true;
+            log.recoveryState = 'COMPLETED';
+            this._rememberRecoveredTxn(txnId);
+            await this._replicateToPreparedTargets(txnId, {
+                type: 'TXN_RECOVERED',
+                txnId,
+                recoveryMemberId: localMemberId,
+                recoveryFenceToken,
+            });
+            await this._replicateToPreparedTargets(txnId, {
+                type: 'TXN_PURGE',
+                txnId,
+            });
+            this.txBackupLogs.delete(txnId);
+            this._pendingBackupTargets.delete(txnId);
+            return true;
+        } catch (error) {
+            if (this._isRecoveryFenceRejectedError(error)) {
+                if (this._matchesRecoveryFence(log, localMemberId, recoveryFenceToken)) {
+                    this._clearRecoveryFence(log, 'FAILED');
+                }
+                return false;
+            }
+            this._clearRecoveryFence(log, 'FAILED');
+            try {
+                await this._replicateToPreparedTargets(txnId, {
+                    type: 'TXN_RECOVERY_FAILED',
+                    txnId,
+                    recoveryMemberId: localMemberId,
+                    recoveryFenceToken,
+                });
+            } catch {
+                // Ignore follow-up fence replication failures and surface the original error.
+            }
+            throw error;
+        }
+    }
+
+    private _matchesRecoveryFence(log: TxBackupLog, recoveryMemberId: string, recoveryFenceToken: string): boolean {
+        return log.recoveryOwnerMemberId === recoveryMemberId && log.recoveryFenceToken === recoveryFenceToken;
+    }
+
+    private _shouldAcceptRecoveryFence(log: TxBackupLog, recoveryMemberId: string, recoveryFenceToken: string): boolean {
+        if (this._hasHigherPriorityLocalRecoveryCandidate(log, recoveryMemberId)) {
+            return false;
+        }
+        if (log.recoveryState === 'COMPLETED') {
+            return this._matchesRecoveryFence(log, recoveryMemberId, recoveryFenceToken);
+        }
+        if (log.recoveryOwnerMemberId === null || log.recoveryFenceToken === null) {
+            return true;
+        }
+        if (log.recoveryOwnerMemberId === recoveryMemberId) {
+            return true;
+        }
+        return this._compareRecoveryOwnerPriority(log, recoveryMemberId, log.recoveryOwnerMemberId) < 0;
+    }
+
+    private _compareRecoveryOwnerPriority(log: TxBackupLog, leftMemberId: string, rightMemberId: string): number {
+        const leftRank = this._getRecoveryOwnerRank(log, leftMemberId);
+        const rightRank = this._getRecoveryOwnerRank(log, rightMemberId);
+        if (leftRank !== rightRank) {
+            return leftRank - rightRank;
+        }
+        return leftMemberId.localeCompare(rightMemberId);
+    }
+
+    private _getRecoveryOwnerRank(log: TxBackupLog, memberId: string): number {
+        const rank = log.backupMemberIds.indexOf(memberId);
+        return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
+    }
+
+    private _hasHigherPriorityLocalRecoveryCandidate(log: TxBackupLog, recoveryMemberId: string): boolean {
+        const localMemberId = this._backupTransport?.localMemberId ?? 'local';
+        if (localMemberId === recoveryMemberId) {
+            return false;
+        }
+        return this._compareRecoveryOwnerPriority(log, localMemberId, recoveryMemberId) < 0;
+    }
+
+    private _isRecoveryFenceRejectedError(error: unknown): boolean {
+        return error instanceof Error && error.message.includes('Transaction backup replication was rejected');
+    }
+
+    private _isBestEffortRecoveryMessage(message: TransactionBackupMessage): boolean {
+        return message.type === 'TXN_RECOVERY_STARTED'
+            || message.type === 'TXN_RECOVERY_FAILED'
+            || message.type === 'TXN_RECOVERED';
+    }
+
+    private _clearRecoveryFence(log: TxBackupLog, state: 'IDLE' | 'FAILED'): void {
+        log.recovered = false;
+        log.recoveryOwnerMemberId = null;
+        log.recoveryFenceToken = null;
+        log.recoveryState = state;
     }
 }
 
@@ -518,5 +678,7 @@ export function snapshotTxBackupLog(log: TxBackupLog): TxBackupLog {
     );
     copy.recovered = log.recovered;
     copy.recoveryOwnerMemberId = log.recoveryOwnerMemberId;
+    copy.recoveryFenceToken = log.recoveryFenceToken;
+    copy.recoveryState = log.recoveryState;
     return copy;
 }

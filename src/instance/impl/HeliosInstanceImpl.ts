@@ -577,7 +577,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionCacheInvalidationListeners = new Map<string, Set<string>>();
   private readonly _clientTransactions = new Map<string, ClientTransactionContext>();
   private readonly _pendingTxnBackupAcks = new Map<string, {
-    resolve: () => void;
+    resolve: (applied: boolean) => void;
     reject: (error: Error) => void;
     timeoutHandle: ReturnType<typeof setTimeout> | null;
     target: string;
@@ -1029,15 +1029,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
       }
       if (message.type === 'TXN_BACKUP_REPLICATION') {
         const dedupeKey = `${message.sourceNodeId}:${message.requestId ?? 'fire-and-forget'}:${message.payload.txnId}:${message.payload.type}`;
+        let applied = true;
         if (!this._dedupedTxnBackupMessages.has(dedupeKey)) {
           this._dedupedTxnBackupMessages.add(dedupeKey);
-          this._transactionManagerService.applyBackupMessage(message.payload);
+          applied = this._transactionManagerService.applyBackupMessage(message.payload);
         }
         if (message.requestId !== null) {
           this._transport?.send(message.sourceNodeId, {
             type: 'TXN_BACKUP_REPLICATION_ACK',
             requestId: message.requestId,
             txnId: message.payload.txnId,
+            applied,
           });
         }
         return;
@@ -1049,7 +1051,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
           if (pending.timeoutHandle !== null) {
             clearTimeout(pending.timeoutHandle);
           }
-          pending.resolve();
+          pending.resolve(message.applied);
         }
         return;
       }
@@ -1444,7 +1446,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
           const channel = directTransport._peers.get(target);
           if (channel !== undefined) {
             const requestId = crypto.randomUUID();
-            const ackPromise = new Promise<void>((resolve, reject) => {
+            const ackPromise = new Promise<boolean>((resolve, reject) => {
               const timeoutHandle = setTimeout(() => {
                 this._pendingTxnBackupAcks.delete(requestId);
                 reject(new Error(`Transaction backup replication timed out for target ${target}`));
@@ -1462,8 +1464,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
               sourceNodeId: this._clusterCoordinator!.getLocalMemberId(),
               payload,
             });
-            await ackPromise;
-            acknowledgedTargets.push(target);
+            if (await ackPromise) {
+              acknowledgedTargets.push(target);
+            }
           }
         }
         return acknowledgedTargets;

@@ -583,6 +583,7 @@ export interface TransactionBackupReplicationAckMsg {
   readonly type: "TXN_BACKUP_REPLICATION_ACK";
   readonly requestId: string;
   readonly txnId: string;
+  readonly applied: boolean;
 }
 
 export type ClusterMessage =
