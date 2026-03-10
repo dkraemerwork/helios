@@ -14,9 +14,9 @@ import { ApiService } from '../../core/services/api.service';
 
       @if (loading()) {
         <div class="text-center py-8 text-mc-text-muted">Loading configuration...</div>
-      } @else if (config(); as cfg) {
+      } @else if (config()) {
         <div class="mc-panel p-4">
-          <pre class="text-xs text-mc-text-dim overflow-x-auto leading-relaxed">{{ cfg | json }}</pre>
+          <pre class="text-xs text-mc-text-dim overflow-x-auto leading-relaxed">{{ config() | json }}</pre>
         </div>
       } @else {
         <div class="text-center py-8 text-mc-text-muted">No configuration available</div>

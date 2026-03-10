@@ -1,5 +1,48 @@
 @import 'tailwindcss';
 
+/* ── Custom theme (Tailwind v4 — replaces tailwind.config.ts) ────────────── */
+
+@theme {
+  --color-mc-bg: #0a0e14;
+  --color-mc-panel: rgba(14, 20, 30, 0.95);
+  --color-mc-panel-solid: #0e141e;
+  --color-mc-border: rgba(59, 130, 246, 0.15);
+  --color-mc-border-hover: rgba(59, 130, 246, 0.3);
+  --color-mc-blue: #3b82f6;
+  --color-mc-blue-hover: #2563eb;
+  --color-mc-blue-light: #60a5fa;
+  --color-mc-amber: #f59e0b;
+  --color-mc-amber-hover: #d97706;
+  --color-mc-emerald: #10b981;
+  --color-mc-emerald-hover: #059669;
+  --color-mc-red: #ef4444;
+  --color-mc-red-hover: #dc2626;
+  --color-mc-cyan: #06b6d4;
+  --color-mc-cyan-hover: #0891b2;
+  --color-mc-purple: #a855f7;
+  --color-mc-purple-hover: #9333ea;
+  --color-mc-text: #e2e8f0;
+  --color-mc-text-dim: #94a3b8;
+  --color-mc-text-muted: #64748b;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fadeIn 0.2s ease-out;
+  --animate-slide-in: slideIn 0.2s ease-out;
+
+  @keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    0% { opacity: 0; transform: translateY(-4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+}
+
 /* ── Base resets and dark theme ───────────────────────────────────────────── */
 
 html,

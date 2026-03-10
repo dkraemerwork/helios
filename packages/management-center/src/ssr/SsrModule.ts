@@ -30,7 +30,12 @@ import { AngularSsrController } from './AngularSsrController.js';
  */
 function resolveBrowserDistPath(): string {
   const moduleDir = path.dirname(new URL(import.meta.url).pathname);
-  return path.resolve(moduleDir, '..', '..', '..', 'frontend', 'dist', 'browser');
+  // When Bun runs TS directly: src/ssr/SsrModule.ts → 2 levels up
+  // When compiled:            dist/src/ssr/SsrModule.js → 3 levels up
+  const packageRoot = moduleDir.includes(path.sep + 'dist' + path.sep)
+    ? path.resolve(moduleDir, '..', '..', '..')
+    : path.resolve(moduleDir, '..', '..');
+  return path.resolve(packageRoot, 'frontend', 'dist', 'browser');
 }
 
 /**

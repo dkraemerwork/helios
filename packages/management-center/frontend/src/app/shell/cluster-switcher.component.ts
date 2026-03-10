@@ -40,7 +40,7 @@ import { ClusterStore } from '../core/store/cluster.store';
             @for (cluster of clusterList(); track cluster.clusterId) {
               <button
                 class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left hover:bg-mc-blue/5 transition-colors"
-                [class.bg-mc-blue/10]="cluster.clusterId === activeClusterId()"
+                [class]="cluster.clusterId === activeClusterId() ? 'bg-mc-blue/10' : ''"
                 (click)="switchCluster(cluster.clusterId)">
                 <span
                   class="mc-status-dot flex-shrink-0"

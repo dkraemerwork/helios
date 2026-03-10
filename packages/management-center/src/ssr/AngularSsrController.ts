@@ -83,15 +83,26 @@ export class AngularSsrController {
     private readonly ssrErrorRenderer: SsrErrorRenderer,
     private readonly sessionService: SessionService,
   ) {
-    // Resolve paths relative to this file's compiled location
-    // In production: dist/src/ssr/AngularSsrController.js
-    // Frontend dist: frontend/dist/
+    // Resolve the package root directory.
+    // When Bun runs TS directly: src/ssr/AngularSsrController.ts → 2 levels up
+    // When compiled:            dist/src/ssr/AngularSsrController.js → 3 levels up
     const ssrDir = path.dirname(new URL(import.meta.url).pathname);
-    const packageRoot = path.resolve(ssrDir, '..', '..', '..');
+    const packageRoot = ssrDir.includes(path.sep + 'dist' + path.sep)
+      ? path.resolve(ssrDir, '..', '..', '..')
+      : path.resolve(ssrDir, '..', '..');
 
     this.browserDistPath = path.join(packageRoot, 'frontend', 'dist', 'browser');
     this.serverBundlePath = path.join(packageRoot, 'frontend', 'dist', 'server', 'main.server.mjs');
-    this.indexHtmlPath = path.join(this.browserDistPath, 'index.html');
+
+    // Angular 19+ uses index.csr.html (browser) and index.server.html (SSR)
+    // Fall back to index.html for older builds.
+    const csrHtmlPath = path.join(this.browserDistPath, 'index.csr.html');
+    const serverHtmlPath = path.join(packageRoot, 'frontend', 'dist', 'server', 'index.server.html');
+    this.indexHtmlPath = existsSync(serverHtmlPath)
+      ? serverHtmlPath
+      : existsSync(csrHtmlPath)
+        ? csrHtmlPath
+        : path.join(this.browserDistPath, 'index.html');
   }
 
   /** Exposes SSR self-metrics for the internal monitoring endpoint. */
@@ -107,7 +118,7 @@ export class AngularSsrController {
     @Req() req: { url: string; headers: Record<string, string | string[] | undefined>; raw?: { url?: string } },
     @Res() res: {
       status: (code: number) => { send: (body: string) => void };
-      redirect: (code: number, url: string) => void;
+      redirect: (url: string, code?: number) => void;
       header: (name: string, value: string) => void;
       type: (contentType: string) => void;
     },
@@ -148,7 +159,26 @@ export class AngularSsrController {
       // Redirect to login for protected routes without auth
       if (!user && !this.isPublicRoute(pathname)) {
         const returnUrl = encodeURIComponent(url);
-        res.redirect(302, `/login?returnUrl=${returnUrl}`);
+        // Fastify 5: reply.redirect(url, code) — explicitly pass 302 since
+        // the @Res() decorator may interfere with the default status code.
+        res.redirect(`/login?returnUrl=${returnUrl}`, 302);
+        return;
+      }
+
+      // For authenticated app routes (anything under /clusters, /settings, /users),
+      // skip SSR entirely and serve the CSR shell directly. SSR is only useful for
+      // the login page; the dashboard is a live SPA that hydrates from the WS.
+      // Angular SSR hangs on authenticated routes because it tries to call API
+      // endpoints on the same server, creating a deadlock.
+      if (user && this.isAppRoute(pathname)) {
+        const transferState = await this.ssrStateService.getStateForRoute(
+          url,
+          user,
+          user?.clusterScopes ?? [],
+        );
+        const fallbackHtml = this.buildFallbackHtml(nonce, transferState);
+        res.type('text/html');
+        res.status(200).send(fallbackHtml);
         return;
       }
 
@@ -159,8 +189,8 @@ export class AngularSsrController {
         user?.clusterScopes ?? [],
       );
 
-      // Attempt SSR rendering
-      const html = await this.renderWithAngular(url, nonce, req, session, user, transferState);
+      // Attempt SSR rendering with a timeout to prevent hangs
+      const html = await this.renderWithTimeout(url, nonce, req, session, user, transferState);
 
       if (html !== null) {
         this.metrics.totalRenders++;
@@ -430,6 +460,43 @@ export class AngularSsrController {
     }
 
     return false;
+  }
+
+  /**
+   * Returns true if the pathname is an authenticated app route that should
+   * be served as CSR (not SSR). These routes are part of the Angular SPA
+   * and SSR rendering them causes deadlocks because Angular tries to call
+   * API endpoints on the same server during server-side rendering.
+   */
+  private isAppRoute(pathname: string): boolean {
+    const appPrefixes = ['/clusters', '/settings', '/users'];
+    return appPrefixes.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
+  }
+
+  /**
+   * Wraps renderWithAngular with a timeout to prevent SSR from hanging
+   * indefinitely. Returns null (triggering CSR fallback) if the render
+   * exceeds the timeout.
+   */
+  private async renderWithTimeout(
+    url: string,
+    nonce: string,
+    req: { url: string; headers: Record<string, string | string[] | undefined> },
+    session: import('../shared/types.js').Session | null,
+    user: import('../shared/types.js').User | null,
+    transferState: Record<string, unknown>,
+  ): Promise<string | null> {
+    const timeoutMs = 5_000;
+
+    const renderPromise = this.renderWithAngular(url, nonce, req, session, user, transferState);
+    const timeoutPromise = new Promise<null>(resolve => {
+      setTimeout(() => {
+        this.logger.warn(`SSR render timed out after ${timeoutMs}ms for ${url} — falling back to CSR`);
+        resolve(null);
+      }, timeoutMs);
+    });
+
+    return Promise.race([renderPromise, timeoutPromise]);
   }
 
   /** Extracts the session cookie value from the raw request headers. */

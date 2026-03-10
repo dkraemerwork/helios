@@ -125,10 +125,13 @@ export const routes: Routes = [
       },
 
       // ── Default redirect ─────────────────────────────────────────────
+      // AppShellComponent.ngOnInit() fetches clusters and navigates to
+      // the first cluster dashboard. This placeholder redirect handles
+      // the initial empty-path route inside the authenticated shell.
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'login',
+        redirectTo: 'clusters/_',
       },
     ],
   },

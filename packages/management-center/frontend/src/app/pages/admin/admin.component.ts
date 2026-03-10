@@ -12,10 +12,7 @@ import { ApiService } from '../../core/services/api.service';
 
       @if (actionResult(); as result) {
         <div class="p-3 rounded-md text-sm"
-          [class.bg-mc-emerald/10]="result.success"
-          [class.text-mc-emerald]="result.success"
-          [class.bg-mc-red/10]="!result.success"
-          [class.text-mc-red]="!result.success">
+          [class]="result.success ? 'bg-mc-emerald/10 text-mc-emerald' : 'bg-mc-red/10 text-mc-red'">
           {{ result.message }}
         </div>
       }

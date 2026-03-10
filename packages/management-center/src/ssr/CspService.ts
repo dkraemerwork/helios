@@ -26,12 +26,19 @@ export class CspService {
 
   /** Builds a complete Content-Security-Policy header value with the given nonce. */
   buildCspHeader(nonce: string): string {
+    // In development, use 'unsafe-inline' for scripts so Angular CSR works
+    // without nonces injected into every <script> tag. In production, use
+    // strict nonce-based CSP.
+    const scriptSrc = this.isProduction
+      ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
+      : `script-src 'self' 'unsafe-inline' 'unsafe-eval'`;
+
     const directives: string[] = [
       "default-src 'self'",
-      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-      "style-src 'self' 'unsafe-inline'",
+      scriptSrc,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob:",
-      "font-src 'self'",
+      "font-src 'self' https://fonts.gstatic.com",
       "connect-src 'self' ws: wss:",
       "frame-src 'none'",
       "object-src 'none'",

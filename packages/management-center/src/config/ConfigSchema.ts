@@ -46,7 +46,7 @@ export const managementCenterConfigSchema = z.object({
     cookieDomain: z.string().optional(),
     csrfSecret: z.string().min(16).default('change-me-in-prod'),
     bootstrapAdmin: z.object({
-      email: z.string().email().default('admin@localhost'),
+      email: z.string().email().default('admin@localhost.local'),
       password: z.string().min(14).default('changeme-in-prod!'),
       displayName: z.string().default('Admin'),
     }).default({}),

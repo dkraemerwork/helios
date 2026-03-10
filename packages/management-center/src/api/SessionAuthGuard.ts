@@ -28,6 +28,21 @@ const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 /** Route prefixes that do not require authentication. */
 const PUBLIC_PREFIXES: readonly string[] = ['/health'];
 
+/**
+ * Routes handled by AngularSsrController — the controller performs its own
+ * authentication check and redirects unauthenticated users to /login.
+ * We allow them through the global guard so the SSR controller can serve
+ * the login page, static assets, and public pages.
+ */
+function isSsrRoute(path: string): boolean {
+  // API, WS, and health routes are NOT SSR routes
+  if (path.startsWith('/api/') || path.startsWith('/ws') || path.startsWith('/health')) {
+    return false;
+  }
+  // Everything else is handled by the SSR catch-all
+  return true;
+}
+
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
   private readonly logger = new Logger(SessionAuthGuard.name);
@@ -41,7 +56,7 @@ export class SessionAuthGuard implements CanActivate {
     // Strip query string for route matching
     const path = url.split('?')[0]!;
 
-    if (this.isPublicRoute(path)) {
+    if (this.isPublicRoute(path) || isSsrRoute(path)) {
       return true;
     }
 
