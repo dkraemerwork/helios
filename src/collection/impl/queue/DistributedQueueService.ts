@@ -389,6 +389,10 @@ export class DistributedQueueService {
     return this._enqueueOwnerOperation(name, async (runtime) => {
       this._cancelDestroy(runtime);
 
+      if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || runtime.appliedTxnOpIds.has(dedupeId))) {
+        return this._dedupedSuccessResponse(operation);
+      }
+
       const finalize = (response: QueueResponseMsg): QueueResponseMsg => {
         if (dedupeId !== undefined) {
           runtime.appliedTxnOpIds.add(dedupeId);

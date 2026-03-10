@@ -344,6 +344,16 @@ export class DistributedMultiMapService {
     return this._enqueueOperation(
       name,
       async (container) => {
+        if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || container.appliedTxnOpIds.has(dedupeId))) {
+          return {
+            type: "MULTIMAP_RESPONSE",
+            requestId: "deduped",
+            success: true,
+            resultType: "boolean",
+            booleanResult: true,
+          };
+        }
+
         const finalize = (response: MultiMapResponseMsg): MultiMapResponseMsg => {
           if (dedupeId !== undefined) {
             container.appliedTxnOpIds.add(dedupeId);

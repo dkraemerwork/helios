@@ -263,6 +263,16 @@ export class DistributedSetService {
       };
     }
     return this._enqueueOperation(name, async (container) => {
+      if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || container.appliedTxnOpIds.has(dedupeId))) {
+        return {
+          type: "SET_RESPONSE",
+          requestId: "deduped",
+          success: true,
+          resultType: "boolean",
+          booleanResult: true,
+        };
+      }
+
       const finalize = (response: SetResponseMsg): SetResponseMsg => {
         if (dedupeId !== undefined) {
           container.appliedTxnOpIds.add(dedupeId);

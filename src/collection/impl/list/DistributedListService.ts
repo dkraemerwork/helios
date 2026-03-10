@@ -332,6 +332,16 @@ export class DistributedListService {
       };
     }
     return this._enqueueOperation(name, async (container) => {
+      if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || container.appliedTxnOpIds.has(dedupeId))) {
+        return {
+          type: "LIST_RESPONSE",
+          requestId: "deduped",
+          success: true,
+          resultType: "boolean",
+          booleanResult: true,
+        };
+      }
+
       const finalize = (response: ListResponseMsg): ListResponseMsg => {
         if (dedupeId !== undefined) {
           container.appliedTxnOpIds.add(dedupeId);

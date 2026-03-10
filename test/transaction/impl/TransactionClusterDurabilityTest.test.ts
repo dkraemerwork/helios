@@ -1,10 +1,11 @@
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
-import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { TransactionOptions, TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
 
 const BASE_PORT = 17180;
+const queuePollCalls: string[] = [];
 
 setDefaultTimeout(15_000);
 
@@ -48,6 +49,10 @@ function makeConfig(name: string, port: number, peerPorts: number[]): HeliosConf
 
 describe('TransactionClusterDurabilityTest', () => {
     const instances: HeliosInstanceImpl[] = [];
+
+    beforeEach(() => {
+        queuePollCalls.length = 0;
+    });
 
     afterEach(async () => {
         for (const instance of instances) {
@@ -150,6 +155,58 @@ describe('TransactionClusterDurabilityTest', () => {
         expect(backupNodeEngine.toObject<string>(backupStore.get(keyData))).toBe('winner');
     });
 
+    it('keeps the canonical winner when backups race with divergent membership views', async () => {
+        const portA = BASE_PORT + 15;
+        const portB = BASE_PORT + 16;
+        const portC = BASE_PORT + 17;
+        const nodeA = await Helios.newInstance(makeConfig('tx-durability-membership-a', portA, []));
+        const nodeB = await Helios.newInstance(makeConfig('tx-durability-membership-b', portB, [portA]));
+        const nodeC = await Helios.newInstance(makeConfig('tx-durability-membership-c', portC, [portA, portB]));
+        instances.push(nodeA, nodeB, nodeC);
+
+        await waitUntil(() => nodeA.getCluster().getMembers().length === 3 && nodeB.getCluster().getMembers().length === 3 && nodeC.getCluster().getMembers().length === 3);
+
+        const coordinator = (nodeA as unknown as { _transactionCoordinator: any })._transactionCoordinator;
+        const tx = coordinator.newTransaction(new TransactionOptions().setTransactionType(TransactionType.TWO_PHASE).setDurability(2), 'owner-membership');
+
+        await coordinator.beginTransaction(tx);
+        const nodeEngine = nodeA.getNodeEngine();
+        const keyData = nodeEngine.toData('membership-key')!;
+        (nodeA as any)._clientTransactions.set(tx.getTxnId(), {
+            transaction: tx,
+            mapProxies: new Map(),
+            queueProxies: new Map(),
+            listProxies: new Map(),
+            setProxies: new Map(),
+            multiMapProxies: new Map(),
+        });
+        const map = (nodeA as any)._getTransactionalMap(tx.getTxnId(), 'durable-map');
+        map.put(keyData, nodeEngine.toData('membership-winner')!);
+        await tx.prepare();
+
+        const canonicalWinner = pickRecoveryWinner(tx.getTxnId(), nodeB, nodeC);
+        const canonicalWinnerId = canonicalWinner.getLocalMemberId();
+        const otherBackup = canonicalWinnerId === nodeB.getLocalMemberId() ? nodeC : nodeB;
+        const otherTransport = (otherBackup as any)._transactionManagerService._backupTransport;
+        const originalGetActiveMemberIds = otherTransport.getActiveMemberIds;
+        otherTransport.getActiveMemberIds = () => [otherBackup.getLocalMemberId()];
+
+        const [recoveredByCanonical, recoveredByOther] = await Promise.all([
+            (canonicalWinner as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId()),
+            (otherBackup as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId()),
+        ]);
+
+        otherTransport.getActiveMemberIds = originalGetActiveMemberIds;
+
+        expect(recoveredByCanonical).toBe(1);
+        expect(recoveredByOther).toBe(0);
+        await waitUntil(() => (nodeB as any)._transactionManagerService.getBackupLog(tx.getTxnId()) === null && (nodeC as any)._transactionManagerService.getBackupLog(tx.getTxnId()) === null);
+
+        const backupNodeEngine = canonicalWinner.getNodeEngine();
+        const backupStore = (canonicalWinner as any)._mapService.getOrCreateRecordStore('durable-map', backupNodeEngine.getPartitionService().getPartitionId(keyData));
+        expect(backupNodeEngine.toObject<string>(backupStore.get(keyData))).toBe('membership-winner');
+    });
+
     it('recovery replay is exactly-once for duplicate-sensitive structures', async () => {
         const portA = BASE_PORT + 20;
         const portB = BASE_PORT + 21;
@@ -222,4 +279,80 @@ describe('TransactionClusterDurabilityTest', () => {
         expect(new Set(await nodeC.getSet<string>('durable-set').toArray())).toEqual(new Set(['tx-set']));
         expect([...await nodeC.getMultiMap<string, string>('durable-multimap').get('k')]).toEqual(['seed', 'tx-mm']);
     });
+
+    it('does not double-apply duplicate-sensitive replay when the winner re-enters recovery', async () => {
+        const portA = BASE_PORT + 30;
+        const portB = BASE_PORT + 31;
+        const portC = BASE_PORT + 32;
+        const nodeA = await Helios.newInstance(makeConfig('tx-durability-reentrant-a', portA, []));
+        const nodeB = await Helios.newInstance(makeConfig('tx-durability-reentrant-b', portB, [portA]));
+        const nodeC = await Helios.newInstance(makeConfig('tx-durability-reentrant-c', portC, [portA, portB]));
+        instances.push(nodeA, nodeB, nodeC);
+
+        await waitUntil(() => nodeA.getCluster().getMembers().length === 3 && nodeB.getCluster().getMembers().length === 3 && nodeC.getCluster().getMembers().length === 3);
+
+        await nodeA.getQueue<string>('durable-queue').offer('seed-1');
+        await nodeA.getQueue<string>('durable-queue').offer('seed-2');
+        await nodeA.getList<string>('durable-list').add('seed');
+        await nodeA.getSet<string>('durable-set').add('seed-set');
+        await nodeA.getMultiMap<string, string>('durable-multimap').put('k', 'seed');
+
+        const coordinator = (nodeA as unknown as { _transactionCoordinator: any })._transactionCoordinator;
+        const tx = coordinator.newTransaction(new TransactionOptions().setTransactionType(TransactionType.TWO_PHASE).setDurability(2), 'owner-reentrant');
+        await coordinator.beginTransaction(tx);
+
+        const nodeEngine = nodeA.getNodeEngine();
+        (nodeA as any)._clientTransactions.set(tx.getTxnId(), {
+            transaction: tx,
+            mapProxies: new Map(),
+            queueProxies: new Map(),
+            listProxies: new Map(),
+            setProxies: new Map(),
+            multiMapProxies: new Map(),
+        });
+
+        const queue = (nodeA as any)._getTransactionalQueue(tx.getTxnId(), 'durable-queue');
+        const list = (nodeA as any)._getTransactionalList(tx.getTxnId(), 'durable-list');
+        const set = (nodeA as any)._getTransactionalSet(tx.getTxnId(), 'durable-set');
+        const multiMap = (nodeA as any)._getTransactionalMultiMap(tx.getTxnId(), 'durable-multimap');
+        await queue.poll();
+        queue.offer(nodeEngine.toData('reentrant-item')!);
+        list.add(nodeEngine.toData('reentrant-list')!);
+        set.add(nodeEngine.toData('reentrant-set')!);
+        multiMap.put(nodeEngine.toData('k')!, nodeEngine.toData('reentrant-mm')!);
+        await tx.prepare();
+
+        const winner = pickRecoveryWinner(tx.getTxnId(), nodeB, nodeC);
+        const loser = winner.getLocalMemberId() === nodeB.getLocalMemberId() ? nodeC : nodeB;
+        const firstRecovery = (winner as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId());
+        await waitUntil(() => ((winner as any)._transactionManagerService.getBackupLog(tx.getTxnId())?.recoveryState) === 'IN_PROGRESS');
+        await waitUntil(() => queuePollCalls.some((recordId) => recordId.startsWith('durable-queue:poll:')));
+
+        const secondRecovery = Promise.all([
+            (winner as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId()),
+            (loser as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId()),
+        ]);
+
+        expect(await firstRecovery).toBe(1);
+        expect(await secondRecovery).toEqual([0, 0]);
+
+        expect(await nodeB.getQueue<string>('durable-queue').toArray()).toEqual(['seed-2', 'reentrant-item']);
+        expect(await nodeC.getQueue<string>('durable-queue').toArray()).toEqual(['seed-2', 'reentrant-item']);
+        expect(await nodeB.getList<string>('durable-list').toArray()).toEqual(['seed', 'reentrant-list']);
+        expect(await nodeC.getList<string>('durable-list').toArray()).toEqual(['seed', 'reentrant-list']);
+        expect(new Set(await nodeB.getSet<string>('durable-set').toArray())).toEqual(new Set(['seed-set', 'reentrant-set']));
+        expect(new Set(await nodeC.getSet<string>('durable-set').toArray())).toEqual(new Set(['seed-set', 'reentrant-set']));
+        expect([...await nodeB.getMultiMap<string, string>('durable-multimap').get('k')]).toEqual(['seed', 'reentrant-mm']);
+        expect([...await nodeC.getMultiMap<string, string>('durable-multimap').get('k')]).toEqual(['seed', 'reentrant-mm']);
+    });
 });
+
+const transactionBackupApplierModule = await import('@zenystx/helios-core/transaction/impl/TransactionBackupApplier');
+const originalCommitRecord = transactionBackupApplierModule.TransactionBackupApplier.prototype.commitRecord;
+transactionBackupApplierModule.TransactionBackupApplier.prototype.commitRecord = async function patchedCommitRecord(record) {
+    if (record.kind === 'queue' && record.opType === 'poll') {
+        queuePollCalls.push(record.recordId);
+        await Bun.sleep(50);
+    }
+    return originalCommitRecord.call(this, record);
+};
