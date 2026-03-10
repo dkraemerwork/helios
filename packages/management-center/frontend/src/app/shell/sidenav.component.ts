@@ -1,12 +1,14 @@
 import { Component, computed, inject, input, output } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../core/services/auth.service';
 import { ClusterStore } from '../core/store/cluster.store';
+import { resolveShellNavigationLink, type ShellNavigationScope } from './cluster-navigation';
 
 interface NavItem {
   label: string;
   icon: string;
   path: string;
+  scope?: ShellNavigationScope;
   roles?: Array<'viewer' | 'operator' | 'admin'>;
 }
 
@@ -53,7 +55,7 @@ interface NavItem {
       <div class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
         @for (item of visibleItems(); track item.path) {
           <a
-            [routerLink]="clusterBasePath() + item.path"
+            [routerLink]="resolveNavLink(item)"
             routerLinkActive="bg-mc-blue/10 text-mc-blue border-mc-blue"
             class="flex items-center gap-3 px-3 py-2.5 rounded-md text-mc-text-dim hover:bg-mc-border-hover hover:text-mc-text transition-colors border border-transparent text-sm"
             [attr.title]="collapsed() ? item.label : null">
@@ -67,29 +69,6 @@ interface NavItem {
 
       <!-- Bottom section -->
       <div class="border-t border-mc-border py-3 px-2 space-y-1">
-        <a
-          routerLink="/settings"
-          routerLinkActive="bg-mc-blue/10 text-mc-blue"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-md text-mc-text-dim hover:bg-mc-border-hover hover:text-mc-text transition-colors text-sm"
-          [attr.title]="collapsed() ? 'Settings' : null">
-          <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs">\u2699</span>
-          @if (!collapsed()) {
-            <span class="truncate">Settings</span>
-          }
-        </a>
-
-        @if (authService.hasRole('admin')) {
-          <a
-            routerLink="/users"
-            routerLinkActive="bg-mc-blue/10 text-mc-blue"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-md text-mc-text-dim hover:bg-mc-border-hover hover:text-mc-text transition-colors text-sm"
-            [attr.title]="collapsed() ? 'Users' : null">
-            <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs">\u{1F465}</span>
-            @if (!collapsed()) {
-              <span class="truncate">Users</span>
-            }
-          </a>
-        }
       </div>
     </nav>
   `,
@@ -100,6 +79,7 @@ export class SidenavComponent {
 
   readonly authService = inject(AuthService);
   private readonly clusterStore = inject(ClusterStore);
+  private readonly router = inject(Router);
 
   private readonly navItems: NavItem[] = [
     { label: 'Dashboard', icon: '\u{1F4CA}', path: '' },
@@ -113,12 +93,9 @@ export class SidenavComponent {
     { label: 'Config', icon: '\u{1F527}', path: '/config' },
     { label: 'Admin', icon: '\u{1F6E0}', path: '/admin', roles: ['operator', 'admin'] },
     { label: 'Audit', icon: '\u{1F4DC}', path: '/audit', roles: ['admin'] },
+    { label: 'Settings', icon: '\u2699', path: '/settings', scope: 'global' },
+    { label: 'Users', icon: '\u{1F465}', path: '/users', scope: 'global', roles: ['admin'] },
   ];
-
-  readonly clusterBasePath = computed(() => {
-    const activeId = this.clusterStore.activeClusterId();
-    return activeId ? `/clusters/${activeId}` : '/clusters/_';
-  });
 
   readonly visibleItems = computed(() =>
     this.navItems.filter(item => {
@@ -126,4 +103,13 @@ export class SidenavComponent {
       return item.roles.some(role => this.authService.hasRole(role));
     }),
   );
+
+  resolveNavLink(item: NavItem): string {
+    return resolveShellNavigationLink(
+      item.path,
+      item.scope ?? 'cluster',
+      this.clusterStore.activeClusterId(),
+      this.router.url,
+    );
+  }
 }
