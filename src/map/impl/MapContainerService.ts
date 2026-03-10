@@ -308,6 +308,33 @@ export class MapContainerService implements MigrationAwareService {
         await Promise.all(destroyPromises);
     }
 
+    async destroyDistributedObject(mapName: string): Promise<void> {
+        const prefix = `${mapName}:`;
+        const keysToRemove: string[] = [];
+        for (const key of this._stores.keys()) {
+            if (key.startsWith(prefix)) {
+                keysToRemove.push(key);
+            }
+        }
+
+        for (const key of keysToRemove) {
+            const store = this._stores.get(key);
+            if (store !== undefined) {
+                store.clear();
+            }
+            this._stores.delete(key);
+        }
+
+        for (const container of this._partitionContainers.values()) {
+            container.removeRecordStore(mapName);
+        }
+
+        this._mapStats.delete(mapName);
+        this._mapStoreConfigs.delete(mapName);
+        this._eagerLoadEpochs.delete(mapName);
+        await this.destroyMapStoreContext(mapName);
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // Block 21.3: Partition ownership epoch fencing
     // ═══════════════════════════════════════════════════════════════════

@@ -272,6 +272,31 @@ export class DistributedQueueService {
     });
   }
 
+  destroy(name: string): void {
+    const runtime = this._runtimes.get(name);
+    if (runtime !== undefined) {
+      this._cancelDestroy(runtime);
+      runtime.state.items.length = 0;
+      for (const pendingPoll of runtime.pendingPolls.splice(0)) {
+        if (pendingPoll.timeoutHandle !== null) {
+          clearTimeout(pendingPoll.timeoutHandle);
+        }
+        pendingPoll.resolve(null);
+      }
+      for (const pendingOffer of runtime.pendingOffers.splice(0)) {
+        if (pendingOffer.timeoutHandle !== null) {
+          clearTimeout(pendingOffer.timeoutHandle);
+        }
+        pendingOffer.resolve(false);
+      }
+      this._runtimes.delete(name);
+    }
+
+    this._listeners.delete(name);
+    this._listenerCounters.delete(name);
+    this._stats.delete(name);
+  }
+
   private async _invokeOnOwner(
     name: string,
     operation: QueueOperation,

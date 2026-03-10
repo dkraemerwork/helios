@@ -164,6 +164,76 @@ describe("getDistributedObject covers all retained services on member", () => {
         );
         expect(HeliosInstanceImpl.prototype.getDistributedObject).toBeDefined();
     });
+
+    test("member getDistributedObject(map) destroy clears state and cache entry", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import("@zenystx/helios-core/config/HeliosConfig");
+
+        const instance = new HeliosInstanceImpl(new HeliosConfig("member-map-destroy"));
+        try {
+            const map = instance.getMap<string, string>("member-map");
+            await map.put("k", "v");
+
+            const object = instance.getDistributedObject("hz:impl:mapService", "member-map");
+            await object.destroy();
+
+            const freshMap = instance.getMap<string, string>("member-map");
+            expect(freshMap).not.toBe(map);
+            expect(await freshMap.get("k")).toBeNull();
+        } finally {
+            instance.shutdown();
+        }
+    });
+
+    test("member getDistributedObject(queue) destroy clears queue contents", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import("@zenystx/helios-core/config/HeliosConfig");
+
+        const instance = new HeliosInstanceImpl(new HeliosConfig("member-queue-destroy"));
+        try {
+            const queue = instance.getQueue<string>("member-queue");
+            await queue.offer("item");
+
+            const object = instance.getDistributedObject("hz:impl:queueService", "member-queue");
+            await object.destroy();
+
+            const freshQueue = instance.getQueue<string>("member-queue");
+            expect(freshQueue).not.toBe(queue);
+            expect(await freshQueue.size()).toBe(0);
+        } finally {
+            instance.shutdown();
+        }
+    });
+
+    test("member getDistributedObject(topic) destroy removes listeners before re-create", async () => {
+        const { HeliosInstanceImpl } = await import(
+            "@zenystx/helios-core/instance/impl/HeliosInstanceImpl"
+        );
+        const { HeliosConfig } = await import("@zenystx/helios-core/config/HeliosConfig");
+
+        const instance = new HeliosInstanceImpl(new HeliosConfig("member-topic-destroy"));
+        try {
+            const topic = instance.getTopic<string>("member-topic");
+            const received: string[] = [];
+            topic.addMessageListener((message) => {
+                received.push(message.getMessageObject());
+            });
+
+            const object = instance.getDistributedObject("hz:impl:topicService", "member-topic");
+            await object.destroy();
+
+            const freshTopic = instance.getTopic<string>("member-topic");
+            expect(freshTopic).not.toBe(topic);
+            await freshTopic.publishAsync("after-destroy");
+            expect(received).toEqual([]);
+        } finally {
+            instance.shutdown();
+        }
+    });
 });
 
 // ── getConfig() contract is resolved ──

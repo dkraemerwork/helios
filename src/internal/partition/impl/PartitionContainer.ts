@@ -30,6 +30,16 @@ export class PartitionContainer {
         return [...this._recordStores.keys()];
     }
 
+    removeRecordStore(mapName: string): boolean {
+        const store = this._recordStores.get(mapName);
+        if (store === undefined) {
+            return false;
+        }
+        store.clear();
+        this._recordStores.delete(mapName);
+        return true;
+    }
+
     /** Destroys all record stores and resets to empty state. Idempotent. */
     cleanUpOnMigration(): void {
         for (const store of this._recordStores.values()) {

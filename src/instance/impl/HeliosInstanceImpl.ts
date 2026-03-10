@@ -5330,32 +5330,32 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   getDistributedObject(serviceName: string, name: string): DistributedObject {
     if (serviceName === MAP_SERVICE_NAME) {
-      this.getMap<unknown, unknown>(name);
+      const map = this.getMap<unknown, unknown>(name);
       return {
-        getName: () => name,
+        getName: () => map.getName(),
         getServiceName: () => MAP_SERVICE_NAME,
         destroy: async () => {
-          /* no-op for in-memory map */
+          await this._destroyMapDistributedObject(name);
         },
       };
     }
     if (serviceName === QUEUE_SERVICE_NAME) {
-      this.getQueue<unknown>(name);
+      const queue = this.getQueue<unknown>(name);
       return {
-        getName: () => name,
+        getName: () => queue.getName(),
         getServiceName: () => QUEUE_SERVICE_NAME,
         destroy: async () => {
-          /* no-op for in-memory queue */
+          this._destroyQueueDistributedObject(name);
         },
       };
     }
     if (serviceName === TOPIC_SERVICE_NAME) {
-      this.getTopic<unknown>(name);
+      const topic = this.getTopic<unknown>(name);
       return {
-        getName: () => name,
+        getName: () => topic.getName(),
         getServiceName: () => TOPIC_SERVICE_NAME,
         destroy: async () => {
-          /* no-op for in-memory topic */
+          this._destroyTopicDistributedObject(name);
         },
       };
     }
@@ -5376,6 +5376,29 @@ export class HeliosInstanceImpl implements HeliosInstance {
       };
     }
     throw new Error(`Unknown distributed object service: '${serviceName}'`);
+  }
+
+  private async _destroyMapDistributedObject(name: string): Promise<void> {
+    this._nearCachedMaps.delete(name);
+    this._nearCacheManager.destroyNearCache(name);
+    this._maps.delete(name);
+    await this._mapService.destroyDistributedObject(name);
+  }
+
+  private _destroyQueueDistributedObject(name: string): void {
+    this._queues.delete(name);
+    if (this._distributedQueueService !== null) {
+      this._distributedQueueService.destroy(name);
+    }
+  }
+
+  private _destroyTopicDistributedObject(name: string): void {
+    const topic = this._topics.get(name);
+    if (topic !== undefined) {
+      topic.destroy();
+      return;
+    }
+    this._distributedTopicService?.destroy(name);
   }
 
   getSql(): SqlService {
