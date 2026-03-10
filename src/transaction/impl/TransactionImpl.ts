@@ -9,6 +9,7 @@
 import type { Counter } from '@zenystx/helios-core/internal/util/counters/Counter';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 import type { Transaction } from '@zenystx/helios-core/transaction/impl/Transaction';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 import { State } from '@zenystx/helios-core/transaction/impl/Transaction';
 import { TransactionLog } from '@zenystx/helios-core/transaction/impl/TransactionLog';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
@@ -22,7 +23,17 @@ export interface TransactionManagerServiceLike {
     startCount: Counter;
     commitCount: Counter;
     rollbackCount: Counter;
-    pickBackupLogAddresses(durability: number): unknown[];
+    pickBackupLogAddresses(durability: number): string[];
+    rememberBackupTargets(txnId: string, targets: readonly string[]): void;
+    createBackupLog(callerUuid: string, txnId: string, timeoutMillis: number, startTime: number, allowedDuringPassiveState: boolean): Promise<void>;
+    createAllowedDuringPassiveStateBackupLog(callerUuid: string, txnId: string): Promise<void>;
+    replicaBackupLog(records: TransactionBackupRecord[], callerUuid: string, txnId: string, timeoutMillis: number, startTime: number): Promise<void>;
+    markCommitting(txnId: string): Promise<void>;
+    markCommitted(txnId: string): Promise<void>;
+    markCommitFailed(txnId: string): Promise<void>;
+    rollbackBackupLog(txnId: string): Promise<void>;
+    markRolledBack(txnId: string): Promise<void>;
+    purgeBackupLog(txnId: string): Promise<void>;
 }
 
 // Module-level flag to prevent nested transactions (mimics Java ThreadLocal).
@@ -98,9 +109,20 @@ export class TransactionImpl implements Transaction {
         }
         this._startTime = Date.now();
         // May throw — callers catch and rethrow
-        this._transactionManagerService.pickBackupLogAddresses(this._durability);
+        const backupTargets = this._transactionManagerService.pickBackupLogAddresses(this._durability);
+        this._transactionManagerService.rememberBackupTargets(this._txnId, backupTargets);
         this._setTransactionFlag(true);
         this._state = State.ACTIVE;
+        if (backupTargets.length > 0) {
+            await this._transactionManagerService.createBackupLog(
+                this._txOwnerUuid,
+                this._txnId,
+                this._timeoutMillis,
+                this._startTime,
+                false,
+            );
+            this._backupLogsCreated = true;
+        }
         this._transactionManagerService.startCount.inc();
     }
 
@@ -116,12 +138,19 @@ export class TransactionImpl implements Transaction {
         }
         this._checkTimeout();
         try {
-            // createBackupLogs — skipped (no cluster backup in current phase)
             this._state = State.PREPARING;
             const futures = this._transactionLog.prepare(this._nodeEngine);
             await this._waitAll(futures);
+            if (this._backupLogsCreated) {
+                await this._transactionManagerService.replicaBackupLog(
+                    this._transactionLog.toBackupRecords(),
+                    this._txOwnerUuid,
+                    this._txnId,
+                    this._timeoutMillis,
+                    this._startTime,
+                );
+            }
             this._state = State.PREPARED;
-            // replicateTxnLog — skipped (no cluster in current phase)
         } catch (e) {
             throw this._rethrowAsTransactionException(e);
         }
@@ -153,17 +182,28 @@ export class TransactionImpl implements Transaction {
             this._checkTimeout();
             try {
                 this._state = State.COMMITTING;
+                if (this._backupLogsCreated) {
+                    await this._transactionManagerService.markCommitting(this._txnId);
+                }
                 const futures = this._transactionLog.commit(this._nodeEngine);
                 await this._waitAll(futures);
                 this._state = State.COMMITTED;
+                if (this._backupLogsCreated) {
+                    await this._transactionManagerService.markCommitted(this._txnId);
+                }
                 this._transactionManagerService.commitCount.inc();
                 this._transactionLog.onCommitSuccess();
             } catch (e) {
                 this._state = State.COMMIT_FAILED;
+                if (this._backupLogsCreated) {
+                    await this._transactionManagerService.markCommitFailed(this._txnId);
+                }
                 this._transactionLog.onCommitFailure();
                 throw this._rethrowAsTransactionException(e);
             } finally {
-                // purgeBackupLogs — skipped (no cluster backup)
+                if (this._backupLogsCreated) {
+                    await this._transactionManagerService.purgeBackupLog(this._txnId);
+                }
             }
         } finally {
             this._setTransactionFlag(false);
@@ -177,14 +217,19 @@ export class TransactionImpl implements Transaction {
             }
             this._state = State.ROLLING_BACK;
             try {
-                // rollbackBackupLogs — skipped (no cluster backup)
+                if (this._backupLogsCreated) {
+                    await this._transactionManagerService.rollbackBackupLog(this._txnId);
+                }
                 const futures = this._transactionLog.rollback(this._nodeEngine);
                 await this._waitAllIgnoreErrors(futures);
-                // purgeBackupLogs — skipped
             } catch (e) {
                 throw e;
             } finally {
                 this._state = State.ROLLED_BACK;
+                if (this._backupLogsCreated) {
+                    await this._transactionManagerService.markRolledBack(this._txnId);
+                    await this._transactionManagerService.purgeBackupLog(this._txnId);
+                }
                 this._transactionManagerService.rollbackCount.inc();
             }
         } finally {

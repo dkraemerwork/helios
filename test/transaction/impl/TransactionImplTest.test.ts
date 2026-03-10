@@ -17,6 +17,16 @@ function makeMockManager(): TransactionManagerServiceLike {
         commitCount:   MwCounter.newMwCounter(),
         rollbackCount: MwCounter.newMwCounter(),
         pickBackupLogAddresses: (_d: number) => [],
+        rememberBackupTargets: () => {},
+        createBackupLog: async () => {},
+        createAllowedDuringPassiveStateBackupLog: async () => {},
+        replicaBackupLog: async () => {},
+        markCommitting: async () => {},
+        markCommitted: async () => {},
+        markCommitFailed: async () => {},
+        rollbackBackupLog: async () => {},
+        markRolledBack: async () => {},
+        purgeBackupLog: async () => {},
     };
 }
 

@@ -8,6 +8,7 @@
 
 import type { EncodedData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import type { BlitzNodeRegistration } from "@zenystx/helios-core/instance/impl/blitz/BlitzClusterTopology";
+import type { TransactionBackupMessage } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
 
 // ── Existing message types ────────────────────────────────────────────
 
@@ -563,6 +564,12 @@ export interface BlitzTopologyAnnounceMsg {
   readonly fenceToken: string;
 }
 
+export interface TransactionBackupReplicationMsg {
+  readonly type: "TXN_BACKUP_REPLICATION";
+  readonly sourceNodeId: string;
+  readonly payload: TransactionBackupMessage;
+}
+
 export type ClusterMessage =
   | HelloMsg
   | MapPutMsg
@@ -621,4 +628,5 @@ export type ClusterMessage =
   | BlitzNodeRemoveMsg
   | BlitzTopologyRequestMsg
   | BlitzTopologyResponseMsg
-  | BlitzTopologyAnnounceMsg;
+  | BlitzTopologyAnnounceMsg
+  | TransactionBackupReplicationMsg;

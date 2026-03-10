@@ -168,6 +168,7 @@ import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/R
 import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
 import { TransactionOptions, TransactionType } from "@zenystx/helios-core/transaction/TransactionOptions";
 import { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
+import { TransactionBackupApplier } from "@zenystx/helios-core/transaction/impl/TransactionBackupApplier";
 import { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
 import { TransactionManagerServiceImpl } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
 import { TransactionalListProxy } from "@zenystx/helios-core/transaction/impl/TransactionalListProxy";
@@ -636,6 +637,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._nodeEngine,
       this._transactionManagerService,
     );
+    this._transactionManagerService.configureReplication(
+      this._buildTransactionBackupTransport(),
+      this._buildTransactionBackupApplier(),
+    );
 
     // RingbufferService — must be initialized after _startNetworking() (needs _nodeEngine)
     // and before DistributedRingbufferService / ReliableTopicService (both depend on it).
@@ -812,6 +817,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       queueMicrotask(() => {
         this._invocationMonitor.failInvocationsForMember(memberId);
         this._failLocalBackupAckWaitersForMember(memberId);
+        void this._transactionManagerService.recoverBackupLogsForCoordinator(memberId);
       });
     });
 
@@ -1002,6 +1008,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
       }
       if (message.type === 'RECOVERY_SYNC_RESPONSE') {
         this._handleRecoverySyncResponse(message);
+        return;
+      }
+      if (message.type === 'TXN_BACKUP_REPLICATION') {
+        this._transactionManagerService.applyBackupMessage(message.payload);
         return;
       }
 
@@ -1330,6 +1340,56 @@ export class HeliosInstanceImpl implements HeliosInstance {
       replicaIndex: op.targetReplicaIndex,
       primaryVersions: op.primaryVersions.map((value) => value.toString()),
       namespaceVersions,
+    });
+  }
+
+  private _buildTransactionBackupTransport(): import('@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl').TransactionBackupTransport | null {
+    if (this._clusterCoordinator === null || this._transport === null) {
+      return null;
+    }
+
+    return {
+      localMemberId: this._clusterCoordinator.getLocalMemberId(),
+      getBackupMemberIds: (count: number) => {
+        const localMemberId = this._clusterCoordinator!.getLocalMemberId();
+        return this._clusterCoordinator!
+          .getCluster()
+          .getMembers()
+          .map((member) => member.getUuid())
+          .filter((memberId) => memberId !== localMemberId)
+          .slice(0, count);
+      },
+      replicate: async (payload, targets) => {
+        for (const target of targets) {
+          const member = this._clusterCoordinator!.getCluster().getMembers().find((candidate) => candidate.getUuid() === target);
+          if (member === undefined) {
+            continue;
+          }
+          await this._ensureRemotePeerConnected(target, member.getAddress(), 2_000);
+          const directTransport = this._transport as unknown as {
+            _peers: Map<string, unknown>;
+            _sendMsg(ch: unknown, msg: import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage): boolean;
+          };
+          const channel = directTransport._peers.get(target);
+          if (channel !== undefined) {
+            directTransport._sendMsg(channel, {
+              type: 'TXN_BACKUP_REPLICATION',
+              sourceNodeId: this._clusterCoordinator!.getLocalMemberId(),
+              payload,
+            });
+          }
+        }
+      },
+    };
+  }
+
+  private _buildTransactionBackupApplier(): TransactionBackupApplier {
+    return new TransactionBackupApplier({
+      mapService: this._mapService,
+      queueService: this._distributedQueueService,
+      listService: this._distributedListService,
+      setService: this._distributedSetService,
+      multiMapService: this._distributedMultiMapService,
     });
   }
 

@@ -23,13 +23,13 @@ describe('TransactionManagerServiceImplTest', () => {
 
     it('createBackupLog_whenNotCreated', () => {
         const callerUuid = crypto.randomUUID();
-        txService.createBackupLog(callerUuid, TXN);
+        void txService.createBackupLog(callerUuid, TXN);
         assertTxLogState(TXN, State.ACTIVE);
     });
 
     it('createBackupLog_whenAlreadyExist', () => {
         const callerUuid = crypto.randomUUID();
-        txService.createBackupLog(callerUuid, TXN);
+        void txService.createBackupLog(callerUuid, TXN);
         expect(() => txService.createBackupLog(callerUuid, TXN)).toThrow(TransactionException);
     });
 
@@ -40,26 +40,26 @@ describe('TransactionManagerServiceImplTest', () => {
         expect(() => txService.replicaBackupLog([], callerUuid, TXN, 1, 1)).toThrow(TransactionException);
     });
 
-    it('replicaBackupLog_whenExist', () => {
+    it('replicaBackupLog_whenExist', async () => {
         const callerUuid = crypto.randomUUID();
-        txService.createBackupLog(callerUuid, TXN);
-        txService.replicaBackupLog([], callerUuid, TXN, 1, 1);
-        assertTxLogState(TXN, State.COMMITTING);
+        await txService.createBackupLog(callerUuid, TXN);
+        await txService.replicaBackupLog([], callerUuid, TXN, 1, 1);
+        assertTxLogState(TXN, State.PREPARED);
     });
 
     it('replicaBackupLog_whenNotActive', () => {
         const callerUuid = crypto.randomUUID();
-        txService.createBackupLog(callerUuid, TXN);
+        void txService.createBackupLog(callerUuid, TXN);
         txService.txBackupLogs.get(TXN)!.state = State.ROLLED_BACK;
         expect(() => txService.replicaBackupLog([], callerUuid, TXN, 1, 1)).toThrow(TransactionException);
     });
 
     // ── rollbackBackupLog ───────────────────────────────────────────────
 
-    it('rollbackBackupLog_whenExist', () => {
+    it('rollbackBackupLog_whenExist', async () => {
         const callerUuid = crypto.randomUUID();
-        txService.createBackupLog(callerUuid, TXN);
-        txService.rollbackBackupLog(TXN);
+        await txService.createBackupLog(callerUuid, TXN);
+        await txService.rollbackBackupLog(TXN);
         assertTxLogState(TXN, State.ROLLING_BACK);
     });
 
@@ -72,8 +72,8 @@ describe('TransactionManagerServiceImplTest', () => {
 
     it('purgeBackupLog_whenExist_thenRemoved', () => {
         const callerUuid = crypto.randomUUID();
-        txService.createBackupLog(callerUuid, TXN);
-        txService.purgeBackupLog(TXN);
+        void txService.createBackupLog(callerUuid, TXN);
+        void txService.purgeBackupLog(TXN);
         expect(txService.txBackupLogs.has(TXN)).toBe(false);
     });
 

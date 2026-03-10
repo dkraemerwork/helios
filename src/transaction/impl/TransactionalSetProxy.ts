@@ -8,9 +8,11 @@
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord.js';
 import { State } from '@zenystx/helios-core/transaction/impl/Transaction.js';
 import type { TransactionImpl } from '@zenystx/helios-core/transaction/impl/TransactionImpl.js';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord.js';
+import { encodeMaybeData } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl.js';
 import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/TransactionNotActiveException.js';
 
 type SetOpType = 'add' | 'remove';
@@ -73,6 +75,14 @@ class TransactionalSetLogRecord<E> implements TransactionLogRecord {
         return new CommitSetOperation(this._opType, this._valueData, this._backend, this._nodeEngine);
     }
     newRollbackOperation(): Operation { return new NoopSetOperation(); }
+    toBackupRecord(): TransactionBackupRecord {
+        return {
+            kind: 'set',
+            setName: this._recordId.split(':', 2)[0],
+            opType: this._opType,
+            valueData: encodeMaybeData(this._valueData)!,
+        };
+    }
     onCommitSuccess(): void { /* nothing */ }
     onCommitFailure(): void { /* nothing */ }
 }

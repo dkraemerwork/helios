@@ -7,6 +7,7 @@ import { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice
 import { GENERIC_PARTITION_ID, Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
 import type { TargetAwareTransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TargetAwareTransactionLogRecord';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 import { TransactionLog } from '@zenystx/helios-core/transaction/impl/TransactionLog';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
 import { describe, expect, it, mock } from 'bun:test';
@@ -73,6 +74,7 @@ function mockKeyRecord(key: unknown, op: Operation): TransactionLogRecord {
         newPrepareOperation: () => op,
         newCommitOperation: () => op,
         newRollbackOperation: () => op,
+        toBackupRecord: () => ({ kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
         onCommitSuccess: () => {},
         onCommitFailure: () => {},
     };
@@ -85,6 +87,7 @@ function mockNoKeyRecord(op: Operation): TransactionLogRecord {
         newPrepareOperation: () => op,
         newCommitOperation: () => op,
         newRollbackOperation: () => op,
+        toBackupRecord: () => ({ kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
         onCommitSuccess: () => {},
         onCommitFailure: () => {},
     };
@@ -98,6 +101,7 @@ function mockTargetRecord(target: Address, op: Operation): TargetAwareTransactio
         newPrepareOperation: () => op,
         newCommitOperation: () => op,
         newRollbackOperation: () => op,
+        toBackupRecord: () => ({ kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
         onCommitSuccess: () => {},
         onCommitFailure: () => {},
     };

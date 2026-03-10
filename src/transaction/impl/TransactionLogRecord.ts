@@ -5,6 +5,7 @@
  * Key-aware records can be overwritten by later records with the same key.
  */
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 
 export interface TransactionLogRecord {
     /**
@@ -16,6 +17,8 @@ export interface TransactionLogRecord {
     newPrepareOperation(): Operation;
     newCommitOperation(): Operation;
     newRollbackOperation(): Operation;
+
+    toBackupRecord(): TransactionBackupRecord;
 
     onCommitSuccess(): void;
     onCommitFailure(): void;

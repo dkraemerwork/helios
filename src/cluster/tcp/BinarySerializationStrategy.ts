@@ -23,6 +23,7 @@ import type {
     SetEventMsg,
     SetResponseMsg,
     SetStateSyncMsg,
+    TransactionBackupReplicationMsg,
     WireMemberInfo,
     WirePartitionReplica,
 } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
@@ -31,6 +32,8 @@ import type { SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/Ser
 import { BIG_ENDIAN, ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
+import type { TransactionBackupMessage } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl';
 import { decodeResponsePayload, encodeResponsePayload } from '@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec';
 
 const PROTOCOL_VERSION = 1;
@@ -101,6 +104,7 @@ const MESSAGE_TYPE_TO_ID = {
     REPLICATED_MAP_CLEAR: 56,
     REPLICATED_MAP_STATE_SYNC: 57,
     REPLICATED_MAP_STATE_ACK: 58,
+    TXN_BACKUP_REPLICATION: 59,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -424,6 +428,10 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.mapName);
                 out.writeLong(BigInt(message.version));
                 return;
+            case 'TXN_BACKUP_REPLICATION':
+                out.writeString(message.sourceNodeId);
+                writeTransactionBackupMessage(out, message.payload);
+                return;
         }
     }
 
@@ -658,6 +666,12 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return readReplicatedMapStateSync(inp);
             case 'REPLICATED_MAP_STATE_ACK':
                 return { type: 'REPLICATED_MAP_STATE_ACK', requestId: readRequiredString(inp), mapName: readRequiredString(inp), version: Number(inp.readLong()) };
+            case 'TXN_BACKUP_REPLICATION':
+                return {
+                    type: 'TXN_BACKUP_REPLICATION',
+                    sourceNodeId: readRequiredString(inp),
+                    payload: readTransactionBackupMessage(inp) as TransactionBackupReplicationMsg['payload'],
+                };
         }
     }
 
@@ -765,6 +779,164 @@ function readPartitionState(inp: ByteArrayObjectDataInput): PartitionStateMsg {
         partitions[rowIndex] = row;
     }
     return { type: 'PARTITION_STATE', versions, partitions };
+}
+
+function writeTransactionBackupMessage(out: ByteArrayObjectDataOutput, message: TransactionBackupMessage): void {
+    out.writeString(message.type);
+    out.writeString(message.txnId);
+    switch (message.type) {
+        case 'TXN_BEGIN':
+            out.writeString(message.coordinatorMemberId);
+            out.writeString(message.callerUuid);
+            out.writeLong(BigInt(message.timeoutMillis));
+            out.writeLong(BigInt(message.startTime));
+            out.writeBoolean(message.allowedDuringPassiveState);
+            return;
+        case 'TXN_PREPARE':
+            out.writeString(message.coordinatorMemberId);
+            out.writeString(message.callerUuid);
+            out.writeLong(BigInt(message.timeoutMillis));
+            out.writeLong(BigInt(message.startTime));
+            out.writeBoolean(message.allowedDuringPassiveState);
+            writeTransactionBackupRecords(out, message.records);
+            return;
+        case 'TXN_STATE':
+            out.writeString(message.state);
+            return;
+        case 'TXN_PURGE':
+            return;
+    }
+}
+
+function readTransactionBackupMessage(inp: ByteArrayObjectDataInput): TransactionBackupMessage {
+    const type = readRequiredString(inp) as TransactionBackupMessage['type'];
+    const txnId = readRequiredString(inp);
+    switch (type) {
+        case 'TXN_BEGIN':
+            return {
+                type,
+                txnId,
+                coordinatorMemberId: readRequiredString(inp),
+                callerUuid: readRequiredString(inp),
+                timeoutMillis: Number(inp.readLong()),
+                startTime: Number(inp.readLong()),
+                allowedDuringPassiveState: inp.readBoolean(),
+            };
+        case 'TXN_PREPARE':
+            return {
+                type,
+                txnId,
+                coordinatorMemberId: readRequiredString(inp),
+                callerUuid: readRequiredString(inp),
+                timeoutMillis: Number(inp.readLong()),
+                startTime: Number(inp.readLong()),
+                allowedDuringPassiveState: inp.readBoolean(),
+                records: readTransactionBackupRecords(inp),
+            };
+        case 'TXN_STATE':
+            return {
+                type,
+                txnId,
+                state: readRequiredString(inp) as Extract<TransactionBackupMessage, { type: 'TXN_STATE' }>['state'],
+            };
+        case 'TXN_PURGE':
+            return { type, txnId };
+    }
+}
+
+function writeTransactionBackupRecords(out: ByteArrayObjectDataOutput, records: readonly TransactionBackupRecord[]): void {
+    out.writeInt(records.length);
+    for (const record of records) {
+        out.writeString(record.kind);
+        switch (record.kind) {
+            case 'map':
+                out.writeString(record.mapName);
+                out.writeInt(record.partitionId);
+                out.writeString(record.entry.opType);
+                writeEncodedData(out, record.entry.key);
+                writeOptionalEncodedData(out, record.entry.value);
+                writeOptionalEncodedData(out, record.entry.oldValue);
+                break;
+            case 'queue':
+                out.writeString(record.queueName);
+                out.writeString(record.opType);
+                writeOptionalEncodedData(out, record.valueData);
+                break;
+            case 'list':
+                out.writeString(record.listName);
+                out.writeString(record.opType);
+                writeEncodedData(out, record.valueData);
+                break;
+            case 'set':
+                out.writeString(record.setName);
+                out.writeString(record.opType);
+                writeEncodedData(out, record.valueData);
+                break;
+            case 'multimap':
+                out.writeString(record.mapName);
+                out.writeString(record.opType);
+                writeEncodedData(out, record.keyData);
+                writeOptionalEncodedData(out, record.valueData);
+                break;
+        }
+    }
+}
+
+function readTransactionBackupRecords(inp: ByteArrayObjectDataInput): TransactionBackupRecord[] {
+    const count = inp.readInt();
+    const records: TransactionBackupRecord[] = new Array(count);
+    for (let index = 0; index < count; index++) {
+        const kind = readRequiredString(inp) as TransactionBackupRecord['kind'];
+        switch (kind) {
+            case 'map':
+                records[index] = {
+                    kind,
+                    mapName: readRequiredString(inp),
+                    partitionId: inp.readInt(),
+                    entry: {
+                        opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'map' }>['entry']['opType'],
+                        key: readEncodedData(inp),
+                        value: readOptionalEncodedData(inp),
+                        oldValue: readOptionalEncodedData(inp),
+                    },
+                };
+                break;
+            case 'queue':
+                records[index] = {
+                    kind,
+                    queueName: readRequiredString(inp),
+                    opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'queue' }>['opType'],
+                    valueData: readOptionalEncodedData(inp),
+                };
+                break;
+            case 'list':
+                records[index] = {
+                    kind,
+                    listName: readRequiredString(inp),
+                    opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'list' }>['opType'],
+                    valueData: readEncodedData(inp),
+                };
+                break;
+            case 'set':
+                records[index] = {
+                    kind,
+                    setName: readRequiredString(inp),
+                    opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'set' }>['opType'],
+                    valueData: readEncodedData(inp),
+                };
+                break;
+            case 'multimap':
+                records[index] = {
+                    kind,
+                    mapName: readRequiredString(inp),
+                    opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'multimap' }>['opType'],
+                    keyData: readEncodedData(inp),
+                    valueData: readOptionalEncodedData(inp),
+                };
+                break;
+        }
+    }
+    return records;
 }
 
 function writeOperationMessage(out: ByteArrayObjectDataOutput, message: OperationMsg): void {

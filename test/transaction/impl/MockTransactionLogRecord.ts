@@ -4,6 +4,7 @@
  * Test helper that can be configured to fail prepare, commit, or rollback.
  */
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
 import { TransactionException } from '@zenystx/helios-core/transaction/TransactionException';
 
@@ -65,6 +66,15 @@ export class MockTransactionLogRecord implements TransactionLogRecord {
     newRollbackOperation(): Operation {
         this._rollbackCalled = true;
         return new MockOperation(this._failRollback);
+    }
+
+    toBackupRecord(): TransactionBackupRecord {
+        return {
+            kind: 'queue',
+            queueName: 'mock',
+            opType: 'poll',
+            valueData: null,
+        };
     }
 
     onCommitSuccess(): void {}

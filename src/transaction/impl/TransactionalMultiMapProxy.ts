@@ -10,9 +10,11 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import type { MultiMap } from '@zenystx/helios-core/multimap/MultiMap.js';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord.js';
 import { State } from '@zenystx/helios-core/transaction/impl/Transaction.js';
 import type { TransactionImpl } from '@zenystx/helios-core/transaction/impl/TransactionImpl.js';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord.js';
+import { encodeMaybeData } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl.js';
 import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/TransactionNotActiveException.js';
 
 type MultiMapOpType = 'put' | 'remove' | 'removeAll';
@@ -113,6 +115,15 @@ class TransactionalMultiMapLogRecord<K, V> implements TransactionLogRecord {
         );
     }
     newRollbackOperation(): Operation { return new NoopMultiMapOperation(); }
+    toBackupRecord(): TransactionBackupRecord {
+        return {
+            kind: 'multimap',
+            mapName: this._recordId.split(':', 2)[0],
+            opType: this._opType,
+            keyData: encodeMaybeData(this._keyData)!,
+            valueData: encodeMaybeData(this._valueData),
+        };
+    }
     onCommitSuccess(): void { /* nothing */ }
     onCommitFailure(): void { /* nothing */ }
 }

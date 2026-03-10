@@ -14,9 +14,11 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord.js';
 import { State } from '@zenystx/helios-core/transaction/impl/Transaction.js';
 import type { TransactionImpl } from '@zenystx/helios-core/transaction/impl/TransactionImpl.js';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord.js';
+import { encodeMaybeData } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl.js';
 import { TransactionNotActiveException } from '@zenystx/helios-core/transaction/TransactionNotActiveException.js';
 
 // ── Noop Operation for commit/prepare/rollback of map operations ──────────────
@@ -84,6 +86,20 @@ class TransactionalMapLogRecord implements TransactionLogRecord {
         );
         op.partitionId = this._partitionId;
         return op;
+    }
+
+    toBackupRecord(): TransactionBackupRecord {
+        return {
+            kind: 'map',
+            mapName: this._mapName,
+            partitionId: this._partitionId,
+            entry: {
+                opType: this._entry.opType,
+                key: encodeMaybeData(this._entry.key)!,
+                value: encodeMaybeData(this._entry.value),
+                oldValue: encodeMaybeData(this._entry.oldValue),
+            },
+        };
     }
 
     onCommitSuccess(): void { /* nothing */ }
