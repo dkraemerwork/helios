@@ -34,6 +34,8 @@ export interface MonitorJobSnapshot {
     status: string;
     submittedAt: number;
     lightJob: boolean;
+    supportsCancel: boolean;
+    supportsRestart: boolean;
     participatingMembers: readonly string[];
     /** Vertex descriptors (topology nodes). */
     vertices: ReadonlyArray<{ name: string; type: string }>;

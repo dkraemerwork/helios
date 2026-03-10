@@ -18,12 +18,16 @@ class NatsSubjectSource<T> implements Source<T> {
 
   async *messages(): AsyncIterable<SourceMessage<T>> {
     const sub = this._nc.subscribe(this._subject);
-    for await (const msg of sub) {
-      yield {
-        value: this.codec.decode(msg.data),
-        ack: () => {},
-        nak: (_delay?: number) => {},
-      };
+    try {
+      for await (const msg of sub) {
+        yield {
+          value: this.codec.decode(msg.data),
+          ack: () => {},
+          nak: (_delay?: number) => {},
+        };
+      }
+    } finally {
+      sub.unsubscribe();
     }
   }
 }

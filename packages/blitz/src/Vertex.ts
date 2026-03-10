@@ -23,6 +23,8 @@ export class Vertex {
    */
   // eslint-disable-next-line @typescript-eslint/ban-types
   readonly fn?: Function;
+  /** Operator mode for operator vertices. */
+  readonly operatorMode?: 'map' | 'filter' | 'flatMap';
 
   /** Optional reference to the Source instance (set during Pipeline.readFrom). */
   sourceRef?: Source<unknown>;
@@ -34,11 +36,15 @@ export class Vertex {
     type: VertexType,
     // eslint-disable-next-line @typescript-eslint/ban-types
     fn?: Function,
+    operatorMode?: 'map' | 'filter' | 'flatMap',
   ) {
     this.name = name;
     this.type = type;
     if (fn !== undefined) {
       this.fn = fn;
+    }
+    if (operatorMode !== undefined) {
+      this.operatorMode = operatorMode;
     }
   }
 }

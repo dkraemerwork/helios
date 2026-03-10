@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { ClusterStore } from '../../core/store/cluster.store';
-import { ApiService } from '../../core/services/api.service';
+import { ApiService, type JobSnapshot } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 
 @Component({
@@ -21,13 +21,13 @@ import { AuthService } from '../../core/services/auth.service';
           <div class="flex gap-2">
             <button
               class="mc-btn mc-btn-ghost text-xs"
-              [disabled]="actionLoading()"
+              [disabled]="actionLoading() || !supportsRestart()"
               (click)="restartJob()">
               Restart
             </button>
             <button
               class="mc-btn mc-btn-danger text-xs"
-              [disabled]="actionLoading()"
+              [disabled]="actionLoading() || !supportsCancel()"
               (click)="cancelJob()">
               Cancel
             </button>
@@ -60,14 +60,23 @@ export class JobDetailComponent implements OnInit {
 
   jobId = '';
   readonly jobName = signal('');
+  readonly supportsCancel = signal(true);
+  readonly supportsRestart = signal(true);
   readonly actionLoading = signal(false);
   readonly actionResult = signal<{ success: boolean; message: string } | null>(null);
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     this.jobId = this.route.snapshot.paramMap.get('jobId') ?? '';
     const clusterId = this.route.parent?.snapshot.paramMap.get('id');
     if (clusterId) {
       this.clusterStore.setActiveCluster(clusterId);
+      const jobs = await this.apiService.getClusterJobs(clusterId);
+      const job = jobs.find((candidate: JobSnapshot) => candidate.jobId === this.jobId);
+      if (job) {
+        this.jobName.set(job.jobName);
+        this.supportsCancel.set(job.supportsCancel);
+        this.supportsRestart.set(job.supportsRestart);
+      }
     }
   }
 

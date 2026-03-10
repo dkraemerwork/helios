@@ -65,7 +65,7 @@ export class JobExecution {
   private readonly abortController = new AbortController();
   private readonly vertexRuntimes: VertexRuntime[] = [];
   private readonly sourceProcessors: SourceProcessor<unknown>[] = [];
-  private _completionPromise: Promise<void> | null = null;
+  private _completionPromise: Promise<PromiseSettledResult<void>[]> | null = null;
 
   /** T13: wall-clock time when start() is called. */
   private readonly _startTime = Date.now();
@@ -231,9 +231,10 @@ export class JobExecution {
       }
     }
 
-    this._completionPromise = Promise.allSettled(promises).then(() => {
+    this._completionPromise = Promise.allSettled(promises).then((results) => {
       // T13: record completion time when all vertex promises settle
       this._completionTime = Date.now();
+      return results;
     });
   }
 
@@ -249,6 +250,10 @@ export class JobExecution {
         setTimeout(() => reject(new Error(`JobExecution timed out after ${timeoutMs}ms`)), timeoutMs),
       ),
     ]);
+  }
+
+  whenComplete(): Promise<PromiseSettledResult<void>[]> {
+    return this._completionPromise ?? Promise.resolve([]);
   }
 
   /**

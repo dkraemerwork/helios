@@ -204,6 +204,9 @@ export interface JobSnapshot {
   timestamp: number;
   executionStartTime: number | null;
   completionTime: number | null;
+  lightJob: boolean;
+  supportsCancel: boolean;
+  supportsRestart: boolean;
   metricsJson: string;
   verticesJson: string;
   edgesJson: string;

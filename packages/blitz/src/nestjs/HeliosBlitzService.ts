@@ -80,6 +80,31 @@ export class HeliosBlitzService implements OnModuleDestroy {
         return this.blitz.getJobs(name);
     }
 
+    getRunningJobCount(): number {
+        return this.blitz.getRunningJobCount();
+    }
+
+    getJobCounters(): { submitted: number; completedSuccessfully: number; completedWithFailure: number; executionStarted: number } {
+        return this.blitz.getJobCounters();
+    }
+
+    async getJobMetadata(id: string): Promise<{
+        lightJob: boolean;
+        participatingMembers: string[];
+        supportsCancel: boolean;
+        supportsRestart: boolean;
+    } | null> {
+        return this.blitz.getJobMetadata(id);
+    }
+
+    async cancelJob(id: string): Promise<void> {
+        return this.blitz.cancelJob(id);
+    }
+
+    async restartJob(id: string): Promise<void> {
+        return this.blitz.restartJob(id);
+    }
+
     /**
      * NestJS lifecycle hook — gracefully shuts down the NATS connection when the
      * module is destroyed (e.g., on `app.close()`).

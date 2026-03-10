@@ -9,6 +9,8 @@ import { BlitzService, type BlitzEventListener } from '../src/BlitzService.ts';
 import { BlitzEvent } from '../src/BlitzEvent.ts';
 import { Pipeline } from '../src/Pipeline.ts';
 import { HeliosBlitzService } from '../src/nestjs/HeliosBlitzService.ts';
+import { StringCodec } from '../src/codec/BlitzCodec.ts';
+import type { Source, SourceMessage } from '../src/source/Source.ts';
 
 // Re-export verification imports — these must compile from index.ts
 import {
@@ -26,6 +28,19 @@ import {
 
 describe('Block 23.12 — BlitzService Job Integration', () => {
   let blitz: BlitzService;
+
+  class BlockingSource implements Source<string> {
+    readonly name = 'blocking-source';
+    readonly codec = StringCodec();
+
+    async *messages(): AsyncIterable<SourceMessage<string>> {
+      let index = 0;
+      while (true) {
+        yield { value: `tick-${index++}`, ack: () => {}, nak: () => {} };
+        await Bun.sleep(50);
+      }
+    }
+  }
 
   beforeAll(async () => {
     blitz = await BlitzService.start();
@@ -93,6 +108,25 @@ describe('Block 23.12 — BlitzService Job Integration', () => {
       expect(filtered[0].name).toBe('filter-a');
       await fresh.shutdown();
     });
+
+    it('exposes standalone job metadata with restart disabled', async () => {
+      const fresh = await BlitzService.connect({ servers: blitz.config.servers });
+      const pipeline = fresh.pipeline('metadata-job');
+      pipeline.readFrom(new BlockingSource()).map((value: string) => value).writeTo({
+        name: 'collect-sink',
+        write: async () => {},
+      });
+      const job = await fresh.newJob(pipeline, { name: 'metadata-job' });
+      const metadata = await fresh.getJobMetadata(job.id);
+      expect(metadata).toEqual({
+        lightJob: true,
+        participatingMembers: ['local'],
+        supportsCancel: true,
+        supportsRestart: false,
+      });
+      await fresh.cancelJob(job.id);
+      await fresh.shutdown();
+    });
   });
 
   // ── BlitzEvent lifecycle events ───────────────────────
@@ -118,14 +152,14 @@ describe('Block 23.12 — BlitzService Job Integration', () => {
     });
 
     it('BlitzEvent enum contains all job lifecycle events', () => {
-      expect(BlitzEvent.JOB_STARTED).toBe('JOB_STARTED');
-      expect(BlitzEvent.JOB_COMPLETED).toBe('JOB_COMPLETED');
-      expect(BlitzEvent.JOB_FAILED).toBe('JOB_FAILED');
-      expect(BlitzEvent.JOB_CANCELLED).toBe('JOB_CANCELLED');
-      expect(BlitzEvent.JOB_SUSPENDED).toBe('JOB_SUSPENDED');
-      expect(BlitzEvent.JOB_RESTARTING).toBe('JOB_RESTARTING');
-      expect(BlitzEvent.SNAPSHOT_STARTED).toBe('SNAPSHOT_STARTED');
-      expect(BlitzEvent.SNAPSHOT_COMPLETED).toBe('SNAPSHOT_COMPLETED');
+      expect(String(BlitzEvent.JOB_STARTED)).toBe('JOB_STARTED');
+      expect(String(BlitzEvent.JOB_COMPLETED)).toBe('JOB_COMPLETED');
+      expect(String(BlitzEvent.JOB_FAILED)).toBe('JOB_FAILED');
+      expect(String(BlitzEvent.JOB_CANCELLED)).toBe('JOB_CANCELLED');
+      expect(String(BlitzEvent.JOB_SUSPENDED)).toBe('JOB_SUSPENDED');
+      expect(String(BlitzEvent.JOB_RESTARTING)).toBe('JOB_RESTARTING');
+      expect(String(BlitzEvent.SNAPSHOT_STARTED)).toBe('SNAPSHOT_STARTED');
+      expect(String(BlitzEvent.SNAPSHOT_COMPLETED)).toBe('SNAPSHOT_COMPLETED');
     });
   });
 
@@ -172,6 +206,20 @@ describe('Block 23.12 — BlitzService Job Integration', () => {
       const jobs = nestService.getJobs();
       expect(Array.isArray(jobs)).toBe(true);
     });
+
+    it('getJobMetadata() proxies to BlitzService', async () => {
+      const nestService = new HeliosBlitzService(blitz);
+      const pipeline = blitz.pipeline('nestjs-metadata');
+      pipeline.readFrom(new BlockingSource()).map((value: string) => value).writeTo({
+        name: 'collect-sink',
+        write: async () => {},
+      });
+      const job = await nestService.newJob(pipeline);
+      const metadata = await nestService.getJobMetadata(job.id);
+      expect(metadata?.lightJob).toBe(true);
+      expect(metadata?.supportsRestart).toBe(false);
+      await nestService.cancelJob(job.id);
+    });
   });
 
   // ── Exports verification ──────────────────────────────
@@ -182,13 +230,13 @@ describe('Block 23.12 — BlitzService Job Integration', () => {
     });
 
     it('exports JobStatus enum', () => {
-      expect(JobStatus.RUNNING).toBe('RUNNING');
-      expect(JobStatus.COMPLETED).toBe('COMPLETED');
+      expect(String(JobStatus.RUNNING)).toBe('RUNNING');
+      expect(String(JobStatus.COMPLETED)).toBe('COMPLETED');
     });
 
     it('exports ProcessingGuarantee enum', () => {
-      expect(ProcessingGuarantee.NONE).toBe('NONE');
-      expect(ProcessingGuarantee.AT_LEAST_ONCE).toBe('AT_LEAST_ONCE');
+      expect(String(ProcessingGuarantee.NONE)).toBe('NONE');
+      expect(String(ProcessingGuarantee.AT_LEAST_ONCE)).toBe('AT_LEAST_ONCE');
     });
   });
 });

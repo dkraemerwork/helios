@@ -8,7 +8,7 @@ import type { Message } from '../topic/Message.js';
 import type { VertexMetrics, BlitzJobMetrics } from './metrics/BlitzJobMetrics.js';
 import { ProcessingGuarantee } from './JobConfig.js';
 import { JobRecord } from './JobRecord.js';
-import { JobStatus } from './JobStatus.js';
+import { JobStatus, isTerminalStatus } from './JobStatus.js';
 import { BlitzJob, type JobCoordinator } from './BlitzJob.js';
 import { computeExecutionPlan } from './ExecutionPlan.js';
 import { SnapshotCoordinator } from './snapshot/SnapshotCoordinator.js';
@@ -328,7 +328,39 @@ export class BlitzJobCoordinator {
       const job = await this.getJob(record.id);
       if (job) jobs.push(job);
     }
+    for (const job of this._lightJobs.values()) {
+      jobs.push(job);
+    }
     return jobs;
+  }
+
+  async getJobMetadata(jobId: string): Promise<{
+    lightJob: boolean;
+    participatingMembers: string[];
+    supportsCancel: boolean;
+    supportsRestart: boolean;
+  } | null> {
+    const lightJob = this._lightJobs.get(jobId);
+    if (lightJob) {
+      return {
+        lightJob: true,
+        participatingMembers: [this._executor.memberId],
+        supportsCancel: !isTerminalStatus(lightJob.getStatus()),
+        supportsRestart: false,
+      };
+    }
+
+    const record = await this._imap.get(jobId);
+    if (!record) {
+      return null;
+    }
+
+    return {
+      lightJob: record.lightJob,
+      participatingMembers: [...record.participatingMembers],
+      supportsCancel: !isTerminalStatus(record.status),
+      supportsRestart: !record.lightJob,
+    };
   }
 
   // ── Demotion / Promotion ────────────────────────────────

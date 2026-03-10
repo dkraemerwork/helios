@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS job_snapshots (
   timestamp             INTEGER NOT NULL,
   execution_start_time  INTEGER,
   completion_time       INTEGER,
+  light_job             INTEGER NOT NULL DEFAULT 0,
+  supports_cancel       INTEGER NOT NULL DEFAULT 1,
+  supports_restart      INTEGER NOT NULL DEFAULT 1,
   metrics_json          TEXT    NOT NULL DEFAULT '{}',
   vertices_json         TEXT    NOT NULL DEFAULT '[]',
   edges_json            TEXT    NOT NULL DEFAULT '[]'

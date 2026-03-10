@@ -25,7 +25,7 @@ export class GeneralStage<T> {
    */
   map<R>(fn: (value: T) => R | Promise<R>): GeneralStage<R> {
     const name = `map-${this._pipeline.vertices.length}`;
-    const vertex = new Vertex(name, 'operator', fn);
+    const vertex = new Vertex(name, 'operator', fn, 'map');
     const edge = new Edge(
       this._vertex,
       vertex,
@@ -43,7 +43,7 @@ export class GeneralStage<T> {
    */
   filter(fn: (value: T) => boolean): GeneralStage<T> {
     const name = `filter-${this._pipeline.vertices.length}`;
-    const vertex = new Vertex(name, 'operator', fn);
+    const vertex = new Vertex(name, 'operator', fn, 'filter');
     const edge = new Edge(
       this._vertex,
       vertex,

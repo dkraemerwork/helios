@@ -12,6 +12,7 @@
 
 import { Module } from '@nestjs/common';
 import { HeliosObjectExtractionModule } from '@zenystx/helios-nestjs';
+import { BinanceBlitzJobsService } from './binance-blitz-jobs.service';
 import { BinanceQuotesService } from './binance-quotes.service';
 import { BinanceTickStreamService } from './binance-tick-stream.service';
 
@@ -19,10 +20,10 @@ import { BinanceTickStreamService } from './binance-tick-stream.service';
     imports: [
         // Expose the 'quotes' IMap as an injectable provider.
         HeliosObjectExtractionModule.forRoot({
-            namedMaps: ['quotes'],
+            namedMaps: ['quotes', 'quote-rollups'],
         }),
     ],
-    providers: [BinanceQuotesService, BinanceTickStreamService],
-    exports: [BinanceQuotesService, BinanceTickStreamService],
+    providers: [BinanceBlitzJobsService, BinanceQuotesService, BinanceTickStreamService],
+    exports: [BinanceBlitzJobsService, BinanceQuotesService, BinanceTickStreamService],
 })
 export class BinanceQuotesModule {}

@@ -65,6 +65,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import "reflect-metadata";
 import { AppModule } from "./app.module";
+import { BinanceBlitzJobsService } from "./binance-quotes/binance-blitz-jobs.service";
 import { BinanceQuotesService } from "./binance-quotes/binance-quotes.service";
 import { BinanceTickStreamService } from "./binance-quotes/binance-tick-stream.service";
 import { DynamoDbStoreService } from "./dynamodb-store/dynamodb-store.service";
@@ -91,6 +92,9 @@ config.addMapConfig(new MapConfig("products"));
 
 // 'quotes' map: materialized view of real-time Binance quotes.
 config.addMapConfig(new MapConfig("quotes"));
+
+// 'quote-rollups' map: Blitz job materialized market rollups visible in MC job snapshots.
+config.addMapConfig(new MapConfig("quote-rollups"));
 
 // ── MapStore-backed maps ──────────────────────────────────────────────────────
 
@@ -229,6 +233,8 @@ try {
 
 console.log("\n  Starting embedded NATS server (Blitz)...");
 const blitzService = await BlitzService.start({ embedded: {} });
+const heliosImpl = heliosInstance as unknown as HeliosInstanceImpl;
+heliosImpl.setBlitzService(blitzService);
 console.log("  Embedded NATS server running on nats://localhost:4222\n");
 
 // ── Bootstrap NestJS (no HTTP) ────────────────────────────────────────────────
@@ -440,6 +446,7 @@ console.log("  Write-coalescing: only latest quote per symbol survives to each f
 console.log("  IMap receives ~N writes per flush (N = tracked symbols), not per tick.\n");
 
 const quotesSvc = app.get(BinanceQuotesService);
+const blitzJobsSvc = app.get(BinanceBlitzJobsService);
 
 // Track a handful of major pairs to keep output readable
 const trackedSymbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"];
@@ -593,6 +600,9 @@ console.log("  Materialized view: IMap('quotes') updated at flush interval.\n");
 await quotesSvc.startFromNats(2_000);
 console.log("  NATS consumer started — waiting for ticks on 'market.ticks'.");
 
+const binanceJob = await blitzJobsSvc.ensureStarted();
+console.log(`  Blitz job started — ${binanceJob.name} (${binanceJob.id}).`);
+
 console.log("\n  ┌─────────────────────────────────────────────────────┐");
 console.log("  │  Server is alive! Open a second terminal and run:   │");
 console.log("  │                                                     │");
@@ -605,12 +615,13 @@ console.log("  └────────────────────�
 // ── Cluster status dashboard (periodic) ───────────────────────────────────
 
 // Cast to HeliosInstanceImpl for access to getTransportStats/getKnownDistributedObjectNames
-const impl = heliosInstance as unknown as HeliosInstanceImpl;
+const impl = heliosImpl;
 
 function printClusterStatus(): void {
   const transport = impl.getTransportStats();
   const inventory = impl.getKnownDistributedObjectNames();
   const quotesMetrics = quotesSvc.getMetrics();
+  const blitzJobState = blitzJobsSvc.getState();
 
   const now = new Date().toLocaleTimeString();
 
@@ -656,6 +667,12 @@ function printClusterStatus(): void {
   console.log(`  ║    Symbols:        ${quotesMetrics.symbolsTracked}`);
   console.log(`  ║    Uptime:         ${(quotesMetrics.uptimeMs / 1000).toFixed(1)}s`);
 
+  console.log("  ║");
+  console.log("  ║  Blitz Jobs");
+  console.log(`  ║    Job name:       ${blitzJobState.jobName ?? 'idle'}`);
+  console.log(`  ║    Job id:         ${blitzJobState.jobId ?? 'n/a'}`);
+  console.log(`  ║    Job status:     ${blitzJobState.status}`);
+
   // IMap materialized view snapshot
   const quoteCount = quotesSvc.getQuoteCount();
   if (quoteCount > 0) {
@@ -687,6 +704,9 @@ const shutdown = async (): Promise<void> => {
 
   await quotesSvc.stop();
   console.log("  NATS consumer stopped.");
+
+  await blitzJobsSvc.stop();
+  console.log("  Binance Blitz job stopped.");
 
   // Stop Management Center first
   try {

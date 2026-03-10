@@ -16,6 +16,9 @@ describe('JobsService', () => {
             status: 'RUNNING',
             executionStartTime: 123,
             completionTime: null,
+            lightJob: true,
+            supportsCancel: true,
+            supportsRestart: false,
           },
         ],
       }),
@@ -44,6 +47,8 @@ describe('JobsService', () => {
           jobId: 'job-1',
           jobName: 'Stress Pipeline',
           status: 'RUNNING',
+          lightJob: true,
+          supportsRestart: false,
         },
       ],
     });

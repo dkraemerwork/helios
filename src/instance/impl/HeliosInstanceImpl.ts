@@ -202,6 +202,25 @@ type BlitzServiceLike = {
   getRunningJobCount?(): number;
   getClusterSize?(): number;
   getJobCounters?(): { submitted: number; completedSuccessfully: number; completedWithFailure: number; executionStarted: number };
+  getJobs?(): Array<{
+    id: string;
+    name: string;
+    getStatus(): string;
+    getSubmissionTime(): number;
+    getMetrics?(): Promise<unknown>;
+  }>;
+  getJobDescriptor?(id: string): {
+    vertices?: Array<{ name: string; type: string }>;
+    edges?: Array<{ from: string; to: string; edgeType: string }>;
+  } | null;
+  getJobMetadata?(id: string): Promise<{
+    lightJob: boolean;
+    participatingMembers: string[];
+    supportsCancel: boolean;
+    supportsRestart: boolean;
+  } | null>;
+  cancelJob?(id: string): Promise<void>;
+  restartJob?(id: string): Promise<void>;
 };
 
 type BlitzRuntimeHandle = {
@@ -5527,6 +5546,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
         if (typeof getJobsFn !== 'function') return [];
 
         try {
+          const getDescriptorFn = (blitzService as unknown as { getJobDescriptor?(id: string): unknown }).getJobDescriptor;
+          const getMetadataFn = (blitzService as unknown as { getJobMetadata?(id: string): Promise<unknown> }).getJobMetadata;
           const jobs = await getJobsFn.call(blitzService) as Array<{
             id: string;
             name: string;
@@ -5549,15 +5570,37 @@ export class HeliosInstanceImpl implements HeliosInstance {
               }
             }
 
+            const descriptor = typeof getDescriptorFn === 'function'
+              ? getDescriptorFn.call(blitzService, job.id) as {
+                  vertices?: Array<{ name: string; type: string }>;
+                  edges?: Array<{ from: string; to: string; edgeType: string }>;
+                } | null
+              : null;
+            const metadata = typeof getMetadataFn === 'function'
+              ? await getMetadataFn.call(blitzService, job.id) as {
+                  lightJob: boolean;
+                  participatingMembers: string[];
+                  supportsCancel: boolean;
+                  supportsRestart: boolean;
+                } | null
+              : null;
+
             snapshots.push({
               id: job.id,
               name: job.name,
               status: typeof job.getStatus === 'function' ? job.getStatus() : 'UNKNOWN',
               submittedAt: typeof job.getSubmissionTime === 'function' ? job.getSubmissionTime() : 0,
-              lightJob: false,
-              participatingMembers: [],
-              vertices: [],
-              edges: [],
+              lightJob: metadata?.lightJob ?? true,
+              supportsCancel: metadata?.supportsCancel ?? true,
+              supportsRestart: metadata?.supportsRestart ?? false,
+              participatingMembers: metadata?.participatingMembers ?? [],
+              vertices: descriptor?.vertices ?? (metrics?.['vertices'] && typeof metrics['vertices'] === 'object'
+                ? Object.entries(metrics['vertices'] as Record<string, Record<string, unknown>>).map(([name, value]) => ({
+                    name,
+                    type: String((value as Record<string, unknown>)['type'] ?? 'operator'),
+                  }))
+                : []),
+              edges: descriptor?.edges ?? [],
               metrics,
             });
           }
@@ -5601,6 +5644,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const blitzService = this.getBlitzServiceForBridge() as (BlitzServiceLike | null);
         if (blitzService === null) {
           throw new Error('No Blitz service available for job operations.');
+        }
+        const getMetadataFn = (blitzService as unknown as { getJobMetadata?(id: string): Promise<unknown> }).getJobMetadata;
+        const metadata = typeof getMetadataFn === 'function'
+          ? await getMetadataFn.call(blitzService, jobId) as { supportsRestart: boolean } | null
+          : null;
+        if (metadata !== null && metadata.supportsRestart === false) {
+          throw new Error('Job restart is not supported for standalone/light jobs.');
         }
         const restartFn = (blitzService as unknown as { restartJob?(id: string): Promise<void> }).restartJob;
         if (typeof restartFn !== 'function') {

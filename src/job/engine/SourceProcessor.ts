@@ -48,8 +48,11 @@ export class SourceProcessor<T> {
     const iter = this.source.messages()[Symbol.asyncIterator]();
     try {
       while (!signal.aborted) {
-        const next = await raceAbort(iter.next(), signal);
-        if (next === ABORTED) return;
+        const next = await raceAbort<IteratorResult<import('@zenystx/helios-blitz/source/Source.js').SourceMessage<T>>>(iter.next(), signal);
+        if (next === ABORTED) {
+          await iter.return?.();
+          return;
+        }
         if (next.done) break;
 
         // Check for pending barrier after reading but before emitting data
@@ -83,6 +86,10 @@ export class SourceProcessor<T> {
     } catch (err) {
       if (signal.aborted) return;
       throw err;
+    } finally {
+      if (signal.aborted) {
+        await iter.return?.();
+      }
     }
   }
 

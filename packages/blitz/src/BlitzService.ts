@@ -11,12 +11,26 @@ import { NatsServerBinaryResolver } from './server/NatsServerBinaryResolver.js';
 import type { NatsServerNodeConfig } from './server/NatsServerConfig.js';
 import { NatsServerManager } from './server/NatsServerManager.js';
 import { BlitzJob, type JobCoordinator } from '@zenystx/helios-core/job/BlitzJob.js';
-import { JobStatus } from '@zenystx/helios-core/job/JobStatus.js';
+import { JobStatus, isTerminalStatus } from '@zenystx/helios-core/job/JobStatus.js';
 import { resolveJobConfig, type JobConfig, type ResolvedJobConfig } from '@zenystx/helios-core/job/JobConfig.js';
 import type { BlitzJobCoordinator } from '@zenystx/helios-core/job/BlitzJobCoordinator.js';
+import type { Sink } from './sink/Sink.js';
+import type { Source } from './source/Source.js';
+import type { OperatorFnEntry } from '@zenystx/helios-core/job/engine/JobExecution.js';
+import { JobExecution } from '@zenystx/helios-core/job/engine/JobExecution.js';
+import { MetricsCollector } from '@zenystx/helios-core/job/metrics/MetricsCollector.js';
+import type { BlitzJobMetrics, VertexMetrics } from '@zenystx/helios-core/job/metrics/BlitzJobMetrics.js';
+import type { PipelineDescriptor } from '@zenystx/helios-core/job/PipelineDescriptor.js';
 
 /** Listener for BlitzEvents emitted by BlitzService. */
 export type BlitzEventListener = (event: BlitzEvent, detail?: unknown) => void;
+
+export interface BlitzJobMetadata {
+    lightJob: boolean;
+    participatingMembers: string[];
+    supportsCancel: boolean;
+    supportsRestart: boolean;
+}
 
 /**
  * BlitzService — top-level entry point for the Helios Blitz stream processing engine.
@@ -88,6 +102,8 @@ export class BlitzService {
     private _jsmInitPromise: Promise<JetStreamManager> | null = null;
     private _coordinator: BlitzJobCoordinator | null = null;
     private readonly _jobs = new Map<string, BlitzJob>();
+    private readonly _standaloneExecutions = new Map<string, JobExecution>();
+    private readonly _jobDescriptors = new Map<string, PipelineDescriptor>();
 
     private constructor(
         config: ResolvedBlitzConfig,
@@ -349,6 +365,27 @@ export class BlitzService {
         return count;
     }
 
+    getJobCounters(): { submitted: number; completedSuccessfully: number; completedWithFailure: number; executionStarted: number } {
+        if (this._coordinator !== null) {
+            return this._coordinator.getJobCounters();
+        }
+
+        let submitted = 0;
+        let completedSuccessfully = 0;
+        let completedWithFailure = 0;
+        let executionStarted = 0;
+
+        for (const job of this._jobs.values()) {
+            submitted++;
+            executionStarted++;
+            const status = job.getStatus();
+            if (status === JobStatus.COMPLETED) completedSuccessfully++;
+            if (status === JobStatus.FAILED) completedWithFailure++;
+        }
+
+        return { submitted, completedSuccessfully, completedWithFailure, executionStarted };
+    }
+
     // ── Job API ──────────────────────────────────────────────
 
     /**
@@ -375,6 +412,7 @@ export class BlitzService {
             const descriptor = pipeline.toDescriptor();
             const job = await this._coordinator.submitJob(descriptor, resolved);
             this._jobs.set(job.id, job);
+            this._jobDescriptors.set(job.id, descriptor);
             this._emit(BlitzEvent.JOB_STARTED, { jobId: job.id, name: job.name });
             return job;
         }
@@ -407,6 +445,57 @@ export class BlitzService {
         const all = [...this._jobs.values()];
         if (name === undefined) return all;
         return all.filter(j => j.name === name);
+    }
+
+    getJobDescriptor(id: string): PipelineDescriptor | null {
+        return this._jobDescriptors.get(id) ?? null;
+    }
+
+    async getJobMetadata(id: string): Promise<BlitzJobMetadata | null> {
+        const job = this._jobs.get(id);
+        if (!job) {
+            return null;
+        }
+
+        if (this._coordinator !== null) {
+            const metadata = await this._coordinator.getJobMetadata(id);
+            if (metadata !== null) {
+                return metadata;
+            }
+        }
+
+        return {
+            lightJob: true,
+            participatingMembers: ['local'],
+            supportsCancel: !isTerminalStatus(job.getStatus()),
+            supportsRestart: false,
+        };
+    }
+
+    async cancelJob(id: string): Promise<void> {
+        const job = this._jobs.get(id);
+        if (!job) {
+            throw new Error(`Job '${id}' not found`);
+        }
+        if (isTerminalStatus(job.getStatus())) {
+            throw new Error(`Job '${id}' is already in terminal state '${job.getStatus()}'`);
+        }
+        await job.cancel();
+    }
+
+    async restartJob(id: string): Promise<void> {
+        const job = this._jobs.get(id);
+        if (!job) {
+            throw new Error(`Job '${id}' not found`);
+        }
+        const metadata = await this.getJobMetadata(id);
+        if (metadata === null) {
+            throw new Error(`Job '${id}' not found`);
+        }
+        if (!metadata.supportsRestart) {
+            throw new Error('Job restart is not supported for standalone/light jobs.');
+        }
+        await job.restart();
     }
 
     /**
@@ -451,28 +540,303 @@ export class BlitzService {
 
     private _createStandaloneJob(_pipeline: Pipeline, config: ResolvedJobConfig): Promise<BlitzJob> {
         const jobId = crypto.randomUUID();
+        const pipeline = _pipeline;
 
         let status = JobStatus.RUNNING;
+
+        const sourceMetrics = new Map<string, number>();
+        const operatorMetrics = new Map<string, { itemsIn: number; itemsOut: number }>();
+        const sinkMetrics = new Map<string, number>();
+        let stopRequested = false;
+        let terminalized = false;
+
+        const transitionTo = (nextStatus: JobStatus): void => {
+            if (status === nextStatus) return;
+            const previousStatus = status;
+            status = nextStatus;
+            if (nextStatus === JobStatus.COMPLETED || nextStatus === JobStatus.CANCELLED || nextStatus === JobStatus.FAILED) {
+                terminalized = true;
+            }
+            job.notifyStatusChange(previousStatus, nextStatus);
+        };
+
+        const completeIfNeeded = (): boolean => {
+            if (!terminalized && !stopRequested) {
+                transitionTo(JobStatus.COMPLETED);
+                return true;
+            }
+            return false;
+        };
+
+        const resources = this._buildStandaloneResources(pipeline, sourceMetrics, operatorMetrics, sinkMetrics);
+
+        let execution: JobExecution | null = null;
 
         const coordinator: JobCoordinator = {
             getStatus: () => status,
             cancel: async () => {
-                status = JobStatus.CANCELLED;
-                job.notifyStatusChange(JobStatus.RUNNING, JobStatus.CANCELLED);
+                stopRequested = true;
+                if (execution) {
+                    await execution.stop();
+                    this._standaloneExecutions.delete(jobId);
+                }
+                transitionTo(JobStatus.CANCELLED);
                 this._emit(BlitzEvent.JOB_CANCELLED, { jobId, name: config.name });
             },
             suspend: async () => { throw new Error('Standalone jobs cannot be suspended'); },
             resume: async () => { throw new Error('Standalone jobs cannot be resumed'); },
             restart: async () => { throw new Error('Standalone jobs cannot be restarted'); },
             exportSnapshot: async () => { throw new Error('Standalone jobs do not support snapshots'); },
-            getMetrics: async () => [],
+            getMetrics: async () => {
+                if (execution) {
+                    return this._collectStandaloneMetrics(jobId, execution);
+                }
+                return this._collectStandaloneMetricsFromSnapshots(
+                    jobId,
+                    this._buildStandaloneMetrics(pipeline, sourceMetrics, operatorMetrics, sinkMetrics),
+                );
+            },
         };
 
         const job = new BlitzJob(jobId, config.name, coordinator, Date.now());
         this._jobs.set(jobId, job);
+        this._jobDescriptors.set(jobId, pipeline.toDescriptor());
         this._emit(BlitzEvent.JOB_STARTED, { jobId, name: config.name });
 
+        execution = this._createStandaloneExecution(jobId, pipeline, config, resources);
+        this._standaloneExecutions.set(jobId, execution);
+
+        this._runStandalonePipeline(jobId, execution, completeIfNeeded, (err) => {
+            if (!terminalized) {
+                transitionTo(JobStatus.FAILED);
+            }
+            this._standaloneExecutions.delete(jobId);
+            this._emit(BlitzEvent.JOB_FAILED, { jobId, name: config.name, error: err instanceof Error ? err.message : String(err) });
+        });
+
         return Promise.resolve(job);
+    }
+
+    private _buildStandaloneResources(
+        pipeline: Pipeline,
+        sourceMetrics: Map<string, number>,
+        operatorMetrics: Map<string, { itemsIn: number; itemsOut: number }>,
+        sinkMetrics: Map<string, number>,
+    ): {
+        sources: Map<string, Source<unknown>>;
+        sinks: Map<string, Sink<unknown>>;
+        operatorFns: Map<string, OperatorFnEntry>;
+    } {
+        const sources = new Map<string, Source<unknown>>();
+        const sinks = new Map<string, Sink<unknown>>();
+        const operatorFns = new Map<string, OperatorFnEntry>();
+
+        for (const vertex of pipeline.vertices) {
+            if (vertex.type === 'source' && vertex.sourceRef) {
+                const baseSource = vertex.sourceRef;
+                sourceMetrics.set(vertex.name, 0);
+                sources.set(vertex.name, {
+                    name: baseSource.name,
+                    codec: baseSource.codec,
+                    messages: async function* () {
+                        for await (const message of baseSource.messages()) {
+                            sourceMetrics.set(vertex.name, (sourceMetrics.get(vertex.name) ?? 0) + 1);
+                            yield message;
+                        }
+                    },
+                });
+            }
+
+            if (vertex.type === 'sink' && vertex.sinkRef) {
+                const baseSink = vertex.sinkRef;
+                sinkMetrics.set(vertex.name, 0);
+                sinks.set(vertex.name, {
+                    name: baseSink.name,
+                    write: async (value: unknown): Promise<void> => {
+                        sinkMetrics.set(vertex.name, (sinkMetrics.get(vertex.name) ?? 0) + 1);
+                        await baseSink.write(value as never);
+                    },
+                });
+            }
+
+            if (vertex.type === 'operator' && vertex.fn) {
+                operatorMetrics.set(vertex.name, { itemsIn: 0, itemsOut: 0 });
+                const mode = vertex.operatorMode ?? (vertex.name.startsWith('filter-') ? 'filter' : 'map');
+                operatorFns.set(vertex.name, {
+                    mode,
+                    fn: async (value: unknown): Promise<unknown> => {
+                        const current = operatorMetrics.get(vertex.name)!;
+                        current.itemsIn++;
+                        const result = await vertex.fn!(value);
+                        if (mode === 'filter') {
+                            if (result) {
+                                current.itemsOut++;
+                            }
+                            return result;
+                        }
+                        current.itemsOut++;
+                        return result;
+                    },
+                });
+            }
+        }
+
+        return { sources, sinks, operatorFns };
+    }
+
+    private _createStandaloneExecution(
+        jobId: string,
+        pipeline: Pipeline,
+        config: ResolvedJobConfig,
+        resources: { sources: Map<string, Source<unknown>>; sinks: Map<string, Sink<unknown>>; operatorFns: Map<string, OperatorFnEntry> },
+    ): JobExecution {
+        return new JobExecution({
+            jobId,
+            jobName: config.name,
+            executionId: jobId,
+            plan: {
+                jobId,
+                pipeline: pipeline.toDescriptor(),
+                memberIds: ['local'],
+                edgeRouting: new Map(),
+                fenceToken: 'standalone',
+                masterMemberId: 'local',
+                memberListVersion: 0,
+            },
+            memberId: 'local',
+            sources: resources.sources,
+            sinks: resources.sinks,
+            operatorFns: resources.operatorFns,
+            guarantee: config.processingGuarantee,
+            maxProcessorAccumulatedRecords: config.maxProcessorAccumulatedRecords,
+        });
+    }
+
+    private _runStandalonePipeline(
+        jobId: string,
+        execution: JobExecution,
+        onComplete: () => boolean,
+        onError: (error: unknown) => void,
+    ): void {
+        void (async () => {
+            try {
+                await execution.start();
+                const results = await execution.whenComplete();
+                const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+                this._standaloneExecutions.delete(jobId);
+                if (failure) {
+                    onError(failure.reason);
+                    return;
+                }
+                 if (onComplete()) {
+                     this._emit(BlitzEvent.JOB_COMPLETED, { jobId });
+                 }
+             } catch (error) {
+                 this._standaloneExecutions.delete(jobId);
+                 onError(error);
+            }
+        })();
+    }
+
+    private _collectStandaloneMetrics(jobId: string, execution: JobExecution): BlitzJobMetrics {
+        return this._collectStandaloneMetricsFromSnapshots(
+            jobId,
+            execution.getMetrics(),
+            execution.startTime,
+            execution.completionTime,
+        );
+    }
+
+    private _collectStandaloneMetricsFromSnapshots(
+        jobId: string,
+        localMetrics: VertexMetrics[],
+        startTime = Date.now(),
+        completionTime = -1,
+    ): BlitzJobMetrics {
+        return MetricsCollector.aggregate(
+            new Map([[jobId, localMetrics]]),
+            {
+                snapshotCount: 0,
+                lastSnapshotDurationMs: 0,
+                lastSnapshotBytes: 0,
+                lastSnapshotTimestamp: 0,
+            },
+            [{ startTime, completionTime }],
+        );
+    }
+
+    private _buildStandaloneMetrics(
+        pipeline: Pipeline,
+        sourceMetrics: Map<string, number>,
+        operatorMetrics: Map<string, { itemsIn: number; itemsOut: number }>,
+        sinkMetrics: Map<string, number>,
+    ): import('@zenystx/helios-core/job/metrics/BlitzJobMetrics').VertexMetrics[] {
+        return pipeline.vertices.map((vertex) => {
+            if (vertex.type === 'source') {
+                return {
+                    name: vertex.name,
+                    type: 'source',
+                    itemsIn: 0,
+                    itemsOut: sourceMetrics.get(vertex.name) ?? 0,
+                    queueSize: 0,
+                    queueCapacity: 0,
+                    latencyP50Ms: 0,
+                    latencyP99Ms: 0,
+                    latencyMaxMs: 0,
+                    distributedItemsIn: 0,
+                    distributedItemsOut: 0,
+                    distributedBytesIn: 0,
+                    distributedBytesOut: 0,
+                    topObservedWm: -1,
+                    coalescedWm: -1,
+                    lastForwardedWm: -1,
+                    lastForwardedWmLatency: -1,
+                  };
+            }
+
+            if (vertex.type === 'sink') {
+                return {
+                    name: vertex.name,
+                    type: 'sink',
+                    itemsIn: sinkMetrics.get(vertex.name) ?? 0,
+                    itemsOut: 0,
+                    queueSize: 0,
+                    queueCapacity: 0,
+                    latencyP50Ms: 0,
+                    latencyP99Ms: 0,
+                    latencyMaxMs: 0,
+                    distributedItemsIn: 0,
+                    distributedItemsOut: 0,
+                    distributedBytesIn: 0,
+                    distributedBytesOut: 0,
+                    topObservedWm: -1,
+                    coalescedWm: -1,
+                    lastForwardedWm: -1,
+                    lastForwardedWmLatency: -1,
+                };
+            }
+
+            const operator = operatorMetrics.get(vertex.name) ?? { itemsIn: 0, itemsOut: 0 };
+            return {
+                name: vertex.name,
+                type: 'operator',
+                itemsIn: operator.itemsIn,
+                itemsOut: operator.itemsOut,
+                queueSize: 0,
+                queueCapacity: 0,
+                latencyP50Ms: 0,
+                latencyP99Ms: 0,
+                latencyMaxMs: 0,
+                distributedItemsIn: 0,
+                distributedItemsOut: 0,
+                distributedBytesIn: 0,
+                distributedBytesOut: 0,
+                topObservedWm: -1,
+                coalescedWm: -1,
+                lastForwardedWm: -1,
+                lastForwardedWmLatency: -1,
+            };
+        });
     }
 
     private _emit(event: BlitzEvent, detail?: unknown): void {

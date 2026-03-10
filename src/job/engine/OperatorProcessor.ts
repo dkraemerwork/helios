@@ -77,9 +77,9 @@ export class OperatorProcessor {
       if (result === ABORTED) return;
       const item = result;
 
-      switch (item.type) {
+        switch (item.type) {
         case 'data': {
-          const transformed = this.fn(item.value);
+          const transformed = await this.fn(item.value);
           if (this.mode === 'flatMap' && Array.isArray(transformed)) {
             for (const v of transformed) {
               await this.outbox.send({
