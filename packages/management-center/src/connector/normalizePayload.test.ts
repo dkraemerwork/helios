@@ -58,4 +58,30 @@ describe('normalizeHeliosPayload', () => {
     expect(payload.members[0]?.monitorCapable).toBe(false);
     expect(payload.members[0]?.adminCapable).toBe(false);
   });
+
+  test('keeps data structure stats from JSON-safe monitor payloads', () => {
+    const payload = normalizeHeliosPayload({
+      instanceName: 'stress-a',
+      clusterName: 'stress',
+      clusterState: 'ACTIVE',
+      clusterSize: 2,
+      members: [],
+      distributedObjects: [],
+      partitions: { partitionCount: 271, memberPartitions: {} },
+      samples: [],
+      mapStats: {
+        orders: {
+          ownedEntryCount: 7,
+          backupEntryCount: 2,
+        },
+      },
+    });
+
+    expect(payload.mapStats).toEqual({
+      orders: {
+        ownedEntryCount: 7,
+        backupEntryCount: 2,
+      },
+    });
+  });
 });

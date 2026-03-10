@@ -120,4 +120,8 @@ export class LocalMapStatsImpl {
             queryResultSizeExceededCount: this._queryResultSizeExceededCount,
         };
     }
+
+    toJSON(): LocalMapStats {
+        return this.toSnapshot();
+    }
 }
