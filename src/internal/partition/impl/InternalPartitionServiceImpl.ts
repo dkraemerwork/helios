@@ -174,10 +174,21 @@ export class InternalPartitionServiceImpl {
         maxParallelSyncs: 20,
     };
 
-    /** Supported replicated service names. */
+    /** Supported partition-owned services with namespace replication wiring. */
     private static readonly SUPPORTED_SERVICES = ['map', 'queue', 'ringbuffer'];
-    /** Explicitly unsupported (deferred) service names. */
-    private static readonly UNSUPPORTED_SERVICES = ['cache', 'sql', 'transaction'];
+    /**
+     * Services intentionally excluded from partition-state replication.
+     *
+     * These are not temporary stub hooks inside the recovery pipeline:
+     * - cache: data service exists, but no MigrationAwareService / namespace sync wiring
+     * - sql: query engine is stateless and has no partition-owned replica state
+     * - transaction: coordinator state is member-local, not partition-replicated
+     */
+    private static readonly UNSUPPORTED_SERVICE_REASONS = {
+        cache: 'cache has no MigrationAwareService implementation or namespace replica sync path',
+        sql: 'sql execution is stateless and does not own partition-backed replica state',
+        transaction: 'transaction coordinator state is member-local and not replicated through the partition service',
+    } as const;
 
     constructor(partitionCount: number = 271) {
         this._partitionCount = partitionCount;
@@ -765,7 +776,11 @@ export class InternalPartitionServiceImpl {
     }
 
     getUnsupportedReplicatedServices(): string[] {
-        return [...InternalPartitionServiceImpl.UNSUPPORTED_SERVICES];
+        return Object.keys(InternalPartitionServiceImpl.UNSUPPORTED_SERVICE_REASONS);
+    }
+
+    getUnsupportedReplicatedServiceReasons(): Record<string, string> {
+        return { ...InternalPartitionServiceImpl.UNSUPPORTED_SERVICE_REASONS };
     }
 
     // ── Existing API preserved ──────────────────────────────────

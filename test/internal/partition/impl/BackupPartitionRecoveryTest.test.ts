@@ -332,6 +332,16 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
                 expect(unsupported).not.toContain(s);
             }
         });
+
+        test('unsupported services expose explicit reasons instead of deferred placeholders', () => {
+            const reasons = service.getUnsupportedReplicatedServiceReasons();
+            expect(reasons.cache).toContain('MigrationAwareService');
+            expect(reasons.sql).toContain('stateless');
+            expect(reasons.transaction).toContain('member-local');
+
+            const unsupported = service.getUnsupportedReplicatedServices();
+            expect(Object.keys(reasons).sort()).toEqual([...unsupported].sort());
+        });
     });
 
     // ── R8A: Config, observability, docs, test-support ──────────

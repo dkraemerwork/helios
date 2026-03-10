@@ -47,8 +47,9 @@ const NOT_RETAINED_DISTRIBUTED_OBJECT_SERVICES = new Set<string>([
 ]);
 
 /**
- * Advanced client features that are explicitly deferred.
- * These are not hidden stubs — they are honestly not wired in the current runtime.
+ * Advanced remote-client capabilities intentionally excluded from the current
+ * shared contract. Exported for transparency so unsupported features stay
+ * explicit instead of surfacing as half-wired runtime stubs.
  */
 export const DEFERRED_CLIENT_FEATURES: readonly string[] = Object.freeze([
     'cache',
