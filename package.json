@@ -43,6 +43,7 @@
   },
   "scripts": {
     "build": "bun run tsc --project tsconfig.build.json",
+    "stress": "bun run examples/nestjs-app/src/stress/stress-test.ts",
     "test": "bun test --timeout 30000",
     "test:watch": "bun test --watch",
     "test:one": "bun test --test-name-pattern",

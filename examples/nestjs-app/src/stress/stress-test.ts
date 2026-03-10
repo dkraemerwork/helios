@@ -34,10 +34,24 @@ import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig';
+import { QueueConfig } from '@zenystx/helios-core/config/QueueConfig';
+import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import type { IExecutorService } from '@zenystx/helios-core/executor/IExecutorService';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { IQueue } from '@zenystx/helios-core/collection/IQueue';
+import type { ITopic } from '@zenystx/helios-core/topic/ITopic';
 import { resolve } from 'path';
+import {
+  getMemberQueuePrefix,
+  COLD_MAP_NAME,
+  HOT_MAP_NAME,
+  NEAR_CACHE_MAP_NAME,
+  STRESS_MAP_NAME,
+  STRESS_MEMBER_TOPIC_NAME,
+  STRESS_QUEUE_NAME,
+  STRESS_TOPIC_NAME,
+} from './stress-shared';
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -47,6 +61,8 @@ interface StressOptions {
   nearCacheConcurrency: number;
   crossNodeConcurrency: number;
   executorConcurrency: number;
+  queueConcurrency: number;
+  topicConcurrency: number;
 }
 
 function parseArgs(): StressOptions {
@@ -57,6 +73,8 @@ function parseArgs(): StressOptions {
     nearCacheConcurrency: 20,
     crossNodeConcurrency: 20,
     executorConcurrency: 8,
+    queueConcurrency: 12,
+    topicConcurrency: 8,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -83,6 +101,14 @@ function parseArgs(): StressOptions {
         opts.executorConcurrency = parseInt(next ?? '', 10) || opts.executorConcurrency;
         i++;
         break;
+      case '--queue-concurrency':
+        opts.queueConcurrency = parseInt(next ?? '', 10) || opts.queueConcurrency;
+        i++;
+        break;
+      case '--topic-concurrency':
+        opts.topicConcurrency = parseInt(next ?? '', 10) || opts.topicConcurrency;
+        i++;
+        break;
       case '--help':
         console.log(`
 Helios Cluster Stress Test (NestJS edition)
@@ -96,6 +122,8 @@ Options:
   --near-cache-concurrency <n> Concurrent near-cache loops (default: 20)
   --cross-node-concurrency <n> Concurrent cross-node loops (default: 20)
   --executor-concurrency <n>   Concurrent executor loops (default: 8)
+  --queue-concurrency <n>      Concurrent queue producer/consumer loops (default: 12)
+  --topic-concurrency <n>      Concurrent topic publisher loops (default: 8)
   --help                       Show this help
 
 Management Center:
@@ -124,6 +152,17 @@ interface Stats {
   crossNodeWrites: number;
   crossNodeReads: number;
   crossNodeErrors: number;
+  queueOffers: number;
+  queuePolls: number;
+  queueNullPolls: number;
+  queueListenerAdds: number;
+  queueListenerRemoves: number;
+  queueErrors: number;
+  topicPublishes: number;
+  topicReceives: number;
+  topicListenerAdds: number;
+  topicListenerRemoves: number;
+  topicErrors: number;
   executorSubmitted: number;
   executorCompleted: number;
   executorErrors: number;
@@ -135,6 +174,8 @@ function createStats(): Stats {
     mapPuts: 0, mapGets: 0, mapDeletes: 0, mapErrors: 0,
     nearCacheHits: 0, nearCacheMisses: 0, nearCacheErrors: 0,
     crossNodeWrites: 0, crossNodeReads: 0, crossNodeErrors: 0,
+    queueOffers: 0, queuePolls: 0, queueNullPolls: 0, queueListenerAdds: 0, queueListenerRemoves: 0, queueErrors: 0,
+    topicPublishes: 0, topicReceives: 0, topicListenerAdds: 0, topicListenerRemoves: 0, topicErrors: 0,
     executorSubmitted: 0, executorCompleted: 0, executorErrors: 0, executorTotalMs: 0,
   };
 }
@@ -155,6 +196,7 @@ function spawnNode(name: string, tcpPort: number, restPort: number, peers: strin
     '--name', name,
     '--tcp-port', String(tcpPort),
     '--rest-port', String(restPort),
+    '--expected-members', '3',
   ];
   for (const peer of peers) {
     args.push('--peer', peer);
@@ -209,6 +251,13 @@ interface ClientInfo {
   nearCacheMap: IMap<string, unknown>;
   hotMap: IMap<string, unknown>;
   coldMap: IMap<string, unknown>;
+  stressQueue: IQueue<{ seq: number; producer: number; createdAt: number }>;
+  stressTopic: ITopic<{ seq: number; publisher: number; emittedAt: number }>;
+}
+
+interface MonitorPayloadLike {
+  queueStats?: Record<string, Record<string, unknown>>;
+  topicStats?: Record<string, Record<string, unknown>>;
 }
 
 async function bootClient(): Promise<ClientInfo> {
@@ -231,13 +280,21 @@ async function bootClient(): Promise<ClientInfo> {
   config.getNetworkConfig().getRestApiConfig().setEnabled(false);
   config.getMonitorConfig().setEnabled(false);
 
-  config.addMapConfig(new MapConfig('stress-map'));
-  config.addMapConfig(new MapConfig('hot-map'));
-  config.addMapConfig(new MapConfig('cold-map'));
+  config.addMapConfig(new MapConfig(STRESS_MAP_NAME));
+  config.addMapConfig(new MapConfig(HOT_MAP_NAME));
+  config.addMapConfig(new MapConfig(COLD_MAP_NAME));
 
-  const ncMapConfig = new MapConfig('near-cache-map');
+  const ncMapConfig = new MapConfig(NEAR_CACHE_MAP_NAME);
   ncMapConfig.setNearCacheConfig(new NearCacheConfig());
   config.addMapConfig(ncMapConfig);
+
+  const queueConfig = new QueueConfig(STRESS_QUEUE_NAME);
+  queueConfig.setBackupCount(1);
+  config.addQueueConfig(queueConfig);
+
+  const topicConfig = new TopicConfig(STRESS_TOPIC_NAME);
+  topicConfig.setGlobalOrderingEnabled(true);
+  config.addTopicConfig(topicConfig);
 
   const execConfig = new ExecutorConfig('compute');
   execConfig.setPoolSize(4);
@@ -268,11 +325,76 @@ async function bootClient(): Promise<ClientInfo> {
   return {
     instance,
     executor,
-    stressMap: instance.getMap('stress-map'),
-    nearCacheMap: instance.getMap('near-cache-map'),
-    hotMap: instance.getMap('hot-map'),
-    coldMap: instance.getMap('cold-map'),
+    stressMap: instance.getMap(STRESS_MAP_NAME),
+    nearCacheMap: instance.getMap(NEAR_CACHE_MAP_NAME),
+    hotMap: instance.getMap(HOT_MAP_NAME),
+    coldMap: instance.getMap(COLD_MAP_NAME),
+    stressQueue: instance.getQueue(STRESS_QUEUE_NAME),
+    stressTopic: instance.getTopic(STRESS_TOPIC_NAME),
   };
+}
+
+function getNumericMetric(stats: Record<string, unknown> | undefined, key: string): number {
+  const value = stats?.[key];
+  return typeof value === 'number' ? value : 0;
+}
+
+async function fetchMonitorPayload(restPort: number): Promise<MonitorPayloadLike> {
+  const response = await fetch(`http://127.0.0.1:${restPort}/helios/monitor/data`);
+  if (!response.ok) {
+    throw new Error(`Monitor endpoint ${restPort} returned ${response.status}`);
+  }
+
+  return await response.json() as MonitorPayloadLike;
+}
+
+async function verifyMemberLocalQueueTopicTraffic(nodes: SpawnedNode[], timeoutMs = 20_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const payloads = await Promise.all(nodes.map(async (node) => ({
+      node,
+      payload: await fetchMonitorPayload(node.restPort),
+    })));
+
+    const allVisible = payloads.every(({ node, payload }) => {
+      const queuePrefix = getMemberQueuePrefix(node.name);
+      const queueStats = Object.entries(payload.queueStats ?? {}).find(([name, stats]) =>
+        name.startsWith(queuePrefix)
+        && getNumericMetric(stats, 'offerOperationCount') > 0
+        && getNumericMetric(stats, 'pollOperationCount') > 0,
+      );
+      const topicStats = payload.topicStats?.[STRESS_MEMBER_TOPIC_NAME];
+
+      return queueStats !== undefined
+        && getNumericMetric(topicStats, 'publishOperationCount') > 0
+        && getNumericMetric(topicStats, 'receiveOperationCount') > 0;
+    });
+
+    if (allVisible) {
+      process.stdout.write('[verify] monitored members report non-zero queue/topic stats\n');
+      return;
+    }
+
+    await Bun.sleep(500);
+  }
+
+  const snapshots = await Promise.all(nodes.map(async (node) => ({
+    node,
+    payload: await fetchMonitorPayload(node.restPort),
+  })));
+
+  const details = snapshots.map(({ node, payload }) => {
+    const queuePrefix = getMemberQueuePrefix(node.name);
+    const queueDetail = Object.entries(payload.queueStats ?? {})
+      .filter(([name]) => name.startsWith(queuePrefix))
+      .map(([name, stats]) => `${name}(offer=${getNumericMetric(stats, 'offerOperationCount')},poll=${getNumericMetric(stats, 'pollOperationCount')})`)
+      .join(', ') || 'none';
+    const topicStats = payload.topicStats?.[STRESS_MEMBER_TOPIC_NAME];
+    return `${node.name}: queues=${queueDetail}; topic(pub=${getNumericMetric(topicStats, 'publishOperationCount')},recv=${getNumericMetric(topicStats, 'receiveOperationCount')})`;
+  }).join(' | ');
+
+  throw new Error(`Member-local queue/topic verification failed: ${details}`);
 }
 
 // ── Workloads ─────────────────────────────────────────────────────────────────
@@ -280,6 +402,7 @@ async function bootClient(): Promise<ClientInfo> {
 async function mapWorkload(map: IMap<string, unknown>, stats: Stats, signal: AbortSignal): Promise<void> {
   let seq = 0;
   while (!signal.aborted) {
+    const iteration = seq;
     const key = `k-${seq++ % 10_000}`;
     try {
       const roll = Math.random();
@@ -297,12 +420,14 @@ async function mapWorkload(map: IMap<string, unknown>, stats: Stats, signal: Abo
       if (signal.aborted) return;
       stats.mapErrors++;
     }
+    await yieldToEventLoop(iteration);
   }
 }
 
 async function nearCacheWorkload(map: IMap<string, unknown>, stats: Stats, signal: AbortSignal): Promise<void> {
   let seq = 0;
   while (!signal.aborted) {
+    const iteration = seq;
     const key = `nc-${seq++ % 5_000}`;
     try {
       if (seq % 5 === 0) {
@@ -319,6 +444,7 @@ async function nearCacheWorkload(map: IMap<string, unknown>, stats: Stats, signa
       if (signal.aborted) return;
       stats.nearCacheErrors++;
     }
+    await yieldToEventLoop(iteration);
   }
 }
 
@@ -330,6 +456,7 @@ async function crossNodeWorkload(
 ): Promise<void> {
   let seq = 0;
   while (!signal.aborted) {
+    const iteration = seq;
     const map = seq % 2 === 0 ? hotMap : coldMap;
     const key = `xn-${seq++ % 10_000}`;
     try {
@@ -341,12 +468,69 @@ async function crossNodeWorkload(
       if (signal.aborted) return;
       stats.crossNodeErrors++;
     }
+    await yieldToEventLoop(iteration);
+  }
+}
+
+async function queueWorkload(
+  queue: IQueue<{ seq: number; producer: number; createdAt: number }>,
+  stats: Stats,
+  signal: AbortSignal,
+  workerId: number,
+): Promise<void> {
+  let seq = 0;
+  while (!signal.aborted) {
+    const iteration = seq;
+    const value = { seq, producer: workerId, createdAt: Date.now() };
+    seq++;
+    try {
+      const offered = await queue.offer(value);
+      if (offered) {
+        stats.queueOffers++;
+      }
+
+      const shouldPoll = seq % 2 === 0 || (await queue.size()) > 128;
+      if (shouldPoll) {
+        const item = await queue.poll();
+        if (item === null) {
+          stats.queueNullPolls++;
+        } else {
+          stats.queuePolls++;
+        }
+      }
+    } catch {
+      if (signal.aborted) return;
+      stats.queueErrors++;
+    }
+    await yieldToEventLoop(iteration);
+  }
+}
+
+async function topicWorkload(
+  topic: ITopic<{ seq: number; publisher: number; emittedAt: number }>,
+  stats: Stats,
+  signal: AbortSignal,
+  workerId: number,
+): Promise<void> {
+  let seq = 0;
+  while (!signal.aborted) {
+    const iteration = seq;
+    try {
+      await topic.publish({ seq, publisher: workerId, emittedAt: Date.now() });
+      stats.topicPublishes++;
+      seq++;
+    } catch {
+      if (signal.aborted) return;
+      stats.topicErrors++;
+    }
+    await yieldToEventLoop(iteration);
   }
 }
 
 async function executorWorkload(executor: IExecutorService, stats: Stats, signal: AbortSignal): Promise<void> {
   let seq = 0;
   while (!signal.aborted) {
+    const iteration = seq;
     const pick = seq++ % 3;
     const label = `t-${seq}`;
 
@@ -380,6 +564,7 @@ async function executorWorkload(executor: IExecutorService, stats: Stats, signal
       if (signal.aborted) return;
       stats.executorErrors++;
     }
+    await yieldToEventLoop(iteration);
   }
 }
 
@@ -391,6 +576,12 @@ function fmt(n: number): string {
   return String(n);
 }
 
+async function yieldToEventLoop(iteration: number): Promise<void> {
+  if (iteration % 64 === 0) {
+    await Bun.sleep(0);
+  }
+}
+
 let prevStats: Stats = createStats();
 let prevStatsTime = 0;
 
@@ -400,6 +591,8 @@ function printStats(stats: Stats, elapsedSec: number, executor: IExecutorService
   let mapRate = 0;
   let ncRate = 0;
   let xnRate = 0;
+  let queueRate = 0;
+  let topicRate = 0;
   let execRate = 0;
 
   if (prevStatsTime > 0) {
@@ -417,13 +610,21 @@ function printStats(stats: Stats, elapsedSec: number, executor: IExecutorService
       ((stats.crossNodeWrites + stats.crossNodeReads)
         - (prevStats.crossNodeWrites + prevStats.crossNodeReads)) / deltaSec,
     );
+    queueRate = Math.round(
+      ((stats.queueOffers + stats.queuePolls)
+        - (prevStats.queueOffers + prevStats.queuePolls)) / deltaSec,
+    );
+    topicRate = Math.round(
+      ((stats.topicPublishes + stats.topicReceives)
+        - (prevStats.topicPublishes + prevStats.topicReceives)) / deltaSec,
+    );
     execRate = Math.round((stats.executorCompleted - prevStats.executorCompleted) / deltaSec);
   }
 
   prevStats = { ...stats };
   prevStatsTime = now;
 
-  const totalRate = mapRate + ncRate + xnRate + execRate;
+  const totalRate = mapRate + ncRate + xnRate + queueRate + topicRate + execRate;
   const es = executor.getLocalExecutorStats();
   const avgLatency = stats.executorCompleted > 0
     ? `${(stats.executorTotalMs / stats.executorCompleted).toFixed(1)}ms`
@@ -441,6 +642,12 @@ function printStats(stats: Stats, elapsedSec: number, executor: IExecutorService
     `\x1b[36m║\x1b[0m    hits: ${fmt(stats.nearCacheHits).padEnd(12)} misses: ${fmt(stats.nearCacheMisses).padEnd(10)} err: ${fmt(stats.nearCacheErrors).padEnd(6)} \x1b[36m║\x1b[0m`,
     `\x1b[36m║\x1b[0m  \x1b[33mCross-Node Partitions\x1b[0m                     \x1b[32m${fmt(xnRate).padStart(8)}/s\x1b[0m            \x1b[36m║\x1b[0m`,
     `\x1b[36m║\x1b[0m    writes: ${fmt(stats.crossNodeWrites).padEnd(10)} reads: ${fmt(stats.crossNodeReads).padEnd(10)} err: ${fmt(stats.crossNodeErrors).padEnd(6)}   \x1b[36m║\x1b[0m`,
+    `\x1b[36m║\x1b[0m  \x1b[33mQueues\x1b[0m                                    \x1b[32m${fmt(queueRate).padStart(8)}/s\x1b[0m            \x1b[36m║\x1b[0m`,
+    `\x1b[36m║\x1b[0m    offers: ${fmt(stats.queueOffers).padEnd(9)} polls: ${fmt(stats.queuePolls).padEnd(9)} null: ${fmt(stats.queueNullPolls).padEnd(8)}    \x1b[36m║\x1b[0m`,
+    `\x1b[36m║\x1b[0m    listeners +/-: ${fmt(stats.queueListenerAdds).padEnd(6)}/${fmt(stats.queueListenerRemoves).padEnd(6)} err: ${fmt(stats.queueErrors).padEnd(21)}\x1b[36m║\x1b[0m`,
+    `\x1b[36m║\x1b[0m  \x1b[33mTopics\x1b[0m                                    \x1b[32m${fmt(topicRate).padStart(8)}/s\x1b[0m            \x1b[36m║\x1b[0m`,
+    `\x1b[36m║\x1b[0m    published: ${fmt(stats.topicPublishes).padEnd(6)} recv: ${fmt(stats.topicReceives).padEnd(9)} listeners +/-: ${fmt(stats.topicListenerAdds).padEnd(4)}/${fmt(stats.topicListenerRemoves).padEnd(4)} \x1b[36m║\x1b[0m`,
+    `\x1b[36m║\x1b[0m    errors: ${fmt(stats.topicErrors).padEnd(52)}    \x1b[36m║\x1b[0m`,
     `\x1b[36m║\x1b[0m  \x1b[33mScatter Executors\x1b[0m                         \x1b[32m${fmt(execRate).padStart(8)}/s\x1b[0m            \x1b[36m║\x1b[0m`,
     `\x1b[36m║\x1b[0m    submitted: ${fmt(stats.executorSubmitted).padEnd(8)} done: ${fmt(stats.executorCompleted).padEnd(8)} err: ${fmt(stats.executorErrors).padEnd(8)}      \x1b[36m║\x1b[0m`,
     `\x1b[36m║\x1b[0m    \x1b[35mactive workers: ${String(es.activeWorkers).padEnd(4)}\x1b[0m  pending: ${String(es.pending).padEnd(6)} avg: ${avgLatency.padEnd(10)}    \x1b[36m║\x1b[0m`,
@@ -466,6 +673,8 @@ async function main(): Promise<void> {
 ║  IMap concurrency:       ${String(opts.mapConcurrency).padEnd(5)} loops                                ║
 ║  Near-cache concurrency: ${String(opts.nearCacheConcurrency).padEnd(5)} loops                                ║
 ║  Cross-node concurrency: ${String(opts.crossNodeConcurrency).padEnd(5)} loops                                ║
+║  Queue concurrency:      ${String(opts.queueConcurrency).padEnd(5)} loops                                ║
+║  Topic concurrency:      ${String(opts.topicConcurrency).padEnd(5)} loops                                ║
 ║  Executor concurrency:   ${String(opts.executorConcurrency).padEnd(5)} loops                                ║
 ╚══════════════════════════════════════════════════════════════════════╝\x1b[0m
 `);
@@ -527,6 +736,8 @@ async function main(): Promise<void> {
 
   // ── Seed maps ───────────────────────────────────────────────────────────────
 
+  const stats = createStats();
+
   process.stdout.write('[stress] seeding maps...\n');
   for (let batch = 0; batch < 5; batch++) {
     const seeds: Promise<void>[] = [];
@@ -535,18 +746,34 @@ async function main(): Promise<void> {
         client.stressMap.set(`k-${i}`, i).catch(() => {}),
         client.nearCacheMap.set(`nc-${i}`, i).catch(() => {}),
         client.hotMap.set(`xn-${i}`, i).catch(() => {}),
+        Promise.resolve(client.stressQueue.offer({ seq: i, producer: -1, createdAt: Date.now() }))
+          .then(() => undefined)
+          .catch(() => undefined),
       );
     }
     await Promise.all(seeds);
   }
-  process.stdout.write('[stress] seeded 500 entries per map\n');
+  process.stdout.write('[stress] seeded maps and queue\n');
+
+  const queueListenerId = client.stressQueue.addItemListener({
+    itemAdded: () => {
+      stats.queueListenerAdds++;
+    },
+    itemRemoved: () => {
+      stats.queueListenerRemoves++;
+    },
+  });
+  const topicListenerId = client.stressTopic.addMessageListener(() => {
+    stats.topicReceives++;
+  });
+  stats.queueListenerAdds++;
+  stats.topicListenerAdds++;
 
   // ── Launch workloads ────────────────────────────────────────────────────────
 
   console.log('\n'.repeat(20));
 
   const abort = new AbortController();
-  const stats = createStats();
   const tasks: Promise<void>[] = [];
 
   for (let i = 0; i < opts.mapConcurrency; i++) {
@@ -558,11 +785,18 @@ async function main(): Promise<void> {
   for (let i = 0; i < opts.crossNodeConcurrency; i++) {
     tasks.push(crossNodeWorkload(client.hotMap, client.coldMap, stats, abort.signal));
   }
+  for (let i = 0; i < opts.queueConcurrency; i++) {
+    tasks.push(queueWorkload(client.stressQueue, stats, abort.signal, i));
+  }
+  for (let i = 0; i < opts.topicConcurrency; i++) {
+    tasks.push(topicWorkload(client.stressTopic, stats, abort.signal, i));
+  }
   for (let i = 0; i < opts.executorConcurrency; i++) {
     tasks.push(executorWorkload(client.executor, stats, abort.signal));
   }
 
   process.stdout.write(`[stress] ${tasks.length} workload loops running\n`);
+  await verifyMemberLocalQueueTopicTraffic(spawnedNodes);
 
   const startTime = Date.now();
   prevStatsTime = 0;
@@ -583,12 +817,19 @@ async function main(): Promise<void> {
 
   await Promise.race([Promise.allSettled(tasks), Bun.sleep(5_000)]);
 
+  client.stressQueue.removeItemListener(queueListenerId);
+  client.stressTopic.removeMessageListener(topicListenerId);
+  stats.queueListenerRemoves++;
+  stats.topicListenerRemoves++;
+
   const totalElapsed = (Date.now() - startTime) / 1000;
   const totalMap = stats.mapPuts + stats.mapGets + stats.mapDeletes;
   const totalNc = stats.nearCacheHits + stats.nearCacheMisses;
   const totalXn = stats.crossNodeWrites + stats.crossNodeReads;
-  const totalAll = totalMap + totalNc + totalXn + stats.executorCompleted;
-  const totalErrors = stats.mapErrors + stats.nearCacheErrors + stats.crossNodeErrors + stats.executorErrors;
+  const totalQueue = stats.queueOffers + stats.queuePolls;
+  const totalTopic = stats.topicPublishes + stats.topicReceives;
+  const totalAll = totalMap + totalNc + totalXn + totalQueue + totalTopic + stats.executorCompleted;
+  const totalErrors = stats.mapErrors + stats.nearCacheErrors + stats.crossNodeErrors + stats.queueErrors + stats.topicErrors + stats.executorErrors;
 
   console.log(`
 \x1b[36m╔══════════════════════════════════════════════════════════════════════╗
@@ -607,6 +848,16 @@ async function main(): Promise<void> {
   \x1b[33mCross-Node Partitions\x1b[0m
     Writes: ${fmt(stats.crossNodeWrites)}   Reads: ${fmt(stats.crossNodeReads)}
     Errors: ${fmt(stats.crossNodeErrors)}   Throughput: ${fmt(Math.round(totalXn / totalElapsed))}/s
+
+  \x1b[33mQueues\x1b[0m
+    Offers: ${fmt(stats.queueOffers)}   Polls: ${fmt(stats.queuePolls)}   Empty polls: ${fmt(stats.queueNullPolls)}
+    Listener added/removed events: ${fmt(stats.queueListenerAdds)}/${fmt(stats.queueListenerRemoves)}
+    Errors: ${fmt(stats.queueErrors)}   Throughput: ${fmt(Math.round(totalQueue / totalElapsed))}/s
+
+  \x1b[33mTopics\x1b[0m
+    Published: ${fmt(stats.topicPublishes)}   Received: ${fmt(stats.topicReceives)}
+    Listener add/remove ops: ${fmt(stats.topicListenerAdds)}/${fmt(stats.topicListenerRemoves)}
+    Errors: ${fmt(stats.topicErrors)}   Throughput: ${fmt(Math.round(totalTopic / totalElapsed))}/s
 
   \x1b[33mScatter Executors\x1b[0m
     Submitted: ${fmt(stats.executorSubmitted)}   Completed: ${fmt(stats.executorCompleted)}   Errors: ${fmt(stats.executorErrors)}

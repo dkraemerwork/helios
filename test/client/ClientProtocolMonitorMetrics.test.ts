@@ -8,6 +8,8 @@ import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
 import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import type { LocalQueueStats } from '@zenystx/helios-core/collection/LocalQueueStats';
+import type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
 import { afterEach, describe, expect, test } from 'bun:test';
 
 class TestClientSession {
@@ -36,6 +38,38 @@ async function waitForOperationCount(instance: HeliosInstanceImpl, minimumCount:
     }
 
     return registry!.buildPayload(provider!).latest?.operation.completedCount ?? 0;
+}
+
+async function waitForQueueAndTopicStats(instance: HeliosInstanceImpl): Promise<{
+    queueStats: LocalQueueStats | null;
+    topicStats: LocalTopicStats | null;
+}> {
+    const registry = instance.getMetricsRegistry();
+    const provider = instance.getMonitorStateProvider();
+    expect(registry).not.toBeNull();
+    expect(provider).not.toBeNull();
+
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+        const payload = registry!.buildPayload(provider!);
+        const queueStats = (payload.queueStats['metrics-queue-activity'] as LocalQueueStats | undefined) ?? null;
+        const topicStats = (payload.topicStats['metrics-topic-activity'] as LocalTopicStats | undefined) ?? null;
+
+        if ((queueStats?.getOfferOperationCount() ?? 0) >= 1
+            && (queueStats?.getPollOperationCount() ?? 0) >= 1
+            && (topicStats?.getPublishOperationCount() ?? 0) >= 1
+            && (topicStats?.getReceiveOperationCount() ?? 0) >= 1) {
+            return { queueStats, topicStats };
+        }
+
+        await Bun.sleep(25);
+    }
+
+    const payload = registry!.buildPayload(provider!);
+    return {
+        queueStats: (payload.queueStats['metrics-queue-activity'] as LocalQueueStats | undefined) ?? null,
+        topicStats: (payload.topicStats['metrics-topic-activity'] as LocalTopicStats | undefined) ?? null,
+    };
 }
 
 describe('client protocol monitor metrics', () => {
@@ -124,5 +158,48 @@ describe('client protocol monitor metrics', () => {
 
         const completedCount = await waitForOperationCount(instance, 3);
         expect(completedCount).toBeGreaterThanOrEqual(3);
+    });
+
+    test('monitor payload exposes real queue and topic activity for Management Center', async () => {
+        const config = new HeliosConfig('client-protocol-monitor-queue-topic');
+        config.setClusterName('client-protocol-monitor-queue-topic');
+        config.getMonitorConfig()
+            .setEnabled(true)
+            .setSampleIntervalMs(100);
+
+        const instance = new HeliosInstanceImpl(config);
+        instances.push(instance);
+
+        const queue = instance.getQueue<string>('metrics-queue-activity');
+        const topic = instance.getTopic<string>('metrics-topic-activity');
+        const received: string[] = [];
+
+        const queueListenerId = queue.addItemListener({
+            itemAdded: () => {},
+            itemRemoved: () => {},
+        });
+        const topicListenerId = topic.addMessageListener((message) => {
+            received.push(message.getMessageObject());
+        });
+
+        try {
+            expect(await queue.offer('job-1')).toBeTrue();
+            expect(await queue.poll()).toBe('job-1');
+
+            await topic.publish('event-1');
+            expect(received).toContain('event-1');
+
+            const { queueStats, topicStats } = await waitForQueueAndTopicStats(instance);
+            expect(queueStats).not.toBeNull();
+            expect(topicStats).not.toBeNull();
+            expect(queueStats!.getOfferOperationCount()).toBeGreaterThanOrEqual(1);
+            expect(queueStats!.getPollOperationCount()).toBeGreaterThanOrEqual(1);
+            expect(queueStats!.getEventOperationCount()).toBeGreaterThanOrEqual(2);
+            expect(topicStats!.getPublishOperationCount()).toBeGreaterThanOrEqual(1);
+            expect(topicStats!.getReceiveOperationCount()).toBeGreaterThanOrEqual(1);
+        } finally {
+            queue.removeItemListener(queueListenerId);
+            topic.removeMessageListener(topicListenerId);
+        }
     });
 });
