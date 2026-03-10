@@ -26,6 +26,7 @@ class MockOperation extends Operation {
 }
 
 export class MockTransactionLogRecord implements TransactionLogRecord {
+    private readonly _recordId = crypto.randomUUID();
     private _failPrepare = false;
     private _failCommit = false;
     private _failRollback = false;
@@ -53,6 +54,10 @@ export class MockTransactionLogRecord implements TransactionLogRecord {
         return null;
     }
 
+    getRecordId(): string {
+        return this._recordId;
+    }
+
     newPrepareOperation(): Operation {
         this._prepareCalled = true;
         return new MockOperation(this._failPrepare);
@@ -70,6 +75,7 @@ export class MockTransactionLogRecord implements TransactionLogRecord {
 
     toBackupRecord(): TransactionBackupRecord {
         return {
+            recordId: this._recordId,
             kind: 'queue',
             queueName: 'mock',
             opType: 'poll',

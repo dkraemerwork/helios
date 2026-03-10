@@ -69,12 +69,14 @@ function makeMockNodeEngine(operationService: OperationService): NodeEngine {
 
 /** Create a mock TransactionLogRecord (key-aware) */
 function mockKeyRecord(key: unknown, op: Operation): TransactionLogRecord {
+    const recordId = crypto.randomUUID();
     return {
+        getRecordId: () => recordId,
         getKey: () => key,
         newPrepareOperation: () => op,
         newCommitOperation: () => op,
         newRollbackOperation: () => op,
-        toBackupRecord: () => ({ kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
+        toBackupRecord: () => ({ recordId, kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
         onCommitSuccess: () => {},
         onCommitFailure: () => {},
     };
@@ -82,12 +84,14 @@ function mockKeyRecord(key: unknown, op: Operation): TransactionLogRecord {
 
 /** Create a mock TransactionLogRecord (no key) */
 function mockNoKeyRecord(op: Operation): TransactionLogRecord {
+    const recordId = crypto.randomUUID();
     return {
+        getRecordId: () => recordId,
         getKey: () => null,
         newPrepareOperation: () => op,
         newCommitOperation: () => op,
         newRollbackOperation: () => op,
-        toBackupRecord: () => ({ kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
+        toBackupRecord: () => ({ recordId, kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
         onCommitSuccess: () => {},
         onCommitFailure: () => {},
     };
@@ -95,13 +99,15 @@ function mockNoKeyRecord(op: Operation): TransactionLogRecord {
 
 /** Create a mock TargetAwareTransactionLogRecord */
 function mockTargetRecord(target: Address, op: Operation): TargetAwareTransactionLogRecord {
+    const recordId = crypto.randomUUID();
     return {
+        getRecordId: () => recordId,
         getKey: () => null,
         getTarget: () => target,
         newPrepareOperation: () => op,
         newCommitOperation: () => op,
         newRollbackOperation: () => op,
-        toBackupRecord: () => ({ kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
+        toBackupRecord: () => ({ recordId, kind: 'queue', queueName: 'q', opType: 'poll', valueData: null } satisfies TransactionBackupRecord),
         onCommitSuccess: () => {},
         onCommitFailure: () => {},
     };

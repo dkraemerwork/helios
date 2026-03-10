@@ -80,7 +80,7 @@ describe('BinarySerializationStrategy', () => {
             { type: 'RECOVERY_SYNC_RESPONSE', requestId: 'sync-1', partitionId: 1, replicaIndex: 1, chunkIndex: 0, chunkCount: 1, versions: ['1', '2'], namespaceVersions: { ns: ['3'] }, namespaceStates: [{ namespace: 'ns', estimatedSizeBytes: 12, entries: [[encoded, encoded]] }] },
             { type: 'QUEUE_REQUEST', requestId: 'req', sourceNodeId: 'node-a', queueName: 'q', operation: 'offer', timeoutMs: 10, data: encoded, dataList: [encoded], maxElements: 5 },
             { type: 'QUEUE_RESPONSE', requestId: 'req', success: true, resultType: 'data-array', dataList: [encoded], error: undefined },
-            { type: 'QUEUE_STATE_SYNC', requestId: 'req', sourceNodeId: 'node-a', queueName: 'q', version: 3, nextItemId: 7, items: [{ itemId: 1, enqueuedAt: 2, data: encoded }], ownerNodeId: 'node-a', counters: { offerOperationCount: 1, rejectedOfferOperationCount: 2, pollOperationCount: 3, emptyPollOperationCount: 4, otherOperationCount: 5, eventOperationCount: 6 } },
+            { type: 'QUEUE_STATE_SYNC', requestId: 'req', sourceNodeId: 'node-a', queueName: 'q', version: 3, nextItemId: 7, items: [{ itemId: 1, enqueuedAt: 2, data: encoded }], ownerNodeId: 'node-a', appliedTxnOpIds: ['txn-op-1'], counters: { offerOperationCount: 1, rejectedOfferOperationCount: 2, pollOperationCount: 3, emptyPollOperationCount: 4, otherOperationCount: 5, eventOperationCount: 6 } },
             { type: 'QUEUE_STATE_ACK', requestId: 'req', queueName: 'q', version: 3 },
             { type: 'QUEUE_EVENT', queueName: 'q', eventType: 'ADDED', sourceNodeId: 'node-a', data: encoded },
             { type: 'TOPIC_MESSAGE', topicName: 'topic', data: encoded, publishTime: 123, sourceNodeId: 'node-a', sequence: 1 },

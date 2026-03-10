@@ -27,6 +27,17 @@ describe('TransactionManagerServiceImplTest', () => {
         assertTxLogState(TXN, State.ACTIVE);
     });
 
+    it('rememberBackupTargets_requiresConfirmedBackups', async () => {
+        txService.configureReplication({
+            localMemberId: 'local',
+            getBackupMemberIds: () => ['backup-a', 'backup-b'],
+            validateBackupMembers: async () => ['backup-a'],
+            replicate: async () => ['backup-a'],
+        }, null);
+
+        await expect(txService.rememberBackupTargets(TXN, ['backup-a', 'backup-b'])).rejects.toThrow(TransactionException);
+    });
+
     it('createBackupLog_whenAlreadyExist', () => {
         const callerUuid = crypto.randomUUID();
         void txService.createBackupLog(callerUuid, TXN);
