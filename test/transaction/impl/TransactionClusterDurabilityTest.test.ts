@@ -1,6 +1,7 @@
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import type { TransactionBackupMessage } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl';
 import { afterEach, beforeEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { TransactionOptions, TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
 
@@ -344,6 +345,87 @@ describe('TransactionClusterDurabilityTest', () => {
         expect(new Set(await nodeC.getSet<string>('durable-set').toArray())).toEqual(new Set(['seed-set', 'reentrant-set']));
         expect([...await nodeB.getMultiMap<string, string>('durable-multimap').get('k')]).toEqual(['seed', 'reentrant-mm']);
         expect([...await nodeC.getMultiMap<string, string>('durable-multimap').get('k')]).toEqual(['seed', 'reentrant-mm']);
+    });
+
+    it('blocks stale loser replay and stale purge under divergent membership views', async () => {
+        const portA = BASE_PORT + 40;
+        const portB = BASE_PORT + 41;
+        const portC = BASE_PORT + 42;
+        const nodeA = await Helios.newInstance(makeConfig('tx-durability-fence-a', portA, []));
+        const nodeB = await Helios.newInstance(makeConfig('tx-durability-fence-b', portB, [portA]));
+        const nodeC = await Helios.newInstance(makeConfig('tx-durability-fence-c', portC, [portA, portB]));
+        instances.push(nodeA, nodeB, nodeC);
+
+        await waitUntil(() => nodeA.getCluster().getMembers().length === 3 && nodeB.getCluster().getMembers().length === 3 && nodeC.getCluster().getMembers().length === 3);
+
+        const coordinator = (nodeA as unknown as { _transactionCoordinator: any })._transactionCoordinator;
+        const tx = coordinator.newTransaction(new TransactionOptions().setTransactionType(TransactionType.TWO_PHASE).setDurability(2), 'owner-fence');
+        await coordinator.beginTransaction(tx);
+
+        await nodeA.getQueue<string>('durable-queue').offer('seed-1');
+        await nodeA.getQueue<string>('durable-queue').offer('seed-2');
+
+        const nodeEngine = nodeA.getNodeEngine();
+        (nodeA as any)._clientTransactions.set(tx.getTxnId(), {
+            transaction: tx,
+            mapProxies: new Map(),
+            queueProxies: new Map(),
+            listProxies: new Map(),
+            setProxies: new Map(),
+            multiMapProxies: new Map(),
+        });
+        const queue = (nodeA as any)._getTransactionalQueue(tx.getTxnId(), 'durable-queue');
+        await queue.poll();
+        queue.offer(nodeEngine.toData('fenced-item')!);
+        await tx.prepare();
+
+        const winner = pickRecoveryWinner(tx.getTxnId(), nodeB, nodeC);
+        const loser = winner.getLocalMemberId() === nodeB.getLocalMemberId() ? nodeC : nodeB;
+        const loserService = (loser as any)._transactionManagerService;
+        const winnerService = (winner as any)._transactionManagerService;
+        const originalLoserTransport = loserService._backupTransport;
+
+        const queuedReplications: Array<() => Promise<string[]>> = [];
+        loserService._backupTransport = {
+            ...originalLoserTransport,
+            getActiveMemberIds: () => [loser.getLocalMemberId()],
+            replicate: async (message: TransactionBackupMessage, targets: readonly string[]) => {
+                if (message.type === 'TXN_RECOVERY_STARTED') {
+                    return await new Promise<string[]>((resolve, reject) => {
+                        queuedReplications.push(async () => {
+                            try {
+                                resolve(await originalLoserTransport.replicate(message, targets));
+                            } catch (error) {
+                                reject(error);
+                            }
+                            return [];
+                        });
+                    });
+                }
+                return originalLoserTransport.replicate(message, targets);
+            },
+        };
+
+        const staleRecovery = loserService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId());
+        await waitUntil(() => loserService.getBackupLog(tx.getTxnId())?.recoveryState === 'IN_PROGRESS');
+
+        const canonicalRecovery = winnerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId());
+        expect(await canonicalRecovery).toBe(1);
+
+        while (queuedReplications.length > 0) {
+            const replayReplication = queuedReplications.shift();
+            if (replayReplication !== undefined) {
+                await replayReplication();
+            }
+        }
+
+        expect(await staleRecovery).toBe(0);
+        loserService._backupTransport = originalLoserTransport;
+
+        await waitUntil(() => (nodeB as any)._transactionManagerService.getBackupLog(tx.getTxnId()) === null && (nodeC as any)._transactionManagerService.getBackupLog(tx.getTxnId()) === null);
+
+        expect(await nodeB.getQueue<string>('durable-queue').toArray()).toEqual(['seed-2', 'fenced-item']);
+        expect(await nodeC.getQueue<string>('durable-queue').toArray()).toEqual(['seed-2', 'fenced-item']);
     });
 });
 

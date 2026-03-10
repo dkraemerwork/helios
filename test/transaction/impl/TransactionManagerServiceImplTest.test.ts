@@ -184,6 +184,43 @@ describe('TransactionManagerServiceImplTest', () => {
         expect(commitCalls).toBe(1);
     });
 
+    it('rejects purge from stale recovery fence', () => {
+        txService.applyBackupMessage({
+            type: 'TXN_PREPARE',
+            txnId: TXN,
+            coordinatorMemberId: 'local',
+            callerUuid: 'caller',
+            timeoutMillis: 1,
+            startTime: 1,
+            allowedDuringPassiveState: false,
+            backupMemberIds: ['backup-a', 'backup-b'],
+            records: [makeMapRecord('record-c')],
+        });
+
+        expect(txService.applyBackupMessage({
+            type: 'TXN_RECOVERY_STARTED',
+            txnId: TXN,
+            recoveryMemberId: 'backup-a',
+            recoveryFenceToken: 'canonical-fence',
+        })).toBe(true);
+
+        expect(txService.applyBackupMessage({
+            type: 'TXN_PURGE',
+            txnId: TXN,
+            recoveryMemberId: 'backup-b',
+            recoveryFenceToken: 'stale-fence',
+        })).toBe(false);
+        expect(txService.getBackupLog(TXN)).not.toBeNull();
+
+        expect(txService.applyBackupMessage({
+            type: 'TXN_PURGE',
+            txnId: TXN,
+            recoveryMemberId: 'backup-a',
+            recoveryFenceToken: 'canonical-fence',
+        })).toBe(true);
+        expect(txService.getBackupLog(TXN)).toBeNull();
+    });
+
     // ── helper ──────────────────────────────────────────────────────────
 
     function makeMapRecord(recordId: string): TransactionBackupRecord {
