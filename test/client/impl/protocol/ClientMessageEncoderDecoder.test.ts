@@ -175,21 +175,18 @@ describe('ClientMessage encode/decode round-trip', () => {
         expect(decoded.key?.toByteArray()).toEqual(keyBuf);
     });
 
-    it('mapAddEntryListener event handler — dispatches handleEntryEvent', () => {
+    it('mapAddEntryListener event handler dispatches decoded payload', () => {
         const uuid = 'cafebabe-cafe-babe-cafe-babecafebabe';
         const msg = MapAddEntryListenerCodec.encodeEntryEvent(null, null, null, null, 2, uuid, 1);
 
         let handledEventType = -1;
         let handledUuid: string | null = null;
 
-        const handler = new (class extends MapAddEntryListenerCodec.AbstractEventHandler {
-            handleEntryEvent(_k: any, _v: any, _ov: any, _mv: any, eventType: number, uuid: string | null, _n: number): void {
-                handledEventType = eventType;
-                handledUuid = uuid;
-            }
-        })();
+        MapAddEntryListenerCodec.handleEvent(msg, (_k, _v, _ov, _mv, eventType, handledEventUuid) => {
+            handledEventType = eventType;
+            handledUuid = handledEventUuid;
+        });
 
-        handler.handle(msg);
         expect(handledEventType).toBe(2);
         expect(handledUuid as unknown as string).toBe(uuid);
     });

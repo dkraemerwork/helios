@@ -121,29 +121,31 @@ export class MapAddEntryListenerCodec {
         return { key, value, oldValue, mergingValue, eventType, uuid, numberOfAffectedEntries };
     }
 
-    /** Abstract event handler base class */
-    static AbstractEventHandler = class {
-        handle(msg: ClientMessage): void {
-            const msgType = msg.getMessageType();
-            if (msgType === MapAddEntryListenerCodec.EVENT_ENTRY_MESSAGE_TYPE) {
-                const decoded = MapAddEntryListenerCodec.decodeEntryEvent(msg);
-                this.handleEntryEvent(
-                    decoded.key, decoded.value, decoded.oldValue, decoded.mergingValue,
-                    decoded.eventType, decoded.uuid, decoded.numberOfAffectedEntries
-                );
-            }
+    static handleEvent(
+        msg: ClientMessage,
+        handler: (
+            key: Data | null,
+            value: Data | null,
+            oldValue: Data | null,
+            mergingValue: Data | null,
+            eventType: number,
+            uuid: string | null,
+            numberOfAffectedEntries: number
+        ) => void
+    ): void {
+        if (msg.getMessageType() !== MapAddEntryListenerCodec.EVENT_ENTRY_MESSAGE_TYPE) {
+            return;
         }
 
-        handleEntryEvent(
-            _key: Data | null,
-            _value: Data | null,
-            _oldValue: Data | null,
-            _mergingValue: Data | null,
-            _eventType: number,
-            _uuid: string | null,
-            _numberOfAffectedEntries: number
-        ): void {
-            throw new Error('handleEntryEvent must be implemented');
-        }
-    };
+        const decoded = MapAddEntryListenerCodec.decodeEntryEvent(msg);
+        handler(
+            decoded.key,
+            decoded.value,
+            decoded.oldValue,
+            decoded.mergingValue,
+            decoded.eventType,
+            decoded.uuid,
+            decoded.numberOfAffectedEntries
+        );
+    }
 }
