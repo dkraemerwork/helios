@@ -98,4 +98,27 @@ describe('OperationServiceImpl.invokeOnPartition()', () => {
         expect(op.serviceName).toBe('my-service');
         expect(op.partitionId).toBe(7);
     });
+
+    it('tracks externally executed operations in stats', async () => {
+        const svc = makeService() as any;
+
+        expect(svc.getStats()).toEqual({
+            queueSize: 0,
+            runningCount: 0,
+            completedCount: 0,
+        });
+
+        const pending = svc.trackExternalOperation(async () => {
+            expect(svc.getStats().runningCount).toBe(1);
+            await Promise.resolve();
+            return 'ok';
+        });
+
+        await expect(pending).resolves.toBe('ok');
+        expect(svc.getStats()).toEqual({
+            queueSize: 0,
+            runningCount: 0,
+            completedCount: 1,
+        });
+    });
 });

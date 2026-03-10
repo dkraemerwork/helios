@@ -1949,6 +1949,28 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const ps = this._nodeEngine.getPartitionService();
     const partitionCount = this.getPartitionCount();
     const entryProcessorEngine = new MapEntryProcessorEngine(this._mapService, this._nodeEngine);
+    const trackClientProtocolOperations = <T extends object>(operations: T): T => {
+      const operationService = this._operationServiceImpl;
+      if (operationService === null) {
+        return operations;
+      }
+
+      const wrapped = { ...operations } as T;
+      for (const name of Object.keys(operations) as Array<keyof T>) {
+        const operation = operations[name];
+        if (typeof operation !== 'function') {
+          continue;
+        }
+
+        wrapped[name] = (async (...args: unknown[]) => {
+          return operationService.trackExternalOperation(async () => {
+            return (operation as (...callArgs: unknown[]) => Promise<unknown>)(...args);
+          });
+        }) as T[keyof T];
+      }
+
+      return wrapped;
+    };
 
     const deserializeEntryProcessor = <R>(data: Data): EntryProcessor<R> => {
       const processor = this._ss.toObject<EntryProcessor<R>>(data);
@@ -3049,26 +3071,26 @@ export class HeliosInstanceImpl implements HeliosInstance {
     registerAllHandlers({
       dispatcher: srv.getDispatcher(),
       topologyPublisher,
-      map: mapOps,
-      queue: queueOps,
-      topic: topicOps,
-      list: listOps,
-      set: setOps,
-      multiMap: multiMapOps,
-      replicatedMap: replicatedMapOps,
-      ringbuffer: ringbufferOps,
-      cache: cacheOps,
-      transaction: transactionOps,
-      sql: sqlOps,
-      executor: executorOps,
-      cpGroup: cpGroupOps,
-      atomicLong: atomicLongOps,
-      atomicRef: atomicRefOps,
-      countDownLatch: countDownLatchOps,
-      semaphore: semaphoreOps,
-      flakeIdGenerator: flakeIdOps,
-      pnCounter: pnCounterOps,
-      cardinalityEstimator: cardinalityOps,
+      map: trackClientProtocolOperations(mapOps),
+      queue: trackClientProtocolOperations(queueOps),
+      topic: trackClientProtocolOperations(topicOps),
+      list: trackClientProtocolOperations(listOps),
+      set: trackClientProtocolOperations(setOps),
+      multiMap: trackClientProtocolOperations(multiMapOps),
+      replicatedMap: trackClientProtocolOperations(replicatedMapOps),
+      ringbuffer: trackClientProtocolOperations(ringbufferOps),
+      cache: trackClientProtocolOperations(cacheOps),
+      transaction: trackClientProtocolOperations(transactionOps),
+      sql: trackClientProtocolOperations(sqlOps),
+      executor: trackClientProtocolOperations(executorOps),
+      cpGroup: trackClientProtocolOperations(cpGroupOps),
+      atomicLong: trackClientProtocolOperations(atomicLongOps),
+      atomicRef: trackClientProtocolOperations(atomicRefOps),
+      countDownLatch: trackClientProtocolOperations(countDownLatchOps),
+      semaphore: trackClientProtocolOperations(semaphoreOps),
+      flakeIdGenerator: trackClientProtocolOperations(flakeIdOps),
+      pnCounter: trackClientProtocolOperations(pnCounterOps),
+      cardinalityEstimator: trackClientProtocolOperations(cardinalityOps),
       invalidationManager: this._nearCacheInvalidationManager,
       sessionRegistry: srv.getSessionRegistry(),
     });

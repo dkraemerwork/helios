@@ -53,6 +53,8 @@ export class OperationServiceImpl implements OperationService {
     private _callIdCounter = 1n;
     private _runningCount = 0;
     private _completedCount = 0;
+    private _externalRunningCount = 0;
+    private _externalCompletedCount = 0;
 
     constructor(nodeEngine: NodeEngine, options?: OperationServiceImplOptions) {
         this._nodeEngine = nodeEngine;
@@ -120,9 +122,27 @@ export class OperationServiceImpl implements OperationService {
     getStats(): OperationStats {
         return {
             queueSize: this._registry.size,
-            runningCount: this._runningCount,
-            completedCount: this._completedCount,
+            runningCount: this._runningCount + this._externalRunningCount,
+            completedCount: this._completedCount + this._externalCompletedCount,
         };
+    }
+
+    /**
+     * Track a completed external operation that runs outside Operation.run().
+     *
+     * Member-side client protocol handlers sometimes execute distributed-object
+     * work directly against service adapters instead of routing through an
+     * Operation subclass. Without this hook, those successful requests never
+     * contribute to monitor operation counts.
+     */
+    async trackExternalOperation<T>(action: () => Promise<T>): Promise<T> {
+        this._externalRunningCount++;
+        try {
+            return await action();
+        } finally {
+            this._externalRunningCount--;
+            this._externalCompletedCount++;
+        }
     }
 
     /**
