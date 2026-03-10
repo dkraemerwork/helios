@@ -209,12 +209,8 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
     dispatcher.register(MapAddEntryListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
         const iter = msg.forwardFrameIterator();
         const initialFrame = iter.next();
-        const listenerFlags = initialFrame.content.readInt32LE(
-            CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES,
-        );
-        const localOnly = initialFrame.content.readUInt8(
-            CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES + INT_SIZE_IN_BYTES,
-        ) !== 0;
+        const listenerFlags = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES);
+        const localOnly = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
         const name = StringCodec.decode(iter);
         const registrationId = await operations.addEntryListener(name, listenerFlags, localOnly, msg.getCorrelationId(), session);
         return _encodeListenerRegistrationResponse(0x011901, registrationId);
@@ -224,15 +220,15 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
     dispatcher.register(MAP_REMOVE_ENTRY_LISTENER_REQUEST_TYPE, async (msg, session) => {
         const iter = msg.forwardFrameIterator();
         const initialFrame = iter.next();
-        const registrationId = FixedSizeTypesCodec.decodeUUID(
-            initialFrame.content,
-            CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES,
-        );
-        StringCodec.decode(iter);
-        if (registrationId === null) {
+        const registrationId = initialFrame.content.length >= CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + UUID_SIZE_IN_BYTES
+            ? FixedSizeTypesCodec.decodeUUID(initialFrame.content, CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES)
+            : null;
+        const fallbackRegistrationId = iter.hasNext() ? StringCodec.decode(iter) : null;
+        const resolvedRegistrationId = registrationId ?? fallbackRegistrationId;
+        if (resolvedRegistrationId === null) {
             throw new Error('registrationId is required');
         }
-        const removed = await operations.removeEntryListener(registrationId, session);
+        const removed = await operations.removeEntryListener(resolvedRegistrationId, session);
         return _encodeBooleanResponse(MAP_REMOVE_ENTRY_LISTENER_RESPONSE_TYPE, removed);
     });
 

@@ -33,11 +33,16 @@ export type ClientMessageHandler = (
 ) => Promise<ClientMessage | null>;
 
 export class ClientMessageDispatcher {
-    private readonly _handlers = new Map<number, ClientMessageHandler>();
+    private readonly _handlers = new Map<number, ClientMessageHandler[]>();
     private readonly _preAuthAllowedMessageTypes = new Set<number>();
 
     register(messageType: number, handler: ClientMessageHandler): void {
-        this._handlers.set(messageType, handler);
+        const handlers = this._handlers.get(messageType);
+        if (handlers === undefined) {
+            this._handlers.set(messageType, [handler]);
+            return;
+        }
+        handlers.push(handler);
     }
 
     allowBeforeAuthentication(messageType: number): void {
@@ -55,16 +60,41 @@ export class ClientMessageDispatcher {
         if (!isClientRequestMessageType(type)) {
             throw new ClientProtocolOpcodeError(type, "illegal");
         }
-        const handler = this._handlers.get(type);
-        if (!handler) {
+        const handlers = this._handlers.get(type);
+        if (!handlers || handlers.length === 0) {
             throw new ClientProtocolOpcodeError(type, "unknown");
         }
+        const handler = selectHandler(type, msg, handlers);
         return handler(msg, session);
     }
 
     hasHandler(messageType: number): boolean {
-        return this._handlers.has(messageType);
+        return (this._handlers.get(messageType)?.length ?? 0) > 0;
     }
+
+}
+
+function selectHandler(type: number, msg: ClientMessage, handlers: ClientMessageHandler[]): ClientMessageHandler {
+    if (handlers.length === 1) {
+        return handlers[0]!;
+    }
+
+    if (isCpAtomicRefOverlap(type, msg)) {
+        return handlers[handlers.length - 1]!;
+    }
+
+    return handlers[0]!;
+}
+
+function isCpAtomicRefOverlap(type: number, msg: ClientMessage): boolean {
+    if (type !== 0x0a0200 && type !== 0x0a0400 && type !== 0x0a0500) {
+        return false;
+    }
+
+    const iterator = msg.forwardFrameIterator();
+    iterator.next();
+    const nextFrame = iterator.peekNext();
+    return nextFrame !== null && nextFrame.isBeginFrame();
 }
 
 function isClientRequestMessageType(messageType: number): boolean {

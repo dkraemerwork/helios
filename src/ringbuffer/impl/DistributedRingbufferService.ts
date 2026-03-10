@@ -512,22 +512,16 @@ export class DistributedRingbufferService {
   }
 
   private _resyncAll(): void {
-    // Re-replicate all containers on membership change
-    const partitionCount = 271;
-    for (let p = 0; p < partitionCount; p++) {
-      const partitionMap = (this._rbService as unknown as {
-        containers: Map<number, Map<string, ReturnType<DistributedRingbufferService["_getContainer"]>>>;
-      }).containers.get(p);
-      if (partitionMap === undefined) continue;
-      for (const [nsKey] of Array.from(partitionMap.entries())) {
-        // Extract name from namespace key: "hz:impl:ringbufferService::<name>"
-        const parts = nsKey.split("::");
-        if (parts.length < 2) continue;
-        const name = parts[1];
-        const container = this._getContainer(name);
-        void this._replicateBackup(name, container);
-      }
-    }
+    // Re-replicate all containers on membership change.
+    // Uses the public forEachContainer() iterator instead of casting to private fields.
+    this._rbService.forEachContainer((_partitionId, nsKey, _container) => {
+      // Extract name from namespace key: "hz:impl:ringbufferService::<name>"
+      const parts = nsKey.split("::");
+      if (parts.length < 2) return;
+      const name = parts[1]!;
+      const container = this._getContainer(name);
+      void this._replicateBackup(name, container);
+    });
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────

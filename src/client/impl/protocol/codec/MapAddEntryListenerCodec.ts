@@ -20,6 +20,10 @@ export class MapAddEntryListenerCodec {
     static readonly REQUEST_INITIAL_FRAME_SIZE =
         MapAddEntryListenerCodec.REQUEST_LOCAL_ONLY_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 21
 
+    private static readonly RESPONSE_RESPONSE_FIELD_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
+    private static readonly RESPONSE_INITIAL_FRAME_SIZE =
+        MapAddEntryListenerCodec.RESPONSE_RESPONSE_FIELD_OFFSET + UUID_SIZE_IN_BYTES;
+
     // Event initial frame: type(4) + correlationId(8) + partitionId(4) + eventType(4) + uuid(17) + numberOfAffectedEntries(4) = 41
     private static readonly EVENT_EVENT_TYPE_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES; // 16
     private static readonly EVENT_UUID_OFFSET =
@@ -76,6 +80,22 @@ export class MapAddEntryListenerCodec {
 
         msg.setFinal();
         return msg;
+    }
+
+    static encodeResponse(registrationId: string | null): ClientMessage {
+        const msg = ClientMessage.createForEncode();
+        const buf = Buffer.alloc(MapAddEntryListenerCodec.RESPONSE_INITIAL_FRAME_SIZE);
+        buf.writeUInt32LE(MapAddEntryListenerCodec.RESPONSE_MESSAGE_TYPE >>> 0, ClientMessage.TYPE_FIELD_OFFSET);
+        FixedSizeTypesCodec.encodeUUID(buf, MapAddEntryListenerCodec.RESPONSE_RESPONSE_FIELD_OFFSET, registrationId);
+        msg.add(new ClientMessage.Frame(buf));
+        msg.setFinal();
+        return msg;
+    }
+
+    static decodeResponse(msg: ClientMessage): string | null {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        return FixedSizeTypesCodec.decodeUUID(initialFrame.content, MapAddEntryListenerCodec.RESPONSE_RESPONSE_FIELD_OFFSET);
     }
 
     static decodeEntryEvent(msg: ClientMessage): {

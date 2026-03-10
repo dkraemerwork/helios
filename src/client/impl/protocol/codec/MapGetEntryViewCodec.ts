@@ -12,11 +12,11 @@ import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.j
 import { SimpleEntryViewCodec } from './custom/SimpleEntryViewCodec.js';
 
 export class MapGetEntryViewCodec {
-    static readonly REQUEST_MESSAGE_TYPE = 0x010a00;
-    static readonly RESPONSE_MESSAGE_TYPE = 0x010a01;
+    static readonly REQUEST_MESSAGE_TYPE = 0x011d00;
+    static readonly RESPONSE_MESSAGE_TYPE = 0x011d01;
     private static readonly REQUEST_THREAD_ID_FIELD_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
     private static readonly REQUEST_INITIAL_FRAME_SIZE = MapGetEntryViewCodec.REQUEST_THREAD_ID_FIELD_OFFSET + LONG_SIZE_IN_BYTES;
-    private static readonly RESPONSE_MAX_IDLE_FIELD_OFFSET = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + 1;
+    private static readonly RESPONSE_MAX_IDLE_FIELD_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
     private static readonly RESPONSE_INITIAL_FRAME_SIZE = MapGetEntryViewCodec.RESPONSE_MAX_IDLE_FIELD_OFFSET + LONG_SIZE_IN_BYTES;
 
     static encodeRequest(name: string, key: Data, threadId: bigint): ClientMessage {

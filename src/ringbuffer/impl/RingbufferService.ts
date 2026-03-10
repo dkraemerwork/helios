@@ -71,6 +71,21 @@ export class RingbufferService {
     }
 
     /**
+     * Iterates over every existing container, yielding (partitionId, namespaceKey, container).
+     * Used by DistributedRingbufferService._resyncAll() to replicate all containers on
+     * membership changes without needing access to the private `containers` field.
+     */
+    forEachContainer(
+        callback: (partitionId: number, nsKey: string, container: RingbufferContainer) => void,
+    ): void {
+        for (const [partitionId, partitionMap] of this.containers) {
+            for (const [nsKey, container] of partitionMap) {
+                callback(partitionId, nsKey, container);
+            }
+        }
+    }
+
+    /**
      * Returns the container for the given partition and namespace, or null.
      */
     getContainerOrNull(partitionId: number, namespace: ObjectNamespace): RingbufferContainer | null {

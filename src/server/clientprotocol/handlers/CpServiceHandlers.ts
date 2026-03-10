@@ -91,11 +91,6 @@ const AR_IS_NULL_REQUEST         = 0x0c0800; const AR_IS_NULL_RESPONSE         =
 const AR_CLEAR_REQUEST           = 0x0c0900; const AR_CLEAR_RESPONSE           = 0x0c0901;
 const AR_COMPARE_AND_SET_REQUEST = 0x0c0a00; const AR_COMPARE_AND_SET_RESPONSE = 0x0c0a01;
 
-const AR_OFFICIAL_COMPARE_AND_SET_REQUEST = 0x0a0200; const AR_OFFICIAL_COMPARE_AND_SET_RESPONSE = 0x0a0201;
-const AR_OFFICIAL_CONTAINS_REQUEST        = 0x0a0300; const AR_OFFICIAL_CONTAINS_RESPONSE        = 0x0a0301;
-const AR_OFFICIAL_GET_REQUEST             = 0x0a0400; const AR_OFFICIAL_GET_RESPONSE             = 0x0a0401;
-const AR_OFFICIAL_SET_REQUEST             = 0x0a0500; const AR_OFFICIAL_SET_RESPONSE             = 0x0a0501;
-
 // ── CountDownLatch message type constants ─────────────────────────────────────
 
 const CDL_TRY_SET_COUNT_REQUEST = 0x0d0100; const CDL_TRY_SET_COUNT_RESPONSE = 0x0d0101;
@@ -322,10 +317,10 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
     // ── AtomicRef ─────────────────────────────────────────────────────────────
 
     dispatcher.register(AR_GET_REQUEST, async (msg, _s) => handleAtomicRefGet(msg, AR_GET_RESPONSE));
-    dispatcher.register(AR_OFFICIAL_GET_REQUEST, async (msg, _s) => handleAtomicRefGet(msg, AR_OFFICIAL_GET_RESPONSE));
+    dispatcher.register(0x0a0400, async (msg, _s) => handleAtomicRefGet(msg, 0x0a0401));
 
     dispatcher.register(AR_SET_REQUEST, async (msg, _s) => handleAtomicRefSet(msg, AR_SET_RESPONSE));
-    dispatcher.register(AR_OFFICIAL_SET_REQUEST, async (msg, _s) => handleAtomicRefSet(msg, AR_OFFICIAL_SET_RESPONSE));
+    dispatcher.register(0x0a0500, async (msg, _s) => handleAtomicRefSet(msg, 0x0a0501));
 
     dispatcher.register(AR_IS_NULL_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator(); iter.next();
@@ -341,10 +336,10 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
     });
 
     dispatcher.register(AR_CONTAINS_REQUEST, async (msg, _s) => handleAtomicRefContains(msg, AR_CONTAINS_RESPONSE));
-    dispatcher.register(AR_OFFICIAL_CONTAINS_REQUEST, async (msg, _s) => handleAtomicRefContains(msg, AR_OFFICIAL_CONTAINS_RESPONSE));
+    dispatcher.register(0x0a0300, async (msg, _s) => handleAtomicRefContains(msg, 0x0a0301));
 
     dispatcher.register(AR_COMPARE_AND_SET_REQUEST, async (msg, _s) => handleAtomicRefCompareAndSet(msg, AR_COMPARE_AND_SET_RESPONSE));
-    dispatcher.register(AR_OFFICIAL_COMPARE_AND_SET_REQUEST, async (msg, _s) => handleAtomicRefCompareAndSet(msg, AR_OFFICIAL_COMPARE_AND_SET_RESPONSE));
+    dispatcher.register(0x0a0200, async (msg, _s) => handleAtomicRefCompareAndSet(msg, 0x0a0201));
 
     dispatcher.register(AR_ALTER_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator(); iter.next();

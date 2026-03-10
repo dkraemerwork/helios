@@ -43,8 +43,12 @@ function decodeStringResponse(message: ClientMessage): string {
     return StringCodec.decode(iterator);
 }
 
+function decodeUuidResponse(message: ClientMessage): string | null {
+    return MapAddEntryListenerCodec.decodeResponse(message);
+}
+
 function decodeBooleanResponse(message: ClientMessage): boolean {
-    return message.getStartFrame().content.readUInt8(16) !== 0;
+    return message.getStartFrame().content.readUInt8(ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1) !== 0;
 }
 
 function decodeQueueBooleanResponse(message: ClientMessage): boolean {
@@ -114,7 +118,7 @@ describe('client protocol adapter chunk 1', () => {
             addRequest.setCorrelationId(10);
             addRequest.setPartitionId(-1);
             const addResponse = await dispatcher.dispatch(addRequest, session);
-            const registrationId = decodeStringResponse(addResponse!);
+            const registrationId = decodeUuidResponse(addResponse!);
 
             const keyData = ss.toData('k1')!;
             const valueData = ss.toData('v1')!;
@@ -146,7 +150,7 @@ describe('client protocol adapter chunk 1', () => {
             expect(clearEvent.uuid).toBe(memberUuid);
             expect(clearEvent.numberOfAffectedEntries).toBe(1);
 
-            const removeRequest = buildStringRequest(0x011a00, 12, registrationId);
+            const removeRequest = buildStringRequest(0x011a00, 12, registrationId!);
             const removeResponse = await dispatcher.dispatch(removeRequest, session);
             expect(decodeBooleanResponse(removeResponse!)).toBe(true);
 
