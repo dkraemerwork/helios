@@ -13,6 +13,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { MetricPathResolver } from './MetricPathResolver.js';
+import { isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import { nowMs } from '../shared/time.js';
 import type {
   AlertRule,
@@ -74,6 +75,7 @@ export class RuleEvaluator {
 
     for (const member of clusterState.members.values()) {
       if (!member.connected) continue;
+      if (!isMonitorCapableMemberState(member)) continue;
       if (member.lastSeen < cutoff) continue;
       if (!member.latestSample) continue;
       result.push(member);

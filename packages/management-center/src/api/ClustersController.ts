@@ -25,23 +25,18 @@ import { CsrfGuard } from '../auth/CsrfGuard.js';
 import { RbacGuard, RequireRoles } from '../auth/RbacGuard.js';
 import { AuthRepository } from '../persistence/AuthRepository.js';
 import { AuditRepository } from '../persistence/AuditRepository.js';
-import { MetricsRepository } from '../persistence/MetricsRepository.js';
 import { ClusterStateStore } from '../connector/ClusterStateStore.js';
 import { AggregationEngine, type ClusterAggregate } from '../connector/AggregationEngine.js';
 import { ClusterConnectorService } from '../connector/ClusterConnectorService.js';
 import { MemberRestClient } from '../connector/MemberRestClient.js';
+import { countConnectedMonitorCapableMembers, countMonitorCapableMembers, isAdminCapableMemberState, isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import { ValidationError, NotFoundError } from '../shared/errors.js';
-import { clampPageSize } from '../shared/formatters.js';
 import { nowMs } from '../shared/time.js';
-import { MAX_HISTORY_PAGE_SIZE, MAX_ADMIN_PAGE_SIZE } from '../shared/constants.js';
 import type {
   ClusterConfig,
   ClusterRecord,
   ClusterState,
   MemberState,
-  OffsetPaginatedResult,
-  CursorPaginatedResult,
-  SystemEvent,
 } from '../shared/types.js';
 
 interface ClusterSummary {
@@ -75,6 +70,18 @@ interface ClusterListItem {
   updatedAt: number;
 }
 
+/** Matches the frontend's expected `ClusterSummary` type. */
+interface ClusterSummaryView {
+  clusterId: string;
+  clusterName: string;
+  clusterState: string;
+  clusterSize: number;
+  connectedMembers: number;
+  totalMembers: number;
+  lastUpdated: number;
+  hasBlitz: boolean;
+}
+
 @Controller('api/clusters')
 @UseGuards(RbacGuard)
 export class ClustersController {
@@ -83,7 +90,6 @@ export class ClustersController {
   constructor(
     private readonly authRepo: AuthRepository,
     private readonly auditRepo: AuditRepository,
-    private readonly metricsRepo: MetricsRepository,
     private readonly stateStore: ClusterStateStore,
     private readonly aggregationEngine: AggregationEngine,
     private readonly connectorService: ClusterConnectorService,
@@ -92,29 +98,61 @@ export class ClustersController {
 
   // ── GET /api/clusters ──────────────────────────────────────────────────
 
+  /**
+   * Returns a list of all clusters with live state from the state store,
+   * enriched with DB record metadata. The frontend expects `ClusterSummary[]`
+   * with live fields like `clusterState`, `connectedMembers`, etc.
+   */
   @Get()
   @RequireRoles('viewer')
-  async listClusters(
-    @Query('page') pageStr?: string,
-    @Query('pageSize') pageSizeStr?: string,
-  ): Promise<OffsetPaginatedResult<ClusterListItem>> {
-    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
-    const pageSize = clampPageSize(parseInt(pageSizeStr ?? '20', 10) || 20, MAX_ADMIN_PAGE_SIZE);
-
+  async listClusters(): Promise<ClusterSummaryView[]> {
     const records = await this.authRepo.listClusters();
-    const total = records.length;
-    const start = (page - 1) * pageSize;
-    const slice = records.slice(start, start + pageSize);
+    const allStates = this.stateStore.getAllClusterStates();
 
-    const items: ClusterListItem[] = slice.map((r) => ({
-      id: r.id,
-      displayName: r.displayName,
-      config: JSON.parse(r.configJson) as ClusterConfig,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }));
+    // Merge DB records with live state — DB is the source of truth for
+    // which clusters exist, state store provides live operational data.
+    const result: ClusterSummaryView[] = [];
 
-    return { items, page, pageSize, total };
+    for (const record of records) {
+      const state = allStates.get(record.id);
+      let connectedMembers = 0;
+      let totalMembers = 0;
+
+      if (state) {
+        totalMembers = countMonitorCapableMembers(state);
+        connectedMembers = countConnectedMonitorCapableMembers(state);
+      }
+
+      result.push({
+        clusterId: record.id,
+        clusterName: state?.clusterName ?? record.displayName,
+        clusterState: state?.clusterState ?? 'UNKNOWN',
+        clusterSize: state?.clusterSize ?? 0,
+        connectedMembers,
+        totalMembers,
+        lastUpdated: state?.lastUpdated ?? record.updatedAt,
+        hasBlitz: state?.blitz !== undefined && state?.blitz !== null,
+      });
+    }
+
+    // Also include any live clusters not yet in the DB
+    // (e.g. programmatically connected via extension before DB persist)
+    for (const [clusterId, state] of allStates) {
+      if (result.some(r => r.clusterId === clusterId)) continue;
+
+      result.push({
+        clusterId,
+        clusterName: state.clusterName,
+        clusterState: state.clusterState,
+        clusterSize: state.clusterSize,
+        connectedMembers: countConnectedMonitorCapableMembers(state),
+        totalMembers: countMonitorCapableMembers(state),
+        lastUpdated: state.lastUpdated,
+        hasBlitz: state.blitz !== undefined && state.blitz !== null,
+      });
+    }
+
+    return result;
   }
 
   // ── POST /api/clusters ─────────────────────────────────────────────────
@@ -293,11 +331,6 @@ export class ClustersController {
       };
     }
 
-    let connectedMembers = 0;
-    for (const member of state.members.values()) {
-      if (member.connected) connectedMembers++;
-    }
-
     const aggregate = this.aggregationEngine.computeClusterAggregate(state);
 
     return {
@@ -305,8 +338,8 @@ export class ClustersController {
       displayName: state.clusterName,
       clusterState: state.clusterState,
       clusterSize: state.clusterSize,
-      memberCount: state.members.size,
-      connectedMembers,
+      memberCount: countMonitorCapableMembers(state),
+      connectedMembers: countConnectedMonitorCapableMembers(state),
       distributedObjectCount: state.distributedObjects.length,
       partitionCount: state.partitions.partitionCount,
       blitz: state.blitz ?? null,
@@ -331,6 +364,10 @@ export class ClustersController {
 
     const members: MemberView[] = [];
     for (const member of state.members.values()) {
+      if (!isMonitorCapableMemberState(member)) {
+        continue;
+      }
+
       members.push({
         address: member.address,
         connected: member.connected,
@@ -347,29 +384,7 @@ export class ClustersController {
     return { members };
   }
 
-  // ── GET /api/clusters/:id/events ───────────────────────────────────────
-
-  @Get(':id/events')
-  @RequireRoles('viewer')
-  async clusterEvents(
-    @Param('id') id: string,
-    @Query('cursor') cursor?: string,
-    @Query('limit') limitStr?: string,
-    @Query('from') fromStr?: string,
-    @Query('to') toStr?: string,
-    @Query('eventType') eventType?: string,
-  ): Promise<CursorPaginatedResult<SystemEvent>> {
-    const record = await this.authRepo.getClusterById(id);
-    if (!record) {
-      throw new NotFoundError(`Cluster ${id} not found`);
-    }
-
-    const limit = clampPageSize(parseInt(limitStr ?? '100', 10) || 100, MAX_HISTORY_PAGE_SIZE);
-    const from = fromStr ? parseInt(fromStr, 10) : undefined;
-    const to = toStr ? parseInt(toStr, 10) : undefined;
-
-    return this.metricsRepo.querySystemEvents(id, from, to, eventType, limit, cursor);
-  }
+  // NOTE: GET /api/clusters/:id/events is handled by EventsController.
 
   // ── GET /api/clusters/:id/config ───────────────────────────────────────
 
@@ -390,7 +405,7 @@ export class ClustersController {
     const clusterConfig = record ? (JSON.parse(record.configJson) as ClusterConfig) : null;
 
     for (const member of state.members.values()) {
-      if (member.connected && member.restAddress) {
+      if (member.connected && member.restAddress && isAdminCapableMemberState(member)) {
         const liveConfig = await this.restClient.fetchConfig(
           member.restAddress,
           clusterConfig?.authToken,

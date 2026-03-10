@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
 import { ClusterStore } from '../../core/store/cluster.store';
+import { WebSocketService } from '../../core/services/websocket.service';
 
 @Component({
   selector: 'mc-members',
@@ -63,16 +64,26 @@ import { ClusterStore } from '../../core/store/cluster.store';
     </div>
   `,
 })
-export class MembersComponent implements OnInit {
+export class MembersComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly clusterStore = inject(ClusterStore);
+  private readonly wsService = inject(WebSocketService);
 
-  readonly members = this.clusterStore.members;
+  private clusterId: string | null = null;
+
+  readonly members = this.clusterStore.monitorMembers;
 
   ngOnInit(): void {
-    const clusterId = this.route.parent?.snapshot.paramMap.get('id');
-    if (clusterId) {
-      this.clusterStore.setActiveCluster(clusterId);
+    this.clusterId = this.route.parent?.snapshot.paramMap.get('id') ?? null;
+    if (this.clusterId) {
+      this.clusterStore.setActiveCluster(this.clusterId);
+      this.wsService.subscribe(this.clusterId, 'all');
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.clusterId) {
+      this.wsService.unsubscribe(this.clusterId);
     }
   }
 

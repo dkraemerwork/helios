@@ -66,6 +66,7 @@ export class MonitorHandler {
         private readonly _registry: MetricsRegistry,
         private readonly _provider: MonitorStateProvider,
         private readonly _jobsProvider: MonitorJobsProvider | null = null,
+        private readonly _capabilities: { monitoring: boolean; admin: boolean } = { monitoring: true, admin: true },
     ) {}
 
     handle(req: Request): Response | Promise<Response> {
@@ -141,8 +142,8 @@ export class MonitorHandler {
             partitionCount: this._provider.getPartitionCount(),
             nodeState: this._provider.getNodeState(),
             capabilities: {
-                monitoring: true,
-                admin: true,
+                monitoring: this._capabilities.monitoring,
+                admin: this._capabilities.admin,
                 jobs: this._jobsProvider !== null,
                 extensions: true,
             },

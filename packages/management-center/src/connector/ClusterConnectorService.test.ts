@@ -28,6 +28,21 @@ function createPayload(member: MonitorPayload['members'][number]): MonitorPayloa
   };
 }
 
+function createMember(overrides: Partial<MonitorPayload['members'][number]>): MonitorPayload['members'][number] {
+  return {
+    address: '10.0.0.5:5701',
+    restPort: 8080,
+    restAddress: 'http://public-a.example:8080',
+    monitorCapable: true,
+    adminCapable: true,
+    liteMember: false,
+    localMember: false,
+    uuid: 'member-a',
+    memberVersion: '1.0.0',
+    ...overrides,
+  };
+}
+
 describe('ClusterConnectorService', () => {
   test('auto-discovery uses the authoritative remote restAddress', () => {
     const service = Object.create(ClusterConnectorService.prototype) as any;
@@ -41,15 +56,12 @@ describe('ClusterConnectorService', () => {
     };
     service.emitSystemEvent = () => {};
 
-    service.autoDiscoverMembers('stress', createPayload({
+    service.autoDiscoverMembers('stress', createPayload(createMember({
       address: '10.0.0.6:5701',
       restPort: 18082,
       restAddress: 'http://public-b.example:18082',
-      liteMember: false,
-      localMember: false,
       uuid: 'member-b',
-      memberVersion: '1.0.0',
-    }));
+    })));
 
     expect(connectCalls).toEqual([
       {
@@ -72,17 +84,40 @@ describe('ClusterConnectorService', () => {
     };
     service.emitSystemEvent = () => {};
 
-    service.autoDiscoverMembers('stress', createPayload({
+    service.autoDiscoverMembers('stress', createPayload(createMember({
       address: '10.0.0.6:5701',
       restPort: 0,
       restAddress: null,
-      liteMember: false,
-      localMember: false,
+      monitorCapable: false,
+      adminCapable: false,
       uuid: 'member-b',
-      memberVersion: '1.0.0',
-    }));
+    })));
 
     expect(connectCalls).toEqual([]);
-    expect(warnings[0]).toContain('did not advertise an authoritative REST endpoint');
+    expect(warnings).toEqual([]);
+  });
+
+  test('auto-discovery ignores non-monitor-capable members even if they appear in membership', () => {
+    const service = Object.create(ClusterConnectorService.prototype) as any;
+    const connectCalls: Array<{ memberAddr: string; restUrl: string }> = [];
+
+    service.clusterConfigs = new Map([['stress', createClusterConfig()]]);
+    service.sseClients = new Map([['stress', new Map()]]);
+    service.logger = { log() {}, warn() {} };
+    service.connectMember = (_clusterId: string, memberAddr: string, restUrl: string) => {
+      connectCalls.push({ memberAddr, restUrl });
+    };
+    service.emitSystemEvent = () => {};
+
+    service.autoDiscoverMembers('stress', createPayload(createMember({
+      address: '127.0.0.1:15710',
+      restPort: 0,
+      restAddress: null,
+      monitorCapable: false,
+      adminCapable: false,
+      uuid: 'client-member',
+    })));
+
+    expect(connectCalls).toEqual([]);
   });
 });

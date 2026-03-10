@@ -7,6 +7,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import type { ClusterState, MemberMetricsSample } from '../shared/types.js';
 
 export interface ClusterAggregate {
@@ -76,7 +77,7 @@ export class AggregationEngine {
     const samples: MemberMetricsSample[] = [];
 
     for (const member of state.members.values()) {
-      if (member.connected && member.latestSample) {
+      if (member.connected && member.latestSample && isMonitorCapableMemberState(member)) {
         samples.push(member.latestSample);
       }
     }

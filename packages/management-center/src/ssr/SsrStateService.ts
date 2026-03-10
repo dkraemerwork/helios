@@ -11,6 +11,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { InValue } from '@libsql/client';
 import { ClusterStateStore } from '../connector/ClusterStateStore.js';
+import { countConnectedMonitorCapableMembers, countMonitorCapableMembers, isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import { MetricsRepository } from '../persistence/MetricsRepository.js';
 import { AuthRepository } from '../persistence/AuthRepository.js';
 import { AuditRepository } from '../persistence/AuditRepository.js';
@@ -342,7 +343,7 @@ export class SsrStateService {
  * Converts the Map<string, MemberState> to a plain object for JSON transfer.
  */
 function serializeClusterSummary(state: ClusterState): Record<string, unknown> {
-  const connectedCount = countConnectedMembers(state);
+  const connectedCount = countConnectedMonitorCapableMembers(state);
 
   return {
     clusterId: state.clusterId,
@@ -350,7 +351,7 @@ function serializeClusterSummary(state: ClusterState): Record<string, unknown> {
     clusterState: state.clusterState,
     clusterSize: state.clusterSize,
     connectedMembers: connectedCount,
-    totalMembers: state.members.size,
+    totalMembers: countMonitorCapableMembers(state),
     lastUpdated: state.lastUpdated,
     hasBlitz: state.blitz !== undefined,
   };
@@ -363,6 +364,10 @@ function serializeClusterDetail(state: ClusterState): Record<string, unknown> {
   const members: Record<string, unknown>[] = [];
 
   for (const [, member] of state.members) {
+    if (!isMonitorCapableMemberState(member)) {
+      continue;
+    }
+
     members.push(serializeMember(member));
   }
 
@@ -400,14 +405,6 @@ function serializeMember(member: MemberState): Record<string, unknown> {
     info: member.info,
     error: member.error,
   };
-}
-
-function countConnectedMembers(state: ClusterState): number {
-  let count = 0;
-  for (const [, member] of state.members) {
-    if (member.connected) count++;
-  }
-  return count;
 }
 
 // ── Row Mappers (duplicated locally to avoid circular imports) ─────────────

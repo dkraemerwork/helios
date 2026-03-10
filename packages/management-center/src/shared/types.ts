@@ -268,6 +268,10 @@ export interface MemberInfo {
   restPort: number;
   /** Authoritative REST base URL advertised by the member, when known. */
   restAddress: string | null;
+  /** Whether this member exposes monitor endpoints and should be health-bearing in MC. */
+  monitorCapable: boolean;
+  /** Whether this member exposes admin endpoints and can receive MC admin actions. */
+  adminCapable: boolean;
   liteMember: boolean;
   localMember: boolean;
   uuid: string;

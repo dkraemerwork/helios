@@ -24,6 +24,10 @@ export function isHeliosPayload(obj: unknown): boolean {
   return hasName && Array.isArray(record['members']);
 }
 
+function parseCapabilityFlag(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
 /**
  * Transforms a raw Helios monitor payload into the MC internal MonitorPayload.
  */
@@ -82,18 +86,26 @@ export function normalizeHeliosPayload(raw: Record<string, unknown>): MonitorPay
 
   // members normalization
   const rawMembers = r['members'] as Array<Record<string, unknown>> | undefined;
-  const members = Array.isArray(rawMembers) ? rawMembers.map(m => ({
-    address: (m['address'] as string) ?? '',
-    // restPort: advertised by each member in its own payload (0 = REST disabled / unknown)
-    restPort: (m['restPort'] as number) ?? 0,
-    restAddress: typeof m['restAddress'] === 'string' && m['restAddress'].trim().length > 0
+  const members = Array.isArray(rawMembers) ? rawMembers.map((m) => {
+    const restPort = (m['restPort'] as number) ?? 0;
+    const restAddress = typeof m['restAddress'] === 'string' && m['restAddress'].trim().length > 0
       ? m['restAddress'].trim()
-      : null,
-    liteMember: (m['liteMember'] as boolean) ?? !(m['isMaster'] as boolean ?? true),
-    localMember: (m['localMember'] as boolean) ?? (m['isLocal'] as boolean) ?? false,
-    uuid: (m['uuid'] as string) ?? '',
-    memberVersion: (m['memberVersion'] as string) ?? (r['memberVersion'] as string) ?? '0.0.0',
-  })) : [];
+      : null;
+    const defaultCapability = restPort > 0 || restAddress !== null;
+
+    return {
+      address: (m['address'] as string) ?? '',
+      // restPort: advertised by each member in its own payload (0 = REST disabled / unknown)
+      restPort,
+      restAddress,
+      monitorCapable: parseCapabilityFlag(m['monitorCapable'], defaultCapability),
+      adminCapable: parseCapabilityFlag(m['adminCapable'], defaultCapability),
+      liteMember: (m['liteMember'] as boolean) ?? !(m['isMaster'] as boolean ?? true),
+      localMember: (m['localMember'] as boolean) ?? (m['isLocal'] as boolean) ?? false,
+      uuid: (m['uuid'] as string) ?? '',
+      memberVersion: (m['memberVersion'] as string) ?? (r['memberVersion'] as string) ?? '0.0.0',
+    };
+  }) : [];
 
   return {
     instanceName: (r['instanceName'] as string) ?? clusterName,

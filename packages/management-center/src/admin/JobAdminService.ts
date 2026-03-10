@@ -12,6 +12,7 @@ import { MemberRestClient } from '../connector/MemberRestClient.js';
 import { AuditRepository } from '../persistence/AuditRepository.js';
 import { ConfigService } from '../config/ConfigService.js';
 import { NotFoundError, ConnectorError } from '../shared/errors.js';
+import { isAdminCapableMemberState } from '../shared/memberCapabilities.js';
 import { nowMs } from '../shared/time.js';
 import type { AuditLogEntry } from '../shared/types.js';
 
@@ -120,7 +121,7 @@ export class JobAdminService {
     const authToken = this.getClusterAuthToken(clusterId);
 
     for (const [, member] of clusterState.members) {
-      if (member.connected && member.restAddress) {
+      if (member.connected && member.restAddress && isAdminCapableMemberState(member)) {
         return { restUrl: member.restAddress, authToken };
       }
     }

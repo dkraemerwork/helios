@@ -29,6 +29,7 @@ import { SessionService } from '../auth/SessionService.js';
 import { PasswordHasher } from '../auth/PasswordHasher.js';
 import { PasswordDenylistService } from '../auth/PasswordDenylistService.js';
 import { ClusterStateStore } from '../connector/ClusterStateStore.js';
+import { countConnectedMonitorCapableMembers } from '../shared/memberCapabilities.js';
 import { ConflictError, NotFoundError, ValidationError } from '../shared/errors.js';
 import { clampPageSize } from '../shared/formatters.js';
 import { nowMs } from '../shared/time.js';
@@ -474,11 +475,7 @@ export class ConfigController {
     const reconnectAttempts: Record<string, number> = {};
 
     for (const [clusterId, state] of this.stateStore.getAllClusterStates()) {
-      let connected = 0;
-      for (const member of state.members.values()) {
-        if (member.connected) connected++;
-      }
-      connectedStreams[clusterId] = connected;
+      connectedStreams[clusterId] = countConnectedMonitorCapableMembers(state);
       reconnectAttempts[clusterId] = 0;
     }
 

@@ -28,6 +28,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { WsTicketService } from '../auth/WsTicketService.js';
 import { SessionService } from '../auth/SessionService.js';
 import { ClusterStateStore } from '../connector/ClusterStateStore.js';
+import { countConnectedMonitorCapableMembers, countMonitorCapableMembers, isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import { JobsService } from '../jobs/JobsService.js';
 import { WsHeartbeatService } from './WsHeartbeatService.js';
 import { HistoryQueryService } from './HistoryQueryService.js';
@@ -552,6 +553,10 @@ function serializeClusterState(state: ClusterState): Record<string, unknown> {
   const members: Array<Record<string, unknown>> = [];
 
   for (const [, member] of state.members) {
+    if (!isMonitorCapableMemberState(member)) {
+      continue;
+    }
+
     members.push({
       address: member.address,
       restAddress: member.restAddress,
@@ -569,6 +574,8 @@ function serializeClusterState(state: ClusterState): Record<string, unknown> {
     clusterName: state.clusterName,
     clusterState: state.clusterState,
     clusterSize: state.clusterSize,
+    connectedMembers: countConnectedMonitorCapableMembers(state),
+    totalMembers: countMonitorCapableMembers(state),
     members,
     distributedObjects: state.distributedObjects,
     partitions: state.partitions,

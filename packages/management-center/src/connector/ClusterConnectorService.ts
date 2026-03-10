@@ -17,6 +17,7 @@ import { AuthRepository } from '../persistence/AuthRepository.js';
 import { ClusterStateStore } from './ClusterStateStore.js';
 import { MemberSseClient } from './MemberSseClient.js';
 import { MemberRestClient } from './MemberRestClient.js';
+import { isAdminCapableMemberState, isMonitorCapableMemberInfo, isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import { nowMs } from '../shared/time.js';
 import type {
   ClusterConfig,
@@ -271,7 +272,7 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
     const config = this.clusterConfigs.get(clusterId);
 
     for (const member of state.members.values()) {
-      if (member.connected && member.restAddress) {
+      if (member.connected && member.restAddress && isAdminCapableMemberState(member)) {
         return this.restClient.fetchJobs(member.restAddress, config?.authToken);
       }
     }
@@ -447,6 +448,10 @@ export class ClusterConnectorService implements OnModuleInit, OnModuleDestroy {
 
     for (const memberInfo of payload.members) {
       const tcpAddr = memberInfo.address;
+
+      if (!isMonitorCapableMemberInfo(memberInfo)) {
+        continue;
+      }
 
       // Already connected to this member
       if (clients.has(tcpAddr)) continue;

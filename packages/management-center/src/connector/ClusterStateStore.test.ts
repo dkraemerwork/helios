@@ -13,6 +13,8 @@ function createPayload(restAddress: string | null): MonitorPayload {
         address: '10.0.0.5:5701',
         restPort: 8080,
         restAddress,
+        monitorCapable: true,
+        adminCapable: true,
         liteMember: false,
         localMember: true,
         uuid: 'member-a',
@@ -45,6 +47,8 @@ function createClusterDataPayload(args: {
         address: args.memberAddress,
         restPort: 8080,
         restAddress: `http://${args.memberAddress.replace(':5701', ':8080')}`,
+        monitorCapable: true,
+        adminCapable: true,
         liteMember: false,
         localMember: true,
         uuid: `uuid-${args.memberAddress}`,
@@ -82,8 +86,10 @@ describe('ClusterStateStore', () => {
     expect(state?.members.has('10.0.0.5')).toBe(false);
 
     const member = state?.members.get('10.0.0.5:5701');
+    expect(member?.address).toBe('10.0.0.5:5701');
     expect(member?.connected).toBe(true);
     expect(member?.restAddress).toBe('http://public-a.example:8080');
+    expect(member?.info?.address).toBe('10.0.0.5:5701');
     expect(member?.info?.restAddress).toBe('http://public-a.example:8080');
   });
 
@@ -243,5 +249,41 @@ describe('ClusterStateStore', () => {
       },
     });
     expect(state?.queueStats).toEqual({});
+  });
+
+  test('does not mark non-monitor-capable members as connected health-bearing members', () => {
+    const store = new ClusterStateStore();
+
+    store.initCluster('stress', 'Stress');
+    store.updateFromPayload('stress', '127.0.0.1:15710', {
+      instanceName: 'stress-client',
+      clusterName: 'stress',
+      clusterState: 'ACTIVE',
+      clusterSize: 4,
+      members: [
+        {
+          address: '127.0.0.1:15710',
+          restPort: 0,
+          restAddress: null,
+          monitorCapable: false,
+          adminCapable: false,
+          liteMember: false,
+          localMember: true,
+          uuid: 'client-member',
+          memberVersion: '1.0.0',
+        },
+      ],
+      partitions: {
+        partitionCount: 271,
+        memberPartitions: {},
+      },
+      distributedObjects: [],
+      samples: [],
+    });
+    store.setMemberConnected('stress', '127.0.0.1:15710', 'http://127.0.0.1:18081');
+
+    const member = store.getClusterState('stress')?.members.get('127.0.0.1:15710');
+    expect(member?.connected).toBe(false);
+    expect(member?.info?.monitorCapable).toBe(false);
   });
 });

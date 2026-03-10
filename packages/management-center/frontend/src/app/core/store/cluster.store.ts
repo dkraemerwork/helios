@@ -13,6 +13,8 @@ export interface ClusterStoreState {
   clusterName: string;
   clusterState: string;
   clusterSize: number;
+  connectedMembers: number;
+  totalMembers: number;
   members: Map<string, MemberStoreState>;
   distributedObjects: Array<{ serviceName: string; name: string }>;
   mapStats: Record<string, unknown>;
@@ -27,6 +29,8 @@ export interface MemberStoreState {
   address: string;
   restAddress: string;
   connected: boolean;
+  monitorCapable: boolean;
+  adminCapable: boolean;
   lastSeen: number;
   latestSample: MemberMetricsSample | null;
   recentSamples: MemberMetricsSample[];
@@ -71,21 +75,27 @@ export class ClusterStore {
     );
   });
 
+  readonly monitorMembers = computed((): MemberStoreState[] => {
+    return this.members().filter(member => member.monitorCapable);
+  });
+
   /** Computed: summary array of all clusters for navigation. */
   readonly clusterList = computed((): ClusterSummary[] => {
     const result: ClusterSummary[] = [];
     for (const [, state] of this._clusters()) {
-      let connectedMembers = 0;
-      for (const [, member] of state.members) {
-        if (member.connected) connectedMembers++;
-      }
+      const connectedMembers = state.members.size > 0
+        ? Array.from(state.members.values()).filter(member => member.monitorCapable && member.connected).length
+        : state.connectedMembers;
+      const totalMembers = state.members.size > 0
+        ? Array.from(state.members.values()).filter(member => member.monitorCapable).length
+        : state.totalMembers;
       result.push({
         clusterId: state.clusterId,
         clusterName: state.clusterName,
         clusterState: state.clusterState,
         clusterSize: state.clusterSize,
         connectedMembers,
-        totalMembers: state.members.size,
+        totalMembers,
         lastUpdated: state.lastUpdated,
         hasBlitz: state.blitz !== null && state.blitz !== undefined,
       });
@@ -105,19 +115,25 @@ export class ClusterStore {
   initFromTransferState(data: Record<string, unknown>): void {
     const clusters = data['clusters'] as Array<Record<string, unknown>> | undefined;
     if (Array.isArray(clusters)) {
-      const map = new Map<string, ClusterStoreState>();
+      const map = new Map(this._clusters());
       for (const cluster of clusters) {
         const state = deserializeClusterSummary(cluster);
-        map.set(state.clusterId, state);
+        const existing = map.get(state.clusterId);
+        map.set(state.clusterId, existing ? mergeClusterState(existing, state) : state);
       }
       this._clusters.set(map);
     }
 
     const cluster = data['cluster'] as Record<string, unknown> | undefined;
     if (cluster && typeof cluster === 'object') {
-      const state = deserializeClusterDetail(cluster);
+      const members = data['members'] as Array<Record<string, unknown>> | undefined;
+      const clusterWithMembers = Array.isArray(members)
+        ? { ...cluster, members }
+        : cluster;
+      const state = deserializeClusterDetail(clusterWithMembers);
       const map = new Map(this._clusters());
-      map.set(state.clusterId, state);
+      const existing = map.get(state.clusterId);
+      map.set(state.clusterId, existing ? mergeClusterState(existing, state) : state);
       this._clusters.set(map);
     }
   }
@@ -153,27 +169,35 @@ export class ClusterStore {
     const clusterId = data['clusterId'] as string;
     if (!clusterId) return;
 
+    // The WS message wraps cluster state inside a `clusterState` property:
+    // { clusterId, clusterState: { clusterName, clusterState, members, ... } }
+    // Unwrap it so we can read fields directly.
+    const nested = data['clusterState'] as Record<string, unknown> | undefined;
+    const source = nested && typeof nested === 'object' ? nested : data;
+
     const current = this._clusters();
     const existing = current.get(clusterId);
 
     const updated: ClusterStoreState = {
       clusterId,
-      clusterName: (data['clusterName'] as string) ?? existing?.clusterName ?? '',
-      clusterState: (data['clusterState'] as string) ?? existing?.clusterState ?? 'UNKNOWN',
-      clusterSize: (data['clusterSize'] as number) ?? existing?.clusterSize ?? 0,
+      clusterName: (source['clusterName'] as string) ?? existing?.clusterName ?? '',
+      clusterState: (source['clusterState'] as string) ?? existing?.clusterState ?? 'UNKNOWN',
+      clusterSize: (source['clusterSize'] as number) ?? existing?.clusterSize ?? 0,
+      connectedMembers: existing?.connectedMembers ?? 0,
+      totalMembers: existing?.totalMembers ?? 0,
       members: existing?.members ?? new Map(),
-      distributedObjects: (data['distributedObjects'] as ClusterStoreState['distributedObjects'])
+      distributedObjects: (source['distributedObjects'] as ClusterStoreState['distributedObjects'])
         ?? existing?.distributedObjects ?? [],
-      mapStats: (data['mapStats'] as Record<string, unknown>) ?? existing?.mapStats ?? {},
-      queueStats: (data['queueStats'] as Record<string, unknown>) ?? existing?.queueStats ?? {},
-      topicStats: (data['topicStats'] as Record<string, unknown>) ?? existing?.topicStats ?? {},
-      blitz: data['blitz'] ?? existing?.blitz ?? null,
+      mapStats: (source['mapStats'] as Record<string, unknown>) ?? existing?.mapStats ?? {},
+      queueStats: (source['queueStats'] as Record<string, unknown>) ?? existing?.queueStats ?? {},
+      topicStats: (source['topicStats'] as Record<string, unknown>) ?? existing?.topicStats ?? {},
+      blitz: source['blitz'] ?? existing?.blitz ?? null,
       lastUpdated: Date.now(),
       activeAlertCount: existing?.activeAlertCount ?? 0,
     };
 
-    // Merge member updates if provided
-    const memberUpdates = data['members'] as Array<Record<string, unknown>> | undefined;
+    // Merge member updates if provided (expects an array of member objects)
+    const memberUpdates = source['members'] as Array<Record<string, unknown>> | undefined;
     if (Array.isArray(memberUpdates)) {
       const newMembers = new Map(updated.members);
       for (const memberData of memberUpdates) {
@@ -184,6 +208,12 @@ export class ClusterStore {
           address: addr,
           restAddress: (memberData['restAddress'] as string) ?? existingMember?.restAddress ?? addr,
           connected: (memberData['connected'] as boolean) ?? existingMember?.connected ?? false,
+          monitorCapable: (memberData['info'] as Record<string, unknown> | undefined)?.['monitorCapable'] as boolean
+            ?? existingMember?.monitorCapable
+            ?? true,
+          adminCapable: (memberData['info'] as Record<string, unknown> | undefined)?.['adminCapable'] as boolean
+            ?? existingMember?.adminCapable
+            ?? true,
           lastSeen: (memberData['lastSeen'] as number) ?? Date.now(),
           latestSample: (memberData['latestSample'] as MemberMetricsSample)
             ?? existingMember?.latestSample ?? null,
@@ -193,6 +223,8 @@ export class ClusterStore {
         });
       }
       updated.members = newMembers;
+      updated.totalMembers = Array.from(newMembers.values()).filter(member => member.monitorCapable).length;
+      updated.connectedMembers = Array.from(newMembers.values()).filter(member => member.monitorCapable && member.connected).length;
     }
 
     const newMap = new Map(current);
@@ -221,6 +253,8 @@ export class ClusterStore {
       address: memberAddr,
       restAddress: member?.restAddress ?? memberAddr,
       connected: true,
+      monitorCapable: member?.monitorCapable ?? true,
+      adminCapable: member?.adminCapable ?? true,
       lastSeen: sample.timestamp ?? Date.now(),
       latestSample: sample,
       recentSamples: newSamples,
@@ -232,6 +266,8 @@ export class ClusterStore {
     newMembers.set(memberAddr, updatedMember);
 
     const updatedCluster = { ...cluster, members: newMembers, lastUpdated: Date.now() };
+    updatedCluster.totalMembers = Array.from(newMembers.values()).filter(existingMember => existingMember.monitorCapable).length;
+    updatedCluster.connectedMembers = Array.from(newMembers.values()).filter(existingMember => existingMember.monitorCapable && existingMember.connected).length;
     const newMap = new Map(current);
     newMap.set(clusterId, updatedCluster);
     this._clusters.set(newMap);
@@ -304,6 +340,8 @@ function deserializeClusterSummary(data: Record<string, unknown>): ClusterStoreS
     clusterName: String(data['clusterName'] ?? ''),
     clusterState: String(data['clusterState'] ?? 'UNKNOWN'),
     clusterSize: Number(data['clusterSize'] ?? 0),
+    connectedMembers: Number(data['connectedMembers'] ?? 0),
+    totalMembers: Number(data['totalMembers'] ?? 0),
     members: new Map(),
     distributedObjects: [],
     mapStats: {},
@@ -326,6 +364,8 @@ function deserializeClusterDetail(data: Record<string, unknown>): ClusterStoreSt
         address: addr,
         restAddress: String(m['restAddress'] ?? addr),
         connected: Boolean(m['connected']),
+        monitorCapable: Boolean((m['info'] as Record<string, unknown> | undefined)?.['monitorCapable'] ?? true),
+        adminCapable: Boolean((m['info'] as Record<string, unknown> | undefined)?.['adminCapable'] ?? true),
         lastSeen: Number(m['lastSeen'] ?? 0),
         latestSample: (m['latestSample'] as MemberMetricsSample) ?? null,
         recentSamples: [],
@@ -340,6 +380,8 @@ function deserializeClusterDetail(data: Record<string, unknown>): ClusterStoreSt
     clusterName: String(data['clusterName'] ?? ''),
     clusterState: String(data['clusterState'] ?? 'UNKNOWN'),
     clusterSize: Number(data['clusterSize'] ?? 0),
+    connectedMembers: Array.from(members.values()).filter(member => member.monitorCapable && member.connected).length,
+    totalMembers: Array.from(members.values()).filter(member => member.monitorCapable).length,
     members,
     distributedObjects: (data['distributedObjects'] as ClusterStoreState['distributedObjects']) ?? [],
     mapStats: (data['mapStats'] as Record<string, unknown>) ?? {},
@@ -348,5 +390,21 @@ function deserializeClusterDetail(data: Record<string, unknown>): ClusterStoreSt
     blitz: data['blitz'] ?? null,
     lastUpdated: Number(data['lastUpdated'] ?? 0),
     activeAlertCount: 0,
+  };
+}
+
+function mergeClusterState(existing: ClusterStoreState, incoming: ClusterStoreState): ClusterStoreState {
+  return {
+    ...existing,
+    ...incoming,
+    connectedMembers: incoming.members.size > 0 ? incoming.connectedMembers : existing.connectedMembers,
+    totalMembers: incoming.members.size > 0 ? incoming.totalMembers : existing.totalMembers,
+    members: incoming.members.size > 0 ? incoming.members : existing.members,
+    distributedObjects: incoming.distributedObjects.length > 0 ? incoming.distributedObjects : existing.distributedObjects,
+    mapStats: Object.keys(incoming.mapStats).length > 0 ? incoming.mapStats : existing.mapStats,
+    queueStats: Object.keys(incoming.queueStats).length > 0 ? incoming.queueStats : existing.queueStats,
+    topicStats: Object.keys(incoming.topicStats).length > 0 ? incoming.topicStats : existing.topicStats,
+    blitz: incoming.blitz ?? existing.blitz,
+    lastUpdated: Math.max(existing.lastUpdated, incoming.lastUpdated),
   };
 }

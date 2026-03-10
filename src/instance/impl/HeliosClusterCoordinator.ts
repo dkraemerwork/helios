@@ -16,6 +16,7 @@ import type {
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { EndpointQualifier } from "@zenystx/helios-core/instance/EndpointQualifier";
+import { createMemberCapabilityAttributes } from "@zenystx/helios-core/instance/impl/MemberCapabilityAttributes";
 import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzCoordinator";
 import { ClusterJoinManager } from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
@@ -51,6 +52,17 @@ const DEFAULT_CLUSTER_NAME = "helios";
 
 function extractHostFromAddress(address: string): string {
   const trimmed = address.trim();
+  if (trimmed.includes("://")) {
+    try {
+      const hostname = new URL(trimmed).hostname;
+      return hostname.startsWith("[") && hostname.endsWith("]")
+        ? hostname.slice(1, -1)
+        : hostname;
+    } catch {
+      // Fall back to host:port parsing below.
+    }
+  }
+
   if (trimmed.startsWith("[")) {
     const bracketEnd = trimmed.indexOf("]");
     if (bracketEnd !== -1) {
@@ -96,6 +108,14 @@ function createAddressMap(restEndpoint: Address | null): Map<EndpointQualifier, 
   return addressMap;
 }
 
+function createCapabilityAttributes(restEndpoint: Address | null): Map<string, string> {
+  const monitorCapable = restEndpoint !== null;
+  return createMemberCapabilityAttributes({
+    monitorCapable,
+    adminCapable: monitorCapable,
+  });
+}
+
 function getRestEndpointAddress(member: MemberImpl): Address | null {
   for (const [qualifier, address] of member.getAddressMap()) {
     if (qualifier.type === EndpointQualifier.REST.type) {
@@ -139,6 +159,11 @@ export class HeliosClusterCoordinator {
       .uuid(memberUuid ?? crypto.randomUUID())
       .version(new MemberVersion(1, 0, 0))
       .localMember(true)
+      .attributes(
+        createCapabilityAttributes(
+          buildAdvertisedRestEndpoint(this._config, this._localAddress),
+        ),
+      )
       .addressMap(
         createAddressMap(
           buildAdvertisedRestEndpoint(this._config, this._localAddress),

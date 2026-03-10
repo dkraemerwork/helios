@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { DecimalPipe } from '@angular/common';
 import { ClusterStore } from '../../core/store/cluster.store';
 import { WebSocketService } from '../../core/services/websocket.service';
 import { ApiService, type MetricAggregate } from '../../core/services/api.service';
@@ -12,7 +13,7 @@ import { SsrStateService } from '../../core/services/ssr-state.service';
 @Component({
   selector: 'mc-dashboard',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, DecimalPipe],
   template: `
     <div class="space-y-6 animate-fade-in">
       <!-- Cluster header -->
@@ -122,7 +123,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly ssrState = inject(SsrStateService);
 
   readonly cluster = this.clusterStore.activeCluster;
-  readonly members = this.clusterStore.members;
+  readonly members = this.clusterStore.monitorMembers;
 
   readonly recentAggregates = signal<MetricAggregate[]>([]);
 

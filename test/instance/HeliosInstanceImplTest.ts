@@ -14,6 +14,7 @@ import { Address } from "@zenystx/helios-core/cluster/Address";
 import { MemberImpl } from "@zenystx/helios-core/cluster/impl/MemberImpl";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { EndpointQualifier } from "@zenystx/helios-core/instance/EndpointQualifier";
+import { ADMIN_CAPABLE_ATTRIBUTE, MONITOR_CAPABLE_ATTRIBUTE } from "@zenystx/helios-core/instance/impl/MemberCapabilityAttributes";
 import type { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import type { NodeEngineImpl } from "@zenystx/helios-core/spi/impl/NodeEngineImpl";
@@ -290,18 +291,89 @@ describe("HeliosInstanceImpl", () => {
 
       const members = instance._buildMemberPartitionInfo();
       expect(members).toHaveLength(2);
-      expect(members).toEqual([
-        expect.objectContaining({
-          uuid: "local-member",
-          restPort: 8080,
-          restAddress: "http://public-local.example:8080",
-        }),
-        expect.objectContaining({
-          uuid: "remote-member",
-          restPort: 18082,
-          restAddress: "http://public-remote.example:18082",
-        }),
-      ]);
+        expect(members).toEqual([
+          expect.objectContaining({
+            uuid: "local-member",
+            restPort: 8080,
+            restAddress: "http://public-local.example:8080",
+            monitorCapable: true,
+            adminCapable: true,
+          }),
+          expect.objectContaining({
+            uuid: "remote-member",
+            restPort: 18082,
+            restAddress: "http://public-remote.example:18082",
+            monitorCapable: true,
+            adminCapable: true,
+          }),
+        ]);
+      });
+
+    it("syncs the local REST endpoint without leaking the URL scheme into member metadata", () => {
+      const config = new HeliosConfig("test-cluster");
+      config.getNetworkConfig().getRestApiConfig().setEnabled(true).setPort(18081);
+
+      const localMember = new MemberImpl.Builder(new Address("127.0.0.1", 5701))
+        .uuid("local-member")
+        .localMember(true)
+        .version(new MemberVersion(1, 0, 0))
+        .build();
+
+      const instance = Object.create(HeliosInstanceImpl.prototype) as any;
+      instance._config = config;
+      instance._restServer = {
+        isStarted: () => true,
+        getBoundPort: () => 18081,
+      };
+      instance._cluster = {
+        getLocalMember: () => localMember,
+      };
+      instance.getCluster = () => instance._cluster;
+
+      instance._syncLocalMemberRestEndpoint();
+
+      const restEndpoint = localMember.getAddressMap().get(EndpointQualifier.REST);
+      expect(restEndpoint?.getHost()).toBe("127.0.0.1");
+      expect(restEndpoint?.getPort()).toBe(18081);
+      expect(localMember.getAttribute(MONITOR_CAPABLE_ATTRIBUTE)).toBe("true");
+      expect(localMember.getAttribute(ADMIN_CAPABLE_ATTRIBUTE)).toBe("true");
+    });
+
+    it("marks members without advertised rest endpoints as non-monitor-capable", () => {
+      const config = new HeliosConfig("test-cluster");
+      config.getNetworkConfig().getRestApiConfig().setEnabled(false);
+
+      const localMember = new MemberImpl.Builder(new Address("127.0.0.1", 5701))
+        .uuid("local-member")
+        .localMember(true)
+        .version(new MemberVersion(1, 0, 0))
+        .build();
+      const remoteMember = new MemberImpl.Builder(new Address("10.0.0.6", 5701))
+        .uuid("remote-member")
+        .version(new MemberVersion(1, 0, 0))
+        .build();
+
+      const instance = Object.create(HeliosInstanceImpl.prototype) as any;
+      instance._config = config;
+      instance._restServer = {
+        isStarted: () => false,
+        getBoundPort: () => 0,
+      };
+      instance._cluster = {
+        getMembers: () => [localMember, remoteMember],
+        getLocalMember: () => localMember,
+      };
+      instance.getCluster = () => instance._cluster;
+      instance.getClusterMasterAddress = () => "127.0.0.1:5701";
+      instance.getPartitionCount = () => 1;
+      instance.getPartitionOwnerId = () => "local-member";
+      instance.getPartitionBackupIds = () => [];
+
+      const members = instance._buildMemberPartitionInfo();
+      expect(members[0]?.monitorCapable).toBe(false);
+      expect(members[0]?.adminCapable).toBe(false);
+      expect(members[1]?.monitorCapable).toBe(false);
+      expect(members[1]?.adminCapable).toBe(false);
     });
 
     it("sweeps expired pending responses without touching fresh ones", () => {

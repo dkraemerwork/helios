@@ -87,6 +87,10 @@ export interface MemberPartitionInfo {
     restPort: number;
     /** Authoritative REST base URL for this member, when known. */
     restAddress: string | null;
+    /** Whether this member exposes monitor endpoints. */
+    monitorCapable: boolean;
+    /** Whether this member exposes admin endpoints. */
+    adminCapable: boolean;
     isMaster: boolean;
     isLocal: boolean;
     primaryPartitions: number;

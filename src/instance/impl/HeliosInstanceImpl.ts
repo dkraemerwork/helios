@@ -74,6 +74,7 @@ import { FlakeIdGeneratorService } from "@zenystx/helios-core/flakeid/impl/Flake
 import { EndpointQualifier } from "@zenystx/helios-core/instance/EndpointQualifier";
 import { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import { InvocationMonitor } from "@zenystx/helios-core/instance/impl/InvocationMonitor";
+import { readMemberAdminCapability, readMemberMonitorCapability } from "@zenystx/helios-core/instance/impl/MemberCapabilityAttributes";
 import { PendingResponseEntryPool } from "@zenystx/helios-core/instance/impl/PendingResponseEntryPool";
 import { BlitzReadinessState, HeliosBlitzLifecycleManager } from "@zenystx/helios-core/instance/impl/blitz/HeliosBlitzLifecycleManager";
 import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService";
@@ -347,6 +348,17 @@ function parseMemberAddress(member: string): [string, number] {
 
 function extractHostFromAddress(address: string): string {
   const trimmed = address.trim();
+  if (trimmed.includes("://")) {
+    try {
+      const hostname = new URL(trimmed).hostname;
+      return hostname.startsWith("[") && hostname.endsWith("]")
+        ? hostname.slice(1, -1)
+        : hostname;
+    } catch {
+      // Fall back to host:port parsing below.
+    }
+  }
+
   if (trimmed.startsWith("[")) {
     const bracketEnd = trimmed.indexOf("]");
     if (bracketEnd !== -1) {
@@ -5360,7 +5372,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const jobsProvider = this._createMonitorJobsProvider();
 
     // Register the monitor REST handler (with jobs and config endpoints)
-    const monitorHandler = new MonitorHandler(monitorConfig, this._metricsRegistry, stateProvider, jobsProvider);
+    const monitorHandler = new MonitorHandler(
+      monitorConfig,
+      this._metricsRegistry,
+      stateProvider,
+      jobsProvider,
+      {
+        monitoring: this._config.getNetworkConfig().getRestApiConfig().isGroupEnabled(RestEndpointGroup.MONITOR),
+        admin: this._config.getNetworkConfig().getRestApiConfig().isGroupEnabled(RestEndpointGroup.ADMIN),
+      },
+    );
     this._restServer.registerHandler('/helios/monitor', (req) => monitorHandler.handle(req));
 
     // Register the /helios/metrics REST handler (JSON + Prometheus text)
@@ -5564,12 +5585,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
         member,
         address === localAddress ? localMember : null,
       );
+      const monitorCapable = readMemberMonitorCapability(member) ?? (restAdvertisement !== null);
+      const adminCapable = readMemberAdminCapability(member) ?? monitorCapable;
 
       result.push({
         uuid: member.getUuid(),
         address,
         restPort: restAdvertisement?.port ?? 0,
         restAddress: restAdvertisement?.url ?? null,
+        monitorCapable,
+        adminCapable,
         isMaster: address === masterAddress,
         isLocal,
         primaryPartitions,

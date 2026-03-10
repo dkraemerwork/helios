@@ -9,6 +9,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { MAX_SAMPLES_IN_MEMORY } from '../shared/constants.js';
+import { isMonitorCapableMemberState } from '../shared/memberCapabilities.js';
 import { nowMs } from '../shared/time.js';
 import type {
   ClusterState,
@@ -146,7 +147,7 @@ export class ClusterStateStore {
 
     const current = state.members.get(currentAddr);
     const canonical = state.members.get(canonicalAddr);
-    const merged = mergeMemberState(current, canonical, restAddress ?? null);
+    const merged = mergeMemberState(current, canonical, restAddress ?? null, canonicalAddr);
     const currentData = this.memberClusterData.get(clusterId)?.get(currentAddr);
     const canonicalData = this.memberClusterData.get(clusterId)?.get(canonicalAddr);
     const clusterData = this.memberClusterData.get(clusterId);
@@ -205,7 +206,7 @@ export class ClusterStateStore {
       state.members.set(memberAddr, member);
     }
 
-    member.connected = true;
+    member.connected = member.info === null ? true : isMonitorCapableMemberState(member);
     member.restAddress = restAddr;
     member.error = null;
     member.lastSeen = nowMs();
@@ -386,12 +387,14 @@ function mergeMemberState(
   current: MemberState | undefined,
   canonical: MemberState | undefined,
   restAddress: string | null,
+  canonicalAddr?: string,
 ): MemberState {
-  const address = canonical?.address ?? current?.address ?? '';
+  const address = canonicalAddr ?? canonical?.address ?? current?.address ?? '';
   const latestSample = pickLatestSample(current?.latestSample ?? null, canonical?.latestSample ?? null);
   const recentSamples = [...(current?.recentSamples ?? []), ...(canonical?.recentSamples ?? [])]
     .sort((left, right) => left.timestamp - right.timestamp)
     .slice(-MAX_SAMPLES_IN_MEMORY);
+  const info = canonical?.info ?? current?.info ?? null;
 
   return {
     address,
@@ -400,7 +403,13 @@ function mergeMemberState(
     lastSeen: Math.max(canonical?.lastSeen ?? 0, current?.lastSeen ?? 0, nowMs()),
     latestSample,
     recentSamples,
-    info: canonical?.info ?? current?.info ?? null,
+    info: info === null
+      ? null
+      : {
+          ...info,
+          address,
+          restAddress: restAddress ?? info.restAddress ?? null,
+        },
     error: canonical?.error ?? current?.error ?? null,
   };
 }

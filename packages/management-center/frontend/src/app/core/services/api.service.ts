@@ -54,6 +54,8 @@ export interface MemberSummary {
 
 export interface MemberInfo {
   address: string;
+  monitorCapable?: boolean;
+  adminCapable?: boolean;
   liteMember: boolean;
   localMember: boolean;
   uuid: string;
