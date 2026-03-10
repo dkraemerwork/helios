@@ -28,11 +28,11 @@
  *   AtomicRef.CompareAndSet       (0x0c0a00)
  *
  * CountDownLatch:
- *   CountDownLatch.TrySetCount    (0x0d0100)
- *   CountDownLatch.Await          (0x0d0200)
- *   CountDownLatch.CountDown      (0x0d0300)
- *   CountDownLatch.GetCount       (0x0d0400)
- *   CountDownLatch.GetRound       (0x0d0500)
+ *   CountDownLatch.TrySetCount    (0x0b0100)
+ *   CountDownLatch.Await          (0x0b0200)
+ *   CountDownLatch.CountDown      (0x0b0300)
+ *   CountDownLatch.GetCount       (0x0b0400)
+ *   CountDownLatch.GetRound       (0x0b0500)
  *
  * Semaphore:
  *   Semaphore.Init                (0x0e0100 — overlaps ReplicatedMap, handled by different services)
@@ -55,7 +55,13 @@ import type {
     CountDownLatchOperations,
     SemaphoreOperations,
 } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import {
+    BOOLEAN_SIZE_IN_BYTES,
+    FixedSizeTypesCodec,
+    INT_SIZE_IN_BYTES,
+    LONG_SIZE_IN_BYTES,
+    UUID_SIZE_IN_BYTES,
+} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
@@ -93,11 +99,11 @@ const AR_COMPARE_AND_SET_REQUEST = 0x0c0a00; const AR_COMPARE_AND_SET_RESPONSE =
 
 // ── CountDownLatch message type constants ─────────────────────────────────────
 
-const CDL_TRY_SET_COUNT_REQUEST = 0x0d0100; const CDL_TRY_SET_COUNT_RESPONSE = 0x0d0101;
-const CDL_AWAIT_REQUEST         = 0x0d0200; const CDL_AWAIT_RESPONSE         = 0x0d0201;
-const CDL_COUNT_DOWN_REQUEST    = 0x0d0300; const CDL_COUNT_DOWN_RESPONSE    = 0x0d0301;
-const CDL_GET_COUNT_REQUEST     = 0x0d0400; const CDL_GET_COUNT_RESPONSE     = 0x0d0401;
-const CDL_GET_ROUND_REQUEST     = 0x0d0500; const CDL_GET_ROUND_RESPONSE     = 0x0d0501;
+const CDL_TRY_SET_COUNT_REQUEST = 0x0b0100; const CDL_TRY_SET_COUNT_RESPONSE = 0x0b0101;
+const CDL_AWAIT_REQUEST         = 0x0b0200; const CDL_AWAIT_RESPONSE         = 0x0b0201;
+const CDL_COUNT_DOWN_REQUEST    = 0x0b0300; const CDL_COUNT_DOWN_RESPONSE    = 0x0b0301;
+const CDL_GET_COUNT_REQUEST     = 0x0b0400; const CDL_GET_COUNT_RESPONSE     = 0x0b0401;
+const CDL_GET_ROUND_REQUEST     = 0x0b0500; const CDL_GET_ROUND_RESPONSE     = 0x0b0501;
 
 // ── Semaphore message type constants ──────────────────────────────────────────
 
@@ -112,6 +118,7 @@ const SEM_INIT_REQUEST             = 0x1f0700; const SEM_INIT_RESPONSE          
 const CP_GROUP_CREATE_REQUEST      = 0x1e0100; const CP_GROUP_CREATE_RESPONSE      = 0x1e0101;
 const CP_GROUP_DESTROY_REQUEST     = 0x1e0200; const CP_GROUP_DESTROY_RESPONSE     = 0x1e0201;
 
+const REQUEST_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
 
 // ── CP group name encoding constants ──────────────────────────────────────────
@@ -172,6 +179,41 @@ function _decodeRaftGroupName(iter: CM.ForwardFrameIterator): string {
     }
 
     return groupName;
+}
+
+function _decodeCountDownLatchAwait(msg: ClientMessage): { name: string; timeoutMs: bigint } {
+    const iter = msg.forwardFrameIterator();
+    const initialFrame = iter.next();
+    const content = initialFrame.content;
+    const timeoutOffset = content.length >= REQUEST_HEADER_SIZE + UUID_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES
+        ? REQUEST_HEADER_SIZE + UUID_SIZE_IN_BYTES
+        : REQUEST_HEADER_SIZE;
+
+    return {
+        name: _decodeCpProxyName(iter),
+        timeoutMs: content.readBigInt64LE(timeoutOffset),
+    };
+}
+
+function _decodeCountDownLatchCountDown(msg: ClientMessage): { name: string; expectedRound: number; invocationUuid: string } {
+    const iter = msg.forwardFrameIterator();
+    const initialFrame = iter.next();
+    const content = initialFrame.content;
+
+    if (content.length >= REQUEST_HEADER_SIZE + UUID_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) {
+        return {
+            name: _decodeCpProxyName(iter),
+            expectedRound: content.readInt32LE(REQUEST_HEADER_SIZE + UUID_SIZE_IN_BYTES),
+            invocationUuid: FixedSizeTypesCodec.decodeUUID(content, REQUEST_HEADER_SIZE) ?? '',
+        };
+    }
+
+    const name = _decodeCpProxyName(iter);
+    return {
+        name,
+        expectedRound: content.readInt32LE(REQUEST_HEADER_SIZE),
+        invocationUuid: StringCodec.decode(iter),
+    };
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────
@@ -381,19 +423,12 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
     });
 
     dispatcher.register(CDL_AWAIT_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator();
-        const f = iter.next();
-        const timeoutMs = f.content.readBigInt64LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
-        const name = _decodeCpProxyName(iter);
+        const { name, timeoutMs } = _decodeCountDownLatchAwait(msg);
         return _bool(CDL_AWAIT_RESPONSE, await countDownLatch.await(name, timeoutMs));
     });
 
     dispatcher.register(CDL_COUNT_DOWN_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator();
-        const f = iter.next();
-        const expectedRound = f.content.readInt32LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
-        const name = _decodeCpProxyName(iter);
-        const invocationUuid = StringCodec.decode(iter);
+        const { name, expectedRound, invocationUuid } = _decodeCountDownLatchCountDown(msg);
         await countDownLatch.countDown(name, expectedRound, invocationUuid);
         return _empty(CDL_COUNT_DOWN_RESPONSE);
     });

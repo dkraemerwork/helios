@@ -1,6 +1,7 @@
 import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import {
+    FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
 } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
@@ -36,11 +37,11 @@ const AR_IS_NULL_REQUEST = 0x0c0800;
 const AR_CLEAR_REQUEST = 0x0c0900;
 const AR_COMPARE_AND_SET_REQUEST = 0x0c0a00;
 
-const CDL_TRY_SET_COUNT_REQUEST = 0x0d0100;
-const CDL_AWAIT_REQUEST = 0x0d0200;
-const CDL_COUNT_DOWN_REQUEST = 0x0d0300;
-const CDL_GET_COUNT_REQUEST = 0x0d0400;
-const CDL_GET_ROUND_REQUEST = 0x0d0500;
+const CDL_TRY_SET_COUNT_REQUEST = 0x0b0100;
+const CDL_AWAIT_REQUEST = 0x0b0200;
+const CDL_COUNT_DOWN_REQUEST = 0x0b0300;
+const CDL_GET_COUNT_REQUEST = 0x0b0400;
+const CDL_GET_ROUND_REQUEST = 0x0b0500;
 
 const SEM_ACQUIRE_REQUEST = 0x1f0100;
 const SEM_RELEASE_REQUEST = 0x1f0200;
@@ -88,6 +89,11 @@ function buildNameRequest(messageType: number, correlationId: number, name: stri
     StringCodec.encode(msg, name);
     msg.setFinal();
     return msg;
+}
+
+function toPseudoUuid(seed: string): string {
+    const hex = Buffer.from(seed, 'utf8').toString('hex').padEnd(32, '0').slice(0, 32);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 function encodeRaftGroupId(msg: ClientMessage, groupName: string): void {
@@ -180,18 +186,19 @@ function buildCountDownLatchTrySetCountRequest(correlationId: number, name: stri
 }
 
 function buildCountDownLatchAwaitRequest(correlationId: number, name: string, timeoutMs: bigint): ClientMessage {
-    const { msg, frame } = createRequest(CDL_AWAIT_REQUEST, correlationId, LONG_SIZE_IN_BYTES);
-    frame.writeBigInt64LE(timeoutMs, INITIAL_FRAME_SIZE);
+    const { msg, frame } = createRequest(CDL_AWAIT_REQUEST, correlationId, LONG_SIZE_IN_BYTES + 17);
+    FixedSizeTypesCodec.encodeUUID(frame, INITIAL_FRAME_SIZE, toPseudoUuid(`await-${correlationId}`));
+    frame.writeBigInt64LE(timeoutMs, INITIAL_FRAME_SIZE + 17);
     StringCodec.encode(msg, name);
     msg.setFinal();
     return msg;
 }
 
 function buildCountDownLatchCountDownRequest(correlationId: number, name: string, expectedRound: number, invocationUuid: string): ClientMessage {
-    const { msg, frame } = createRequest(CDL_COUNT_DOWN_REQUEST, correlationId, INT_SIZE_IN_BYTES);
-    frame.writeInt32LE(expectedRound, INITIAL_FRAME_SIZE);
+    const { msg, frame } = createRequest(CDL_COUNT_DOWN_REQUEST, correlationId, 17 + INT_SIZE_IN_BYTES);
+    FixedSizeTypesCodec.encodeUUID(frame, INITIAL_FRAME_SIZE, toPseudoUuid(invocationUuid));
+    frame.writeInt32LE(expectedRound, INITIAL_FRAME_SIZE + 17);
     StringCodec.encode(msg, name);
-    StringCodec.encode(msg, invocationUuid);
     msg.setFinal();
     return msg;
 }
