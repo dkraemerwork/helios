@@ -56,14 +56,15 @@ function buildFlakeNewIdBatchRequest(correlationId: number, name: string, batchS
 }
 
 function encodeReplicaTimestamps(msg: ClientMessage, replicaTimestamps: Array<[string, bigint]>): void {
-    msg.add(new ClientMessageFrame(Buffer.alloc(0), ClientMessage.BEGIN_DATA_STRUCTURE_FLAG));
-    for (const [replicaId, timestamp] of replicaTimestamps) {
-        msg.add(new ClientMessageFrame(Buffer.from(replicaId, 'utf8')));
-        const timestampFrame = Buffer.alloc(LONG_SIZE_IN_BYTES);
-        timestampFrame.writeBigInt64LE(timestamp, 0);
-        msg.add(new ClientMessageFrame(timestampFrame));
+    const entrySize = UUID_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    const frame = Buffer.alloc(entrySize * replicaTimestamps.length);
+    for (let index = 0; index < replicaTimestamps.length; index++) {
+        const [replicaId, timestamp] = replicaTimestamps[index]!;
+        const offset = index * entrySize;
+        FixedSizeTypesCodec.encodeUUID(frame, offset, replicaId);
+        FixedSizeTypesCodec.encodeLong(frame, offset + UUID_SIZE_IN_BYTES, timestamp);
     }
-    msg.add(new ClientMessageFrame(Buffer.alloc(0), ClientMessage.END_DATA_STRUCTURE_FLAG));
+    msg.add(new ClientMessageFrame(frame));
 }
 
 function buildPnGetRequest(correlationId: number, name: string, replicaTimestamps: Array<[string, bigint]> = []): ClientMessage {
@@ -132,23 +133,19 @@ function decodePnValueResponse(message: ClientMessage): { value: bigint; replica
         return { value, replicaTimestamps };
     }
 
-    let frame = iterator.next();
-    if ((frame.flags & ClientMessage.BEGIN_DATA_STRUCTURE_FLAG) === 0) {
+    const frame = iterator.next();
+    if (frame.content.length === 0) {
         return { value, replicaTimestamps };
     }
 
-    while (iterator.hasNext()) {
-        frame = iterator.next();
-        if ((frame.flags & ClientMessage.END_DATA_STRUCTURE_FLAG) !== 0) {
-            break;
+    const entrySize = UUID_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    const entryCount = Math.floor(frame.content.length / entrySize);
+    for (let index = 0; index < entryCount; index++) {
+        const offset = index * entrySize;
+        const replicaId = FixedSizeTypesCodec.decodeUUID(frame.content, offset);
+        if (replicaId !== null) {
+            replicaTimestamps.push([replicaId, FixedSizeTypesCodec.decodeLong(frame.content, offset + UUID_SIZE_IN_BYTES)]);
         }
-
-        const replicaId = frame.content.toString('utf8');
-        const timestampFrame = iterator.next();
-        if ((timestampFrame.flags & ClientMessage.END_DATA_STRUCTURE_FLAG) !== 0) {
-            break;
-        }
-        replicaTimestamps.push([replicaId, timestampFrame.content.readBigInt64LE(0)]);
     }
 
     return { value, replicaTimestamps };
@@ -206,9 +203,11 @@ describe('flake/pn/cardinality protocol adapter', () => {
         const get = decodePnValueResponse((await dispatcher.dispatch(buildPnGetRequest(3, 'counter', secondAdd.replicaTimestamps), session))!);
 
         expect(firstAdd.value).toBe(5n);
-        expect(firstAdd.replicaTimestamps).toEqual([[instance.getLocalMemberId(), 1n]]);
+        const replicaId = firstAdd.replicaTimestamps[0]?.[0];
+        expect(replicaId).toBeDefined();
+        expect(firstAdd.replicaTimestamps).toEqual([[replicaId!, 1n]]);
         expect(secondAdd.value).toBe(5n);
-        expect(secondAdd.replicaTimestamps).toEqual([[instance.getLocalMemberId(), 2n]]);
+        expect(secondAdd.replicaTimestamps).toEqual([[replicaId!, 2n]]);
         expect(get.value).toBe(7n);
         expect(decodeIntResponse((await dispatcher.dispatch(buildNameRequest(PN_GET_CONFIGURED_REPLICA_COUNT_REQUEST, 4, 'counter'), session))!)).toBe(3);
     });

@@ -48,6 +48,7 @@ import type {
     TransactionServiceOperations,
     SqlServiceOperations,
     ExecutorServiceOperations,
+    CpGroupOperations,
     AtomicLongOperations,
     AtomicRefOperations,
     CountDownLatchOperations,
@@ -81,6 +82,7 @@ export interface RegisterAllHandlersOptions {
     executor: ExecutorServiceOperations;
 
     // CP subsystem
+    cpGroup: CpGroupOperations;
     atomicLong: AtomicLongOperations;
     atomicRef: AtomicRefOperations;
     countDownLatch: CountDownLatchOperations;
@@ -138,6 +140,7 @@ export function registerAllHandlers(opts: RegisterAllHandlersOptions): void {
 
     registerCpServiceHandlers({
         dispatcher,
+        cpGroup: opts.cpGroup,
         atomicLong: opts.atomicLong,
         atomicRef: opts.atomicRef,
         countDownLatch: opts.countDownLatch,

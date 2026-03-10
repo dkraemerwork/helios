@@ -51,6 +51,7 @@ import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/client
 import type {
     AtomicLongOperations,
     AtomicRefOperations,
+    CpGroupOperations,
     CountDownLatchOperations,
     SemaphoreOperations,
 } from './ServiceOperations.js';
@@ -90,6 +91,11 @@ const AR_IS_NULL_REQUEST         = 0x0c0800; const AR_IS_NULL_RESPONSE         =
 const AR_CLEAR_REQUEST           = 0x0c0900; const AR_CLEAR_RESPONSE           = 0x0c0901;
 const AR_COMPARE_AND_SET_REQUEST = 0x0c0a00; const AR_COMPARE_AND_SET_RESPONSE = 0x0c0a01;
 
+const AR_OFFICIAL_COMPARE_AND_SET_REQUEST = 0x0a0200; const AR_OFFICIAL_COMPARE_AND_SET_RESPONSE = 0x0a0201;
+const AR_OFFICIAL_CONTAINS_REQUEST        = 0x0a0300; const AR_OFFICIAL_CONTAINS_RESPONSE        = 0x0a0301;
+const AR_OFFICIAL_GET_REQUEST             = 0x0a0400; const AR_OFFICIAL_GET_RESPONSE             = 0x0a0401;
+const AR_OFFICIAL_SET_REQUEST             = 0x0a0500; const AR_OFFICIAL_SET_RESPONSE             = 0x0a0501;
+
 // ── CountDownLatch message type constants ─────────────────────────────────────
 
 const CDL_TRY_SET_COUNT_REQUEST = 0x0d0100; const CDL_TRY_SET_COUNT_RESPONSE = 0x0d0101;
@@ -107,6 +113,9 @@ const SEM_CHANGE_REQUEST           = 0x1f0400; const SEM_CHANGE_RESPONSE        
 const SEM_AVAILABLE_PERMITS_REQUEST = 0x1f0500; const SEM_AVAILABLE_PERMITS_RESPONSE = 0x1f0501;
 const SEM_TRY_ACQUIRE_REQUEST      = 0x1f0600; const SEM_TRY_ACQUIRE_RESPONSE      = 0x1f0601;
 const SEM_INIT_REQUEST             = 0x1f0700; const SEM_INIT_RESPONSE             = 0x1f0701;
+
+const CP_GROUP_CREATE_REQUEST      = 0x1e0100; const CP_GROUP_CREATE_RESPONSE      = 0x1e0101;
+const CP_GROUP_DESTROY_REQUEST     = 0x1e0200; const CP_GROUP_DESTROY_RESPONSE     = 0x1e0201;
 
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
 
@@ -143,10 +152,38 @@ function _decodeCpProxyName(iter: CM.ForwardFrameIterator): string {
     return StringCodec.decode(iter);
 }
 
+function _decodeRaftGroupName(iter: CM.ForwardFrameIterator): string {
+    if (!iter.hasNext()) {
+        throw new Error('Missing CP group frame');
+    }
+
+    const firstFrame = iter.next();
+    if ((firstFrame.flags & CM.BEGIN_DATA_STRUCTURE_FLAG) === 0) {
+        throw new Error('Missing CP group begin frame');
+    }
+
+    if (!iter.hasNext()) {
+        throw new Error('Missing CP group initial frame');
+    }
+
+    iter.next();
+    const groupName = StringCodec.decode(iter);
+
+    while (iter.hasNext()) {
+        const frame = iter.next();
+        if ((frame.flags & CM.END_DATA_STRUCTURE_FLAG) !== 0) {
+            break;
+        }
+    }
+
+    return groupName;
+}
+
 // ── Registration ──────────────────────────────────────────────────────────────
 
 export interface CpServiceHandlersOptions {
     dispatcher: ClientMessageDispatcher;
+    cpGroup: CpGroupOperations;
     atomicLong: AtomicLongOperations;
     atomicRef: AtomicRefOperations;
     countDownLatch: CountDownLatchOperations;
@@ -154,7 +191,54 @@ export interface CpServiceHandlersOptions {
 }
 
 export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void {
-    const { dispatcher, atomicLong, atomicRef, countDownLatch, semaphore } = opts;
+    const { dispatcher, cpGroup, atomicLong, atomicRef, countDownLatch, semaphore } = opts;
+
+    const handleAtomicRefGet = async (msg: ClientMessage, responseType: number) => {
+        const iter = msg.forwardFrameIterator(); iter.next();
+        const name = _decodeCpProxyName(iter);
+        return _nullable(responseType, await atomicRef.get(name));
+    };
+
+    const handleAtomicRefSet = async (msg: ClientMessage, responseType: number) => {
+        const iter = msg.forwardFrameIterator(); iter.next();
+        const name = _decodeCpProxyName(iter);
+        const value = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
+        await atomicRef.set(name, value);
+        return _empty(responseType);
+    };
+
+    const handleAtomicRefContains = async (msg: ClientMessage, responseType: number) => {
+        const iter = msg.forwardFrameIterator(); iter.next();
+        const name = _decodeCpProxyName(iter);
+        const value = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
+        return _bool(responseType, await atomicRef.contains(name, value));
+    };
+
+    const handleAtomicRefCompareAndSet = async (msg: ClientMessage, responseType: number) => {
+        const iter = msg.forwardFrameIterator(); iter.next();
+        const name = _decodeCpProxyName(iter);
+        const expected = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
+        const updated = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
+        return _bool(responseType, await atomicRef.compareAndSet(name, expected, updated));
+    };
+
+    dispatcher.register(CP_GROUP_CREATE_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const proxyName = StringCodec.decode(iter);
+        const groupId = await cpGroup.createCPGroup(proxyName);
+        return _raftGroupId(CP_GROUP_CREATE_RESPONSE, groupId);
+    });
+
+    dispatcher.register(CP_GROUP_DESTROY_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const groupName = _decodeRaftGroupName(iter);
+        const serviceName = StringCodec.decode(iter);
+        const objectName = StringCodec.decode(iter);
+        await cpGroup.destroyCPObject(groupName, serviceName, objectName);
+        return _empty(CP_GROUP_DESTROY_RESPONSE);
+    });
 
     // ── AtomicLong ────────────────────────────────────────────────────────────
 
@@ -237,19 +321,11 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
 
     // ── AtomicRef ─────────────────────────────────────────────────────────────
 
-    dispatcher.register(AR_GET_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpProxyName(iter);
-        return _nullable(AR_GET_RESPONSE, await atomicRef.get(name));
-    });
+    dispatcher.register(AR_GET_REQUEST, async (msg, _s) => handleAtomicRefGet(msg, AR_GET_RESPONSE));
+    dispatcher.register(AR_OFFICIAL_GET_REQUEST, async (msg, _s) => handleAtomicRefGet(msg, AR_OFFICIAL_GET_RESPONSE));
 
-    dispatcher.register(AR_SET_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpProxyName(iter);
-        const value = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
-        await atomicRef.set(name, value);
-        return _empty(AR_SET_RESPONSE);
-    });
+    dispatcher.register(AR_SET_REQUEST, async (msg, _s) => handleAtomicRefSet(msg, AR_SET_RESPONSE));
+    dispatcher.register(AR_OFFICIAL_SET_REQUEST, async (msg, _s) => handleAtomicRefSet(msg, AR_OFFICIAL_SET_RESPONSE));
 
     dispatcher.register(AR_IS_NULL_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator(); iter.next();
@@ -264,20 +340,11 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
         return _empty(AR_CLEAR_RESPONSE);
     });
 
-    dispatcher.register(AR_CONTAINS_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpProxyName(iter);
-        const value = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
-        return _bool(AR_CONTAINS_RESPONSE, await atomicRef.contains(name, value));
-    });
+    dispatcher.register(AR_CONTAINS_REQUEST, async (msg, _s) => handleAtomicRefContains(msg, AR_CONTAINS_RESPONSE));
+    dispatcher.register(AR_OFFICIAL_CONTAINS_REQUEST, async (msg, _s) => handleAtomicRefContains(msg, AR_OFFICIAL_CONTAINS_RESPONSE));
 
-    dispatcher.register(AR_COMPARE_AND_SET_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpProxyName(iter);
-        const expected = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
-        const updated = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
-        return _bool(AR_COMPARE_AND_SET_RESPONSE, await atomicRef.compareAndSet(name, expected, updated));
-    });
+    dispatcher.register(AR_COMPARE_AND_SET_REQUEST, async (msg, _s) => handleAtomicRefCompareAndSet(msg, AR_COMPARE_AND_SET_RESPONSE));
+    dispatcher.register(AR_OFFICIAL_COMPARE_AND_SET_REQUEST, async (msg, _s) => handleAtomicRefCompareAndSet(msg, AR_OFFICIAL_COMPARE_AND_SET_RESPONSE));
 
     dispatcher.register(AR_ALTER_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator(); iter.next();
@@ -430,3 +497,4 @@ function _bool(t: number, v: boolean): ClientMessage { const msg = CM.createForE
 function _int(t: number, v: number): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeInt32LE(v | 0, RESPONSE_HEADER_SIZE); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
 function _long(t: number, v: bigint): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeBigInt64LE(v, RESPONSE_HEADER_SIZE); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
 function _nullable(t: number, data: Data | null): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); if (data === null) { msg.add(CM.NULL_FRAME); } else { DataCodec.encode(msg, data); } msg.setFinal(); return msg; }
+function _raftGroupId(t: number, groupId: { name: string; seed: bigint; id: bigint }): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.add(CM.BEGIN_FRAME); const initial = Buffer.allocUnsafe(LONG_SIZE_IN_BYTES * 2); initial.writeBigInt64LE(groupId.seed, 0); initial.writeBigInt64LE(groupId.id, LONG_SIZE_IN_BYTES); msg.add(new CM.Frame(initial)); StringCodec.encode(msg, groupId.name); msg.add(CM.END_FRAME); msg.setFinal(); return msg; }

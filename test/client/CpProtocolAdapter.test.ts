@@ -23,6 +23,8 @@ const AL_GET_AND_ALTER_REQUEST = 0x090800;
 const AL_ALTER_AND_GET_REQUEST = 0x090900;
 const AL_SET_REQUEST = 0x090a00;
 
+const CP_GROUP_CREATE_REQUEST = 0x1e0100;
+const CP_GROUP_DESTROY_REQUEST = 0x1e0200;
 const AR_APPLY_REQUEST = 0x0c0100;
 const AR_ALTER_REQUEST = 0x0c0200;
 const AR_GET_AND_ALTER_REQUEST = 0x0c0300;
@@ -84,6 +86,29 @@ function encodeNullableData(msg: ClientMessage, value: Data | null): void {
 function buildNameRequest(messageType: number, correlationId: number, name: string): ClientMessage {
     const { msg } = createRequest(messageType, correlationId);
     StringCodec.encode(msg, name);
+    msg.setFinal();
+    return msg;
+}
+
+function encodeRaftGroupId(msg: ClientMessage, groupName: string): void {
+    msg.add(ClientMessage.BEGIN_FRAME);
+    msg.add(new ClientMessageFrame(Buffer.alloc(LONG_SIZE_IN_BYTES * 2)));
+    StringCodec.encode(msg, groupName);
+    msg.add(ClientMessage.END_FRAME);
+}
+
+function buildCpGroupCreateRequest(correlationId: number, proxyName: string): ClientMessage {
+    const { msg } = createRequest(CP_GROUP_CREATE_REQUEST, correlationId);
+    StringCodec.encode(msg, proxyName);
+    msg.setFinal();
+    return msg;
+}
+
+function buildCpGroupDestroyRequest(correlationId: number, groupName: string, serviceName: string, objectName: string): ClientMessage {
+    const { msg } = createRequest(CP_GROUP_DESTROY_REQUEST, correlationId);
+    encodeRaftGroupId(msg, groupName);
+    StringCodec.encode(msg, serviceName);
+    StringCodec.encode(msg, objectName);
     msg.setFinal();
     return msg;
 }
@@ -314,6 +339,26 @@ describe('cp protocol adapter', () => {
         } finally {
             ss.destroy();
         }
+    });
+
+    test('dispatches CP group create and destroy through the CP services', async () => {
+        const config = new HeliosConfig('cp-group-protocol');
+        config.getNetworkConfig().setClientProtocolPort(0);
+        const instance = new HeliosInstanceImpl(config);
+        instances.push(instance);
+
+        const dispatcher = (instance as any)._clientProtocolServer.getDispatcher();
+        const session = new TestClientSession('cp-group-protocol') as any;
+
+        const createResponse = (await dispatcher.dispatch(buildCpGroupCreateRequest(1, 'atomic-long@default'), session))!;
+        const iterator = createResponse.forwardFrameIterator();
+        iterator.next();
+        iterator.next();
+        iterator.next();
+        expect(StringCodec.decode(iterator)).toBe('default');
+
+        await dispatcher.dispatch(buildCpGroupDestroyRequest(2, 'default', 'hz:raft:atomicLongService', 'atomic-long'), session);
+        expect(instance.getCPSubsystem().getGroup('default')).not.toBeNull();
     });
 
     test('dispatches count down latch operations through the CP services', async () => {

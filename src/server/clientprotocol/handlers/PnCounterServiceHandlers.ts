@@ -39,7 +39,6 @@ import {
     BOOLEAN_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
 } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { FixedSizeTypesCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
@@ -80,7 +79,7 @@ export function registerPnCounterServiceHandlers(opts: PnCounterServiceHandlersO
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
         const targetReplicaUUID = FixedSizeTypesCodec.decodeUUID(f.content, REQUEST_HEADER_SIZE) ?? '';
-        const name = StringCodec.decode(iter);
+        const name = _decodeStringFrame(iter);
         const replicaTimestamps = _decodeReplicaTimestamps(iter);
 
         const result = await pnCounter.get(name, replicaTimestamps, targetReplicaUUID);
@@ -104,7 +103,7 @@ export function registerPnCounterServiceHandlers(opts: PnCounterServiceHandlersO
         const delta = f.content.readBigInt64LE(REQUEST_HEADER_SIZE);
         const getBeforeUpdate = f.content.readUInt8(REQUEST_HEADER_SIZE + LONG_SIZE_IN_BYTES) !== 0;
         const targetReplicaUUID = FixedSizeTypesCodec.decodeUUID(f.content, REQUEST_HEADER_SIZE + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES) ?? '';
-        const name = StringCodec.decode(iter);
+        const name = _decodeStringFrame(iter);
         const replicaTimestamps = _decodeReplicaTimestamps(iter);
 
         const result = await pnCounter.add(name, delta, getBeforeUpdate, replicaTimestamps, targetReplicaUUID);
@@ -123,7 +122,7 @@ export function registerPnCounterServiceHandlers(opts: PnCounterServiceHandlersO
     dispatcher.register(PN_GET_CONFIGURED_REPLICA_COUNT_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator();
         iter.next(); // skip initial frame
-        const name = StringCodec.decode(iter);
+        const name = _decodeStringFrame(iter);
 
         const count = await pnCounter.getConfiguredReplicaCount(name);
         return _intResponse(PN_GET_CONFIGURED_REPLICA_COUNT_RESPONSE, count);
@@ -143,27 +142,28 @@ function _decodeReplicaTimestamps(
     iter: CM.ForwardFrameIterator,
 ): Array<[string, bigint]> {
     const result: Array<[string, bigint]> = [];
-    // The list is framed by BEGIN_DATA_STRUCTURE / END_DATA_STRUCTURE flags.
-    // Skip the begin frame.
     if (!iter.hasNext()) return result;
-    let frame = iter.next();
-    if ((frame.flags & CM.BEGIN_DATA_STRUCTURE_FLAG) === 0) {
-        // No list framing; frame contains inline data — treat as empty
+    const frame = iter.next();
+    if (frame.content.length === 0) {
         return result;
     }
 
-    while (iter.hasNext()) {
-        frame = iter.next();
-        if ((frame.flags & CM.END_DATA_STRUCTURE_FLAG) !== 0) break;
-        // Each entry: UUID string (16 bytes or as a string frame)
-        const memberUUID = frame.content.toString('utf8');
-        if (!iter.hasNext()) break;
-        const tsFrame = iter.next();
-        if ((tsFrame.flags & CM.END_DATA_STRUCTURE_FLAG) !== 0) break;
-        const timestamp = tsFrame.content.readBigInt64LE(0);
-        result.push([memberUUID, timestamp]);
+    const entrySize = UUID_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    const entryCount = Math.floor(frame.content.length / entrySize);
+    for (let index = 0; index < entryCount; index++) {
+        const offset = index * entrySize;
+        const memberUUID = FixedSizeTypesCodec.decodeUUID(frame.content, offset);
+        const timestamp = FixedSizeTypesCodec.decodeLong(frame.content, offset + UUID_SIZE_IN_BYTES);
+        if (memberUUID !== null) {
+            result.push([memberUUID, BigInt(timestamp.toString())]);
+        }
     }
     return result;
+}
+
+function _decodeStringFrame(iter: CM.ForwardFrameIterator): string {
+    const frame = iter.next();
+    return frame.content.toString('utf8');
 }
 
 /**
@@ -185,16 +185,16 @@ function _pnValueResponse(
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
 
-    // replicaTimestamps list
-    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
-    for (const [memberUUID, timestamp] of replicaTimestamps) {
-        const uuidBuf = Buffer.from(memberUUID, 'utf8');
-        msg.add(new CM.Frame(uuidBuf));
-        const tsBuf = Buffer.allocUnsafe(LONG_SIZE_IN_BYTES);
-        tsBuf.writeBigInt64LE(timestamp);
-        msg.add(new CM.Frame(tsBuf));
+    const entrySize = UUID_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
+    const entries = Buffer.allocUnsafe(replicaTimestamps.length * entrySize);
+    entries.fill(0);
+    for (let index = 0; index < replicaTimestamps.length; index++) {
+        const [memberUUID, timestamp] = replicaTimestamps[index];
+        const offset = index * entrySize;
+        FixedSizeTypesCodec.encodeUUID(entries, offset, memberUUID);
+        FixedSizeTypesCodec.encodeLong(entries, offset + UUID_SIZE_IN_BYTES, timestamp);
     }
-    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    msg.add(new CM.Frame(entries));
 
     msg.setFinal();
     return msg;

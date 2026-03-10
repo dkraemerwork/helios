@@ -2971,6 +2971,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._getOrCreateSemaphoreService().tryAcquire(name, permits, this._toOptionalTimeoutMs(timeoutMs), this._toOptionalCpSessionId(sessionId), invocationUuid),
     };
 
+    const cpGroupOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CpGroupOperations = {
+      createCPGroup: async (proxyName) => this._createClientCpGroup(proxyName),
+      destroyCPObject: async (groupName, serviceName, objectName) => {
+        this._destroyClientCpObject(groupName, serviceName, objectName);
+      },
+    };
+
     const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
       newIdBatch: async (name, batchSize) => this._getOrCreateFlakeIdGeneratorService().newBatch(name, batchSize),
     };
@@ -3054,6 +3061,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       transaction: transactionOps,
       sql: sqlOps,
       executor: executorOps,
+      cpGroup: cpGroupOps,
       atomicLong: atomicLongOps,
       atomicRef: atomicRefOps,
       countDownLatch: countDownLatchOps,
@@ -3144,7 +3152,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   private _getOrCreatePnCounterService(): PNCounterService {
     if (this._pnCounterService === null) {
-      this._pnCounterService = new PNCounterService(this.getLocalMemberId());
+      this._pnCounterService = new PNCounterService(this._getClientProtocolReplicaId());
       this._nodeEngine.registerService(PNCounterService.SERVICE_NAME, this._pnCounterService);
     }
     return this._pnCounterService;
@@ -3179,6 +3187,32 @@ export class HeliosInstanceImpl implements HeliosInstance {
       hash = ((hash * 31) + value.charCodeAt(i)) | 0;
     }
     return hash >>> 0;
+  }
+
+  private _getClientProtocolReplicaId(): string {
+    const memberId = this.getLocalMemberId();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberId)) {
+      return memberId;
+    }
+
+    const hex = this._computeStableUuidHex(memberId);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  }
+
+  private _computeStableUuidHex(value: string): string {
+    let hi = 0x811c9dc5;
+    let lo = 0x01000193;
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      hi = Math.imul(hi ^ code, 16777619) >>> 0;
+      lo = Math.imul(lo ^ ((code << 8) | code), 16777619) >>> 0;
+    }
+
+    const part1 = hi.toString(16).padStart(8, '0');
+    const part2 = lo.toString(16).padStart(8, '0');
+    const part3 = (hi ^ lo).toString(16).padStart(8, '0');
+    const part4 = Math.imul(hi, 31).toString(16).padStart(8, '0');
+    return `${part1}${part2}${part3}${part4}`.slice(0, 32);
   }
 
   private _getOrCreateAtomicLongService(): AtomicLongService {
@@ -3283,6 +3317,39 @@ export class HeliosInstanceImpl implements HeliosInstance {
       }
     }
     throw new Error('AtomicReference function payload is not a supported callable descriptor');
+  }
+
+  private _createClientCpGroup(proxyName: string): { name: string; seed: bigint; id: bigint } {
+    const normalizedName = proxyName.trim();
+    const separatorIndex = normalizedName.indexOf('@');
+    const groupName = separatorIndex >= 0 ? normalizedName.slice(separatorIndex + 1).trim() : 'default';
+    const effectiveGroupName = groupName.length > 0 ? groupName : 'default';
+    this._getOrCreateCpSubsystemService().getOrCreateGroup(effectiveGroupName);
+    return {
+      name: effectiveGroupName,
+      seed: 0n,
+      id: 0n,
+    };
+  }
+
+  private _destroyClientCpObject(groupName: string, serviceName: string, objectName: string): void {
+    const effectiveGroupName = groupName.length > 0 ? groupName : 'default';
+    switch (serviceName) {
+      case 'hz:raft:atomicLongService':
+        this._getOrCreateAtomicLongService().destroy(objectName);
+        return;
+      case 'hz:raft:atomicRefService':
+        this._getOrCreateAtomicReferenceService().destroy(objectName);
+        return;
+      case 'hz:raft:countDownLatchService':
+        this._getOrCreateCountDownLatchService().destroy(objectName);
+        return;
+      case 'hz:raft:semaphoreService':
+        this._getOrCreateSemaphoreService().destroy(objectName);
+        return;
+      default:
+        this._getOrCreateCpSubsystemService().destroyGroup(effectiveGroupName);
+    }
   }
 
   private _clientSqlQueryKey(queryId: ClientSqlQueryId): string {

@@ -366,6 +366,11 @@ export interface SemaphoreOperations {
     tryAcquire(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string, permits: number, timeoutMs: bigint): Promise<boolean>;
 }
 
+export interface CpGroupOperations {
+    createCPGroup(proxyName: string): Promise<{ name: string; seed: bigint; id: bigint }>;
+    destroyCPObject(groupName: string, serviceName: string, objectName: string): Promise<void>;
+}
+
 // ── FlakeIdGenerator ──────────────────────────────────────────────────────────
 
 export interface FlakeIdGeneratorOperations {

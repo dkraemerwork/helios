@@ -86,7 +86,7 @@ export function registerExecutorServiceHandlers(
     dispatcher.register(EXEC_CANCEL_ON_MEMBER_REQUEST, async (msg, _s) => {
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
-        const interrupt = f.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
+        const interrupt = f.content.readUInt8(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES - BOOLEAN_SIZE_IN_BYTES) !== 0;
         const uuid = StringCodec.decode(iter);
         const memberUuid = StringCodec.decode(iter);
         return _bool(EXEC_CANCEL_ON_MEMBER_RESPONSE, await operations.cancelOnMember(uuid, memberUuid, interrupt));
