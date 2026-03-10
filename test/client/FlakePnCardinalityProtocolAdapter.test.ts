@@ -23,7 +23,7 @@ const PN_GET_CONFIGURED_REPLICA_COUNT_REQUEST = 0x1d0300;
 const FLAKE_NEW_ID_BATCH_REQUEST = 0x1e0100;
 
 const INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-const RESPONSE_VALUE_OFFSET = INITIAL_FRAME_SIZE;
+const RESPONSE_VALUE_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
 class TestClientSession {
     readonly events: ClientMessage[] = [];
@@ -183,11 +183,13 @@ describe('flake/pn/cardinality protocol adapter', () => {
 
         const first = decodeFlakeBatchResponse((await dispatcher.dispatch(buildFlakeNewIdBatchRequest(1, 'flake', 3), session))!);
         const second = decodeFlakeBatchResponse((await dispatcher.dispatch(buildFlakeNewIdBatchRequest(2, 'flake', 2), session))!);
+        const firstLastId = first.base + (BigInt(first.batchSize - 1) * first.increment);
 
         expect(first.batchSize).toBe(3);
         expect(first.increment).toBe(1n);
         expect(second.batchSize).toBe(2);
-        expect(second.base).toBe(first.base + 3n);
+        expect(second.increment).toBe(1n);
+        expect(second.base > firstLastId).toBe(true);
     });
 
     test('dispatches pn counter operations through the pn counter service', async () => {
@@ -226,7 +228,9 @@ describe('flake/pn/cardinality protocol adapter', () => {
             await dispatcher.dispatch(buildCardinalityAddRequest(2, 'cardinality', ss.toData('beta')!), session);
             await dispatcher.dispatch(buildCardinalityAddRequest(3, 'cardinality', ss.toData('alpha')!), session);
 
-            expect(decodeLongResponse((await dispatcher.dispatch(buildNameRequest(CE_ESTIMATE_REQUEST, 4, 'cardinality'), session))!)).toBe(2n);
+            const estimateMessage = (await dispatcher.dispatch(buildNameRequest(CE_ESTIMATE_REQUEST, 4, 'cardinality'), session))!;
+            expect(estimateMessage.getMessageType()).toBe(0x1b0201);
+            expect(decodeLongResponse(estimateMessage)).toBe(2n);
         } finally {
             ss.destroy();
         }

@@ -47,6 +47,10 @@ function decodeBooleanResponse(message: ClientMessage): boolean {
     return message.getStartFrame().content.readUInt8(16) !== 0;
 }
 
+function decodeQueueBooleanResponse(message: ClientMessage): boolean {
+    return message.getStartFrame().content.readUInt8(ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1) !== 0;
+}
+
 describe('client protocol adapter chunk 1', () => {
     const instances: HeliosInstanceImpl[] = [];
 
@@ -203,9 +207,9 @@ describe('client protocol adapter chunk 1', () => {
             expect(removedEvent.eventType).toBe(2);
             expect(removedEvent.uuid).toBe(memberUuid);
 
-            const removeRequest = buildStringRequest(0x031400, 22, registrationId);
+            const removeRequest = buildStringRequest(0x031200, 22, registrationId);
             const removeResponse = await dispatcher.dispatch(removeRequest, session);
-            expect(decodeBooleanResponse(removeResponse!)).toBe(true);
+            expect(decodeQueueBooleanResponse(removeResponse!)).toBe(true);
 
             session.events.length = 0;
             const secondOfferRequest = QueueOfferCodec.encodeRequest('listener-queue', ss.toData('q2')!, 0n);

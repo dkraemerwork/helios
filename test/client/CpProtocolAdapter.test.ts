@@ -49,7 +49,7 @@ const SEM_TRY_ACQUIRE_REQUEST = 0x1f0600;
 const SEM_INIT_REQUEST = 0x1f0700;
 
 const INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-const RESPONSE_VALUE_OFFSET = INITIAL_FRAME_SIZE;
+const RESPONSE_VALUE_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
 class TestClientSession {
     readonly events: ClientMessage[] = [];

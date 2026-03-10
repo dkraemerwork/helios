@@ -18,11 +18,12 @@
  *   Queue.DrainToWithMaxSize (0x030d00)
  *   Queue.Iterator           (0x030e00)
  *   Queue.IsEmpty            (0x030f00)
- *   Queue.Take               (0x031000)
- *   Queue.Put                (0x031100)
- *   Queue.RemainingCapacity  (0x031200)
- *   Queue.AddListener        (0x031300)
- *   Queue.RemoveListener     (0x031400)
+ *   Queue.Take               (0x030600)
+ *   Queue.Put                (0x030200)
+ *   Queue.RemainingCapacity  (0x031300)
+ *   Queue.AddListener        (0x031100)
+ *   Queue.RemoveListener     (0x031200)
+ *   Queue.IsEmpty            (0x031400)
  */
 
 import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';

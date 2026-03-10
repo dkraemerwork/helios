@@ -24,10 +24,10 @@ import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/bui
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
-const FLAKE_NEW_ID_BATCH_REQUEST  = 0x1c0100;
-const FLAKE_NEW_ID_BATCH_RESPONSE = 0x1c0101;
+const FLAKE_NEW_ID_BATCH_REQUEST  = 0x1e0100;
+const FLAKE_NEW_ID_BATCH_RESPONSE = 0x1e0101;
 
-// Response header size: messageType(4) + correlationId(8)
+// Response fixed fields start after type(4) + correlationId(8) + backupAcks(1).
 const REQUEST_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + 1;
 

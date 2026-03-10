@@ -34,8 +34,8 @@ const CE_ADD_RESPONSE     = 0x1b0101;
 const CE_ESTIMATE_REQUEST  = 0x1b0200;
 const CE_ESTIMATE_RESPONSE = 0x1b0201;
 
-// Response header size: messageType(4) + correlationId(8)
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+// Response fixed fields start after type(4) + correlationId(8) + backupAcks(1).
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + 1;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 

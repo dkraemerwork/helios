@@ -121,9 +121,9 @@ function _decodeCpProxyName(iter: CM.ForwardFrameIterator): string {
         throw new Error('Missing CP group frame');
     }
 
-    const beginFrame = iter.next();
-    if ((beginFrame.flags & CM.BEGIN_DATA_STRUCTURE_FLAG) === 0) {
-        return StringCodec.decode(iter);
+    const firstFrame = iter.next();
+    if ((firstFrame.flags & CM.BEGIN_DATA_STRUCTURE_FLAG) === 0) {
+        return firstFrame.content.toString('utf8');
     }
 
     if (!iter.hasNext()) {
