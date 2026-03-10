@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@zenystx/helios-blitz": "file:../../packages/blitz",
-    "@zenystx/helios-core": "file:../..",
+    "@zenystx/helios-core": "link:../..",
     "@zenystx/helios-dynamodb": "file:../../packages/dynamodb",
     "@zenystx/helios-management-center": "file:../../packages/management-center",
     "@zenystx/helios-mongodb": "file:../../packages/mongodb",
