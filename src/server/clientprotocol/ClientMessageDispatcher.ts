@@ -3,7 +3,7 @@
  *
  * Port of Hazelcast {@code CompositeMessageTaskFactory} + execution routing.
  */
-import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
+import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
 
 export class ClientAuthenticationRequiredError extends Error {
@@ -83,6 +83,10 @@ function selectHandler(type: number, msg: ClientMessage, handlers: ClientMessage
         return handlers[handlers.length - 1]!;
     }
 
+    if (isTransactionSetOverlap(type, msg)) {
+        return handlers[handlers.length - 1]!;
+    }
+
     return handlers[0]!;
 }
 
@@ -95,6 +99,14 @@ function isCpAtomicRefOverlap(type: number, msg: ClientMessage): boolean {
     iterator.next();
     const nextFrame = iterator.peekNext();
     return nextFrame !== null && nextFrame.isBeginFrame();
+}
+
+function isTransactionSetOverlap(type: number, msg: ClientMessage): boolean {
+    if (type !== 0x170100 && type !== 0x170200 && type !== 0x170300) {
+        return false;
+    }
+
+    return msg.getStartFrame().content.length > ClientMessage.PARTITION_ID_FIELD_OFFSET + 4;
 }
 
 function isClientRequestMessageType(messageType: number): boolean {
