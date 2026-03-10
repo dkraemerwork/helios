@@ -208,6 +208,7 @@ export interface QueueRequestMsg {
   readonly sourceNodeId: string;
   readonly queueName: string;
   readonly operation: string;
+  readonly txnDedupeId?: string;
   readonly timeoutMs?: number;
   readonly data?: EncodedData;
   readonly dataList?: EncodedData[];
@@ -241,6 +242,7 @@ export interface QueueStateSyncMsg {
   readonly nextItemId: number;
   readonly items: QueueStateItemMsg[];
   readonly ownerNodeId: string;
+  readonly appliedTxnOpIds: string[];
   readonly counters: {
     readonly offerOperationCount: number;
     readonly rejectedOfferOperationCount: number;
@@ -342,6 +344,7 @@ export interface ListRequestMsg {
   readonly sourceNodeId: string;
   readonly listName: string;
   readonly operation: string;
+  readonly txnDedupeId?: string;
   readonly index?: number;
   readonly fromIndex?: number;
   readonly toIndex?: number;
@@ -368,6 +371,7 @@ export interface ListStateSyncMsg {
   readonly listName: string;
   readonly version: number;
   readonly items: EncodedData[];
+  readonly appliedTxnOpIds: string[];
 }
 
 export interface ListStateAckMsg {
@@ -393,6 +397,7 @@ export interface SetRequestMsg {
   readonly sourceNodeId: string;
   readonly setName: string;
   readonly operation: string;
+  readonly txnDedupeId?: string;
   readonly data?: EncodedData;
   readonly dataList?: EncodedData[];
 }
@@ -415,6 +420,7 @@ export interface SetStateSyncMsg {
   readonly setName: string;
   readonly version: number;
   readonly items: EncodedData[];
+  readonly appliedTxnOpIds: string[];
 }
 
 export interface SetStateAckMsg {
@@ -440,6 +446,7 @@ export interface MultiMapRequestMsg {
   readonly sourceNodeId: string;
   readonly mapName: string;
   readonly operation: string;
+  readonly txnDedupeId?: string;
   readonly keyData?: EncodedData;
   readonly valueData?: EncodedData;
   readonly dataList?: EncodedData[];
@@ -465,6 +472,7 @@ export interface MultiMapStateSyncMsg {
   readonly version: number;
   readonly entries: Array<[EncodedData, EncodedData[]]>;
   readonly valueCollectionType: "SET" | "LIST";
+  readonly appliedTxnOpIds: string[];
 }
 
 export interface MultiMapStateAckMsg {
@@ -566,8 +574,15 @@ export interface BlitzTopologyAnnounceMsg {
 
 export interface TransactionBackupReplicationMsg {
   readonly type: "TXN_BACKUP_REPLICATION";
+  readonly requestId: string | null;
   readonly sourceNodeId: string;
   readonly payload: TransactionBackupMessage;
+}
+
+export interface TransactionBackupReplicationAckMsg {
+  readonly type: "TXN_BACKUP_REPLICATION_ACK";
+  readonly requestId: string;
+  readonly txnId: string;
 }
 
 export type ClusterMessage =
@@ -629,4 +644,5 @@ export type ClusterMessage =
   | BlitzTopologyRequestMsg
   | BlitzTopologyResponseMsg
   | BlitzTopologyAnnounceMsg
-  | TransactionBackupReplicationMsg;
+  | TransactionBackupReplicationMsg
+  | TransactionBackupReplicationAckMsg;

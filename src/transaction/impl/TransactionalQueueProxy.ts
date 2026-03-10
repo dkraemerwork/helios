@@ -22,8 +22,8 @@ type MaybePromise<T> = T | Promise<T>;
 
 /** Delegate queue operations the transaction log record commits/rolls back against. */
 interface QueueBackend<E> {
-    offer(element: E): MaybePromise<boolean>;
-    poll(): MaybePromise<E | null>;
+    offer(element: E, dedupeId?: string): MaybePromise<boolean>;
+    poll(dedupeId?: string): MaybePromise<E | null>;
     peek(): MaybePromise<E | null>;
     size(): MaybePromise<number>;
     toArray(): MaybePromise<E[]>;
@@ -64,12 +64,17 @@ class TransactionalQueueLogRecord<E> implements TransactionLogRecord {
         return this._recordId;
     }
 
+    getRecordId(): string {
+        return this._recordId;
+    }
+
     newPrepareOperation(): Operation {
         return new NoopQueueOperation();
     }
 
     newCommitOperation(): Operation {
         const op = new CommitQueueOperation<E>(
+            this._recordId,
             this._opType,
             this._valueData,
             this._backend,
@@ -84,6 +89,7 @@ class TransactionalQueueLogRecord<E> implements TransactionLogRecord {
 
     toBackupRecord(): TransactionBackupRecord {
         return {
+            recordId: this._recordId,
             kind: 'queue',
             queueName: this._recordId.split(':', 2)[0],
             opType: this._opType,
@@ -96,18 +102,21 @@ class TransactionalQueueLogRecord<E> implements TransactionLogRecord {
 }
 
 class CommitQueueOperation<E> extends Operation {
+    private readonly _recordId: string;
     private readonly _qOpType: QueueOpType;
     private readonly _qValueData: Data | null;
     private readonly _qBackend: QueueBackend<E>;
     private readonly _qNodeEngine: NodeEngine;
 
     constructor(
+        recordId: string,
         opType: QueueOpType,
         valueData: Data | null,
         backend: QueueBackend<E>,
         nodeEngine: NodeEngine,
     ) {
         super();
+        this._recordId = recordId;
         this._qOpType = opType;
         this._qValueData = valueData;
         this._qBackend = backend;
@@ -118,11 +127,11 @@ class CommitQueueOperation<E> extends Operation {
         switch (this._qOpType) {
             case 'offer':
                 if (this._qValueData !== null) {
-                    await this._qBackend.offer(this._qValueData as unknown as E);
+                    await this._qBackend.offer(this._qValueData as unknown as E, this._recordId);
                 }
                 break;
             case 'poll':
-                await this._qBackend.poll();
+                await this._qBackend.poll(this._recordId);
                 break;
         }
         this.sendResponse(null);

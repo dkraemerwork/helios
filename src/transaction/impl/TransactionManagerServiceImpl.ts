@@ -15,10 +15,14 @@ import { TransactionException } from '@zenystx/helios-core/transaction/Transacti
 
 export const SERVICE_NAME = 'hz:core:txManagerService';
 
+const RECOVERED_TXN_CACHE_LIMIT = 4_096;
+const APPLIED_RECORD_CACHE_LIMIT = 16_384;
+
 export interface TransactionBackupTransport {
     readonly localMemberId: string;
     getBackupMemberIds(count: number): string[];
-    replicate(message: TransactionBackupMessage, targets: readonly string[]): Promise<void>;
+    validateBackupMembers(targets: readonly string[]): Promise<string[]>;
+    replicate(message: TransactionBackupMessage, targets: readonly string[]): Promise<string[]>;
 }
 
 export interface TransactionBackupExecutor {
@@ -34,6 +38,7 @@ export type TransactionBackupMessage =
         readonly timeoutMillis: number;
         readonly startTime: number;
         readonly allowedDuringPassiveState: boolean;
+        readonly backupMemberIds: readonly string[];
     }
     | {
         readonly type: 'TXN_PREPARE';
@@ -43,12 +48,18 @@ export type TransactionBackupMessage =
         readonly timeoutMillis: number;
         readonly startTime: number;
         readonly allowedDuringPassiveState: boolean;
+        readonly backupMemberIds: readonly string[];
         readonly records: TransactionBackupRecord[];
     }
     | {
         readonly type: 'TXN_STATE';
         readonly txnId: string;
         readonly state: State.COMMITTING | State.COMMITTED | State.ROLLING_BACK | State.ROLLED_BACK | State.COMMIT_FAILED;
+    }
+    | {
+        readonly type: 'TXN_RECOVERED';
+        readonly txnId: string;
+        readonly recoveryMemberId: string;
     }
     | {
         readonly type: 'TXN_PURGE';
@@ -60,6 +71,8 @@ export type TransactionBackupMessage =
  */
 export class TxBackupLog {
     state: State;
+    recoveryOwnerMemberId: string | null;
+    recovered: boolean;
 
     constructor(
         public readonly records: TransactionBackupRecord[],
@@ -69,8 +82,11 @@ export class TxBackupLog {
         public readonly timeoutMillis: number,
         public readonly startTime: number,
         public readonly allowedDuringPassiveState: boolean,
+        public readonly backupMemberIds: readonly string[] = [],
     ) {
         this.state = initialState;
+        this.recoveryOwnerMemberId = null;
+        this.recovered = false;
     }
 
     toString(): string {
@@ -91,6 +107,10 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
     private _backupTransport: TransactionBackupTransport | null;
     private _backupExecutor: TransactionBackupExecutor | null;
     private readonly _pendingBackupTargets = new Map<string, string[]>();
+    private readonly _recoveredTxnIds: string[] = [];
+    private readonly _recoveredTxnIdSet = new Set<string>();
+    private readonly _appliedRecordIds: string[] = [];
+    private readonly _appliedRecordIdSet = new Set<string>();
 
     constructor(
         nodeEngine: NodeEngine,
@@ -117,12 +137,21 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
         return this._backupTransport.getBackupMemberIds(durability);
     }
 
-    rememberBackupTargets(txnId: string, targets: readonly string[]): void {
+    async rememberBackupTargets(txnId: string, targets: readonly string[]): Promise<void> {
         if (targets.length === 0) {
             this._pendingBackupTargets.delete(txnId);
             return;
         }
-        this._pendingBackupTargets.set(txnId, [...targets]);
+        if (this._backupTransport === null) {
+            throw new TransactionException('Transaction durability requires configured backup transport');
+        }
+        const validatedTargets = await this._backupTransport.validateBackupMembers(targets);
+        if (validatedTargets.length !== targets.length) {
+            throw new TransactionException(
+                `Transaction durability requires ${targets.length} confirmed backups but only ${validatedTargets.length} are available`,
+            );
+        }
+        this._pendingBackupTargets.set(txnId, [...validatedTargets]);
     }
 
     getClusterName(): string {
@@ -142,6 +171,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             throw new TransactionException('TxLog already exists!');
         }
         this.txBackupLogs.set(txnId, log);
+        const backupMemberIds = this._pendingBackupTargets.get(txnId) ?? [];
         await this._replicateToPreparedTargets(txnId, {
             type: 'TXN_BEGIN',
             txnId,
@@ -150,6 +180,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             timeoutMillis,
             startTime,
             allowedDuringPassiveState,
+            backupMemberIds,
         });
     }
 
@@ -179,6 +210,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             timeoutMillis,
             startTime,
             beginLog.allowedDuringPassiveState,
+            beginLog.backupMemberIds,
         );
         this.txBackupLogs.set(txnId, newLog);
         await this._replicateToPreparedTargets(txnId, {
@@ -189,6 +221,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
             timeoutMillis,
             startTime,
             allowedDuringPassiveState: beginLog.allowedDuringPassiveState,
+            backupMemberIds: beginLog.backupMemberIds,
             records,
         });
     }
@@ -247,6 +280,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                         message.timeoutMillis,
                         message.startTime,
                         message.allowedDuringPassiveState,
+                        message.backupMemberIds,
                     ),
                 );
                 return;
@@ -261,6 +295,7 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                         message.timeoutMillis,
                         message.startTime,
                         message.allowedDuringPassiveState,
+                        message.backupMemberIds,
                     ),
                 );
                 return;
@@ -271,8 +306,18 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                 }
                 return;
             }
+            case 'TXN_RECOVERED': {
+                const existing = this.txBackupLogs.get(message.txnId);
+                if (existing !== undefined) {
+                    existing.recovered = true;
+                    existing.recoveryOwnerMemberId = message.recoveryMemberId;
+                }
+                this._rememberRecoveredTxn(message.txnId);
+                return;
+            }
             case 'TXN_PURGE':
                 this.txBackupLogs.delete(message.txnId);
+                this._pendingBackupTargets.delete(message.txnId);
                 return;
         }
     }
@@ -292,10 +337,37 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
                 continue;
             }
 
+            if (log.state === State.COMMITTED || log.state === State.ROLLED_BACK || log.state === State.COMMIT_FAILED) {
+                this.txBackupLogs.delete(txnId);
+                this._pendingBackupTargets.delete(txnId);
+                continue;
+            }
+
+            if (this._recoveredTxnIdSet.has(txnId) && !log.recovered) {
+                log.recovered = true;
+            }
+
+            if (log.recovered && log.recoveryOwnerMemberId !== this._backupTransport?.localMemberId) {
+                continue;
+            }
+
             if (log.state === State.PREPARED || log.state === State.COMMITTING) {
+                const localMemberId = this._backupTransport?.localMemberId ?? 'local';
+                await this._replicateToPreparedTargets(txnId, {
+                    type: 'TXN_RECOVERED',
+                    txnId,
+                    recoveryMemberId: localMemberId,
+                });
+                log.recovered = true;
+                log.recoveryOwnerMemberId = localMemberId;
                 for (const record of log.records) {
+                    if (this._appliedRecordIdSet.has(record.recordId)) {
+                        continue;
+                    }
                     await this._backupExecutor.commitRecord(record);
+                    this._rememberAppliedRecord(record.recordId);
                 }
+                this._rememberRecoveredTxn(txnId);
                 recovered++;
             }
 
@@ -309,6 +381,10 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
     reset(): void {
         this.txBackupLogs.clear();
         this._pendingBackupTargets.clear();
+        this._recoveredTxnIds.length = 0;
+        this._recoveredTxnIdSet.clear();
+        this._appliedRecordIds.length = 0;
+        this._appliedRecordIdSet.clear();
     }
 
     shutdown(_terminate: boolean): void {
@@ -334,11 +410,45 @@ export class TransactionManagerServiceImpl implements TransactionManagerServiceL
     }
 
     private async _replicateToPreparedTargets(txnId: string, message: TransactionBackupMessage): Promise<void> {
-        const targets = this._pendingBackupTargets.get(txnId) ?? [];
+        const logTargets = this.txBackupLogs.get(txnId)?.backupMemberIds ?? [];
+        const targets = logTargets.length > 0 ? [...logTargets] : (this._pendingBackupTargets.get(txnId) ?? []);
         if (targets.length === 0 || this._backupTransport === null) {
             return;
         }
-        await this._backupTransport.replicate(message, targets);
+        const acknowledgedTargets = await this._backupTransport.replicate(message, targets);
+        if (acknowledgedTargets.length !== targets.length) {
+            throw new TransactionException(
+                `Transaction durability replication incomplete for ${txnId}: required=${targets.length}, confirmed=${acknowledgedTargets.length}`,
+            );
+        }
+    }
+
+    private _rememberRecoveredTxn(txnId: string): void {
+        if (this._recoveredTxnIdSet.has(txnId)) {
+            return;
+        }
+        this._recoveredTxnIdSet.add(txnId);
+        this._recoveredTxnIds.push(txnId);
+        while (this._recoveredTxnIds.length > RECOVERED_TXN_CACHE_LIMIT) {
+            const oldest = this._recoveredTxnIds.shift();
+            if (oldest !== undefined) {
+                this._recoveredTxnIdSet.delete(oldest);
+            }
+        }
+    }
+
+    private _rememberAppliedRecord(recordId: string): void {
+        if (this._appliedRecordIdSet.has(recordId)) {
+            return;
+        }
+        this._appliedRecordIdSet.add(recordId);
+        this._appliedRecordIds.push(recordId);
+        while (this._appliedRecordIds.length > APPLIED_RECORD_CACHE_LIMIT) {
+            const oldest = this._appliedRecordIds.shift();
+            if (oldest !== undefined) {
+                this._appliedRecordIdSet.delete(oldest);
+            }
+        }
     }
 }
 
@@ -351,4 +461,20 @@ export function encodeMaybeData(data: { toByteArray(): Buffer | null } | null): 
         throw new TransactionException('Cannot encode null transaction data');
     }
     return { bytes: Buffer.from(bytes) };
+}
+
+export function snapshotTxBackupLog(log: TxBackupLog): TxBackupLog {
+    const copy = new TxBackupLog(
+        [...log.records],
+        log.coordinatorMemberId,
+        log.callerUuid,
+        log.state,
+        log.timeoutMillis,
+        log.startTime,
+        log.allowedDuringPassiveState,
+        log.backupMemberIds,
+    );
+    copy.recovered = log.recovered;
+    copy.recoveryOwnerMemberId = log.recoveryOwnerMemberId;
+    return copy;
 }

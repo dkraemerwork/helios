@@ -58,6 +58,10 @@ class TransactionalMapLogRecord implements TransactionLogRecord {
         this._containerService = containerService;
     }
 
+    getRecordId(): string {
+        return this.getKey() as string;
+    }
+
     getKey(): unknown {
         // Use a composite key so operations on the same map+key overwrite each other
         return `${this._mapName}:${this._entry.key.toByteArray()?.join(',')}`;
@@ -90,6 +94,7 @@ class TransactionalMapLogRecord implements TransactionLogRecord {
 
     toBackupRecord(): TransactionBackupRecord {
         return {
+            recordId: this.getRecordId(),
             kind: 'map',
             mapName: this._mapName,
             partitionId: this._partitionId,

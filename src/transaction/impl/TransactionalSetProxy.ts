@@ -20,8 +20,8 @@ type SetOpType = 'add' | 'remove';
 type MaybePromise<T> = T | Promise<T>;
 
 interface SetBackend<E> {
-    add(element: E): MaybePromise<boolean>;
-    remove(element: E): MaybePromise<boolean>;
+    add(element: E, dedupeId?: string): MaybePromise<boolean>;
+    remove(element: E, dedupeId?: string): MaybePromise<boolean>;
     size(): MaybePromise<number>;
     contains(element: E): MaybePromise<boolean>;
 }
@@ -31,13 +31,15 @@ class NoopSetOperation extends Operation {
 }
 
 class CommitSetOperation<E> extends Operation {
+    private readonly _recordId: string;
     private readonly _sOpType: SetOpType;
     private readonly _sValueData: Data;
     private readonly _sBackend: SetBackend<E>;
     private readonly _sNodeEngine: NodeEngine;
 
-    constructor(opType: SetOpType, valueData: Data, backend: SetBackend<E>, nodeEngine: NodeEngine) {
+    constructor(recordId: string, opType: SetOpType, valueData: Data, backend: SetBackend<E>, nodeEngine: NodeEngine) {
         super();
+        this._recordId = recordId;
         this._sOpType = opType;
         this._sValueData = valueData;
         this._sBackend = backend;
@@ -47,8 +49,8 @@ class CommitSetOperation<E> extends Operation {
     async run(): Promise<void> {
         const value = this._sValueData as unknown as E;
         switch (this._sOpType) {
-            case 'add': await this._sBackend.add(value); break;
-            case 'remove': await this._sBackend.remove(value); break;
+            case 'add': await this._sBackend.add(value, this._recordId); break;
+            case 'remove': await this._sBackend.remove(value, this._recordId); break;
         }
         this.sendResponse(null);
     }
@@ -70,13 +72,15 @@ class TransactionalSetLogRecord<E> implements TransactionLogRecord {
     }
 
     getKey(): unknown { return this._recordId; }
+    getRecordId(): string { return this._recordId; }
     newPrepareOperation(): Operation { return new NoopSetOperation(); }
     newCommitOperation(): Operation {
-        return new CommitSetOperation(this._opType, this._valueData, this._backend, this._nodeEngine);
+        return new CommitSetOperation(this._recordId, this._opType, this._valueData, this._backend, this._nodeEngine);
     }
     newRollbackOperation(): Operation { return new NoopSetOperation(); }
     toBackupRecord(): TransactionBackupRecord {
         return {
+            recordId: this._recordId,
             kind: 'set',
             setName: this._recordId.split(':', 2)[0],
             opType: this._opType,

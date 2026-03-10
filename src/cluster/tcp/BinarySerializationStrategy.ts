@@ -105,6 +105,7 @@ const MESSAGE_TYPE_TO_ID = {
     REPLICATED_MAP_STATE_SYNC: 57,
     REPLICATED_MAP_STATE_ACK: 58,
     TXN_BACKUP_REPLICATION: 59,
+    TXN_BACKUP_REPLICATION_ACK: 60,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -255,6 +256,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.sourceNodeId);
                 out.writeString(message.queueName);
                 out.writeString(message.operation);
+                out.writeString(message.txnDedupeId ?? null);
                 out.writeLong(BigInt(message.timeoutMs ?? -1));
                 writeOptionalEncodedData(out, message.data ?? null);
                 writeEncodedDataArray(out, message.dataList ?? []);
@@ -337,6 +339,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.sourceNodeId);
                 out.writeString(message.listName);
                 out.writeString(message.operation);
+                out.writeString(message.txnDedupeId ?? null);
                 out.writeInt(message.index ?? -1);
                 out.writeInt(message.fromIndex ?? -1);
                 out.writeInt(message.toIndex ?? -1);
@@ -362,6 +365,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.sourceNodeId);
                 out.writeString(message.setName);
                 out.writeString(message.operation);
+                out.writeString(message.txnDedupeId ?? null);
                 writeOptionalEncodedData(out, message.data ?? null);
                 writeEncodedDataArray(out, message.dataList ?? null);
                 return;
@@ -384,6 +388,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.sourceNodeId);
                 out.writeString(message.mapName);
                 out.writeString(message.operation);
+                out.writeString(message.txnDedupeId ?? null);
                 writeOptionalEncodedData(out, message.keyData ?? null);
                 writeOptionalEncodedData(out, message.valueData ?? null);
                 writeEncodedDataArray(out, message.dataList ?? null);
@@ -429,8 +434,13 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeLong(BigInt(message.version));
                 return;
             case 'TXN_BACKUP_REPLICATION':
+                out.writeString(message.requestId);
                 out.writeString(message.sourceNodeId);
                 writeTransactionBackupMessage(out, message.payload);
+                return;
+            case 'TXN_BACKUP_REPLICATION_ACK':
+                out.writeString(message.requestId);
+                out.writeString(message.txnId);
                 return;
         }
     }
@@ -549,6 +559,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     sourceNodeId: readRequiredString(inp),
                     queueName: readRequiredString(inp),
                     operation: readRequiredString(inp),
+                    ...( (() => { const txnDedupeId = inp.readString() ?? undefined; return txnDedupeId !== undefined ? { txnDedupeId } : {}; })() ),
                     timeoutMs: readMinusOneAsUndefined(inp),
                     data: readOptionalEncodedData(inp) ?? undefined,
                     dataList: readEncodedDataArray(inp) ?? undefined,
@@ -595,12 +606,13 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 const sourceNodeId = readRequiredString(inp);
                 const listName = readRequiredString(inp);
                 const operation = readRequiredString(inp);
+                const txnDedupeId = inp.readString() ?? undefined;
                 const index = readIntMinusOneAsUndefined(inp);
                 const fromIndex = readIntMinusOneAsUndefined(inp);
                 const toIndex = readIntMinusOneAsUndefined(inp);
                 const data = readOptionalEncodedData(inp) ?? undefined;
                 const dataList = readEncodedDataArray(inp) ?? undefined;
-                return { type: 'LIST_REQUEST', requestId, sourceNodeId, listName, operation, ...(index !== undefined ? { index } : {}), ...(fromIndex !== undefined ? { fromIndex } : {}), ...(toIndex !== undefined ? { toIndex } : {}), ...(data !== undefined ? { data } : {}), ...(dataList !== undefined ? { dataList } : {}) };
+                return { type: 'LIST_REQUEST', requestId, sourceNodeId, listName, operation, ...(txnDedupeId !== undefined ? { txnDedupeId } : {}), ...(index !== undefined ? { index } : {}), ...(fromIndex !== undefined ? { fromIndex } : {}), ...(toIndex !== undefined ? { toIndex } : {}), ...(data !== undefined ? { data } : {}), ...(dataList !== undefined ? { dataList } : {}) };
             }
             case 'LIST_RESPONSE':
                 return readListResponse(inp);
@@ -615,9 +627,10 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 const sourceNodeId = readRequiredString(inp);
                 const setName = readRequiredString(inp);
                 const operation = readRequiredString(inp);
+                const txnDedupeId = inp.readString() ?? undefined;
                 const data = readOptionalEncodedData(inp) ?? undefined;
                 const dataList = readEncodedDataArray(inp) ?? undefined;
-                return { type: 'SET_REQUEST', requestId, sourceNodeId, setName, operation, ...(data !== undefined ? { data } : {}), ...(dataList !== undefined ? { dataList } : {}) };
+                return { type: 'SET_REQUEST', requestId, sourceNodeId, setName, operation, ...(txnDedupeId !== undefined ? { txnDedupeId } : {}), ...(data !== undefined ? { data } : {}), ...(dataList !== undefined ? { dataList } : {}) };
             }
             case 'SET_RESPONSE':
                 return readSetResponse(inp);
@@ -632,10 +645,11 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 const sourceNodeId = readRequiredString(inp);
                 const mapName = readRequiredString(inp);
                 const operation = readRequiredString(inp);
+                const txnDedupeId = inp.readString() ?? undefined;
                 const keyData = readOptionalEncodedData(inp) ?? undefined;
                 const valueData = readOptionalEncodedData(inp) ?? undefined;
                 const dataList = readEncodedDataArray(inp) ?? undefined;
-                return { type: 'MULTIMAP_REQUEST', requestId, sourceNodeId, mapName, operation, ...(keyData !== undefined ? { keyData } : {}), ...(valueData !== undefined ? { valueData } : {}), ...(dataList !== undefined ? { dataList } : {}) };
+                return { type: 'MULTIMAP_REQUEST', requestId, sourceNodeId, mapName, operation, ...(txnDedupeId !== undefined ? { txnDedupeId } : {}), ...(keyData !== undefined ? { keyData } : {}), ...(valueData !== undefined ? { valueData } : {}), ...(dataList !== undefined ? { dataList } : {}) };
             }
             case 'MULTIMAP_RESPONSE':
                 return readMultiMapResponse(inp);
@@ -669,8 +683,15 @@ export class BinarySerializationStrategy implements SerializationStrategy {
             case 'TXN_BACKUP_REPLICATION':
                 return {
                     type: 'TXN_BACKUP_REPLICATION',
+                    requestId: inp.readString() ?? null,
                     sourceNodeId: readRequiredString(inp),
                     payload: readTransactionBackupMessage(inp) as TransactionBackupReplicationMsg['payload'],
+                };
+            case 'TXN_BACKUP_REPLICATION_ACK':
+                return {
+                    type: 'TXN_BACKUP_REPLICATION_ACK',
+                    requestId: readRequiredString(inp),
+                    txnId: readRequiredString(inp),
                 };
         }
     }
@@ -791,6 +812,7 @@ function writeTransactionBackupMessage(out: ByteArrayObjectDataOutput, message: 
             out.writeLong(BigInt(message.timeoutMillis));
             out.writeLong(BigInt(message.startTime));
             out.writeBoolean(message.allowedDuringPassiveState);
+            out.writeStringArray([...message.backupMemberIds]);
             return;
         case 'TXN_PREPARE':
             out.writeString(message.coordinatorMemberId);
@@ -798,10 +820,14 @@ function writeTransactionBackupMessage(out: ByteArrayObjectDataOutput, message: 
             out.writeLong(BigInt(message.timeoutMillis));
             out.writeLong(BigInt(message.startTime));
             out.writeBoolean(message.allowedDuringPassiveState);
+            out.writeStringArray([...message.backupMemberIds]);
             writeTransactionBackupRecords(out, message.records);
             return;
         case 'TXN_STATE':
             out.writeString(message.state);
+            return;
+        case 'TXN_RECOVERED':
+            out.writeString(message.recoveryMemberId);
             return;
         case 'TXN_PURGE':
             return;
@@ -821,6 +847,7 @@ function readTransactionBackupMessage(inp: ByteArrayObjectDataInput): Transactio
                 timeoutMillis: Number(inp.readLong()),
                 startTime: Number(inp.readLong()),
                 allowedDuringPassiveState: inp.readBoolean(),
+                backupMemberIds: inp.readStringArray() ?? [],
             };
         case 'TXN_PREPARE':
             return {
@@ -831,6 +858,7 @@ function readTransactionBackupMessage(inp: ByteArrayObjectDataInput): Transactio
                 timeoutMillis: Number(inp.readLong()),
                 startTime: Number(inp.readLong()),
                 allowedDuringPassiveState: inp.readBoolean(),
+                backupMemberIds: inp.readStringArray() ?? [],
                 records: readTransactionBackupRecords(inp),
             };
         case 'TXN_STATE':
@@ -839,14 +867,22 @@ function readTransactionBackupMessage(inp: ByteArrayObjectDataInput): Transactio
                 txnId,
                 state: readRequiredString(inp) as Extract<TransactionBackupMessage, { type: 'TXN_STATE' }>['state'],
             };
+        case 'TXN_RECOVERED':
+            return {
+                type,
+                txnId,
+                recoveryMemberId: readRequiredString(inp),
+            };
         case 'TXN_PURGE':
             return { type, txnId };
     }
+    throw new Error(`Unsupported transaction backup message type: ${type}`);
 }
 
 function writeTransactionBackupRecords(out: ByteArrayObjectDataOutput, records: readonly TransactionBackupRecord[]): void {
     out.writeInt(records.length);
     for (const record of records) {
+        out.writeString(record.recordId);
         out.writeString(record.kind);
         switch (record.kind) {
             case 'map':
@@ -886,10 +922,12 @@ function readTransactionBackupRecords(inp: ByteArrayObjectDataInput): Transactio
     const count = inp.readInt();
     const records: TransactionBackupRecord[] = new Array(count);
     for (let index = 0; index < count; index++) {
+        const recordId = readRequiredString(inp);
         const kind = readRequiredString(inp) as TransactionBackupRecord['kind'];
         switch (kind) {
             case 'map':
                 records[index] = {
+                    recordId,
                     kind,
                     mapName: readRequiredString(inp),
                     partitionId: inp.readInt(),
@@ -903,6 +941,7 @@ function readTransactionBackupRecords(inp: ByteArrayObjectDataInput): Transactio
                 break;
             case 'queue':
                 records[index] = {
+                    recordId,
                     kind,
                     queueName: readRequiredString(inp),
                     opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'queue' }>['opType'],
@@ -911,6 +950,7 @@ function readTransactionBackupRecords(inp: ByteArrayObjectDataInput): Transactio
                 break;
             case 'list':
                 records[index] = {
+                    recordId,
                     kind,
                     listName: readRequiredString(inp),
                     opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'list' }>['opType'],
@@ -919,6 +959,7 @@ function readTransactionBackupRecords(inp: ByteArrayObjectDataInput): Transactio
                 break;
             case 'set':
                 records[index] = {
+                    recordId,
                     kind,
                     setName: readRequiredString(inp),
                     opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'set' }>['opType'],
@@ -927,6 +968,7 @@ function readTransactionBackupRecords(inp: ByteArrayObjectDataInput): Transactio
                 break;
             case 'multimap':
                 records[index] = {
+                    recordId,
                     kind,
                     mapName: readRequiredString(inp),
                     opType: readRequiredString(inp) as Extract<TransactionBackupRecord, { kind: 'multimap' }>['opType'],
@@ -1059,6 +1101,7 @@ function writeQueueStateSync(out: ByteArrayObjectDataOutput, message: QueueState
         writeEncodedData(out, item.data);
     }
     out.writeString(message.ownerNodeId);
+    out.writeStringArray(message.appliedTxnOpIds);
     out.writeLong(BigInt(message.counters.offerOperationCount));
     out.writeLong(BigInt(message.counters.rejectedOfferOperationCount));
     out.writeLong(BigInt(message.counters.pollOperationCount));
@@ -1087,6 +1130,7 @@ function readQueueStateSync(inp: ByteArrayObjectDataInput): QueueStateSyncMsg {
         nextItemId,
         items,
         ownerNodeId: readRequiredString(inp),
+        appliedTxnOpIds: inp.readStringArray() ?? [],
         counters: {
             offerOperationCount: Number(inp.readLong()),
             rejectedOfferOperationCount: Number(inp.readLong()),
@@ -1501,6 +1545,7 @@ function writeListStateSync(out: ByteArrayObjectDataOutput, message: ListStateSy
     out.writeString(message.listName);
     out.writeLong(BigInt(message.version));
     writeEncodedDataArray(out, message.items);
+    out.writeStringArray(message.appliedTxnOpIds);
 }
 
 function readListStateSync(inp: ByteArrayObjectDataInput): ListStateSyncMsg {
@@ -1511,6 +1556,7 @@ function readListStateSync(inp: ByteArrayObjectDataInput): ListStateSyncMsg {
         listName: readRequiredString(inp),
         version: Number(inp.readLong()),
         items: readEncodedDataArray(inp) ?? [],
+        appliedTxnOpIds: inp.readStringArray() ?? [],
     };
 }
 
@@ -1552,6 +1598,7 @@ function writeSetStateSync(out: ByteArrayObjectDataOutput, message: SetStateSync
     out.writeString(message.setName);
     out.writeLong(BigInt(message.version));
     writeEncodedDataArray(out, message.items);
+    out.writeStringArray(message.appliedTxnOpIds);
 }
 
 function readSetStateSync(inp: ByteArrayObjectDataInput): SetStateSyncMsg {
@@ -1562,6 +1609,7 @@ function readSetStateSync(inp: ByteArrayObjectDataInput): SetStateSyncMsg {
         setName: readRequiredString(inp),
         version: Number(inp.readLong()),
         items: readEncodedDataArray(inp) ?? [],
+        appliedTxnOpIds: inp.readStringArray() ?? [],
     };
 }
 
@@ -1623,6 +1671,7 @@ function writeMultiMapStateSync(out: ByteArrayObjectDataOutput, message: MultiMa
     out.writeString(message.mapName);
     out.writeLong(BigInt(message.version));
     out.writeString(message.valueCollectionType);
+    out.writeStringArray(message.appliedTxnOpIds);
     out.writeInt(message.entries.length);
     for (const [key, values] of message.entries) {
         writeEncodedData(out, key);
@@ -1636,6 +1685,7 @@ function readMultiMapStateSync(inp: ByteArrayObjectDataInput): MultiMapStateSync
     const mapName = readRequiredString(inp);
     const version = Number(inp.readLong());
     const valueCollectionType = readRequiredString(inp) as 'SET' | 'LIST';
+    const appliedTxnOpIds = inp.readStringArray() ?? [];
     const entryCount = inp.readInt();
     const entries: Array<[import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData, import('@zenystx/helios-core/cluster/tcp/DataWireCodec').EncodedData[]]> = new Array(entryCount);
     for (let i = 0; i < entryCount; i++) {
@@ -1643,7 +1693,7 @@ function readMultiMapStateSync(inp: ByteArrayObjectDataInput): MultiMapStateSync
         const values = readEncodedDataArray(inp) ?? [];
         entries[i] = [key, values];
     }
-    return { type: 'MULTIMAP_STATE_SYNC', requestId, sourceNodeId, mapName, version, valueCollectionType, entries };
+    return { type: 'MULTIMAP_STATE_SYNC', requestId, sourceNodeId, mapName, version, valueCollectionType, appliedTxnOpIds, entries };
 }
 
 // ── ReplicatedMap helpers ─────────────────────────────────────────────

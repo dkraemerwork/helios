@@ -28,6 +28,8 @@ import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
+import { RecentStringSet as RecentStringSetImpl } from "@zenystx/helios-core/internal/util/RecentStringSet";
 
 // ── Container ─────────────────────────────────────────────────────────
 
@@ -36,6 +38,7 @@ interface ListContainer {
   items: Data[];
   version: number;
   operationChain: Promise<void>;
+  appliedTxnOpIds: RecentStringSet;
 }
 
 /** In-flight remote request waiting for a LIST_RESPONSE or LIST_STATE_ACK. */
@@ -119,8 +122,8 @@ export class DistributedListService {
 
   // ── Public API ───────────────────────────────────────────────────────
 
-  async add(name: string, data: Data): Promise<boolean> {
-    const r = await this._invoke(name, "add", { data });
+  async add(name: string, data: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
+    const r = await this._invoke(name, "add", { data }, dedupeId, dedupeSet);
     return r.booleanResult ?? false;
   }
 
@@ -158,8 +161,8 @@ export class DistributedListService {
     return decodeData(r.data);
   }
 
-  async remove(name: string, data: Data): Promise<boolean> {
-    const r = await this._invoke(name, "remove", { data });
+  async remove(name: string, data: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
+    const r = await this._invoke(name, "remove", { data }, dedupeId, dedupeSet);
     return r.booleanResult ?? false;
   }
 
@@ -253,10 +256,21 @@ export class DistributedListService {
       data?: Data;
       dataList?: Data[];
     },
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<ListResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreate(name).appliedTxnOpIds.has(dedupeId))) {
+      return {
+        type: "LIST_RESPONSE",
+        requestId: "deduped",
+        success: true,
+        resultType: "boolean",
+        booleanResult: true,
+      };
+    }
     const ownerId = this._resolveOwnerId(name);
     if (ownerId === this._instanceName || this._transport === null) {
-      return this._invokeLocally(name, operation, options);
+      return this._invokeLocally(name, operation, options, dedupeId, dedupeSet);
     }
 
     const requestId = crypto.randomUUID();
@@ -280,6 +294,7 @@ export class DistributedListService {
       sourceNodeId: this._instanceName,
       listName: name,
       operation,
+      txnDedupeId: dedupeId,
       index: options?.index,
       fromIndex: options?.fromIndex,
       toIndex: options?.toIndex,
@@ -287,7 +302,11 @@ export class DistributedListService {
       dataList: options?.dataList?.map(encodeData),
     });
 
-    return response;
+    const result = await response;
+    if (dedupeId !== undefined) {
+      dedupeSet?.add(dedupeId);
+    }
+    return result;
   }
 
   private async _invokeLocally(
@@ -300,8 +319,27 @@ export class DistributedListService {
       data?: Data;
       dataList?: Data[];
     },
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<ListResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreate(name).appliedTxnOpIds.has(dedupeId))) {
+      return {
+        type: "LIST_RESPONSE",
+        requestId: "deduped",
+        success: true,
+        resultType: "boolean",
+        booleanResult: true,
+      };
+    }
     return this._enqueueOperation(name, async (container) => {
+      const finalize = (response: ListResponseMsg): ListResponseMsg => {
+        if (dedupeId !== undefined) {
+          container.appliedTxnOpIds.add(dedupeId);
+          dedupeSet?.add(dedupeId);
+        }
+        return response;
+      };
+
       switch (operation) {
         case "add": {
           const d = options?.data;
@@ -310,7 +348,7 @@ export class DistributedListService {
           container.version++;
           await this._replicateState(name, container);
           this._broadcastEvent(name, "ADDED", d);
-          return this._boolResponse(true);
+          return finalize(this._boolResponse(true));
         }
         case "addAt": {
           const idx = options?.index ?? 0;
@@ -321,42 +359,42 @@ export class DistributedListService {
           container.version++;
           await this._replicateState(name, container);
           this._broadcastEvent(name, "ADDED", d);
-          return this._voidResponse();
+          return finalize(this._voidResponse());
         }
         case "addAll": {
           const list = options?.dataList ?? [];
-          if (list.length === 0) return this._boolResponse(false);
+          if (list.length === 0) return finalize(this._boolResponse(false));
           container.items.push(...list);
           container.version++;
           await this._replicateState(name, container);
           for (const item of list) {
             this._broadcastEvent(name, "ADDED", item);
           }
-          return this._boolResponse(true);
+          return finalize(this._boolResponse(true));
         }
         case "addAllAt": {
           const idx = options?.index ?? 0;
           const list = options?.dataList ?? [];
           this._checkBoundsInclusive(idx, container);
-          if (list.length === 0) return this._boolResponse(false);
+          if (list.length === 0) return finalize(this._boolResponse(false));
           container.items.splice(idx, 0, ...list);
           container.version++;
           await this._replicateState(name, container);
           for (const item of list) {
             this._broadcastEvent(name, "ADDED", item);
           }
-          return this._boolResponse(true);
+          return finalize(this._boolResponse(true));
         }
         case "get": {
           const idx = options?.index ?? 0;
           this._checkBoundsExclusive(idx, container);
-          return {
+          return finalize({
             type: "LIST_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data",
             data: encodeData(container.items[idx]),
-          };
+          });
         }
         case "set": {
           const idx = options?.index ?? 0;
@@ -369,24 +407,24 @@ export class DistributedListService {
           await this._replicateState(name, container);
           this._broadcastEvent(name, "REMOVED", old);
           this._broadcastEvent(name, "ADDED", d);
-          return {
+          return finalize({
             type: "LIST_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data",
             data: encodeData(old),
-          };
+          });
         }
         case "remove": {
           const d = options?.data;
           if (d === undefined) throw new Error("NullPointerException");
           const i = container.items.findIndex((item) => item.equals(d));
-          if (i === -1) return this._boolResponse(false);
+          if (i === -1) return finalize(this._boolResponse(false));
           const [removed] = container.items.splice(i, 1);
           container.version++;
           await this._replicateState(name, container);
           this._broadcastEvent(name, "REMOVED", removed);
-          return this._boolResponse(true);
+          return finalize(this._boolResponse(true));
         }
         case "removeAt": {
           const idx = options?.index ?? 0;
@@ -395,20 +433,20 @@ export class DistributedListService {
           container.version++;
           await this._replicateState(name, container);
           this._broadcastEvent(name, "REMOVED", removed);
-          return {
+          return finalize({
             type: "LIST_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data",
             data: encodeData(removed),
-          };
+          });
         }
         case "indexOf": {
           const d = options?.data;
           if (d === undefined) throw new Error("NullPointerException");
-          return this._numberResponse(
+          return finalize(this._numberResponse(
             container.items.findIndex((item) => item.equals(d)),
-          );
+          ));
         }
         case "lastIndexOf": {
           const d = options?.data;
@@ -417,46 +455,46 @@ export class DistributedListService {
           for (let i = 0; i < container.items.length; i++) {
             if (container.items[i].equals(d)) last = i;
           }
-          return this._numberResponse(last);
+          return finalize(this._numberResponse(last));
         }
         case "contains": {
           const d = options?.data;
           if (d === undefined) throw new Error("NullPointerException");
-          return this._boolResponse(
+          return finalize(this._boolResponse(
             container.items.some((item) => item.equals(d)),
-          );
+          ));
         }
         case "containsAll": {
           const list = options?.dataList ?? [];
           const has = list.every((d) =>
             container.items.some((item) => item.equals(d)),
           );
-          return this._boolResponse(has);
+          return finalize(this._boolResponse(has));
         }
         case "size":
-          return this._numberResponse(container.items.length);
+          return finalize(this._numberResponse(container.items.length));
         case "isEmpty":
-          return this._boolResponse(container.items.length === 0);
+          return finalize(this._boolResponse(container.items.length === 0));
         case "subList": {
           const from = options?.fromIndex ?? 0;
           const to = options?.toIndex ?? container.items.length;
           const slice = container.items.slice(from, to);
-          return {
+          return finalize({
             type: "LIST_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data-array",
             dataList: slice.map(encodeData),
-          };
+          });
         }
         case "toArray":
-          return {
+          return finalize({
             type: "LIST_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data-array",
             dataList: container.items.map(encodeData),
-          };
+          });
         case "clear":
           if (container.items.length > 0) {
             const removedItems = [...container.items];
@@ -467,7 +505,7 @@ export class DistributedListService {
               this._broadcastEvent(name, "REMOVED", item);
             }
           }
-          return this._voidResponse();
+          return finalize(this._voidResponse());
       }
     });
   }
@@ -487,6 +525,8 @@ export class DistributedListService {
         data: message.data ? decodeData(message.data) : undefined,
         dataList: message.dataList?.map(decodeData),
       },
+      message.txnDedupeId,
+      this._getOrCreate(message.listName).appliedTxnOpIds,
     )
       .then((response) => {
         this._transport?.send(message.sourceNodeId, {
@@ -528,6 +568,7 @@ export class DistributedListService {
 
     container.items = message.items.map(decodeData);
     container.version = message.version;
+    container.appliedTxnOpIds.replace(message.appliedTxnOpIds);
 
     if (message.requestId !== null) {
       this._transport?.send(message.sourceNodeId, {
@@ -627,6 +668,7 @@ export class DistributedListService {
       listName: name,
       version: container.version,
       items: container.items.map(encodeData),
+      appliedTxnOpIds: container.appliedTxnOpIds.snapshot(),
     };
     this._transport.send(backupId, msg);
 
@@ -660,10 +702,10 @@ export class DistributedListService {
   private _getOrCreate(name: string): ListContainer {
     let container = this._containers.get(name);
     if (container === undefined) {
-      container = { items: [], version: 0, operationChain: Promise.resolve() };
+      container = { items: [], version: 0, operationChain: Promise.resolve(), appliedTxnOpIds: new RecentStringSetImpl(8_192) };
       this._containers.set(name, container);
     }
-    return container;
+    return container!;
   }
 
   private _enqueueOperation<T>(

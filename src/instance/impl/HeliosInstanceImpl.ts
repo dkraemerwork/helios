@@ -15,6 +15,7 @@
 import { CacheUtil } from "@zenystx/helios-core/cache/CacheUtil";
 import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
 import { DistributedCardinalityEstimatorService } from "@zenystx/helios-core/cardinality/impl/DistributedCardinalityEstimatorService";
+import { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
 import { ListAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js";
 import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
 import { MultiMapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
@@ -234,6 +235,11 @@ type BlitzRuntimeHandle = {
     advertiseHost: string;
     clusterName: string;
   };
+};
+
+type MonitorJobSnapshotWithCapabilities = MonitorJobSnapshot & {
+  supportsCancel: boolean;
+  supportsRestart: boolean;
 };
 
 type BlitzRuntimeLauncher = (input: {
@@ -570,6 +576,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientCacheInvalidationListenerRegistrations = new Map<string, CacheClientInvalidationListenerRegistration>();
   private readonly _clientSessionCacheInvalidationListeners = new Map<string, Set<string>>();
   private readonly _clientTransactions = new Map<string, ClientTransactionContext>();
+  private readonly _pendingTxnBackupAcks = new Map<string, {
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timeoutHandle: ReturnType<typeof setTimeout> | null;
+    target: string;
+  }>();
+  private readonly _dedupedTxnBackupMessages = new RecentStringSet(8_192);
+  private readonly _dedupedQueueTxnOps = new RecentStringSet(8_192);
+  private readonly _dedupedListTxnOps = new RecentStringSet(8_192);
+  private readonly _dedupedSetTxnOps = new RecentStringSet(8_192);
+  private readonly _dedupedMultiMapTxnOps = new RecentStringSet(8_192);
   private readonly _addressToMemberId = new Map<string, string>();
   private _pendingResponseEntryPool: PendingResponseEntryPool = new PendingResponseEntryPool();
   private _invocationMonitor: InvocationMonitor = new InvocationMonitor(this._pendingResponseEntryPool);
@@ -1011,7 +1028,29 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return;
       }
       if (message.type === 'TXN_BACKUP_REPLICATION') {
-        this._transactionManagerService.applyBackupMessage(message.payload);
+        const dedupeKey = `${message.sourceNodeId}:${message.requestId ?? 'fire-and-forget'}:${message.payload.txnId}:${message.payload.type}`;
+        if (!this._dedupedTxnBackupMessages.has(dedupeKey)) {
+          this._dedupedTxnBackupMessages.add(dedupeKey);
+          this._transactionManagerService.applyBackupMessage(message.payload);
+        }
+        if (message.requestId !== null) {
+          this._transport?.send(message.sourceNodeId, {
+            type: 'TXN_BACKUP_REPLICATION_ACK',
+            requestId: message.requestId,
+            txnId: message.payload.txnId,
+          });
+        }
+        return;
+      }
+      if (message.type === 'TXN_BACKUP_REPLICATION_ACK') {
+        const pending = this._pendingTxnBackupAcks.get(message.requestId);
+        if (pending !== undefined) {
+          this._pendingTxnBackupAcks.delete(message.requestId);
+          if (pending.timeoutHandle !== null) {
+            clearTimeout(pending.timeoutHandle);
+          }
+          pending.resolve();
+        }
         return;
       }
 
@@ -1359,8 +1398,36 @@ export class HeliosInstanceImpl implements HeliosInstance {
           .filter((memberId) => memberId !== localMemberId)
           .slice(0, count);
       },
-      replicate: async (payload, targets) => {
+      validateBackupMembers: async (targets) => {
+        const confirmedTargets: string[] = [];
         for (const target of targets) {
+          if (target === this._clusterCoordinator!.getLocalMemberId()) {
+            confirmedTargets.push(target);
+            continue;
+          }
+          const member = this._clusterCoordinator!.getCluster().getMembers().find((candidate) => candidate.getUuid() === target);
+          if (member === undefined) {
+            continue;
+          }
+          try {
+            await this._ensureRemotePeerConnected(target, member.getAddress(), 2_000);
+            const directTransport = this._transport as unknown as { _peers: Map<string, unknown> };
+            if (directTransport._peers.has(target)) {
+              confirmedTargets.push(target);
+            }
+          } catch {
+            continue;
+          }
+        }
+        return confirmedTargets;
+      },
+      replicate: async (payload, targets) => {
+        const acknowledgedTargets: string[] = [];
+        for (const target of targets) {
+          if (target === this._clusterCoordinator!.getLocalMemberId()) {
+            acknowledgedTargets.push(target);
+            continue;
+          }
           const member = this._clusterCoordinator!.getCluster().getMembers().find((candidate) => candidate.getUuid() === target);
           if (member === undefined) {
             continue;
@@ -1372,13 +1439,30 @@ export class HeliosInstanceImpl implements HeliosInstance {
           };
           const channel = directTransport._peers.get(target);
           if (channel !== undefined) {
+            const requestId = crypto.randomUUID();
+            const ackPromise = new Promise<void>((resolve, reject) => {
+              const timeoutHandle = setTimeout(() => {
+                this._pendingTxnBackupAcks.delete(requestId);
+                reject(new Error(`Transaction backup replication timed out for target ${target}`));
+              }, 10_000);
+              this._pendingTxnBackupAcks.set(requestId, {
+                resolve,
+                reject,
+                timeoutHandle,
+                target,
+              });
+            });
             directTransport._sendMsg(channel, {
               type: 'TXN_BACKUP_REPLICATION',
+              requestId,
               sourceNodeId: this._clusterCoordinator!.getLocalMemberId(),
               payload,
             });
+            await ackPromise;
+            acknowledgedTargets.push(target);
           }
         }
+        return acknowledgedTargets;
       },
     };
   }
@@ -3837,8 +3921,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (proxy === undefined) {
       this._ensureQueueService();
       proxy = new TransactionalQueueProxy(name, context.transaction, this._nodeEngine, {
-        offer: (value) => this._distributedQueueService!.offer(name, value, 0),
-        poll: () => this._distributedQueueService!.poll(name, 0),
+        offer: (value, dedupeId) => this._distributedQueueService!.offer(name, value, 0, dedupeId, this._dedupedQueueTxnOps),
+        poll: (dedupeId) => this._distributedQueueService!.poll(name, 0, dedupeId, this._dedupedQueueTxnOps),
         peek: () => this._distributedQueueService!.peek(name),
         size: () => this._distributedQueueService!.size(name),
         toArray: () => this._distributedQueueService!.toArray(name),
@@ -3857,8 +3941,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (proxy === undefined) {
       this._ensureListService();
       proxy = new TransactionalListProxy(name, context.transaction, this._nodeEngine, {
-        add: (value) => this._distributedListService!.add(name, value),
-        remove: (value) => this._distributedListService!.remove(name, value),
+        add: (value, dedupeId) => this._distributedListService!.add(name, value, dedupeId, this._dedupedListTxnOps),
+        remove: (value, dedupeId) => this._distributedListService!.remove(name, value, dedupeId, this._dedupedListTxnOps),
         size: () => this._distributedListService!.size(name),
         toArray: () => this._distributedListService!.toArray(name),
       });
@@ -3876,8 +3960,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (proxy === undefined) {
       this._ensureSetService();
       proxy = new TransactionalSetProxy(name, context.transaction, this._nodeEngine, {
-        add: (value) => this._distributedSetService!.add(name, value),
-        remove: (value) => this._distributedSetService!.remove(name, value),
+        add: (value, dedupeId) => this._distributedSetService!.add(name, value, dedupeId, this._dedupedSetTxnOps),
+        remove: (value, dedupeId) => this._distributedSetService!.remove(name, value, dedupeId, this._dedupedSetTxnOps),
         size: () => this._distributedSetService!.size(name),
         contains: (value) => this._distributedSetService!.contains(name, value),
       });
@@ -3895,10 +3979,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (proxy === undefined) {
       this._ensureMultiMapService();
       proxy = new TransactionalMultiMapProxy(name, context.transaction, this._nodeEngine, {
-        put: (key, value) => this._distributedMultiMapService!.put(name, key, value),
+        put: (key, value, dedupeId) => this._distributedMultiMapService!.put(name, key, value, undefined, dedupeId, this._dedupedMultiMapTxnOps),
         get: (key) => this._distributedMultiMapService!.get(name, key),
-        remove: (key, value) => this._distributedMultiMapService!.remove(name, key, value),
-        removeAll: (key) => this._distributedMultiMapService!.removeAll(name, key),
+        remove: (key, value, dedupeId) => this._distributedMultiMapService!.remove(name, key, value, dedupeId, this._dedupedMultiMapTxnOps),
+        removeAll: (key, dedupeId) => this._distributedMultiMapService!.removeAll(name, key, dedupeId, this._dedupedMultiMapTxnOps),
         valueCount: (key) => this._distributedMultiMapService!.valueCount(name, key),
         size: () => this._distributedMultiMapService!.size(name),
       });
@@ -5616,7 +5700,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
             getMetrics?(): Promise<unknown>;
           }>;
 
-          const snapshots: MonitorJobSnapshot[] = [];
+          const snapshots: MonitorJobSnapshotWithCapabilities[] = [];
           for (const job of jobs) {
             let metrics: Record<string, unknown> | null = null;
             if (typeof job.getMetrics === 'function') {

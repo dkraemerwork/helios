@@ -21,6 +21,8 @@ import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
+import { RecentStringSet as RecentStringSetImpl } from "@zenystx/helios-core/internal/util/RecentStringSet";
 
 // ── Container ─────────────────────────────────────────────────────────
 
@@ -35,6 +37,7 @@ interface SetContainer {
   items: Map<string, Data>;
   version: number;
   operationChain: Promise<void>;
+  appliedTxnOpIds: RecentStringSet;
 }
 
 interface PendingRemoteRequest {
@@ -111,8 +114,8 @@ export class DistributedSetService {
 
   // ── Public API ───────────────────────────────────────────────────────
 
-  async add(name: string, data: Data): Promise<boolean> {
-    const r = await this._invoke(name, "add", { data });
+  async add(name: string, data: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
+    const r = await this._invoke(name, "add", { data }, dedupeId, dedupeSet);
     return r.booleanResult ?? false;
   }
 
@@ -121,8 +124,8 @@ export class DistributedSetService {
     return r.booleanResult ?? false;
   }
 
-  async remove(name: string, data: Data): Promise<boolean> {
-    const r = await this._invoke(name, "remove", { data });
+  async remove(name: string, data: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
+    const r = await this._invoke(name, "remove", { data }, dedupeId, dedupeSet);
     return r.booleanResult ?? false;
   }
 
@@ -193,10 +196,21 @@ export class DistributedSetService {
     name: string,
     operation: SetOperation,
     options?: { data?: Data; dataList?: Data[] },
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<SetResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreate(name).appliedTxnOpIds.has(dedupeId))) {
+      return {
+        type: "SET_RESPONSE",
+        requestId: "deduped",
+        success: true,
+        resultType: "boolean",
+        booleanResult: true,
+      };
+    }
     const ownerId = this._resolveOwnerId(name);
     if (ownerId === this._instanceName || this._transport === null) {
-      return this._invokeLocally(name, operation, options);
+      return this._invokeLocally(name, operation, options, dedupeId, dedupeSet);
     }
 
     const requestId = crypto.randomUUID();
@@ -220,34 +234,58 @@ export class DistributedSetService {
       sourceNodeId: this._instanceName,
       setName: name,
       operation,
+      txnDedupeId: dedupeId,
       data: options?.data ? encodeData(options.data) : undefined,
       dataList: options?.dataList?.map(encodeData),
     });
 
-    return response;
+    const result = await response;
+    if (dedupeId !== undefined) {
+      dedupeSet?.add(dedupeId);
+    }
+    return result;
   }
 
   private async _invokeLocally(
     name: string,
     operation: SetOperation,
     options?: { data?: Data; dataList?: Data[] },
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<SetResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreate(name).appliedTxnOpIds.has(dedupeId))) {
+      return {
+        type: "SET_RESPONSE",
+        requestId: "deduped",
+        success: true,
+        resultType: "boolean",
+        booleanResult: true,
+      };
+    }
     return this._enqueueOperation(name, async (container) => {
+      const finalize = (response: SetResponseMsg): SetResponseMsg => {
+        if (dedupeId !== undefined) {
+          container.appliedTxnOpIds.add(dedupeId);
+          dedupeSet?.add(dedupeId);
+        }
+        return response;
+      };
+
       switch (operation) {
         case "add": {
           const d = options?.data;
           if (d === undefined) throw new Error("NullPointerException");
           const fp = dataFingerprint(d);
-          if (container.items.has(fp)) return this._boolResponse(false);
+          if (container.items.has(fp)) return finalize(this._boolResponse(false));
           container.items.set(fp, d);
           container.version++;
           await this._replicateState(name, container);
           this._broadcastEvent(name, "ADDED", d);
-          return this._boolResponse(true);
+          return finalize(this._boolResponse(true));
         }
         case "addAll": {
           const list = options?.dataList ?? [];
-          if (list.length === 0) return this._boolResponse(false);
+          if (list.length === 0) return finalize(this._boolResponse(false));
           let changed = false;
           const added: Data[] = [];
           for (const d of list) {
@@ -265,18 +303,18 @@ export class DistributedSetService {
               this._broadcastEvent(name, "ADDED", item);
             }
           }
-          return this._boolResponse(changed);
+          return finalize(this._boolResponse(changed));
         }
         case "remove": {
           const d = options?.data;
           if (d === undefined) throw new Error("NullPointerException");
           const fp = dataFingerprint(d);
-          if (!container.items.has(fp)) return this._boolResponse(false);
+          if (!container.items.has(fp)) return finalize(this._boolResponse(false));
           container.items.delete(fp);
           container.version++;
           await this._replicateState(name, container);
           this._broadcastEvent(name, "REMOVED", d);
-          return this._boolResponse(true);
+          return finalize(this._boolResponse(true));
         }
         case "removeAll": {
           const list = options?.dataList ?? [];
@@ -295,7 +333,7 @@ export class DistributedSetService {
               this._broadcastEvent(name, "REMOVED", item);
             }
           }
-          return this._boolResponse(changed);
+          return finalize(this._boolResponse(changed));
         }
         case "retainAll": {
           const retain = new Set<string>(
@@ -320,32 +358,32 @@ export class DistributedSetService {
               this._broadcastEvent(name, "REMOVED", item);
             }
           }
-          return this._boolResponse(changed);
+          return finalize(this._boolResponse(changed));
         }
         case "contains": {
           const d = options?.data;
           if (d === undefined) throw new Error("NullPointerException");
-          return this._boolResponse(container.items.has(dataFingerprint(d)));
+          return finalize(this._boolResponse(container.items.has(dataFingerprint(d))));
         }
         case "containsAll": {
           const list = options?.dataList ?? [];
           const has = list.every((d) =>
             container.items.has(dataFingerprint(d)),
           );
-          return this._boolResponse(has);
+          return finalize(this._boolResponse(has));
         }
         case "size":
-          return this._numberResponse(container.items.size);
+          return finalize(this._numberResponse(container.items.size));
         case "isEmpty":
-          return this._boolResponse(container.items.size === 0);
+          return finalize(this._boolResponse(container.items.size === 0));
         case "toArray":
-          return {
+          return finalize({
             type: "SET_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data-array",
             dataList: Array.from(container.items.values()).map(encodeData),
-          };
+          });
         case "clear":
           if (container.items.size > 0) {
             const removedItems = Array.from(container.items.values());
@@ -356,7 +394,7 @@ export class DistributedSetService {
               this._broadcastEvent(name, "REMOVED", item);
             }
           }
-          return this._voidResponse();
+          return finalize(this._voidResponse());
       }
     });
   }
@@ -373,6 +411,8 @@ export class DistributedSetService {
         data: message.data ? decodeData(message.data) : undefined,
         dataList: message.dataList?.map(decodeData),
       },
+      message.txnDedupeId,
+      this._getOrCreate(message.setName).appliedTxnOpIds,
     )
       .then((response) => {
         this._transport?.send(message.sourceNodeId, {
@@ -419,6 +459,7 @@ export class DistributedSetService {
       }),
     );
     container.version = message.version;
+    container.appliedTxnOpIds.replace(message.appliedTxnOpIds);
 
     if (message.requestId !== null) {
       this._transport?.send(message.sourceNodeId, {
@@ -509,6 +550,7 @@ export class DistributedSetService {
       setName: name,
       version: container.version,
       items: Array.from(container.items.values()).map(encodeData),
+      appliedTxnOpIds: container.appliedTxnOpIds.snapshot(),
     };
     this._transport.send(backupId, msg);
 
@@ -546,10 +588,11 @@ export class DistributedSetService {
         items: new Map(),
         version: 0,
         operationChain: Promise.resolve(),
+        appliedTxnOpIds: new RecentStringSetImpl(8_192),
       };
       this._containers.set(name, container);
     }
-    return container;
+    return container!;
   }
 
   private _enqueueOperation<T>(

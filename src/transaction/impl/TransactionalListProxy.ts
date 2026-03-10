@@ -20,8 +20,8 @@ type ListOpType = 'add' | 'remove';
 type MaybePromise<T> = T | Promise<T>;
 
 interface ListBackend<E> {
-    add(element: E): MaybePromise<boolean>;
-    remove(element: E): MaybePromise<boolean>;
+    add(element: E, dedupeId?: string): MaybePromise<boolean>;
+    remove(element: E, dedupeId?: string): MaybePromise<boolean>;
     size(): MaybePromise<number>;
     toArray(): MaybePromise<E[]>;
 }
@@ -31,13 +31,15 @@ class NoopListOperation extends Operation {
 }
 
 class CommitListOperation<E> extends Operation {
+    private readonly _recordId: string;
     private readonly _lOpType: ListOpType;
     private readonly _lValueData: Data;
     private readonly _lBackend: ListBackend<E>;
     private readonly _lNodeEngine: NodeEngine;
 
-    constructor(opType: ListOpType, valueData: Data, backend: ListBackend<E>, nodeEngine: NodeEngine) {
+    constructor(recordId: string, opType: ListOpType, valueData: Data, backend: ListBackend<E>, nodeEngine: NodeEngine) {
         super();
+        this._recordId = recordId;
         this._lOpType = opType;
         this._lValueData = valueData;
         this._lBackend = backend;
@@ -47,8 +49,8 @@ class CommitListOperation<E> extends Operation {
     async run(): Promise<void> {
         const value = this._lValueData as unknown as E;
         switch (this._lOpType) {
-            case 'add': await this._lBackend.add(value); break;
-            case 'remove': await this._lBackend.remove(value); break;
+            case 'add': await this._lBackend.add(value, this._recordId); break;
+            case 'remove': await this._lBackend.remove(value, this._recordId); break;
         }
         this.sendResponse(null);
     }
@@ -70,13 +72,15 @@ class TransactionalListLogRecord<E> implements TransactionLogRecord {
     }
 
     getKey(): unknown { return this._recordId; }
+    getRecordId(): string { return this._recordId; }
     newPrepareOperation(): Operation { return new NoopListOperation(); }
     newCommitOperation(): Operation {
-        return new CommitListOperation(this._opType, this._valueData, this._backend, this._nodeEngine);
+        return new CommitListOperation(this._recordId, this._opType, this._valueData, this._backend, this._nodeEngine);
     }
     newRollbackOperation(): Operation { return new NoopListOperation(); }
     toBackupRecord(): TransactionBackupRecord {
         return {
+            recordId: this._recordId,
             kind: 'list',
             listName: this._recordId.split(':', 2)[0],
             opType: this._opType,

@@ -22,10 +22,10 @@ type MultiMapOpType = 'put' | 'remove' | 'removeAll';
 type MaybePromise<T> = T | Promise<T>;
 
 interface MultiMapBackend<K, V> {
-    put(key: K, value: V): MaybePromise<boolean>;
+    put(key: K, value: V, dedupeId?: string): MaybePromise<boolean>;
     get(key: K): MaybePromise<Iterable<V>>;
-    remove(key: K, value: V): MaybePromise<boolean>;
-    removeAll(key: K): MaybePromise<Iterable<V>>;
+    remove(key: K, value: V, dedupeId?: string): MaybePromise<boolean>;
+    removeAll(key: K, dedupeId?: string): MaybePromise<Iterable<V>>;
     valueCount(key: K): MaybePromise<number>;
     size(): MaybePromise<number>;
 }
@@ -35,6 +35,7 @@ class NoopMultiMapOperation extends Operation {
 }
 
 class CommitMultiMapOperation<K, V> extends Operation {
+    private readonly _recordId: string;
     private readonly _mmOpType: MultiMapOpType;
     private readonly _mmKeyData: Data;
     private readonly _mmValueData: Data | null;
@@ -42,6 +43,7 @@ class CommitMultiMapOperation<K, V> extends Operation {
     private readonly _mmNodeEngine: NodeEngine;
 
     constructor(
+        recordId: string,
         opType: MultiMapOpType,
         keyData: Data,
         valueData: Data | null,
@@ -49,6 +51,7 @@ class CommitMultiMapOperation<K, V> extends Operation {
         nodeEngine: NodeEngine,
     ) {
         super();
+        this._recordId = recordId;
         this._mmOpType = opType;
         this._mmKeyData = keyData;
         this._mmValueData = valueData;
@@ -62,16 +65,16 @@ class CommitMultiMapOperation<K, V> extends Operation {
         switch (this._mmOpType) {
             case 'put':
                 if (this._mmValueData !== null) {
-                    await this._mmBackend.put(key, this._mmValueData as unknown as V);
+                    await this._mmBackend.put(key, this._mmValueData as unknown as V, this._recordId);
                 }
                 break;
             case 'remove':
                 if (this._mmValueData !== null) {
-                    await this._mmBackend.remove(key, this._mmValueData as unknown as V);
+                    await this._mmBackend.remove(key, this._mmValueData as unknown as V, this._recordId);
                 }
                 break;
             case 'removeAll':
-                await this._mmBackend.removeAll(key);
+                await this._mmBackend.removeAll(key, this._recordId);
                 break;
         }
 
@@ -104,9 +107,11 @@ class TransactionalMultiMapLogRecord<K, V> implements TransactionLogRecord {
     }
 
     getKey(): unknown { return this._recordId; }
+    getRecordId(): string { return this._recordId; }
     newPrepareOperation(): Operation { return new NoopMultiMapOperation(); }
     newCommitOperation(): Operation {
         return new CommitMultiMapOperation(
+            this._recordId,
             this._opType,
             this._keyData,
             this._valueData,
@@ -117,6 +122,7 @@ class TransactionalMultiMapLogRecord<K, V> implements TransactionLogRecord {
     newRollbackOperation(): Operation { return new NoopMultiMapOperation(); }
     toBackupRecord(): TransactionBackupRecord {
         return {
+            recordId: this._recordId,
             kind: 'multimap',
             mapName: this._recordId.split(':', 2)[0],
             opType: this._opType,

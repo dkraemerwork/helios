@@ -24,7 +24,7 @@ export interface TransactionManagerServiceLike {
     commitCount: Counter;
     rollbackCount: Counter;
     pickBackupLogAddresses(durability: number): string[];
-    rememberBackupTargets(txnId: string, targets: readonly string[]): void;
+    rememberBackupTargets(txnId: string, targets: readonly string[]): Promise<void>;
     createBackupLog(callerUuid: string, txnId: string, timeoutMillis: number, startTime: number, allowedDuringPassiveState: boolean): Promise<void>;
     createAllowedDuringPassiveStateBackupLog(callerUuid: string, txnId: string): Promise<void>;
     replicaBackupLog(records: TransactionBackupRecord[], callerUuid: string, txnId: string, timeoutMillis: number, startTime: number): Promise<void>;
@@ -110,7 +110,7 @@ export class TransactionImpl implements Transaction {
         this._startTime = Date.now();
         // May throw — callers catch and rethrow
         const backupTargets = this._transactionManagerService.pickBackupLogAddresses(this._durability);
-        this._transactionManagerService.rememberBackupTargets(this._txnId, backupTargets);
+        await this._transactionManagerService.rememberBackupTargets(this._txnId, backupTargets);
         this._setTransactionFlag(true);
         this._state = State.ACTIVE;
         if (backupTargets.length > 0) {

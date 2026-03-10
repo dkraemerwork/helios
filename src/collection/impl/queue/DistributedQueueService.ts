@@ -22,6 +22,8 @@ import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
+import { RecentStringSet as RecentStringSetImpl } from "@zenystx/helios-core/internal/util/RecentStringSet";
 
 interface QueueStateItem {
   itemId: number;
@@ -64,6 +66,7 @@ interface QueueRuntime {
   pendingPolls: PendingPoll[];
   pendingOffers: PendingOffer[];
   destroyHandle: ReturnType<typeof setTimeout> | null;
+  appliedTxnOpIds: RecentStringSet;
 }
 
 interface QueueListenerRegistration<E = unknown> {
@@ -139,16 +142,16 @@ export class DistributedQueueService {
     }
   }
 
-  async offer(name: string, data: Data, timeoutMs = 0): Promise<boolean> {
+  async offer(name: string, data: Data, timeoutMs = 0, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
     const response = await this._invokeOnOwner(name, "offer", {
       data,
       timeoutMs,
-    });
+    }, dedupeId, dedupeSet);
     return response.booleanResult ?? false;
   }
 
-  async poll(name: string, timeoutMs = 0): Promise<Data | null> {
-    const response = await this._invokeOnOwner(name, "poll", { timeoutMs });
+  async poll(name: string, timeoutMs = 0, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<Data | null> {
+    const response = await this._invokeOnOwner(name, "poll", { timeoutMs }, dedupeId, dedupeSet);
     return response.data === undefined ? null : decodeData(response.data);
   }
 
@@ -306,10 +309,20 @@ export class DistributedQueueService {
       maxElements?: number;
       timeoutMs?: number;
     },
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<QueueResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreateRuntime(name).appliedTxnOpIds.has(dedupeId))) {
+      return this._dedupedSuccessResponse(operation);
+    }
     const ownerId = this._resolveOwnerId(name);
     if (ownerId === this._instanceName || this._transport === null) {
-      return this._invokeLocally(name, operation, options);
+      const response = await this._invokeLocally(name, operation, options);
+      if (dedupeId !== undefined) {
+        this._getOrCreateRuntime(name).appliedTxnOpIds.add(dedupeId);
+        dedupeSet?.add(dedupeId);
+      }
+      return response;
     }
 
     const requestId = crypto.randomUUID();
@@ -334,13 +347,28 @@ export class DistributedQueueService {
       sourceNodeId: this._instanceName,
       queueName: name,
       operation,
+      txnDedupeId: dedupeId,
       timeoutMs: options?.timeoutMs,
       data: options?.data ? encodeData(options.data) : undefined,
       dataList: options?.dataList?.map((entry) => encodeData(entry)),
       maxElements: options?.maxElements,
     });
 
-    return responsePromise;
+    const response = await responsePromise;
+    if (dedupeId !== undefined) {
+      dedupeSet?.add(dedupeId);
+    }
+    return response;
+  }
+
+  private _dedupedSuccessResponse(operation: QueueOperation): QueueResponseMsg {
+    return {
+      type: "QUEUE_RESPONSE",
+      requestId: "deduped",
+      success: true,
+      resultType: operation === "poll" ? "none" : "boolean",
+      booleanResult: operation === "offer" ? true : undefined,
+    };
   }
 
   private async _invokeLocally(
@@ -352,9 +380,22 @@ export class DistributedQueueService {
       maxElements?: number;
       timeoutMs?: number;
     },
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<QueueResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreateRuntime(name).appliedTxnOpIds.has(dedupeId))) {
+      return this._dedupedSuccessResponse(operation);
+    }
     return this._enqueueOwnerOperation(name, async (runtime) => {
       this._cancelDestroy(runtime);
+
+      const finalize = (response: QueueResponseMsg): QueueResponseMsg => {
+        if (dedupeId !== undefined) {
+          runtime.appliedTxnOpIds.add(dedupeId);
+          dedupeSet?.add(dedupeId);
+        }
+        return response;
+      };
 
       switch (operation) {
         case "offer": {
@@ -364,13 +405,13 @@ export class DistributedQueueService {
             options?.data,
             options?.timeoutMs ?? 0,
           );
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: accepted,
-          };
+          });
         }
         case "poll": {
           const result = await this._pollInternal(
@@ -378,72 +419,72 @@ export class DistributedQueueService {
             runtime,
             options?.timeoutMs ?? 0,
           );
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: result === null ? "none" : "data",
             data: result === null ? undefined : encodeData(result),
-          };
+          });
         }
         case "peek": {
           const result = runtime.state.items[0]?.data ?? null;
           this._getStats(name).otherOperationCount++;
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: result === null ? "none" : "data",
             data: result === null ? undefined : encodeData(result),
-          };
+          });
         }
         case "size":
           this._getStats(name).otherOperationCount++;
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "number",
             numberResult: runtime.state.items.length,
-          };
+          });
         case "isEmpty":
           this._getStats(name).otherOperationCount++;
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: runtime.state.items.length === 0,
-          };
+          });
         case "remainingCapacity":
           this._getStats(name).otherOperationCount++;
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "number",
             numberResult: this._remainingCapacity(name, runtime),
-          };
+          });
         case "remove": {
           const removed = this._removeByValue(name, runtime, options?.data);
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: removed,
-          };
+          });
         }
         case "contains":
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: this._containsValue(name, runtime, options?.data),
-          };
+          });
         case "containsAll":
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
@@ -451,10 +492,10 @@ export class DistributedQueueService {
             booleanResult: (options?.dataList ?? []).every((entry) =>
               this._containsValue(name, runtime, entry),
             ),
-          };
+          });
         case "toArray":
           this._getStats(name).otherOperationCount++;
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
@@ -462,20 +503,20 @@ export class DistributedQueueService {
             dataList: runtime.state.items.map((entry) =>
               encodeData(entry.data),
             ),
-          };
+          });
         case "drain": {
           const dataList = this._drain(
             name,
             runtime,
             options?.maxElements ?? -1,
           );
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "data-array",
             dataList: dataList.map((entry) => encodeData(entry)),
-          };
+          });
         }
         case "addAll": {
           const changed = await this._addAll(
@@ -483,13 +524,13 @@ export class DistributedQueueService {
             runtime,
             options?.dataList ?? [],
           );
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: changed,
-          };
+          });
         }
         case "removeAll": {
           const changed = this._removeAll(
@@ -497,13 +538,13 @@ export class DistributedQueueService {
             runtime,
             options?.dataList ?? [],
           );
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: changed,
-          };
+          });
         }
         case "retainAll": {
           const changed = this._retainAll(
@@ -511,22 +552,22 @@ export class DistributedQueueService {
             runtime,
             options?.dataList ?? [],
           );
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "boolean",
             booleanResult: changed,
-          };
+          });
         }
         case "clear":
           this._clear(name, runtime);
-          return {
+          return finalize({
             type: "QUEUE_RESPONSE",
             requestId: "local",
             success: true,
             resultType: "none",
-          };
+          });
       }
     });
   }
@@ -543,6 +584,8 @@ export class DistributedQueueService {
         maxElements: message.maxElements,
         timeoutMs: message.timeoutMs,
       },
+      message.txnDedupeId,
+      this._getOrCreateRuntime(message.queueName).appliedTxnOpIds,
     )
       .then((response) => {
         this._transport?.send(message.sourceNodeId, {
@@ -594,6 +637,7 @@ export class DistributedQueueService {
       ownerNodeId: message.ownerNodeId,
       items: message.items.map((item) => this._fromWireQueueItem(item)),
     };
+    runtime.appliedTxnOpIds.replace(message.appliedTxnOpIds);
     this._scheduleDestroyIfNeeded(message.queueName, runtime);
 
     if (message.requestId !== null) {
@@ -1015,6 +1059,7 @@ export class DistributedQueueService {
         otherOperationCount: 0,
         eventOperationCount: 0,
       },
+      appliedTxnOpIds: runtime.appliedTxnOpIds.snapshot(),
     };
 
     this._transport.send(backupId, message);
@@ -1121,10 +1166,11 @@ export class DistributedQueueService {
         pendingPolls: [],
         pendingOffers: [],
         destroyHandle: null,
+        appliedTxnOpIds: new RecentStringSetImpl(8_192),
       };
       this._runtimes.set(name, runtime);
     }
-    return runtime;
+    return runtime!;
   }
 
   private _enqueueOwnerOperation<T>(

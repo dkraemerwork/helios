@@ -20,6 +20,8 @@ import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
+import { RecentStringSet as RecentStringSetImpl } from "@zenystx/helios-core/internal/util/RecentStringSet";
 import { EntryEventImpl } from "@zenystx/helios-core/map/EntryListener";
 import { ValueCollectionType } from "@zenystx/helios-core/multimap/MultiMapConfig";
 
@@ -73,6 +75,7 @@ interface MultiMapContainer {
   version: number;
   operationChain: Promise<void>;
   valueCollectionType: ValueCollectionType;
+  appliedTxnOpIds: RecentStringSet;
 }
 
 interface PendingRemoteRequest {
@@ -168,8 +171,10 @@ export class DistributedMultiMapService {
     keyData: Data,
     valueData: Data,
     type = ValueCollectionType.LIST,
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<boolean> {
-    const r = await this._invoke(name, "put", { keyData, valueData }, type);
+    const r = await this._invoke(name, "put", { keyData, valueData }, type, dedupeId, dedupeSet);
     return r.booleanResult ?? false;
   }
 
@@ -178,13 +183,13 @@ export class DistributedMultiMapService {
     return (r.dataList ?? []).map(decodeData);
   }
 
-  async remove(name: string, keyData: Data, valueData: Data): Promise<boolean> {
-    const r = await this._invoke(name, "remove", { keyData, valueData });
+  async remove(name: string, keyData: Data, valueData: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
+    const r = await this._invoke(name, "remove", { keyData, valueData }, ValueCollectionType.LIST, dedupeId, dedupeSet);
     return r.booleanResult ?? false;
   }
 
-  async removeAll(name: string, keyData: Data): Promise<Data[]> {
-    const r = await this._invoke(name, "removeAll", { keyData });
+  async removeAll(name: string, keyData: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<Data[]> {
+    const r = await this._invoke(name, "removeAll", { keyData }, ValueCollectionType.LIST, dedupeId, dedupeSet);
     return (r.dataList ?? []).map(decodeData);
   }
 
@@ -266,10 +271,21 @@ export class DistributedMultiMapService {
     operation: MultiMapOperation,
     options?: { keyData?: Data; valueData?: Data; dataList?: Data[] },
     valueCollectionType = ValueCollectionType.LIST,
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<MultiMapResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreate(name, valueCollectionType).appliedTxnOpIds.has(dedupeId))) {
+      return {
+        type: "MULTIMAP_RESPONSE",
+        requestId: "deduped",
+        success: true,
+        resultType: "boolean",
+        booleanResult: true,
+      };
+    }
     const ownerId = this._resolveOwnerId(name);
     if (ownerId === this._instanceName || this._transport === null) {
-      return this._invokeLocally(name, operation, options, valueCollectionType);
+      return this._invokeLocally(name, operation, options, valueCollectionType, dedupeId, dedupeSet);
     }
 
     const requestId = crypto.randomUUID();
@@ -295,12 +311,17 @@ export class DistributedMultiMapService {
       sourceNodeId: this._instanceName,
       mapName: name,
       operation,
+      txnDedupeId: dedupeId,
       keyData: options?.keyData ? encodeData(options.keyData) : undefined,
       valueData: options?.valueData ? encodeData(options.valueData) : undefined,
       dataList: options?.dataList?.map(encodeData),
     });
 
-    return response;
+    const result = await response;
+    if (dedupeId !== undefined) {
+      dedupeSet?.add(dedupeId);
+    }
+    return result;
   }
 
   private async _invokeLocally(
@@ -308,10 +329,29 @@ export class DistributedMultiMapService {
     operation: MultiMapOperation,
     options?: { keyData?: Data; valueData?: Data; dataList?: Data[] },
     valueCollectionType = ValueCollectionType.LIST,
+    dedupeId?: string,
+    dedupeSet?: RecentStringSet,
   ): Promise<MultiMapResponseMsg> {
+    if (dedupeId !== undefined && ((dedupeSet?.has(dedupeId) ?? false) || this._getOrCreate(name, valueCollectionType).appliedTxnOpIds.has(dedupeId))) {
+      return {
+        type: "MULTIMAP_RESPONSE",
+        requestId: "deduped",
+        success: true,
+        resultType: "boolean",
+        booleanResult: true,
+      };
+    }
     return this._enqueueOperation(
       name,
       async (container) => {
+        const finalize = (response: MultiMapResponseMsg): MultiMapResponseMsg => {
+          if (dedupeId !== undefined) {
+            container.appliedTxnOpIds.add(dedupeId);
+            dedupeSet?.add(dedupeId);
+          }
+          return response;
+        };
+
         switch (operation) {
           case "put": {
             const key = options?.keyData;
@@ -331,19 +371,19 @@ export class DistributedMultiMapService {
               await this._replicateState(name, container);
               this._broadcastEvent(name, "ADDED", key, val, null, 1);
             }
-            return this._boolResponse(changed);
+            return finalize(this._boolResponse(changed));
           }
           case "get": {
             const key = options?.keyData;
             if (key === undefined) throw new Error("NullPointerException");
             const entry = container.entries.get(dataFp(key));
-            return {
+            return finalize({
               type: "MULTIMAP_RESPONSE",
               requestId: "local",
               success: true,
               resultType: "data-array",
               dataList: entry?.col.toArray().map(encodeData) ?? [],
-            };
+            });
           }
           case "remove": {
             const key = options?.keyData;
@@ -353,7 +393,7 @@ export class DistributedMultiMapService {
             }
             const fp = dataFp(key);
             const entry = container.entries.get(fp);
-            if (entry === undefined) return this._boolResponse(false);
+            if (entry === undefined) return finalize(this._boolResponse(false));
             const removed = entry.col.removeOne(val);
             if (removed) {
               if (entry.col.size === 0) container.entries.delete(fp);
@@ -361,7 +401,7 @@ export class DistributedMultiMapService {
               await this._replicateState(name, container);
               this._broadcastEvent(name, "REMOVED", key, null, val, 1);
             }
-            return this._boolResponse(removed);
+            return finalize(this._boolResponse(removed));
           }
           case "removeAll": {
             const key = options?.keyData;
@@ -369,13 +409,13 @@ export class DistributedMultiMapService {
             const fp = dataFp(key);
             const entry = container.entries.get(fp);
             if (entry === undefined) {
-              return {
+              return finalize({
                 type: "MULTIMAP_RESPONSE",
                 requestId: "local",
                 success: true,
                 resultType: "data-array",
                 dataList: [],
-              };
+              });
             }
             const oldValues = entry.col.toArray();
             container.entries.delete(fp);
@@ -384,21 +424,21 @@ export class DistributedMultiMapService {
             for (const oldValue of oldValues) {
               this._broadcastEvent(name, "REMOVED", key, null, oldValue, 1);
             }
-            return {
+            return finalize({
               type: "MULTIMAP_RESPONSE",
               requestId: "local",
               success: true,
               resultType: "data-array",
               dataList: oldValues.map(encodeData),
-            };
+            });
           }
           case "containsKey": {
             const key = options?.keyData;
             if (key === undefined) throw new Error("NullPointerException");
             const entry = container.entries.get(dataFp(key));
-            return this._boolResponse(
+            return finalize(this._boolResponse(
               entry !== undefined && entry.col.size > 0,
-            );
+            ));
           }
           case "containsValue": {
             const val = options?.valueData;
@@ -407,7 +447,7 @@ export class DistributedMultiMapService {
             for (const { col } of Array.from(container.entries.values())) {
               if (col.has(val)) { found = true; break; }
             }
-            return this._boolResponse(found);
+            return finalize(this._boolResponse(found));
           }
           case "containsEntry": {
             const key = options?.keyData;
@@ -416,10 +456,10 @@ export class DistributedMultiMapService {
               throw new Error("NullPointerException");
             }
             const entry = container.entries.get(dataFp(key));
-            return this._boolResponse(entry?.col.has(val) ?? false);
+            return finalize(this._boolResponse(entry?.col.has(val) ?? false));
           }
           case "keySet":
-            return {
+            return finalize({
               type: "MULTIMAP_RESPONSE",
               requestId: "local",
               success: true,
@@ -427,19 +467,19 @@ export class DistributedMultiMapService {
               dataList: Array.from(container.entries.values()).map(({ key }) =>
                 encodeData(key),
               ),
-            };
+            });
           case "values": {
             const all: EncodedData[] = [];
             for (const { col } of Array.from(container.entries.values())) {
               for (const v of col.toArray()) all.push(encodeData(v));
             }
-            return {
+            return finalize({
               type: "MULTIMAP_RESPONSE",
               requestId: "local",
               success: true,
               resultType: "data-array",
               dataList: all,
-            };
+            });
           }
           case "entrySet": {
             const pairs: Array<[EncodedData, EncodedData]> = [];
@@ -448,27 +488,27 @@ export class DistributedMultiMapService {
                 pairs.push([encodeData(key), encodeData(v)]);
               }
             }
-            return {
+            return finalize({
               type: "MULTIMAP_RESPONSE",
               requestId: "local",
               success: true,
               resultType: "entry-set",
               entrySet: pairs,
-            };
+            });
           }
           case "size": {
             let total = 0;
             for (const { col } of Array.from(container.entries.values())) {
               total += col.size;
             }
-            return this._numberResponse(total);
+            return finalize(this._numberResponse(total));
           }
           case "valueCount": {
             const key = options?.keyData;
             if (key === undefined) throw new Error("NullPointerException");
-            return this._numberResponse(
+            return finalize(this._numberResponse(
               container.entries.get(dataFp(key))?.col.size ?? 0,
-            );
+            ));
           }
           case "clear":
             if (container.entries.size > 0) {
@@ -488,7 +528,7 @@ export class DistributedMultiMapService {
                 numberOfAffectedEntries,
               );
             }
-            return this._voidResponse();
+            return finalize(this._voidResponse());
         }
       },
       valueCollectionType,
@@ -510,6 +550,9 @@ export class DistributedMultiMapService {
           : undefined,
         dataList: message.dataList?.map(decodeData),
       },
+      ValueCollectionType.LIST,
+      message.txnDedupeId,
+      this._getOrCreate(message.mapName).appliedTxnOpIds,
     )
       .then((response) => {
         this._transport?.send(message.sourceNodeId, {
@@ -562,6 +605,7 @@ export class DistributedMultiMapService {
       container.entries.set(dataFp(key), { key, col });
     }
     container.version = message.version;
+    container.appliedTxnOpIds.replace(message.appliedTxnOpIds);
 
     if (message.requestId !== null) {
       this._transport?.send(message.sourceNodeId, {
@@ -679,6 +723,7 @@ export class DistributedMultiMapService {
         container.valueCollectionType === ValueCollectionType.SET
           ? "SET"
           : "LIST",
+      appliedTxnOpIds: container.appliedTxnOpIds.snapshot(),
     };
     this._transport.send(backupId, msg);
 
@@ -726,10 +771,11 @@ export class DistributedMultiMapService {
         version: 0,
         operationChain: Promise.resolve(),
         valueCollectionType: type,
+        appliedTxnOpIds: new RecentStringSetImpl(8_192),
       };
       this._containers.set(name, container);
     }
-    return container;
+    return container!;
   }
 
   private _enqueueOperation<T>(

@@ -14,6 +14,7 @@ import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl
 
 export class TransactionLog {
     private readonly _recordMap = new Map<unknown, TransactionLogRecord>();
+    private readonly _recordOrder: string[] = [];
 
     constructor(records?: Iterable<TransactionLogRecord>) {
         if (records !== undefined) {
@@ -25,7 +26,12 @@ export class TransactionLog {
 
     add(record: TransactionLogRecord): void {
         const key = record.getKey() ?? {};
+        const existing = this._recordMap.get(key);
+        if (existing !== undefined) {
+            this._removeRecordId(existing.getRecordId());
+        }
         this._recordMap.set(key, record);
+        this._recordOrder.push(record.getRecordId());
     }
 
     get(key: unknown): TransactionLogRecord | null {
@@ -37,6 +43,10 @@ export class TransactionLog {
     }
 
     remove(key: unknown): void {
+        const existing = this._recordMap.get(key);
+        if (existing !== undefined) {
+            this._removeRecordId(existing.getRecordId());
+        }
         this._recordMap.delete(key);
     }
 
@@ -45,7 +55,19 @@ export class TransactionLog {
     }
 
     toBackupRecords(): TransactionBackupRecord[] {
-        return Array.from(this._recordMap.values(), (record) => record.toBackupRecord());
+        const recordsById = new Map<string, TransactionLogRecord>();
+        for (const record of this._recordMap.values()) {
+            recordsById.set(record.getRecordId(), record);
+        }
+
+        const records: TransactionBackupRecord[] = [];
+        for (const recordId of this._recordOrder) {
+            const record = recordsById.get(recordId);
+            if (record !== undefined) {
+                records.push(record.toBackupRecord());
+            }
+        }
+        return records;
     }
 
     commit(nodeEngine: NodeEngine): InvocationFuture<unknown>[] {
@@ -96,5 +118,12 @@ export class TransactionLog {
 
     private _isTargetAware(record: TransactionLogRecord): record is TargetAwareTransactionLogRecord {
         return typeof (record as TargetAwareTransactionLogRecord).getTarget === 'function';
+    }
+
+    private _removeRecordId(recordId: string): void {
+        const index = this._recordOrder.indexOf(recordId);
+        if (index !== -1) {
+            this._recordOrder.splice(index, 1);
+        }
     }
 }

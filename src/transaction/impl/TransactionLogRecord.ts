@@ -8,6 +8,8 @@ import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/O
 import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 
 export interface TransactionLogRecord {
+    getRecordId(): string;
+
     /**
      * The key that uniquely identifies this record within the TransactionLog.
      * Return null if this record cannot be overwritten.
