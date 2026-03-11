@@ -4,6 +4,15 @@ import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 
 const ABORTED = Symbol('aborted');
 
+function closeIteratorSafely<T>(iter: AsyncIterator<T>): void {
+  const close = iter.return;
+  if (typeof close !== 'function') {
+    return;
+  }
+
+  void close.call(iter).catch(() => {});
+}
+
 function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T | typeof ABORTED> {
   if (signal.aborted) return Promise.resolve(ABORTED);
   return new Promise<T | typeof ABORTED>((resolve, reject) => {
@@ -50,7 +59,7 @@ export class SourceProcessor<T> {
       while (!signal.aborted) {
         const next = await raceAbort<IteratorResult<import('@zenystx/helios-blitz/source/Source.js').SourceMessage<T>>>(iter.next(), signal);
         if (next === ABORTED) {
-          await iter.return?.();
+          closeIteratorSafely(iter);
           return;
         }
         if (next.done) break;
@@ -88,7 +97,7 @@ export class SourceProcessor<T> {
       throw err;
     } finally {
       if (signal.aborted) {
-        await iter.return?.();
+        closeIteratorSafely(iter);
       }
     }
   }

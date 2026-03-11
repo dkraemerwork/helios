@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { BlitzService } from '@zenystx/helios-blitz/BlitzService';
 import { Pipeline } from '@zenystx/helios-blitz/Pipeline';
-import { StringCodec } from '@zenystx/helios-blitz/codec/BlitzCodec';
+import { JsonCodec, StringCodec } from '@zenystx/helios-blitz/codec/BlitzCodec';
 import { BlitzEvent } from '@zenystx/helios-blitz/BlitzEvent';
 import type { Sink } from '@zenystx/helios-blitz/sink/Sink';
+import { NatsSource } from '@zenystx/helios-blitz/source/NatsSource';
 import type { Source, SourceMessage } from '@zenystx/helios-blitz/source/Source';
 import { JobStatus } from '@zenystx/helios-core/job/JobStatus';
 
@@ -103,5 +104,28 @@ describe('BlitzService standalone jobs', () => {
     expect(events).not.toContain(BlitzEvent.JOB_COMPLETED);
     await expect(blitz.cancelJob(job.id)).rejects.toThrow(`Job '${job.id}' is already in terminal state 'CANCELLED'`);
     await expect(blitz.restartJob(job.id)).rejects.toThrow('Job restart is not supported for standalone/light jobs.');
+  });
+
+  it('cancels a NATS-backed standalone job without waiting for new messages', async () => {
+    const pipeline = new Pipeline('standalone-nats-cancel-job');
+    pipeline
+      .readFrom(NatsSource.fromSubject(blitz.nc, `standalone.cancel.${Date.now()}`, JsonCodec<{ price: number }>()))
+      .map((value: { price: number }) => value.price)
+      .writeTo({
+        name: 'collect-sink',
+        write: async () => {},
+      });
+
+    const job = await blitz.newJob(pipeline, { name: 'standalone-nats-cancel-job' });
+
+    await expect(Promise.race([
+      blitz.cancelJob(job.id),
+      Bun.sleep(1_000).then(() => {
+        throw new Error('Timed out waiting for NATS-backed job cancel');
+      }),
+    ])).resolves.toBeUndefined();
+
+    await job.join();
+    expect(job.getStatus()).toBe(JobStatus.CANCELLED);
   });
 });
