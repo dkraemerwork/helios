@@ -59,13 +59,21 @@ describe('BinarySerializationStrategy', () => {
         };
 
         const messages: ClusterMessage[] = [
-            { type: 'HELLO', nodeId: 'node-a' },
+            {
+                type: 'HELLO',
+                nodeId: 'node-a',
+                protocol: 'helios.cluster.tcp',
+                protocolVersion: 1,
+                minSupportedProtocolVersion: 1,
+                capabilities: ['binary-framing-v1'],
+                requiredCapabilities: [],
+            },
             { type: 'MAP_PUT', mapName: 'm', key: { hello: 'world' }, value: ['v'] },
             { type: 'MAP_REMOVE', mapName: 'm', key: 42 },
             { type: 'MAP_CLEAR', mapName: 'm' },
             { type: 'INVALIDATE', mapName: 'm', key: 'k' },
-            { type: 'JOIN_REQUEST', joinerAddress: { host: '127.0.0.1', port: 5701 }, joinerUuid: 'uuid-1', clusterName: 'helios', partitionCount: 271, joinerVersion: { major: 1, minor: 2, patch: 3 }, joinerRestEndpoint: { host: 'public-a.example', port: 18081 } },
-            { type: 'FINALIZE_JOIN', memberListVersion: 2, members: [{ address: { host: '127.0.0.1', port: 5701 }, uuid: 'uuid-1', attributes: { role: 'data' }, liteMember: false, version: { major: 1, minor: 0, patch: 0 }, memberListJoinVersion: 1, restEndpoint: { host: 'public-a.example', port: 18081 } }], masterAddress: { host: '127.0.0.1', port: 5701 }, clusterId: 'cluster-1', clusterState: 'FROZEN' },
+            { type: 'JOIN_REQUEST', joinerAddress: { host: '127.0.0.1', port: 5701 }, joinerUuid: 'uuid-1', clusterName: 'helios', partitionCount: 271, joinerVersion: { major: 1, minor: 2, patch: 3 }, joinerClientEndpoint: { host: 'public-a.example', port: 5702 }, joinerRestEndpoint: { host: 'public-a.example', port: 18081 } },
+            { type: 'FINALIZE_JOIN', memberListVersion: 2, members: [{ address: { host: '127.0.0.1', port: 5701 }, uuid: 'uuid-1', attributes: { role: 'data' }, liteMember: false, version: { major: 1, minor: 0, patch: 0 }, memberListJoinVersion: 1, clientEndpoint: { host: 'public-a.example', port: 5702 }, restEndpoint: { host: 'public-a.example', port: 18081 } }], masterAddress: { host: '127.0.0.1', port: 5701 }, clusterId: 'cluster-1', clusterState: 'FROZEN' },
             { type: 'MEMBERS_UPDATE', memberListVersion: 3, members: [], masterAddress: { host: '127.0.0.1', port: 5701 }, clusterId: 'cluster-1', clusterState: 'ACTIVE' },
             { type: 'PARTITION_STATE', clusterState: 'PASSIVE', versions: [1, 2], partitions: [[null, { address: { host: '127.0.0.1', port: 5701 }, uuid: 'uuid-1' }]] },
             { type: 'HEARTBEAT', senderUuid: 'uuid-1', timestamp: 123 },

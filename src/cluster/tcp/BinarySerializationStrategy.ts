@@ -165,6 +165,11 @@ export class BinarySerializationStrategy implements SerializationStrategy {
         switch (message.type) {
             case 'HELLO':
                 out.writeString(message.nodeId);
+                out.writeString(message.protocol);
+                out.writeInt(message.protocolVersion);
+                out.writeInt(message.minSupportedProtocolVersion);
+                out.writeStringArray(message.capabilities);
+                out.writeStringArray(message.requiredCapabilities);
                 return;
             case 'MAP_PUT':
                 out.writeString(message.mapName);
@@ -188,6 +193,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.clusterName);
                 out.writeInt(message.partitionCount);
                 writeMemberVersion(out, message.joinerVersion);
+                writeOptionalAddress(out, message.joinerClientEndpoint);
                 writeOptionalAddress(out, message.joinerRestEndpoint);
                 return;
             case 'FINALIZE_JOIN':
@@ -449,7 +455,15 @@ export class BinarySerializationStrategy implements SerializationStrategy {
     private _readMessageBody(inp: ByteArrayObjectDataInput, messageTypeId: MessageTypeId, _flags: number, partitionId: number): ClusterMessage {
         switch (MESSAGE_ID_TO_TYPE[messageTypeId]) {
             case 'HELLO':
-                return { type: 'HELLO', nodeId: readRequiredString(inp) };
+                return {
+                    type: 'HELLO',
+                    nodeId: readRequiredString(inp),
+                    protocol: readRequiredString(inp),
+                    protocolVersion: inp.readInt(),
+                    minSupportedProtocolVersion: inp.readInt(),
+                    capabilities: inp.readStringArray() ?? [],
+                    requiredCapabilities: inp.readStringArray() ?? [],
+                };
             case 'MAP_PUT':
                 return { type: 'MAP_PUT', mapName: readRequiredString(inp), key: readUnknownValue(inp), value: readUnknownValue(inp) };
             case 'MAP_REMOVE':
@@ -466,6 +480,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     clusterName: readRequiredString(inp),
                     partitionCount: inp.readInt(),
                     joinerVersion: readMemberVersion(inp),
+                    joinerClientEndpoint: readOptionalAddress(inp),
                     joinerRestEndpoint: readOptionalAddress(inp),
                 };
             case 'FINALIZE_JOIN':
@@ -1360,6 +1375,7 @@ function writeWireMembers(out: ByteArrayObjectDataOutput, members: readonly Wire
         out.writeBoolean(member.liteMember);
         writeMemberVersion(out, member.version);
         out.writeInt(member.memberListJoinVersion);
+        writeOptionalAddress(out, member.clientEndpoint);
         writeOptionalAddress(out, member.restEndpoint);
     }
 }
@@ -1375,6 +1391,7 @@ function readWireMembers(inp: ByteArrayObjectDataInput): WireMemberInfo[] {
             liteMember: inp.readBoolean(),
             version: readMemberVersion(inp),
             memberListJoinVersion: inp.readInt(),
+            clientEndpoint: readOptionalAddress(inp),
             restEndpoint: readOptionalAddress(inp),
         };
     }

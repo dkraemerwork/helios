@@ -202,6 +202,7 @@ export class TestClusterNode {
             patch: m.getVersion().getPatch(),
           },
           memberListJoinVersion: m.getMemberListJoinVersion(),
+          clientEndpoint: null,
           restEndpoint: null,
         }));
 

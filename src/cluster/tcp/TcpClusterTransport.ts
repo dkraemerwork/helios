@@ -32,14 +32,42 @@ interface FrameDecoderState {
 
 const INITIAL_READ_BUFFER_SIZE = 64 * 1024;
 
+export interface TransportHandshakeMetadata {
+    protocol: string;
+    protocolVersion: number;
+    minSupportedProtocolVersion: number;
+    capabilities: string[];
+    requiredCapabilities: string[];
+}
+
+export interface TransportCloseReason {
+    code:
+        | 'connection-closed'
+        | 'duplicate-peer'
+        | 'handshake-incompatible'
+        | 'handshake-required'
+        | 'malformed-frame';
+    detail: string;
+}
+
+const DEFAULT_TRANSPORT_HANDSHAKE: TransportHandshakeMetadata = Object.freeze({
+    protocol: 'helios.cluster.tcp',
+    protocolVersion: 1,
+    minSupportedProtocolVersion: 1,
+    capabilities: ['binary-framing-v1', 'handshake-negotiation-v1'],
+    requiredCapabilities: [],
+});
+
 export interface TcpClusterTransportOptions {
     scatterOutboundEncoding?: boolean;
     scatterOutboundEncoder?: ScatterOutboundEncoderOptions;
+    handshake?: Partial<TransportHandshakeMetadata>;
 }
 
 export class TcpClusterTransport {
     private readonly _nodeId: string;
     private readonly _strategy: SerializationStrategy;
+    private readonly _handshake: TransportHandshakeMetadata;
     private readonly _scatterOutboundEncoding: boolean;
     private readonly _scatterOutboundEncoderOptions?: ScatterOutboundEncoderOptions;
     private _server: EventloopServer | null = null;
@@ -57,6 +85,8 @@ export class TcpClusterTransport {
     private readonly _buffers = new Map<EventloopChannel, FrameDecoderState>();
     private readonly _outboundBatchers = new Map<EventloopChannel, OutboundBatcher>();
     private readonly _scatterOutboundEncoders = new Map<EventloopChannel, ScatterOutboundEncoder>();
+    private readonly _channelPeerIds = new Map<EventloopChannel, string>();
+    private readonly _pendingCloseReasons = new Map<EventloopChannel, TransportCloseReason>();
 
     // ── External callbacks (set by HeliosInstanceImpl) ────────────────────
 
@@ -71,13 +101,22 @@ export class TcpClusterTransport {
     /** Fired when a peer successfully completes the HELLO handshake. */
     onPeerConnected: (nodeId: string) => void = () => {};
     /** Fired when a peer's channel is closed. */
-    onPeerDisconnected: (nodeId: string) => void = () => {};
+    onPeerDisconnected: (nodeId: string, reason?: TransportCloseReason) => void = () => {};
+    /** Fired whenever a channel closes, including pre-handshake failures. */
+    onConnectionClosed: (event: { nodeId: string | null; reason: TransportCloseReason }) => void = () => {};
     /** Fired for any non-HELLO message that is not handled by legacy callbacks. */
     onMessage: (msg: ClusterMessage) => void = () => {};
 
     constructor(nodeId: string, strategy?: SerializationStrategy, options?: TcpClusterTransportOptions) {
         this._nodeId = nodeId;
         this._strategy = strategy ?? new BinarySerializationStrategy();
+        this._handshake = {
+            protocol: options?.handshake?.protocol ?? DEFAULT_TRANSPORT_HANDSHAKE.protocol,
+            protocolVersion: options?.handshake?.protocolVersion ?? DEFAULT_TRANSPORT_HANDSHAKE.protocolVersion,
+            minSupportedProtocolVersion: options?.handshake?.minSupportedProtocolVersion ?? DEFAULT_TRANSPORT_HANDSHAKE.minSupportedProtocolVersion,
+            capabilities: [...(options?.handshake?.capabilities ?? DEFAULT_TRANSPORT_HANDSHAKE.capabilities)],
+            requiredCapabilities: [...(options?.handshake?.requiredCapabilities ?? DEFAULT_TRANSPORT_HANDSHAKE.requiredCapabilities)],
+        };
         this._scatterOutboundEncoding = options?.scatterOutboundEncoding ?? true;
         this._scatterOutboundEncoderOptions = options?.scatterOutboundEncoder;
     }
@@ -129,6 +168,8 @@ export class TcpClusterTransport {
         }
         this._scatterOutboundEncoders.clear();
         this._buffers.clear();
+        this._channelPeerIds.clear();
+        this._pendingCloseReasons.clear();
         this._server?.stop(true);
         this._server = null;
     }
@@ -271,7 +312,15 @@ export class TcpClusterTransport {
             writeOffset: 0,
         });
         // Immediately announce this node's identity
-        this._sendMsg(ch, { type: 'HELLO', nodeId: this._nodeId });
+        this._sendMsg(ch, {
+            type: 'HELLO',
+            nodeId: this._nodeId,
+            protocol: this._handshake.protocol,
+            protocolVersion: this._handshake.protocolVersion,
+            minSupportedProtocolVersion: this._handshake.minSupportedProtocolVersion,
+            capabilities: [...this._handshake.capabilities],
+            requiredCapabilities: [...this._handshake.requiredCapabilities],
+        });
     }
 
     private _onClose(ch: EventloopChannel): void {
@@ -282,13 +331,24 @@ export class TcpClusterTransport {
         encoder?.dispose();
         this._scatterOutboundEncoders.delete(ch);
         this._buffers.delete(ch);
-        for (const [id, peerCh] of this._peers) {
-            if (peerCh === ch) {
-                this._peers.delete(id);
-                this.onPeerDisconnected(id);
-                break;
+        const peerId = this._channelPeerIds.get(ch) ?? null;
+        if (peerId !== null) {
+            this._channelPeerIds.delete(ch);
+            if (this._peers.get(peerId) === ch) {
+                this._peers.delete(peerId);
             }
         }
+
+        const reason = this._pendingCloseReasons.get(ch) ?? {
+            code: 'connection-closed',
+            detail: 'Channel closed',
+        } satisfies TransportCloseReason;
+        this._pendingCloseReasons.delete(ch);
+
+        if (peerId !== null) {
+            this.onPeerDisconnected(peerId, reason);
+        }
+        this.onConnectionClosed({ nodeId: peerId, reason });
     }
 
     private _onData(ch: EventloopChannel, incoming: Buffer): void {
@@ -320,8 +380,12 @@ export class TcpClusterTransport {
             try {
                 const msg = this._strategy.deserialize(msgBytes);
                 this._handleMsg(ch, msg);
-            } catch {
-                // Malformed frame — discard and continue
+            } catch (error) {
+                this._closeChannel(ch, {
+                    code: 'malformed-frame',
+                    detail: error instanceof Error ? error.message : 'Malformed cluster frame',
+                });
+                break;
             }
         }
 
@@ -358,33 +422,134 @@ export class TcpClusterTransport {
 
     private _handleMsg(ch: EventloopChannel, msg: ClusterMessage): void {
         switch (msg.type) {
-            case 'HELLO':
+            case 'HELLO': {
+                const incompatibility = this._validateHello(msg);
+                if (incompatibility !== null) {
+                    this._closeChannel(ch, incompatibility);
+                    return;
+                }
+                const existingPeer = this._peers.get(msg.nodeId);
+                if (existingPeer !== undefined && existingPeer !== ch) {
+                    this._closeChannel(ch, {
+                        code: 'duplicate-peer',
+                        detail: `Duplicate transport channel for peer '${msg.nodeId}'`,
+                    });
+                    return;
+                }
                 this._peers.set(msg.nodeId, ch);
+                this._channelPeerIds.set(ch, msg.nodeId);
                 this.onPeerConnected(msg.nodeId);
                 break;
+            }
 
             case 'MAP_PUT':
+                if (!this._isHandshakeComplete(ch)) {
+                    this._closeChannel(ch, {
+                        code: 'handshake-required',
+                        detail: 'Received MAP_PUT before HELLO handshake completed',
+                    });
+                    return;
+                }
                 this.onRemotePut(msg.mapName, msg.key, msg.value);
                 break;
 
             case 'MAP_REMOVE':
+                if (!this._isHandshakeComplete(ch)) {
+                    this._closeChannel(ch, {
+                        code: 'handshake-required',
+                        detail: 'Received MAP_REMOVE before HELLO handshake completed',
+                    });
+                    return;
+                }
                 this.onRemoteRemove(msg.mapName, msg.key);
                 break;
 
             case 'MAP_CLEAR':
+                if (!this._isHandshakeComplete(ch)) {
+                    this._closeChannel(ch, {
+                        code: 'handshake-required',
+                        detail: 'Received MAP_CLEAR before HELLO handshake completed',
+                    });
+                    return;
+                }
                 this.onRemoteClear(msg.mapName);
                 break;
 
             case 'INVALIDATE':
+                if (!this._isHandshakeComplete(ch)) {
+                    this._closeChannel(ch, {
+                        code: 'handshake-required',
+                        detail: 'Received INVALIDATE before HELLO handshake completed',
+                    });
+                    return;
+                }
                 this.onRemoteInvalidate(msg.mapName, msg.key);
                 break;
 
             default:
+                if (!this._isHandshakeComplete(ch)) {
+                    this._closeChannel(ch, {
+                        code: 'handshake-required',
+                        detail: `Received ${msg.type} before HELLO handshake completed`,
+                    });
+                    return;
+                }
                 // All new message types (JOIN_REQUEST, FINALIZE_JOIN, MEMBERS_UPDATE,
                 // HEARTBEAT, FETCH_MEMBERS_VIEW, OPERATION, BACKUP, etc.)
                 this.onMessage(msg);
                 break;
         }
+    }
+
+    private _isHandshakeComplete(ch: EventloopChannel): boolean {
+        return this._channelPeerIds.has(ch);
+    }
+
+    private _validateHello(msg: Extract<ClusterMessage, { type: 'HELLO' }>): TransportCloseReason | null {
+        if (msg.protocol !== this._handshake.protocol) {
+            return {
+                code: 'handshake-incompatible',
+                detail: `Unsupported transport protocol '${msg.protocol}'`,
+            };
+        }
+
+        const compatibleVersionRange = msg.protocolVersion >= this._handshake.minSupportedProtocolVersion
+            && msg.minSupportedProtocolVersion <= this._handshake.protocolVersion;
+        if (!compatibleVersionRange) {
+            return {
+                code: 'handshake-incompatible',
+                detail: `Incompatible protocol versions local=${this._handshake.minSupportedProtocolVersion}-${this._handshake.protocolVersion} remote=${msg.minSupportedProtocolVersion}-${msg.protocolVersion}`,
+            };
+        }
+
+        const localCapabilities = new Set(this._handshake.capabilities);
+        for (const capability of msg.requiredCapabilities) {
+            if (!localCapabilities.has(capability)) {
+                return {
+                    code: 'handshake-incompatible',
+                    detail: `Remote peer requires unsupported capability '${capability}'`,
+                };
+            }
+        }
+
+        const remoteCapabilities = new Set(msg.capabilities);
+        for (const capability of this._handshake.requiredCapabilities) {
+            if (!remoteCapabilities.has(capability)) {
+                return {
+                    code: 'handshake-incompatible',
+                    detail: `Remote peer is missing required capability '${capability}'`,
+                };
+            }
+        }
+
+        return null;
+    }
+
+    private _closeChannel(ch: EventloopChannel, reason: TransportCloseReason): void {
+        if (!this._pendingCloseReasons.has(ch)) {
+            this._pendingCloseReasons.set(ch, reason);
+        }
+        ch.close();
     }
 
     private _createOutboundBatcher(ch: EventloopChannel): OutboundBatcher {

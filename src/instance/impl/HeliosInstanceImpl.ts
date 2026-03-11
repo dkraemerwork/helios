@@ -536,6 +536,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Client protocol server — non-null when client protocol port is configured (>= 0). */
   private _clientProtocolServer: ClientProtocolServer | null = null;
 
+  /** Topology publisher used for live official-client cluster view updates. */
+  private _topologyPublisher: TopologyPublisher | null = null;
+
   /** Resolves when the client protocol server has finished binding its TCP port. */
   private _clientProtocolReady: Promise<void> = Promise.resolve();
 
@@ -741,7 +744,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
 
     this._restServer.start();
-    this._syncLocalMemberRestEndpoint();
+    this._syncLocalMemberEndpoints();
 
     // Initialize monitoring subsystem if configured
     this._initMonitor();
@@ -845,6 +848,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._clusterCoordinator.onMembershipChanged(() => {
       this._rebuildAddressToMemberIdCache();
       this._handleExecutorMembershipChange();
+      this._publishClientTopology();
       this._systemEventLog.pushEvent('MEMBER_JOINED', 'Cluster membership changed');
     });
     this._clusterCoordinator.onMemberRemoved((memberId) => {
@@ -2128,6 +2132,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // We must start() BEFORE registering handlers so that srv.getPort() returns
     // the actual bound port (especially for ephemeral port 0).
     this._clientProtocolReady = this._clientProtocolServer.start();
+    this._syncLocalMemberEndpoints();
 
     this._registerClientProtocolHandlers();
   }
@@ -3216,30 +3221,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // ── TopologyPublisher ─────────────────────────────────────────────────
     const topologyPublisher = new TopologyPublisher(srv.getSessionRegistry());
     topologyPublisher.start();
-
-    // Build a MemberInfo for the local member so clients see Members [1]
-    const localMember = this._cluster.getLocalMember();
-    const memberAddress = new Address(
-      '127.0.0.1',
-      srv.getPort() > 0 ? srv.getPort() : this._config.getNetworkConfig().getPort(),
-    );
-    const localMemberInfo = new MemberInfo(
-      memberAddress,
-      localMember.getUuid(),
-      localMember.getAttributes(),
-      localMember.isLiteMember(),
-      localMember.getVersion().isUnknown()
-        ? new MemberVersion(5, 5, 0)
-        : localMember.getVersion(),
-    );
-    topologyPublisher.publishMemberListUpdate([localMemberInfo]);
-
-    // Assign all partitions to the local member UUID
-    const partitionOwnership = new Map<number, string | null>();
-    for (let i = 0; i < partitionCount; i++) {
-      partitionOwnership.set(i, localMember.getUuid());
-    }
-    topologyPublisher.publishPartitionTableUpdate(partitionOwnership);
+    this._topologyPublisher = topologyPublisher;
+    this._publishClientTopology();
 
     // Wire session close handler to clean up topology subscriptions
     srv.setSessionCloseHandler((session) => {
@@ -5959,24 +5942,103 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return `http://${formatUrlHost(host)}:${restPort}`;
   }
 
-  private _syncLocalMemberRestEndpoint(): void {
+  private _buildAdvertisedClientAddress(localMember: Member): Address | null {
+    const configuredPort = this._config.getNetworkConfig().getClientProtocolPort();
+    const boundPort = this._clientProtocolServer?.getPort() ?? 0;
+    const port = boundPort > 0 ? boundPort : configuredPort;
+    if (port <= 0) {
+      return null;
+    }
+
+    const publicAddress = this._config.getNetworkConfig().getPublicAddress();
+    const host = publicAddress !== null && publicAddress.trim().length > 0
+      ? extractHostFromAddress(publicAddress)
+      : localMember.getAddress().getHost();
+    return new Address(host, port);
+  }
+
+  private _syncLocalMemberEndpoints(): void {
     const localMember = this.getCluster().getLocalMember();
     const restAddress = this._buildAdvertisedRestAddress(localMember);
+    const clientAddress = this._buildAdvertisedClientAddress(localMember);
     const addressMap = localMember.getAddressMap();
 
     for (const qualifier of addressMap.keys()) {
-      if (qualifier.type === EndpointQualifier.REST.type) {
+      if (
+        qualifier.type === EndpointQualifier.REST.type
+        || qualifier.type === EndpointQualifier.CLIENT.type
+      ) {
         addressMap.delete(qualifier);
       }
     }
 
-    if (restAddress === null) {
+    if (clientAddress !== null) {
+      addressMap.set(EndpointQualifier.CLIENT, clientAddress);
+    }
+
+    if (restAddress !== null) {
+      const host = extractHostFromAddress(restAddress);
+      const port = this._restServer.getBoundPort();
+      addressMap.set(EndpointQualifier.REST, new Address(host, port));
+    }
+
+    this._clusterCoordinator?.updateLocalEndpoints({
+      restEndpoint: addressMap.get(EndpointQualifier.REST) ?? null,
+      clientEndpoint: addressMap.get(EndpointQualifier.CLIENT) ?? null,
+    });
+  }
+
+  private _publishClientTopology(): void {
+    const topologyPublisher = this._topologyPublisher;
+    if (topologyPublisher === null) {
       return;
     }
 
-    const host = extractHostFromAddress(restAddress);
-    const port = this._restServer.getBoundPort();
-    addressMap.set(EndpointQualifier.REST, new Address(host, port));
+    topologyPublisher.publishMemberListUpdate(this._buildClientTopologyMembers());
+    topologyPublisher.publishPartitionTableUpdate(this._buildClientPartitionOwnership());
+  }
+
+  private _buildClientTopologyMembers(): MemberInfo[] {
+    return this.getCluster().getMembers().map((member) => new MemberInfo(
+      this._resolveClientVisibleMemberAddress(member),
+      member.getUuid(),
+      member.getAttributes(),
+      member.isLiteMember(),
+      member.getVersion().isUnknown()
+        ? new MemberVersion(5, 5, 0)
+        : member.getVersion(),
+      member.getAddressMap(),
+    ));
+  }
+
+  private _resolveClientVisibleMemberAddress(member: Member): Address {
+    for (const [qualifier, address] of member.getAddressMap()) {
+      if (qualifier.type === EndpointQualifier.CLIENT.type) {
+        return address;
+      }
+    }
+
+    return member.getAddress();
+  }
+
+  private _buildClientPartitionOwnership(): Map<number, string | null> {
+    const partitionOwnership = new Map<number, string | null>();
+    const partitionService = this._clusterCoordinator?.getInternalPartitionService() ?? null;
+    if (partitionService === null) {
+      const localMemberId = this.getCluster().getLocalMember().getUuid();
+      for (let partitionId = 0; partitionId < this.getPartitionCount(); partitionId++) {
+        partitionOwnership.set(partitionId, localMemberId);
+      }
+      return partitionOwnership;
+    }
+
+    for (let partitionId = 0; partitionId < partitionService.getPartitionCount(); partitionId++) {
+      partitionOwnership.set(
+        partitionId,
+        partitionService.getPartitionOwner(partitionId)?.uuid() ?? null,
+      );
+    }
+    return partitionOwnership;
   }
 
   private _getMemberRestAdvertisement(

@@ -18,6 +18,7 @@ import {
   TcpClusterTransport,
   type TcpClusterTransportOptions,
 } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
+import type { EventloopChannel } from "@zenystx/helios-core/internal/eventloop/Eventloop";
 import { afterEach, describe, expect, it } from "bun:test";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -51,6 +52,22 @@ function encodeFrame(
   return frame;
 }
 
+function createTestChannel(): EventloopChannel & { closeCalled: boolean } {
+  const channel = {
+    closeCalled: false,
+    write: () => true,
+    close() {
+      channel.closeCalled = true;
+    },
+    isClosed: () => channel.closeCalled,
+    bytesRead: () => 0,
+    bytesWritten: () => 0,
+    queuedFrames: () => 0,
+    pendingBytes: () => 0,
+  } as unknown as EventloopChannel & { closeCalled: boolean };
+  return channel;
+}
+
 describe("TCP Protocol Upgrade (Block 16.A5)", () => {
   const transports: TcpClusterTransport[] = [];
 
@@ -82,6 +99,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         clusterName: "helios-cluster",
         partitionCount: 271,
         joinerVersion: { major: 1, minor: 0, patch: 0 },
+        joinerClientEndpoint: { host: "public-a.example", port: 5702 },
         joinerRestEndpoint: { host: "public-a.example", port: 18081 },
       };
       const buf = strategy.serialize(msg);
@@ -101,6 +119,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
             liteMember: false,
             version: { major: 1, minor: 0, patch: 0 },
             memberListJoinVersion: 1,
+            clientEndpoint: { host: "public-a.example", port: 5702 },
             restEndpoint: { host: "public-a.example", port: 18081 },
           },
         ],
@@ -125,6 +144,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
             liteMember: false,
             version: { major: 1, minor: 2, patch: 3 },
             memberListJoinVersion: 2,
+            clientEndpoint: { host: "public-a.example", port: 5702 },
             restEndpoint: { host: "public-a.example", port: 18081 },
           },
           {
@@ -134,6 +154,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
             liteMember: true,
             version: { major: 1, minor: 2, patch: 3 },
             memberListJoinVersion: 4,
+            clientEndpoint: null,
             restEndpoint: null,
           },
         ],
@@ -279,15 +300,16 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
     await tB.connectToPeer("127.0.0.1", portA);
     await waitUntil(() => tA.peerCount() >= 1);
 
-    tB.send("nodeA", {
-      type: "JOIN_REQUEST",
-      joinerAddress: { host: "127.0.0.1", port: 5702 },
-      joinerUuid: "uuid-joiner",
-      clusterName: "test-cluster",
-      partitionCount: 271,
-      joinerVersion: { major: 1, minor: 0, patch: 0 },
-      joinerRestEndpoint: { host: "public-joiner.example", port: 18082 },
-    });
+      tB.send("nodeA", {
+        type: "JOIN_REQUEST",
+        joinerAddress: { host: "127.0.0.1", port: 5702 },
+        joinerUuid: "uuid-joiner",
+        clusterName: "test-cluster",
+        partitionCount: 271,
+        joinerVersion: { major: 1, minor: 0, patch: 0 },
+        joinerClientEndpoint: { host: "public-joiner.example", port: 5703 },
+        joinerRestEndpoint: { host: "public-joiner.example", port: 18082 },
+      });
 
     await waitUntil(() => received.some((m) => m.type === "JOIN_REQUEST"));
     const jr = received.find((m) => m.type === "JOIN_REQUEST")!;
@@ -431,6 +453,87 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
     expect(frame.readUInt32BE(0)).toBe(frame.length - 4);
   });
 
+  describe("HELLO handshake negotiation", () => {
+    it("accepts compatible HELLO metadata", () => {
+      const transport = createTransport("nodeA");
+      const received: ClusterMessage[] = [];
+      transport.onMessage = (msg) => received.push(msg);
+      const channel = createTestChannel();
+
+      (transport as any)._onConnect(channel);
+      (transport as any)._onData(channel, encodeFrame(new BinarySerializationStrategy(), {
+        type: "HELLO",
+        nodeId: "nodeB",
+        protocol: "helios.cluster.tcp",
+        protocolVersion: 1,
+        minSupportedProtocolVersion: 1,
+        capabilities: ["binary-framing-v1", "handshake-negotiation-v1"],
+        requiredCapabilities: [],
+      }));
+      (transport as any)._onData(channel, encodeFrame(new BinarySerializationStrategy(), {
+        type: "HEARTBEAT",
+        senderUuid: "nodeB",
+        timestamp: 1,
+      }));
+
+      expect(channel.closeCalled).toBe(false);
+      expect(transport.peerCount()).toBe(1);
+      expect(received).toEqual([{ type: "HEARTBEAT", senderUuid: "nodeB", timestamp: 1 }]);
+    });
+
+    it("rejects incompatible protocol versions with a close reason", () => {
+      const transport = createTransport("nodeA");
+      const closes: Array<{ nodeId: string | null; reason: { code: string; detail: string } }> = [];
+      transport.onConnectionClosed = (event) => closes.push(event);
+      const channel = createTestChannel();
+
+      (transport as any)._onConnect(channel);
+      (transport as any)._onData(channel, encodeFrame(new BinarySerializationStrategy(), {
+        type: "HELLO",
+        nodeId: "nodeB",
+        protocol: "helios.cluster.tcp",
+        protocolVersion: 3,
+        minSupportedProtocolVersion: 2,
+        capabilities: ["binary-framing-v1", "handshake-negotiation-v1"],
+        requiredCapabilities: [],
+      }));
+      (transport as any)._onClose(channel);
+
+      expect(channel.closeCalled).toBe(true);
+      expect(transport.peerCount()).toBe(0);
+      expect(closes).toHaveLength(1);
+      expect(closes[0]).toMatchObject({
+        nodeId: null,
+        reason: { code: "handshake-incompatible" },
+      });
+    });
+
+    it("rejects unknown required capabilities with a close reason", () => {
+      const transport = createTransport("nodeA");
+      const closes: Array<{ nodeId: string | null; reason: { code: string; detail: string } }> = [];
+      transport.onConnectionClosed = (event) => closes.push(event);
+      const channel = createTestChannel();
+
+      (transport as any)._onConnect(channel);
+      (transport as any)._onData(channel, encodeFrame(new BinarySerializationStrategy(), {
+        type: "HELLO",
+        nodeId: "nodeB",
+        protocol: "helios.cluster.tcp",
+        protocolVersion: 1,
+        minSupportedProtocolVersion: 1,
+        capabilities: ["binary-framing-v1", "handshake-negotiation-v1"],
+        requiredCapabilities: ["topology-delta-v2"],
+      }));
+      (transport as any)._onClose(channel);
+
+      expect(channel.closeCalled).toBe(true);
+      expect(closes[0]).toMatchObject({
+        nodeId: null,
+        reason: { code: "handshake-incompatible" },
+      });
+    });
+  });
+
   describe("stateful frame decoder", () => {
     it("reassembles a frame split across multiple chunks", () => {
       const transport = createTransport("nodeA");
@@ -448,6 +551,17 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
       } as any;
 
       (transport as any)._onConnect(channel);
+
+      const helloFrame = encodeFrame(strategy, {
+        type: "HELLO",
+        nodeId: "nodeB",
+        protocol: "helios.cluster.tcp",
+        protocolVersion: 1,
+        minSupportedProtocolVersion: 1,
+        capabilities: ["binary-framing-v1", "handshake-negotiation-v1"],
+        requiredCapabilities: [],
+      });
+      (transport as any)._onData(channel, helloFrame);
 
       const frame = encodeFrame(strategy, {
         type: "HEARTBEAT",
@@ -484,6 +598,17 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
       } as any;
 
       (transport as any)._onConnect(channel);
+
+      const helloFrame = encodeFrame(strategy, {
+        type: "HELLO",
+        nodeId: "nodeB",
+        protocol: "helios.cluster.tcp",
+        protocolVersion: 1,
+        minSupportedProtocolVersion: 1,
+        capabilities: ["binary-framing-v1", "handshake-negotiation-v1"],
+        requiredCapabilities: [],
+      });
+      (transport as any)._onData(channel, helloFrame);
 
       const first = encodeFrame(strategy, {
         type: "HEARTBEAT",
@@ -529,6 +654,17 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
 
       (transport as any)._onConnect(channel);
 
+      const helloFrame = encodeFrame(strategy, {
+        type: "HELLO",
+        nodeId: "nodeB",
+        protocol: "helios.cluster.tcp",
+        protocolVersion: 1,
+        minSupportedProtocolVersion: 1,
+        capabilities: ["binary-framing-v1", "handshake-negotiation-v1"],
+        requiredCapabilities: [],
+      });
+      (transport as any)._onData(channel, helloFrame);
+
       const largeValue = Buffer.alloc(80_000, 7);
       const encoded = serializeOperation(
         new SetOperation(
@@ -561,6 +697,32 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         classId: encoded.classId,
       });
       expect((received[0] as Extract<ClusterMessage, { type: "OPERATION" }>).payload).toEqual(encoded.payload);
+    });
+
+    it("closes malformed frames with an observable reason", () => {
+      const transport = createTransport("nodeA");
+      const closes: Array<{ nodeId: string | null; reason: { code: string; detail: string } }> = [];
+      transport.onConnectionClosed = (event) => closes.push(event);
+      const channel = createTestChannel();
+
+      (transport as any)._onConnect(channel);
+
+      const malformed = Buffer.allocUnsafe(4 + 13);
+      malformed.writeUInt32BE(13, 0);
+      malformed[4] = 1;
+      malformed.writeUInt16BE(0, 5);
+      malformed.writeInt32BE(-1, 7);
+      malformed.writeInt32BE(999, 11);
+      malformed.writeUInt16BE(10, 15);
+
+      (transport as any)._onData(channel, malformed);
+      (transport as any)._onClose(channel);
+
+      expect(channel.closeCalled).toBe(true);
+      expect(closes[0]).toMatchObject({
+        nodeId: null,
+        reason: { code: "malformed-frame" },
+      });
     });
   });
 });

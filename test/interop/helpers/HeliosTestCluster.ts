@@ -48,10 +48,10 @@ export interface ClusterConnectionInfo {
 let clusterCounter = 0;
 
 interface MemberSlot {
-  readonly name: string;
-  readonly host: string;
-  readonly memberPort: number;
-  readonly clientPort: number;
+  name: string;
+  host: string;
+  memberPort: number;
+  clientPort: number;
   instance: HeliosInstanceImpl | null;
 }
 
@@ -154,6 +154,7 @@ export class HeliosTestCluster {
     slot.instance = null;
     this._removeInstance(instance);
     await this._shutdownInstance(instance);
+    this._refreshConnectionInfo();
   }
 
   async restartMember(index: number): Promise<MemberConnectionInfo> {
@@ -165,7 +166,43 @@ export class HeliosTestCluster {
     const instance = await this._startMember(slot, this._memberSlots.length, true);
     this._instances.push(instance);
     slot.instance = instance;
+    this._refreshConnectionInfo();
 
+    return this.getMemberConnectionInfo(index);
+  }
+
+  async addMember(): Promise<MemberConnectionInfo> {
+    if (!this._started) {
+      throw new Error("HeliosTestCluster: cluster not started");
+    }
+
+    const index = this._memberSlots.length;
+    const slot: MemberSlot = {
+      name: `node-${index}`,
+      host: "127.0.0.1",
+      memberPort: this._memberBasePort + index,
+      clientPort: this._clientBasePort + index,
+      instance: null,
+    };
+    this._memberSlots.push(slot);
+
+    const instance = await this._startMember(slot, this._memberSlots.length, true);
+    this._instances.push(instance);
+    slot.instance = instance;
+    this._refreshConnectionInfo();
+
+    return this.getMemberConnectionInfo(index);
+  }
+
+  reassignStoppedMemberPorts(index: number): MemberConnectionInfo {
+    const slot = this._getMemberSlot(index);
+    if (slot.instance !== null) {
+      throw new Error(`HeliosTestCluster: member ${index} must be stopped before reassigning ports`);
+    }
+
+    slot.memberPort = this._memberBasePort + this._memberSlots.length + index;
+    slot.clientPort = this._clientBasePort + this._memberSlots.length + index;
+    this._refreshConnectionInfo();
     return this.getMemberConnectionInfo(index);
   }
 
@@ -268,6 +305,24 @@ export class HeliosTestCluster {
     return this._connectionInfo;
   }
 
+  private _refreshConnectionInfo(): void {
+    if (!this._started || this._connectionInfo === null) {
+      return;
+    }
+
+    const members: MemberConnectionInfo[] = this._memberSlots.map((slot) => ({
+      name: slot.name,
+      host: slot.host,
+      clientPort: slot.clientPort,
+      memberPort: slot.memberPort,
+    }));
+    this._connectionInfo = {
+      clusterName: this._clusterName,
+      members,
+      addresses: members.map((member) => `${member.host}:${member.clientPort}`),
+    };
+  }
+
   private async _startMember(
     slot: MemberSlot,
     nodeCount: number,
@@ -316,7 +371,7 @@ export class HeliosTestCluster {
     network.setPort(memberPort);
     network.setPortAutoIncrement(false);
 
-    if (nodeCount > 1) {
+    if (nodeCount > 1 || useTcpSeedJoin) {
       const join = network.getJoin();
       join.getMulticastConfig().setEnabled(false);
       join.getTcpIpConfig()

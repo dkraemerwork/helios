@@ -1,7 +1,7 @@
 /**
  * Discriminated-union message types for the Helios TCP cluster protocol.
  *
- * Wire format: [4-byte BE uint32: JSON length][JSON payload bytes]
+ * Wire format: [4-byte BE uint32: payload length][binary payload bytes]
  *
  * All messages carry a `type` discriminant so the receiver can switch on them.
  */
@@ -16,6 +16,16 @@ export interface HelloMsg {
   readonly type: "HELLO";
   /** Logical node ID of the sender (instance name). */
   readonly nodeId: string;
+  /** Stable cluster transport protocol identity. */
+  readonly protocol: string;
+  /** Highest protocol version supported by the sender. */
+  readonly protocolVersion: number;
+  /** Lowest protocol version still accepted by the sender. */
+  readonly minSupportedProtocolVersion: number;
+  /** Optional sender capabilities understood by this peer. */
+  readonly capabilities: string[];
+  /** Capabilities the remote peer must advertise or the handshake fails closed. */
+  readonly requiredCapabilities: string[];
 }
 
 export interface MapPutMsg {
@@ -63,6 +73,7 @@ export interface WireMemberInfo {
   readonly liteMember: boolean;
   readonly version: { major: number; minor: number; patch: number };
   readonly memberListJoinVersion: number;
+  readonly clientEndpoint: WireRestEndpointInfo | null;
   readonly restEndpoint: WireRestEndpointInfo | null;
 }
 
@@ -74,6 +85,7 @@ export interface JoinRequestMsg {
   readonly clusterName: string;
   readonly partitionCount: number;
   readonly joinerVersion: { major: number; minor: number; patch: number };
+  readonly joinerClientEndpoint: WireRestEndpointInfo | null;
   readonly joinerRestEndpoint: WireRestEndpointInfo | null;
 }
 
