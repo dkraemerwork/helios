@@ -36,6 +36,18 @@ export async function openRawSocket(port: number, host = "127.0.0.1"): Promise<R
   return { socket, receivedBuffers, waitForClose };
 }
 
+export function buildMalformedUnknownOpcodeRequest(correlationId = 1): Buffer {
+  const serialized = buildUnauthenticatedMapPutRequest(
+    "wp0-malformed-map",
+    "bad-key",
+    "bad-value",
+    correlationId,
+  );
+
+  serialized.writeUInt32LE(0x00ffff00, 6);
+  return serialized;
+}
+
 export function buildUnauthenticatedMapPutRequest(
   mapName: string,
   key: string,

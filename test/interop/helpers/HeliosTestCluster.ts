@@ -162,7 +162,7 @@ export class HeliosTestCluster {
       throw new Error(`HeliosTestCluster: member ${index} is already running`);
     }
 
-    const instance = await this._startMember(slot, this._memberSlots.length);
+    const instance = await this._startMember(slot, this._memberSlots.length, true);
     this._instances.push(instance);
     slot.instance = instance;
 
@@ -170,12 +170,53 @@ export class HeliosTestCluster {
   }
 
   async waitForRunningClusterSize(expectedSize: number, timeoutMs = 30_000): Promise<void> {
-    await waitUntil(() => {
-      const runningInstances = this.getRunningInstances();
+    let consecutiveStablePolls = 0;
+    const requiredStablePolls = 2;
 
-      return runningInstances.length === expectedSize
-        && runningInstances.every((instance) => instance.getCluster().getMembers().length === expectedSize);
+    await waitUntil(() => {
+      const runningSlots = this._memberSlots.filter((slot) => slot.instance !== null);
+
+      if (runningSlots.length !== expectedSize) {
+        consecutiveStablePolls = 0;
+        return false;
+      }
+
+      const expectedMemberAddresses = new Set(
+        runningSlots.map((slot) => `${slot.host}:${slot.memberPort}`),
+      );
+
+      const clusterViewsMatch = runningSlots.every((slot) => {
+        const members = slot.instance!.getCluster().getMembers();
+        if (members.length !== expectedSize) {
+          return false;
+        }
+
+        const actualMemberAddresses = new Set(
+          members.map((member) => {
+            const address = member.getAddress();
+            return `${address.getHost()}:${address.getPort()}`;
+          }),
+        );
+
+        return actualMemberAddresses.size === expectedMemberAddresses.size
+          && [...actualMemberAddresses].every((address) => expectedMemberAddresses.has(address));
+      });
+
+      if (!clusterViewsMatch) {
+        consecutiveStablePolls = 0;
+        return false;
+      }
+
+      consecutiveStablePolls += 1;
+      return consecutiveStablePolls >= requiredStablePolls;
     }, timeoutMs);
+  }
+
+  async waitForRunningMemberCount(expectedSize: number, timeoutMs = 10_000): Promise<void> {
+    await waitUntil(
+      () => this._memberSlots.filter((slot) => slot.instance !== null).length === expectedSize,
+      timeoutMs,
+    );
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
@@ -188,7 +229,7 @@ export class HeliosTestCluster {
     this._memberSlots = this._createMemberSlots(nodeCount);
 
     for (const slot of this._memberSlots) {
-      const instance = await this._startMember(slot, nodeCount);
+      const instance = await this._startMember(slot, nodeCount, true);
       slot.instance = instance;
       this._instances.push(instance);
     }
@@ -227,8 +268,22 @@ export class HeliosTestCluster {
     return this._connectionInfo;
   }
 
-  private async _startMember(slot: MemberSlot, nodeCount: number): Promise<HeliosInstanceImpl> {
-    const instance = await Helios.newInstance(this._buildConfig(slot.name, slot.memberPort, slot.clientPort, nodeCount));
+  private async _startMember(
+    slot: MemberSlot,
+    nodeCount: number,
+    useTcpSeedJoin: boolean,
+  ): Promise<HeliosInstanceImpl> {
+    const seedSlots = this._memberSlots.filter((memberSlot) => memberSlot.instance !== null);
+    const instance = await Helios.newInstance(
+      this._buildConfig(
+        slot.name,
+        slot.memberPort,
+        slot.clientPort,
+        nodeCount,
+        seedSlots,
+        useTcpSeedJoin,
+      ),
+    );
     await instance.waitForClientProtocolReady();
 
     if (instance.getClientProtocolPort() !== slot.clientPort) {
@@ -242,7 +297,14 @@ export class HeliosTestCluster {
     return instance;
   }
 
-  private _buildConfig(nodeName: string, memberPort: number, clientPort: number, nodeCount: number): HeliosConfig {
+  private _buildConfig(
+    nodeName: string,
+    memberPort: number,
+    clientPort: number,
+    nodeCount: number,
+    seedSlots: MemberSlot[],
+    useTcpSeedJoin: boolean,
+  ): HeliosConfig {
     const cfg = new HeliosConfig(nodeName);
     cfg.setClusterName(this._clusterName);
 
@@ -255,15 +317,20 @@ export class HeliosTestCluster {
     network.setPortAutoIncrement(false);
 
     if (nodeCount > 1) {
-      // Multi-node: use multicast discovery with a unique port per cluster
-      // to prevent cross-test interference.
-      const multicast = network.getJoin().getMulticastConfig();
-      multicast.setEnabled(true);
-      multicast.setMulticastPort(this._multicastPort);
-      multicast.setLoopbackModeEnabled(true);
+      const join = network.getJoin();
+      join.getMulticastConfig().setEnabled(false);
+      join.getTcpIpConfig()
+        .setEnabled(true)
+        .clear()
+        .setConnectionTimeoutSeconds(1);
+
+      if (useTcpSeedJoin && seedSlots.length > 0) {
+        join.getTcpIpConfig().setMembers(seedSlots.map((memberSlot) => `${memberSlot.host}:${memberSlot.memberPort}`));
+      }
     } else {
       // Single-node: no join needed — disable multicast to keep tests fast
       network.getJoin().getMulticastConfig().setEnabled(false);
+      network.getJoin().getTcpIpConfig().setEnabled(false).clear();
     }
 
     return cfg;
