@@ -127,18 +127,22 @@ function createMockTopic(): ITopic<JobCommand> & {
 function createMockExecutor(): BlitzJobExecutor & {
   startedJobs: string[];
   stoppedJobs: Array<{ jobId: string; reason: string }>;
+  executionTimestamps: Map<string, { startTime: number; completionTime: number }>;
 } {
   const startedJobs: string[] = [];
   const stoppedJobs: Array<{ jobId: string; reason: string }> = [];
+  const executionTimestamps = new Map<string, { startTime: number; completionTime: number }>();
 
   return {
     memberId: 'master-1',
     startedJobs,
     stoppedJobs,
+    executionTimestamps,
     startExecution: async (plan: any) => { startedJobs.push(plan.jobId); },
     stopExecution: async (jobId: string, reason: string) => { stoppedJobs.push({ jobId, reason }); },
     waitForCompletion: async () => {},
     getLocalMetrics: () => null,
+    getExecutionTimestamps: (jobId: string) => executionTimestamps.get(jobId) ?? null,
     injectSnapshotBarrier: () => {},
   } as any;
 }
@@ -572,6 +576,22 @@ describe('BlitzJobCoordinator', () => {
       // No INJECT_BARRIER commands should appear
       const barriers = topic.published.filter(c => c.type === 'INJECT_BARRIER');
       expect(barriers.length).toBe(0);
+    });
+
+    it('reports real light-job execution timestamps from the executor', async () => {
+      const config = makeConfig({ name: 'light-metadata' });
+      const pipeline = makePipeline();
+
+      const job = await coordinator.submitLightJob(pipeline, config);
+      executor.executionTimestamps.set(job.id, { startTime: 123, completionTime: 456 });
+
+      const metadata = await coordinator.getJobMetadata(job.id);
+
+      expect(metadata).toMatchObject({
+        lightJob: true,
+        executionStartTime: 123,
+        executionCompletionTime: 456,
+      });
     });
   });
 

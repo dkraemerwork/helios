@@ -135,4 +135,40 @@ describe('Monitor jobs provider', () => {
     expect(jobs[0]?.supportsRestart).toBe(true);
     expect(jobs[0]?.participatingMembers).toEqual(['member-a', 'member-b']);
   });
+
+  it('does not fake terminal light-job completion from submission time', async () => {
+    const instance = new HeliosInstanceImpl(new HeliosConfig('monitor-jobs-light-terminal-test'));
+    instance.setBlitzService({
+      isClosed: false,
+      shutdown: async () => {},
+      getJobs: () => [{
+        id: 'job-3',
+        name: 'completed-light-job',
+        getStatus: () => 'COMPLETED',
+        getSubmissionTime: () => 111,
+      }],
+      getJobDescriptor: () => ({
+        vertices: [{ name: 'source', type: 'source' }],
+        edges: [],
+      }),
+      getJobMetadata: async () => ({
+        lightJob: true,
+        participatingMembers: ['local'],
+        supportsCancel: false,
+        supportsRestart: false,
+        executionStartTime: 222,
+        executionCompletionTime: 333,
+      }),
+    } as never);
+
+    const provider = (instance as unknown as {
+      _createMonitorJobsProvider(): { getActiveJobs(): Promise<Array<{ executionStartTime: number | null; executionCompletionTime: number | null }>> };
+    })._createMonitorJobsProvider();
+
+    const jobs = await provider.getActiveJobs();
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.executionStartTime).toBe(222);
+    expect(jobs[0]?.executionCompletionTime).toBe(333);
+  });
 });

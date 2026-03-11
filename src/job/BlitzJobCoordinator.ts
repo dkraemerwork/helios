@@ -347,13 +347,16 @@ export class BlitzJobCoordinator {
   } | null> {
     const lightJob = this._lightJobs.get(jobId);
     if (lightJob) {
+      const timestamps = this._executor.getExecutionTimestamps(jobId);
       return {
         lightJob: true,
         participatingMembers: [this._executor.memberId],
         supportsCancel: !isTerminalStatus(lightJob.getStatus()),
         supportsRestart: false,
-        executionStartTime: lightJob.getSubmissionTime(),
-        executionCompletionTime: isTerminalStatus(lightJob.getStatus()) ? lightJob.getSubmissionTime() : null,
+        executionStartTime: timestamps?.startTime ?? null,
+        executionCompletionTime: timestamps && timestamps.completionTime >= 0
+          ? timestamps.completionTime
+          : null,
       };
     }
 
