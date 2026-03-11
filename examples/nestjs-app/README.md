@@ -1,8 +1,12 @@
 # Helios NestJS Example
 
-A comprehensive NestJS application demonstrating all major Helios features — from distributed caching and predicate queries to MapStore persistence and real-time stream processing.
+A comprehensive NestJS application demonstrating Helios features across caching, predicates, MapStore persistence, and Blitz/NATS stream processing.
 
-Runs as a CLI application (no HTTP server). Demos 1-9 execute sequentially on `bun run start`, then the server stays alive with an embedded NATS cluster and a real-time cluster status dashboard. Demo 10 uses a two-terminal workflow where a standalone NATS client streams market data into the cluster.
+Runs as a CLI application (no HTTP server) with two distinct operating modes:
+
+- `bun run start` is the all-in-one demo path only. It runs Demos 1-9, keeps the process alive with embedded MC and embedded Blitz/NATS, and is not the standalone takeover path.
+- `bun run stress` + `bun run mc` is the standalone monitoring/admin path for the stress topology.
+- `bun run stress` + `bun run mc` + `NATS_URL=nats://127.0.0.1:4222 bun run stream` is the only full standalone takeover acceptance path.
 
 ## Prerequisites
 
@@ -23,9 +27,9 @@ bun install
 bun run start
 ```
 
-Demos 1-9 run automatically. Demos that need external services (MongoDB, S3, Scylla Cloud) skip gracefully with a message. After Demo 9, the server stays alive with an embedded NATS cluster and periodic cluster status dashboard.
+Demos 1-9 run automatically. Demos that need external services (MongoDB, S3, Scylla Cloud) skip gracefully with a message. After Demo 9, the server stays alive with embedded MC, embedded NATS, and a periodic cluster status dashboard.
 
-For Demo 10 (NATS market data streaming), open a second terminal:
+For the demo-only Demo 10 streaming flow, open a second terminal:
 
 ```bash
 # Terminal 2: Start the standalone Binance → NATS streamer
@@ -35,7 +39,61 @@ bun run stream
 bun run stream -- BTCUSDT ETHUSDT SOLUSDT DOGEUSDT
 ```
 
-The streamer publishes Binance ticks to `market.ticks` on the embedded NATS server. The NestJS app consumes them and materializes into the IMap. Press `Ctrl+C` in either terminal to stop.
+The streamer publishes Binance ticks to `market.ticks` on the embedded NATS server started by `bun run start`. The NestJS app consumes them and materializes into the IMap. Press `Ctrl+C` in either terminal to stop.
+
+## Run Modes
+
+### `start` - all-in-one demo only
+
+```bash
+bun run start
+```
+
+Use this when you want the single-process example experience with embedded MC and embedded Blitz/NATS. This path is convenient for local demos, but it is not used for standalone takeover acceptance.
+
+### `stress + mc` - standalone monitoring/admin
+
+```bash
+bun run stress -- --duration 1800
+MC_DATABASE_URL=file:data/takeover-mc.db \
+MC_AUTH_BOOTSTRAP_ADMIN_EMAIL=takeover@helios.local \
+MC_AUTH_BOOTSTRAP_ADMIN_PASSWORD=takeover-admin-1234 \
+MC_AUTH_BOOTSTRAP_ADMIN_NAME="Takeover Admin" \
+bun run mc
+```
+
+Use this when you want standalone Management Center against the real stress topology without full external job proof. In this mode, MC proves members, metrics/history, maps, queues, topics, executor activity, and admin actions.
+
+### `stress + mc + stream` - full standalone takeover acceptance
+
+```bash
+# Terminal 1
+bun run stress -- --duration 1800
+
+# Terminal 2
+MC_DATABASE_URL=file:data/takeover-mc.db \
+MC_AUTH_BOOTSTRAP_ADMIN_EMAIL=takeover@helios.local \
+MC_AUTH_BOOTSTRAP_ADMIN_PASSWORD=takeover-admin-1234 \
+MC_AUTH_BOOTSTRAP_ADMIN_NAME="Takeover Admin" \
+bun run mc
+
+# Terminal 3
+NATS_URL=nats://127.0.0.1:4222 bun run stream -- BTCUSDT ETHUSDT SOLUSDT
+```
+
+This is the only full standalone acceptance path.
+
+What it proves:
+
+- stress member 1 hosts the real Blitz/NATS runtime on port `4222`
+- `bun run stream` feeds the stress topology through `market.ticks`
+- standalone MC shows the active `binance-market-rollups` job and `quote-rollups` updates
+- standalone MC proves alert firing plus admin actions including map clear, job cancel/restart, and cluster state changes
+
+Standalone MC login for the acceptance flow:
+
+- email: `takeover@helios.local`
+- password: `takeover-admin-1234`
 
 ## Demos
 
@@ -271,9 +329,9 @@ await tickStreamService.stop();
 unsub();
 ```
 
-### Demo 10 — NATS Consumer + Cluster Status Dashboard (Two-Terminal)
+### Demo 10 — Embedded NATS Consumer + Cluster Status Dashboard (Two-Terminal Demo)
 
-**What it shows:** The server stays alive after Demos 1-9. An embedded NATS server runs on `nats://localhost:4222`. The `BinanceQuotesService` switches to NATS consumer mode — subscribing to `market.ticks` and materializing incoming quotes into the IMap. A standalone client script streams Binance WebSocket ticks directly into NATS.
+**What it shows:** The server stays alive after Demos 1-9. An embedded NATS server runs on `nats://localhost:4222`. The `BinanceQuotesService` switches to NATS consumer mode, subscribes to `market.ticks`, and materializes incoming quotes into the IMap. A standalone client script streams Binance WebSocket ticks directly into that embedded NATS server.
 
 **Architecture:**
 
@@ -290,7 +348,7 @@ Terminal 2 (bun run stream):
 
 **Why two terminals?**
 
-The standalone client publishes ticks directly to NATS — it never touches the Helios binary protocol, IMap partitions, or the server's main thread. This is the production pattern for high-throughput ingestion: decouple the data producer from the Helios instance entirely.
+The standalone client publishes ticks directly to NATS. It never touches the Helios binary protocol, IMap partitions, or the server's main thread. This is the same external-ingress pattern used by the standalone stress takeover path, but this Demo 10 section is still describing the embedded `start` flow only.
 
 **Cluster Status Dashboard:**
 
@@ -401,7 +459,9 @@ src/
 ## Scripts
 
 ```bash
-bun run start       # Run all demos, then keep server alive (Demo 9 ready)
-bun run stream      # Standalone Binance → NATS streamer (run in Terminal 2)
+bun run start       # All-in-one demo mode with embedded MC and embedded Blitz/NATS
+bun run stress      # Stress topology: 3 monitored members + 1 workload client
+bun run mc          # Standalone MC seeded from stress member 1 with auto-discovery
+bun run stream      # External Binance -> NATS streamer; use NATS_URL=nats://127.0.0.1:4222 for stress takeover
 bun run typecheck   # Type-check without emitting
 ```

@@ -18,12 +18,13 @@
  *   Scatter executor tasks     — fibonacci / hash-grind / matrix-multiply
  *
  * Management Center:
- *   Pass all three REST addresses when starting MC:
- *     MC_SERVER_PORT=9090 \
- *     MC_CLUSTERS='[{"id":"stress","displayName":"Stress Cluster",
- *       "memberAddresses":["127.0.0.1:18081","127.0.0.1:18082","127.0.0.1:18083"],
- *       "restPort":18081,"autoDiscover":false}]' \
- *     bun run packages/management-center/src/main.ts
+ *   Start standalone MC against stress member 1 and let auto-discovery
+ *   discover the other monitored members:
+ *     MC_DATABASE_URL=file:data/takeover-mc.db \
+ *     MC_AUTH_BOOTSTRAP_ADMIN_EMAIL=takeover@helios.local \
+ *     MC_AUTH_BOOTSTRAP_ADMIN_PASSWORD=takeover-admin-1234 \
+ *     MC_AUTH_BOOTSTRAP_ADMIN_NAME="Takeover Admin" \
+ *     bun run mc
  *
  * Usage:
  *   bun run src/stress/stress-test.ts [--duration 60] [--map-concurrency 40] ...
@@ -132,11 +133,11 @@ Options:
   --help                       Show this help
 
 Management Center:
-  MC_SERVER_PORT=9090 \\
-  MC_CLUSTERS='[{"id":"stress","displayName":"Stress Cluster",
-    "memberAddresses":["127.0.0.1:18081","127.0.0.1:18082","127.0.0.1:18083"],
-    "restPort":18081,"autoDiscover":false}]' \\
-  bun run packages/management-center/src/main.ts
+  MC_DATABASE_URL=file:data/takeover-mc.db \\
+  MC_AUTH_BOOTSTRAP_ADMIN_EMAIL=takeover@helios.local \\
+  MC_AUTH_BOOTSTRAP_ADMIN_PASSWORD=takeover-admin-1234 \\
+  MC_AUTH_BOOTSTRAP_ADMIN_NAME="Takeover Admin" \\
+  bun run mc
 `);
         process.exit(0);
     }
@@ -879,12 +880,11 @@ async function main(): Promise<void> {
 \x1b[1;33m  ╔══════════════════════════════════════════════════════════════════╗
   ║  Management Center:                                            ║
   ║                                                                ║
-  ║  MC_SERVER_PORT=9090 \\                                         ║
-  ║  MC_CLUSTERS='[{"id":"stress","displayName":"Stress Cluster",  ║
-  ║    "memberAddresses":["127.0.0.1:18081","127.0.0.1:18082",     ║
-  ║                       "127.0.0.1:18083"],                      ║
-  ║    "restPort":18081,"autoDiscover":false}]' \\                  ║
-  ║  bun run packages/management-center/src/main.ts               ║
+  ║  MC_DATABASE_URL=file:data/takeover-mc.db \\                   ║
+  ║  MC_AUTH_BOOTSTRAP_ADMIN_EMAIL=takeover@helios.local \\        ║
+  ║  MC_AUTH_BOOTSTRAP_ADMIN_PASSWORD=takeover-admin-1234 \\       ║
+  ║  MC_AUTH_BOOTSTRAP_ADMIN_NAME="Takeover Admin" \\              ║
+  ║  bun run mc                                                   ║
   ╚══════════════════════════════════════════════════════════════════╝\x1b[0m
 `);
 
