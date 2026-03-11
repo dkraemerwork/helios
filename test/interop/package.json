@@ -16,6 +16,7 @@
     "test:multimap": "bun test --timeout 60000 suites/multimap.test.ts",
     "test:replicatedmap": "bun test --timeout 60000 suites/replicatedmap.test.ts",
     "test:atomics": "bun test --timeout 60000 suites/atomics.test.ts",
+    "test:cp": "bun test --timeout 60000 suites/cp.test.ts",
     "test:flakeid": "bun test --timeout 60000 suites/flakeid.test.ts",
     "test:pncounter": "bun test --timeout 60000 suites/pncounter.test.ts",
     "test:lifecycle": "bun test --timeout 60000 suites/lifecycle.test.ts",

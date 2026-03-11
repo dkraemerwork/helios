@@ -56,7 +56,11 @@ export class SemaphoreService {
     }>
   >();
 
-  constructor(private readonly _cp: CpSubsystemService) {}
+  constructor(private readonly _cp: CpSubsystemService) {
+    this._cp.onSessionClosed((sessionId) => {
+      void this._releaseAllSessionPermits(sessionId);
+    });
+  }
 
   // ── Initialisation ───────────────────────────────────────────────────────
 
@@ -85,9 +89,10 @@ export class SemaphoreService {
     permits = 1,
     sessionId: string | null = null,
     invocationUuid?: string,
-  ): Promise<void> {
+    timeoutMs?: number,
+  ): Promise<boolean> {
     if (permits <= 0) throw new Error('Permits must be positive');
-    await this._doAcquire(name, permits, sessionId, undefined, invocationUuid);
+    return this._doAcquire(name, permits, sessionId, timeoutMs, invocationUuid);
   }
 
   /**
@@ -354,5 +359,23 @@ export class SemaphoreService {
         }
       }
     })();
+  }
+
+  private async _releaseAllSessionPermits(sessionId: string): Promise<void> {
+    for (const groupName of this._cp.listGroups()) {
+      const group = this._cp.getGroup(groupName);
+      if (group === null) {
+        continue;
+      }
+
+      for (const key of group.stateMachine.keys()) {
+        if (!key.startsWith(KEY_PREFIX)) {
+          continue;
+        }
+
+        const name = key.slice(KEY_PREFIX.length);
+        await this.releaseSessionPermits(name, sessionId);
+      }
+    }
   }
 }

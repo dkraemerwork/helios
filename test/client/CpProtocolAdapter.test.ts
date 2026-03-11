@@ -26,16 +26,17 @@ const AL_SET_REQUEST = 0x090a00;
 
 const CP_GROUP_CREATE_REQUEST = 0x1e0100;
 const CP_GROUP_DESTROY_REQUEST = 0x1e0200;
-const AR_APPLY_REQUEST = 0x0c0100;
-const AR_ALTER_REQUEST = 0x0c0200;
-const AR_GET_AND_ALTER_REQUEST = 0x0c0300;
-const AR_ALTER_AND_GET_REQUEST = 0x0c0400;
-const AR_CONTAINS_REQUEST = 0x0c0500;
-const AR_GET_REQUEST = 0x0c0600;
-const AR_SET_REQUEST = 0x0c0700;
+const AR_COMPARE_AND_SET_REQUEST = 0x0a0200;
+const AR_CONTAINS_REQUEST = 0x0a0300;
+const AR_GET_REQUEST = 0x0a0400;
+const AR_SET_REQUEST = 0x0a0500;
+const AR_APPLY_REQUEST = 0x0a0600;
+const AR_ALTER_REQUEST = 0x0a0700;
+const AR_GET_AND_ALTER_REQUEST = 0x0a0800;
+const AR_ALTER_AND_GET_REQUEST = 0x0a0900;
 const AR_IS_NULL_REQUEST = 0x0c0800;
 const AR_CLEAR_REQUEST = 0x0c0900;
-const AR_COMPARE_AND_SET_REQUEST = 0x0c0a00;
+const AR_COMPARE_AND_SET_LEGACY_REQUEST = 0x0c0a00;
 
 const CDL_TRY_SET_COUNT_REQUEST = 0x0b0100;
 const CDL_AWAIT_REQUEST = 0x0b0200;
@@ -43,13 +44,12 @@ const CDL_COUNT_DOWN_REQUEST = 0x0b0300;
 const CDL_GET_COUNT_REQUEST = 0x0b0400;
 const CDL_GET_ROUND_REQUEST = 0x0b0500;
 
-const SEM_ACQUIRE_REQUEST = 0x1f0100;
-const SEM_RELEASE_REQUEST = 0x1f0200;
-const SEM_DRAIN_REQUEST = 0x1f0300;
-const SEM_CHANGE_REQUEST = 0x1f0400;
-const SEM_AVAILABLE_PERMITS_REQUEST = 0x1f0500;
-const SEM_TRY_ACQUIRE_REQUEST = 0x1f0600;
-const SEM_INIT_REQUEST = 0x1f0700;
+const SEM_INIT_REQUEST = 0x0c0100;
+const SEM_ACQUIRE_REQUEST = 0x0c0200;
+const SEM_RELEASE_REQUEST = 0x0c0300;
+const SEM_DRAIN_REQUEST = 0x0c0400;
+const SEM_CHANGE_REQUEST = 0x0c0500;
+const SEM_AVAILABLE_PERMITS_REQUEST = 0x0c0600;
 
 const INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
 const RESPONSE_VALUE_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
@@ -86,6 +86,14 @@ function encodeNullableData(msg: ClientMessage, value: Data | null): void {
 
 function buildNameRequest(messageType: number, correlationId: number, name: string): ClientMessage {
     const { msg } = createRequest(messageType, correlationId);
+    StringCodec.encode(msg, name);
+    msg.setFinal();
+    return msg;
+}
+
+function buildCpNameRequest(messageType: number, correlationId: number, name: string, groupName = 'default'): ClientMessage {
+    const { msg } = createRequest(messageType, correlationId);
+    encodeRaftGroupId(msg, groupName);
     StringCodec.encode(msg, name);
     msg.setFinal();
     return msg;
@@ -146,6 +154,7 @@ function buildAtomicLongFunctionRequest(messageType: number, correlationId: numb
 
 function buildAtomicRefSetRequest(correlationId: number, name: string, value: Data | null): ClientMessage {
     const { msg } = createRequest(AR_SET_REQUEST, correlationId);
+    encodeRaftGroupId(msg, 'default');
     StringCodec.encode(msg, name);
     encodeNullableData(msg, value);
     msg.setFinal();
@@ -154,6 +163,7 @@ function buildAtomicRefSetRequest(correlationId: number, name: string, value: Da
 
 function buildAtomicRefContainsRequest(correlationId: number, name: string, value: Data | null): ClientMessage {
     const { msg } = createRequest(AR_CONTAINS_REQUEST, correlationId);
+    encodeRaftGroupId(msg, 'default');
     StringCodec.encode(msg, name);
     encodeNullableData(msg, value);
     msg.setFinal();
@@ -162,6 +172,16 @@ function buildAtomicRefContainsRequest(correlationId: number, name: string, valu
 
 function buildAtomicRefCompareAndSetRequest(correlationId: number, name: string, expected: Data | null, updated: Data | null): ClientMessage {
     const { msg } = createRequest(AR_COMPARE_AND_SET_REQUEST, correlationId);
+    encodeRaftGroupId(msg, 'default');
+    StringCodec.encode(msg, name);
+    encodeNullableData(msg, expected);
+    encodeNullableData(msg, updated);
+    msg.setFinal();
+    return msg;
+}
+
+function buildAtomicRefCompareAndSetLegacyRequest(correlationId: number, name: string, expected: Data | null, updated: Data | null): ClientMessage {
+    const { msg } = createRequest(AR_COMPARE_AND_SET_LEGACY_REQUEST, correlationId);
     StringCodec.encode(msg, name);
     encodeNullableData(msg, expected);
     encodeNullableData(msg, updated);
@@ -171,6 +191,7 @@ function buildAtomicRefCompareAndSetRequest(correlationId: number, name: string,
 
 function buildAtomicRefFunctionRequest(messageType: number, correlationId: number, name: string, functionData: Data): ClientMessage {
     const { msg } = createRequest(messageType, correlationId);
+    encodeRaftGroupId(msg, 'default');
     StringCodec.encode(msg, name);
     DataCodec.encode(msg, functionData);
     msg.setFinal();
@@ -221,30 +242,29 @@ function buildSemaphoreRequest(
     invocationUuid: string,
     timeoutMs?: bigint,
 ): ClientMessage {
-    const extraBytes = LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + (timeoutMs === undefined ? 0 : LONG_SIZE_IN_BYTES);
+    const extraBytes = LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + 17 + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
     const { msg, frame } = createRequest(messageType, correlationId, extraBytes);
     let offset = INITIAL_FRAME_SIZE;
     frame.writeBigInt64LE(sessionId, offset);
     offset += LONG_SIZE_IN_BYTES;
     frame.writeBigInt64LE(threadId, offset);
     offset += LONG_SIZE_IN_BYTES;
+    FixedSizeTypesCodec.encodeUUID(frame, offset, toPseudoUuid(invocationUuid));
+    offset += 17;
     frame.writeInt32LE(permits, offset);
     offset += INT_SIZE_IN_BYTES;
-    if (timeoutMs !== undefined) {
-        frame.writeBigInt64LE(timeoutMs, offset);
-    }
+    frame.writeBigInt64LE(timeoutMs ?? -1n, offset);
     StringCodec.encode(msg, name);
-    StringCodec.encode(msg, invocationUuid);
     msg.setFinal();
     return msg;
 }
 
 function buildSemaphoreDrainRequest(correlationId: number, name: string, sessionId: bigint, threadId: bigint, invocationUuid: string): ClientMessage {
-    const { msg, frame } = createRequest(SEM_DRAIN_REQUEST, correlationId, LONG_SIZE_IN_BYTES * 2);
+    const { msg, frame } = createRequest(SEM_DRAIN_REQUEST, correlationId, LONG_SIZE_IN_BYTES * 2 + 17);
     frame.writeBigInt64LE(sessionId, INITIAL_FRAME_SIZE);
     frame.writeBigInt64LE(threadId, INITIAL_FRAME_SIZE + LONG_SIZE_IN_BYTES);
+    FixedSizeTypesCodec.encodeUUID(frame, INITIAL_FRAME_SIZE + (LONG_SIZE_IN_BYTES * 2), toPseudoUuid(invocationUuid));
     StringCodec.encode(msg, name);
-    StringCodec.encode(msg, invocationUuid);
     msg.setFinal();
     return msg;
 }
@@ -332,17 +352,17 @@ describe('cp protocol adapter', () => {
             const identityFn = ss.toData({ type: 'identity' })!;
 
             await dispatcher.dispatch(buildAtomicRefSetRequest(1, name, first), session);
-            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildNameRequest(AR_GET_REQUEST, 2, name), session))!, ss)).toEqual({ version: 1 });
+            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildCpNameRequest(AR_GET_REQUEST, 2, name), session))!, ss)).toEqual({ version: 1 });
             expect(decodeBooleanResponse((await dispatcher.dispatch(buildAtomicRefContainsRequest(3, name, first), session))!)).toBe(true);
             expect(decodeBooleanResponse((await dispatcher.dispatch(buildAtomicRefCompareAndSetRequest(4, name, first, second), session))!)).toBe(true);
             expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_APPLY_REQUEST, 5, name, identityFn), session))!, ss)).toEqual({ version: 2 });
             await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_ALTER_REQUEST, 6, name, setFn), session);
             expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_ALTER_AND_GET_REQUEST, 7, name, identityFn), session))!, ss)).toEqual({ version: 3 });
             expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_GET_AND_ALTER_REQUEST, 8, name, clearFn), session))!, ss)).toEqual({ version: 3 });
-            expect(decodeBooleanResponse((await dispatcher.dispatch(buildNameRequest(AR_IS_NULL_REQUEST, 9, name), session))!)).toBe(true);
+            expect(decodeBooleanResponse((await dispatcher.dispatch(buildCpNameRequest(AR_IS_NULL_REQUEST, 9, name), session))!)).toBe(true);
             await dispatcher.dispatch(buildAtomicRefSetRequest(10, name, second), session);
-            await dispatcher.dispatch(buildNameRequest(AR_CLEAR_REQUEST, 11, name), session);
-            expect(decodeBooleanResponse((await dispatcher.dispatch(buildNameRequest(AR_IS_NULL_REQUEST, 12, name), session))!)).toBe(true);
+            await dispatcher.dispatch(buildCpNameRequest(AR_CLEAR_REQUEST, 11, name), session);
+            expect(decodeBooleanResponse((await dispatcher.dispatch(buildCpNameRequest(AR_IS_NULL_REQUEST, 12, name), session))!)).toBe(true);
         } finally {
             ss.destroy();
         }
@@ -408,7 +428,7 @@ describe('cp protocol adapter', () => {
         expect(decodeIntResponse((await dispatcher.dispatch(buildNameRequest(SEM_AVAILABLE_PERMITS_REQUEST, 2, name), session))!)).toBe(1);
 
         await dispatcher.dispatch(buildSemaphoreRequest(SEM_ACQUIRE_REQUEST, 3, name, 11n, 1n, 1, 'sem-acquire-1'), session);
-        expect(decodeBooleanResponse((await dispatcher.dispatch(buildSemaphoreRequest(SEM_TRY_ACQUIRE_REQUEST, 4, name, 12n, 1n, 1, 'sem-try-acquire-1', 0n), session))!)).toBe(false);
+        expect(decodeBooleanResponse((await dispatcher.dispatch(buildSemaphoreRequest(SEM_ACQUIRE_REQUEST, 4, name, 12n, 1n, 1, 'sem-try-acquire-1', 0n), session))!)).toBe(false);
 
         const blockingAcquire = dispatcher.dispatch(buildSemaphoreRequest(SEM_ACQUIRE_REQUEST, 5, name, 12n, 1n, 1, 'sem-acquire-2'), session);
         await Bun.sleep(10);

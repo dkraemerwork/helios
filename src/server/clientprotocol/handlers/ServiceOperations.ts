@@ -358,17 +358,24 @@ export interface CountDownLatchOperations {
 
 export interface SemaphoreOperations {
     init(proxyName: string, permits: number): Promise<boolean>;
-    acquire(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string, permits: number): Promise<void>;
+    acquire(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string, permits: number, timeoutMs: bigint): Promise<boolean>;
     release(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string, permits: number): Promise<void>;
     drain(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string): Promise<number>;
     change(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string, permits: number): Promise<void>;
     availablePermits(proxyName: string): Promise<number>;
-    tryAcquire(proxyName: string, sessionId: bigint, threadId: bigint, invocationUuid: string, permits: number, timeoutMs: bigint): Promise<boolean>;
+    isJdkCompatible(proxyName: string): Promise<boolean>;
 }
 
 export interface CpGroupOperations {
     createCPGroup(proxyName: string): Promise<{ name: string; seed: bigint; id: bigint }>;
     destroyCPObject(groupName: string, serviceName: string, objectName: string): Promise<void>;
+}
+
+export interface CpSessionOperations {
+    createSession(groupName: string, endpointName: string): Promise<{ sessionId: bigint; ttlMillis: bigint; heartbeatMillis: bigint }>;
+    closeSession(groupName: string, sessionId: bigint): Promise<boolean>;
+    heartbeatSession(groupName: string, sessionId: bigint): Promise<void>;
+    generateThreadId(groupName: string): Promise<bigint>;
 }
 
 // ── FlakeIdGenerator ──────────────────────────────────────────────────────────

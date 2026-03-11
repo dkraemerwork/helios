@@ -41,7 +41,7 @@ error()  { echo -e "${RED}[interop]${RESET} $*" >&2; }
 
 # ── Resolve which suites to run ───────────────────────────────────────────────
 
-ALL_SUITES=(connection topology map queue topic ringbuffer collections serialization multimap replicatedmap atomics flakeid pncounter lifecycle harness-baseline)
+ALL_SUITES=(connection topology map queue topic ringbuffer collections serialization multimap replicatedmap atomics cp flakeid pncounter lifecycle harness-baseline)
 
 if [ $# -gt 0 ]; then
   SUITES=("$@")

@@ -150,6 +150,9 @@ export class CpSubsystemService {
   private static readonly SESSION_TTL_MS = 60_000;
   private static readonly SESSION_HEARTBEAT_INTERVAL_MS = 5_000;
   private _sessionHeartbeatHandle: ReturnType<typeof setInterval> | null = null;
+  private _nextSessionId = 1n;
+  private _nextThreadId = 1n;
+  private readonly _sessionCloseListeners: Array<(sessionId: string) => void> = [];
 
   constructor(private readonly _localMemberId: string) {
     this._startSessionHeartbeat();
@@ -233,7 +236,7 @@ export class CpSubsystemService {
   // ── Session management ─────────────────────────────────────────────────
 
   createSession(memberId: string): CpSession {
-    const sessionId = crypto.randomUUID();
+    const sessionId = String(this._nextSessionId++);
     const now = Date.now();
     const session: CpSession = {
       sessionId,
@@ -246,6 +249,24 @@ export class CpSubsystemService {
     return session;
   }
 
+  getSessionTtlMs(): number {
+    return CpSubsystemService.SESSION_TTL_MS;
+  }
+
+  getSessionHeartbeatIntervalMs(): number {
+    return CpSubsystemService.SESSION_HEARTBEAT_INTERVAL_MS;
+  }
+
+  createThreadId(): bigint {
+    const threadId = this._nextThreadId;
+    this._nextThreadId += 1n;
+    return threadId;
+  }
+
+  onSessionClosed(listener: (sessionId: string) => void): void {
+    this._sessionCloseListeners.push(listener);
+  }
+
   heartbeatSession(sessionId: string): boolean {
     const session = this._sessions.get(sessionId);
     if (session === undefined) return false;
@@ -254,7 +275,11 @@ export class CpSubsystemService {
   }
 
   closeSession(sessionId: string): boolean {
-    return this._sessions.delete(sessionId);
+    const closed = this._sessions.delete(sessionId);
+    if (closed) {
+      this._notifySessionClosed(sessionId);
+    }
+    return closed;
   }
 
   getSession(sessionId: string): CpSession | null {
@@ -299,7 +324,14 @@ export class CpSubsystemService {
     for (const [sessionId, session] of this._sessions) {
       if (now - session.lastHeartbeatAt >= session.ttlMs) {
         this._sessions.delete(sessionId);
+        this._notifySessionClosed(sessionId);
       }
+    }
+  }
+
+  private _notifySessionClosed(sessionId: string): void {
+    for (const listener of this._sessionCloseListeners) {
+      listener(sessionId);
     }
   }
 

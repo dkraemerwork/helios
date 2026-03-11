@@ -3177,8 +3177,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const semaphoreOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SemaphoreOperations = {
       init: async (name, permits) => this._getOrCreateSemaphoreService().init(name, permits),
-      acquire: async (name, sessionId, _threadId, invocationUuid, permits) =>
-        this._getOrCreateSemaphoreService().acquire(name, permits, this._toOptionalCpSessionId(sessionId), invocationUuid),
+      acquire: async (name, sessionId, _threadId, invocationUuid, permits, timeoutMs) =>
+        this._getOrCreateSemaphoreService().acquire(
+          name,
+          permits,
+          this._toOptionalCpSessionId(sessionId),
+          invocationUuid,
+          this._toOptionalTimeoutMs(timeoutMs),
+        ),
       release: async (name, sessionId, _threadId, invocationUuid, permits) =>
         this._getOrCreateSemaphoreService().release(name, permits, this._toOptionalCpSessionId(sessionId), invocationUuid),
       drain: async (name, sessionId, _threadId, invocationUuid) =>
@@ -3186,8 +3192,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       change: async (name, _sessionId, _threadId, invocationUuid, permits) =>
         this._getOrCreateSemaphoreService().change(name, permits, invocationUuid),
       availablePermits: async (name) => this._getOrCreateSemaphoreService().availablePermits(name),
-      tryAcquire: async (name, sessionId, _threadId, invocationUuid, permits, timeoutMs) =>
-        this._getOrCreateSemaphoreService().tryAcquire(name, permits, this._toOptionalTimeoutMs(timeoutMs), this._toOptionalCpSessionId(sessionId), invocationUuid),
+      isJdkCompatible: async (_name) => false,
     };
 
     const cpGroupOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CpGroupOperations = {
@@ -3195,6 +3200,23 @@ export class HeliosInstanceImpl implements HeliosInstance {
       destroyCPObject: async (groupName, serviceName, objectName) => {
         this._destroyClientCpObject(groupName, serviceName, objectName);
       },
+    };
+
+    const cpSessionOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CpSessionOperations = {
+      createSession: async (groupName, endpointName) => {
+        this._getOrCreateCpSubsystemService().getOrCreateGroup(groupName);
+        const session = this._getOrCreateCpSubsystemService().createSession(endpointName);
+        return {
+          sessionId: BigInt(session.sessionId),
+          ttlMillis: BigInt(this._getOrCreateCpSubsystemService().getSessionTtlMs()),
+          heartbeatMillis: BigInt(this._getOrCreateCpSubsystemService().getSessionHeartbeatIntervalMs()),
+        };
+      },
+      closeSession: async (_groupName, sessionId) => this._getOrCreateCpSubsystemService().closeSession(String(sessionId)),
+      heartbeatSession: async (_groupName, sessionId) => {
+        this._getOrCreateCpSubsystemService().heartbeatSession(String(sessionId));
+      },
+      generateThreadId: async (_groupName) => this._getOrCreateCpSubsystemService().createThreadId(),
     };
 
     const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
@@ -3261,6 +3283,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       sql: trackClientProtocolOperations(sqlOps),
       executor: trackClientProtocolOperations(executorOps),
       cpGroup: trackClientProtocolOperations(cpGroupOps),
+      cpSession: trackClientProtocolOperations(cpSessionOps),
       atomicLong: trackClientProtocolOperations(atomicLongOps),
       atomicRef: trackClientProtocolOperations(atomicRefOps),
       countDownLatch: trackClientProtocolOperations(countDownLatchOps),
@@ -3539,20 +3562,26 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
   }
 
+  private _toScopedCpObjectName(groupName: string, objectName: string): string {
+    const effectiveGroupName = groupName.length > 0 ? groupName : 'default';
+    return effectiveGroupName === 'default' ? objectName : `${objectName}@${effectiveGroupName}`;
+  }
+
   private _destroyClientCpObject(groupName: string, serviceName: string, objectName: string): void {
     const effectiveGroupName = groupName.length > 0 ? groupName : 'default';
+    const scopedObjectName = this._toScopedCpObjectName(effectiveGroupName, objectName);
     switch (serviceName) {
       case 'hz:raft:atomicLongService':
-        this._getOrCreateAtomicLongService().destroy(objectName);
+        this._getOrCreateAtomicLongService().destroy(scopedObjectName);
         return;
       case 'hz:raft:atomicRefService':
-        this._getOrCreateAtomicReferenceService().destroy(objectName);
+        this._getOrCreateAtomicReferenceService().destroy(scopedObjectName);
         return;
       case 'hz:raft:countDownLatchService':
-        this._getOrCreateCountDownLatchService().destroy(objectName);
+        this._getOrCreateCountDownLatchService().destroy(scopedObjectName);
         return;
       case 'hz:raft:semaphoreService':
-        this._getOrCreateSemaphoreService().destroy(objectName);
+        this._getOrCreateSemaphoreService().destroy(scopedObjectName);
         return;
       default:
         this._getOrCreateCpSubsystemService().destroyGroup(effectiveGroupName);
