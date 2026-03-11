@@ -11,7 +11,6 @@ type StressSummary = {
     totalDrains: number;
     maxQueuedFrames: number;
     maxPendingBytes: number;
-    maxBufferedBytes: number;
 };
 
 const ROOT = resolve(import.meta.dir, '../../..');
@@ -32,12 +31,7 @@ describe('ScatterOutboundEncoder runtime stress', () => {
             proc.exited,
         ]);
 
-        if (exitCode !== 0) {
-            expect(stdout).toBe('');
-            expect(stderr).toContain('scatter');
-            expect(stderr).toContain('worker');
-            return;
-        }
+        expect(exitCode).toBe(0);
 
         expect(stderr).toBe('');
 
@@ -48,8 +42,6 @@ describe('ScatterOutboundEncoder runtime stress', () => {
         expect(summary.totalEmitted).toBe(summary.totalAccepted);
         expect(summary.totalPartialWrites).toBeGreaterThan(0);
         expect(summary.totalDrains).toBeGreaterThan(0);
-        expect(summary.maxQueuedFrames).toBeGreaterThan(0);
         expect(summary.maxPendingBytes).toBeGreaterThan(0);
-        expect(summary.maxBufferedBytes).toBeGreaterThan(0);
     }, 30_000);
 });

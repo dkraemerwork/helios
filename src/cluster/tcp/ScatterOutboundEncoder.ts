@@ -31,72 +31,69 @@ const OUTPUT_DRAIN_BATCH_SIZE = 64;
 const STATUS_DRAIN_BATCH_SIZE = 4;
 const IDLE_POLL_DELAY_MS = 1;
 
-const clusterMessageCodec = {
-    name: 'helios-cluster-message',
-    encode(value: ClusterMessage): Uint8Array {
+const scatterEncodeRequestCodec = {
+    name: 'helios-scatter-encode-request',
+    encode(value: ScatterEncodeRequest): Uint8Array {
         const bufferMarker = '__heliosScatterBuffer';
         const dataMarker = '__heliosScatterData';
-        return new TextEncoder().encode(JSON.stringify(value, (_key: string, currentValue: unknown): unknown => {
+        return new TextEncoder().encode(JSON.stringify(value.message, (_key: string, currentValue: unknown): unknown => {
             if (Buffer.isBuffer(currentValue)) {
                 return { [bufferMarker]: currentValue.toString('base64') };
             }
+
             if (currentValue !== null && typeof currentValue === 'object' && typeof (currentValue as { toByteArray?: () => Uint8Array | null }).toByteArray === 'function') {
                 const bytes = (currentValue as { toByteArray: () => Uint8Array | null }).toByteArray();
                 return { [dataMarker]: bytes === null ? null : Buffer.from(bytes).toString('base64') };
             }
+
             return currentValue;
         }));
     },
-    decode(buffer: Uint8Array): ClusterMessage {
+    decode(buffer: Uint8Array): ScatterEncodeRequest {
         const bufferMarker = '__heliosScatterBuffer';
         const dataMarker = '__heliosScatterData';
-        return JSON.parse(new TextDecoder().decode(buffer), (_key: string, currentValue: unknown): unknown => {
-            if (currentValue !== null && typeof currentValue === 'object') {
-                const objectValue = currentValue as Record<string, unknown>;
-                if (objectValue.type === 'Buffer' && Array.isArray(objectValue.data)) {
-                    return Buffer.from(objectValue.data as number[]);
-                }
-                if (bufferMarker in objectValue) {
-                    return Buffer.from(objectValue[bufferMarker] as string, 'base64');
-                }
-                if (dataMarker in objectValue) {
-                    const encoded = objectValue[dataMarker] as string | null;
-                    if (encoded === null) {
-                        return null;
+        return {
+            message: JSON.parse(new TextDecoder().decode(buffer), (_key: string, currentValue: unknown): unknown => {
+                if (currentValue !== null && typeof currentValue === 'object') {
+                    const objectValue = currentValue as Record<string, unknown>;
+                    if (objectValue.type === 'Buffer' && Array.isArray(objectValue.data)) {
+                        return Buffer.from(objectValue.data as number[]);
                     }
 
-                    const payload = Buffer.from(encoded, 'base64');
-                    return {
-                        copyTo(dest: Buffer, destPos: number): void {
-                            payload.copy(dest, destPos);
-                        },
-                        dataSize(): number {
-                            return Math.max(payload.length - 8, 0);
-                        },
-                        getType(): number {
-                            return payload.length >= 8 ? payload.readInt32BE(4) : 0;
-                        },
-                        toByteArray(): Buffer {
-                            return payload;
-                        },
-                        totalSize(): number {
-                            return payload.length;
-                        },
-                    };
-                }
-            }
-            return currentValue;
-        }) as ClusterMessage;
-    },
-};
+                    if (bufferMarker in objectValue) {
+                        return Buffer.from(objectValue[bufferMarker] as string, 'base64');
+                    }
 
-const scatterEncodeRequestCodec = {
-    name: 'helios-scatter-encode-request',
-    encode(value: ScatterEncodeRequest): Uint8Array {
-        return clusterMessageCodec.encode(value.message);
-    },
-    decode(buffer: Uint8Array): ScatterEncodeRequest {
-        return { message: clusterMessageCodec.decode(buffer) };
+                    if (dataMarker in objectValue) {
+                        const encoded = objectValue[dataMarker] as string | null;
+                        if (encoded === null) {
+                            return null;
+                        }
+
+                        const payload = Buffer.from(encoded, 'base64');
+                        return {
+                            copyTo(dest: Buffer, destPos: number): void {
+                                payload.copy(dest, destPos);
+                            },
+                            dataSize(): number {
+                                return Math.max(payload.length - 8, 0);
+                            },
+                            getType(): number {
+                                return payload.length >= 8 ? payload.readInt32BE(4) : 0;
+                            },
+                            toByteArray(): Buffer {
+                                return payload;
+                            },
+                            totalSize(): number {
+                                return payload.length;
+                            },
+                        };
+                    }
+                }
+
+                return currentValue;
+            }) as ClusterMessage,
+        };
     },
 };
 

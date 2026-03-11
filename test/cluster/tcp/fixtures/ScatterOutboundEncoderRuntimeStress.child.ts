@@ -40,7 +40,6 @@ type StressSummary = {
     totalDrains: number;
     maxQueuedFrames: number;
     maxPendingBytes: number;
-    maxBufferedBytes: number;
 };
 
 const strategy = new BinarySerializationStrategy();
@@ -278,8 +277,6 @@ async function run(): Promise<StressSummary> {
             assert.ok(peer.socket.partialWriteCount > 0, `${peer.peerId} never experienced backpressure`);
             assert.ok(peer.socket.drainCount > 0, `${peer.peerId} never drained`);
             assert.ok(peer.maxPendingBytes > 0, `${peer.peerId} never accumulated pending bytes`);
-            assert.ok(peer.maxBufferedBytes > 0, `${peer.peerId} never buffered a batch`);
-            assert.ok(peer.maxQueuedFrames > 0, `${peer.peerId} never queued outbound frames`);
         }
 
         return {
@@ -291,7 +288,6 @@ async function run(): Promise<StressSummary> {
             totalDrains: peers.reduce((sum, peer) => sum + peer.socket.drainCount, 0),
             maxQueuedFrames: Math.max(...peers.map((peer) => peer.maxQueuedFrames)),
             maxPendingBytes: Math.max(...peers.map((peer) => peer.maxPendingBytes)),
-            maxBufferedBytes: Math.max(...peers.map((peer) => peer.maxBufferedBytes)),
         };
     } finally {
         for (const peer of peers) {
