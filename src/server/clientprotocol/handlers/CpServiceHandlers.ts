@@ -154,6 +154,10 @@ function _decodeCpProxyName(iter: CM.ForwardFrameIterator): string {
     return StringCodec.decode(iter);
 }
 
+function _isNullAtomicReferenceValue(value: Data | null): boolean {
+    return value === null || (value.getType() === 0 && value.dataSize() === 0);
+}
+
 function _decodeRaftGroupName(iter: CM.ForwardFrameIterator): string {
     if (!iter.hasNext()) {
         throw new Error('Missing CP group frame');
@@ -248,6 +252,9 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
         const iter = msg.forwardFrameIterator(); iter.next();
         const name = _decodeCpProxyName(iter);
         const value = CodecUtil.decodeNullable(iter, i => DataCodec.decode(i));
+        if (_isNullAtomicReferenceValue(value)) {
+            return _bool(responseType, await atomicRef.isNull(name));
+        }
         return _bool(responseType, await atomicRef.contains(name, value));
     };
 

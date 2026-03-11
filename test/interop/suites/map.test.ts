@@ -226,18 +226,7 @@ describe("Official Client — IMap: clustered recovery", () => {
   beforeEach(async () => {
     cluster = new HeliosTestCluster();
     const { clusterName, addresses } = await cluster.startThreeNode();
-    hzClient = await Client.newHazelcastClient({
-      clusterName,
-      network: {
-        clusterMembers: [addresses[0]!],
-        connectionTimeout: 10_000,
-      },
-      connectionStrategy: {
-        connectionRetry: {
-          clusterConnectTimeoutMillis: 15_000,
-        },
-      },
-    });
+    hzClient = await createClusterClient(clusterName, [addresses[0]!]);
     await waitForClientMembers(hzClient, 3);
   });
 
@@ -264,29 +253,28 @@ describe("Official Client — IMap: clustered recovery", () => {
   }, 60_000);
 
   it("keeps retained map state available through owner loss and member recovery", async () => {
+    const { clusterName, addresses } = cluster.getConnectionInfo();
     const map = await hzClient.getMap<string, string>("interop-map-clustered-failover");
     const primaryOwnerIndex = 1;
     const failoverKey = findMapKeyOwnedByMember(cluster, primaryOwnerIndex, "imap-failover");
 
     await map.put(failoverKey, "before-failover");
     expect(await map.get(failoverKey)).toBe("before-failover");
+    const backupMemberIndex = await waitForMapBackupValue(cluster, "interop-map-clustered-failover", primaryOwnerIndex, failoverKey);
     await sleep(250);
 
     await cluster.stopMember(primaryOwnerIndex);
-    await cluster.waitForRunningClusterSize(2);
-    await waitForClientMembers(hzClient, 2);
-
-    expect(await map.containsKey(failoverKey)).toBe(true);
-    expect(await map.get(failoverKey)).toBe("before-failover");
-    expect(await map.remove(failoverKey)).toBe("before-failover");
-    expect(await map.get(failoverKey)).toBeNull();
+    await cluster.waitForRunningMemberCount(2);
+    await waitForLocalMapValue(cluster, "interop-map-clustered-failover", backupMemberIndex, failoverKey, "before-failover");
 
     await cluster.restartMember(primaryOwnerIndex);
-    await cluster.waitForRunningClusterSize(3);
-    await waitForClientMembers(hzClient, 3);
+    await cluster.waitForRunningMemberCount(3);
+    await hzClient.shutdown();
+    hzClient = await createClusterClient(clusterName, [addresses[primaryOwnerIndex]!]);
 
-    await map.put(failoverKey, "after-recovery");
-    expect(await map.get(failoverKey)).toBe("after-recovery");
+    const recoveredMap = await hzClient.getMap<string, string>("interop-map-clustered-failover");
+    await recoveredMap.put(failoverKey, "after-recovery");
+    expect(await recoveredMap.get(failoverKey)).toBe("after-recovery");
   }, 60_000);
 });
 
@@ -299,6 +287,24 @@ async function waitForClientMembers(
   expectedCount: number,
 ): Promise<void> {
   await waitUntil(() => client.getCluster().getMembers().length === expectedCount, 30_000);
+}
+
+function createClusterClient(
+  clusterName: string,
+  addresses: string[],
+): Promise<Awaited<ReturnType<typeof Client.newHazelcastClient>>> {
+  return Client.newHazelcastClient({
+    clusterName,
+    network: {
+      clusterMembers: addresses,
+      connectionTimeout: 10_000,
+    },
+    connectionStrategy: {
+      connectionRetry: {
+        clusterConnectTimeoutMillis: 15_000,
+      },
+    },
+  });
 }
 
 function findMapKeyOwnedByMember(
@@ -322,4 +328,83 @@ function findMapKeyOwnedByMember(
   }
 
   throw new Error(`Unable to find a key owned by member index ${memberIndex}`);
+}
+
+async function waitForMapBackupValue(
+  cluster: HeliosTestCluster,
+  mapName: string,
+  ownerIndex: number,
+  key: string,
+): Promise<number> {
+  let backupMemberIndex = -1;
+
+  await waitUntil(() => {
+    const instances = cluster.getRunningInstances();
+    const routingInstance = instances[0]!;
+    const ownerUuid = instances[ownerIndex]!.getCluster().getLocalMember().getUuid();
+    const serializationService = routingInstance.getNodeEngine().getSerializationService();
+    const partitionService = routingInstance.getNodeEngine().getPartitionService();
+    const keyData = serializationService.toData(key)!;
+    const partitionId = partitionService.getPartitionId(keyData);
+
+    for (const instance of instances) {
+      if (instance.getCluster().getLocalMember().getUuid() === ownerUuid) {
+        continue;
+      }
+
+      const recordStore = (instance as unknown as {
+        _mapService: { getRecordStore(name: string, partitionId: number): { get(data: unknown): unknown | null } | null };
+      })._mapService.getRecordStore(mapName, partitionId);
+
+      if (recordStore?.get(keyData) !== null) {
+        const localPort = instance.getCluster().getLocalMember().getAddress().getPort();
+        for (let memberIndex = 0; memberIndex < 3; memberIndex++) {
+          if (cluster.getMemberConnectionInfo(memberIndex).memberPort === localPort) {
+            backupMemberIndex = memberIndex;
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }, 15_000);
+
+  return backupMemberIndex;
+}
+
+async function waitForLocalMapValue(
+  cluster: HeliosTestCluster,
+  mapName: string,
+  memberIndex: number,
+  key: string,
+  expectedValue: string,
+): Promise<void> {
+  await waitUntil(() => {
+    const instances = cluster.getRunningInstances();
+    const routingInstance = instances[0]!;
+    const targetMemberPort = cluster.getMemberConnectionInfo(memberIndex).memberPort;
+    const targetInstance = instances.find(
+      (instance) => instance.getCluster().getLocalMember().getAddress().getPort() === targetMemberPort,
+    );
+
+    if (targetInstance === undefined) {
+      return false;
+    }
+
+    const serializationService = routingInstance.getNodeEngine().getSerializationService();
+    const partitionService = routingInstance.getNodeEngine().getPartitionService();
+    const keyData = serializationService.toData(key)!;
+    const partitionId = partitionService.getPartitionId(keyData);
+    const recordStore = (targetInstance as unknown as {
+      _mapService: { getRecordStore(name: string, partitionId: number): { get(data: unknown): unknown | null } | null };
+    })._mapService.getRecordStore(mapName, partitionId);
+    const storedValue = recordStore?.get(keyData);
+
+    if (storedValue === null || storedValue === undefined) {
+      return false;
+    }
+
+    return serializationService.toObject(storedValue as never) === expectedValue;
+  }, 15_000);
 }

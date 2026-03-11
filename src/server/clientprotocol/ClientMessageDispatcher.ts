@@ -91,7 +91,7 @@ function selectHandler(type: number, msg: ClientMessage, handlers: ClientMessage
 }
 
 function isCpAtomicRefOverlap(type: number, msg: ClientMessage): boolean {
-    if (type !== 0x0a0200 && type !== 0x0a0400 && type !== 0x0a0500) {
+    if (type !== 0x0a0200 && type !== 0x0a0300 && type !== 0x0a0400 && type !== 0x0a0500) {
         return false;
     }
 

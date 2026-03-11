@@ -156,9 +156,11 @@ describe("Official Client — AtomicReference (CP Subsystem)", () => {
   it("isNull — true for unset reference, false when set", async () => {
     const ref = await hzClient.getCPSubsystem().getAtomicReference<string>("interop-atomic-ref-isnull");
     expect(await ref.get()).toBeNull();
-    expect(await ref.isNull()).toBe(false);
+    expect(await ref.isNull()).toBe(true);
     await ref.set("value");
     expect(await ref.isNull()).toBe(false);
+    await ref.clear();
+    expect(await ref.isNull()).toBe(true);
   });
 
   it("clear — resets reference to null", async () => {
