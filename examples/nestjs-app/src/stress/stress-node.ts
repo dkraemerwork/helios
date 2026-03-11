@@ -241,6 +241,26 @@ function createRestartableBlitzBridge(
   };
 }
 
+async function waitForHeliosBlitzService(
+  instance: HeliosInstanceImpl,
+  timeoutMs = 30_000,
+): Promise<BlitzService> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await instance.waitForBlitzOrchestration();
+
+    const service = instance.getBlitzServiceForBridge() as BlitzService | null;
+    if (service !== null) {
+      return service;
+    }
+
+    await Bun.sleep(100);
+  }
+
+  throw new Error(`Blitz service did not become available within ${timeoutMs}ms`);
+}
+
 async function waitForClusterSize(
   instance: HeliosInstanceImpl,
   expectedMembers: number,
@@ -393,7 +413,7 @@ async function main(): Promise<void> {
     config.setBlitzConfig({
       enabled: true,
       mode: 'embedded-local',
-      localPort: STRESS_JOB_HOST_NATS_PORT + 1000,
+      localPort: STRESS_JOB_HOST_NATS_PORT,
       localClusterPort: STRESS_JOB_HOST_NATS_PORT + 2000,
     });
   }
@@ -466,13 +486,7 @@ async function main(): Promise<void> {
 
   let blitzService: BlitzService | null = null;
   if (jobHost) {
-    blitzService = await BlitzService.start({
-      embedded: {
-        port: STRESS_JOB_HOST_NATS_PORT,
-      },
-    });
-    instance.setBlitzService(blitzService);
-    instance.getBlitzLifecycleManager()?.onLocalNodeStarted();
+    blitzService = await waitForHeliosBlitzService(instance);
   }
 
   // ── Boot NestJS ─────────────────────────────────────────────────────────────

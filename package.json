@@ -90,6 +90,7 @@
     "@nats-io/jetstream": "^3.3.1",
     "@nats-io/kv": "^3.3.1",
     "@nats-io/transport-node": "^3.3.1",
+    "@zenystx/helios-blitz": "file:packages/blitz",
     "@zenystx/helios-core": "^1.0.0",
     "@zenystx/scatterjs": "0.1.1"
   },

@@ -267,7 +267,7 @@ const defaultBlitzRuntimeLauncher: BlitzRuntimeLauncher = async ({
   config,
   routes,
 }) => {
-  const blitz = await import("@zenystx/helios-blitz");
+  const blitz = await import("../../../packages/blitz/src/index.js");
   const resolved = blitz.resolveClusterNodeConfig({
     bindHost: config.bindHost,
     advertiseHost: config.advertiseHost,
@@ -3146,12 +3146,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const atomicRefOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicRefOperations = {
       get: async (name) => this._toClientData(await this._getOrCreateAtomicReferenceService().get(name)),
-      set: async (name, value) => this._getOrCreateAtomicReferenceService().set(name, this._ss.toObject(value)),
+      set: async (name, value) => this._getOrCreateAtomicReferenceService().set(name, this._fromNullableClientData(value)),
       compareAndSet: async (name, expected, updated) =>
-        this._getOrCreateAtomicReferenceService().compareAndSet(name, this._ss.toObject(expected), this._ss.toObject(updated)),
+        this._getOrCreateAtomicReferenceService().compareAndSet(
+          name,
+          this._fromNullableClientData(expected),
+          this._fromNullableClientData(updated),
+        ),
       isNull: async (name) => this._getOrCreateAtomicReferenceService().isNull(name),
       clear: async (name) => this._getOrCreateAtomicReferenceService().clear(name),
-      contains: async (name, value) => this._getOrCreateAtomicReferenceService().contains(name, this._ss.toObject(value)),
+      contains: async (name, value) => this._getOrCreateAtomicReferenceService().contains(name, this._fromNullableClientData(value)),
       apply: async (name, functionData) =>
         this._toClientData(await this._getOrCreateAtomicReferenceService().apply(name, this._deserializeAtomicReferenceFunction(functionData))),
       alter: async (name, functionData) => {
@@ -3315,6 +3319,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
       return value as Data;
     }
     return this._ss.toData(value);
+  }
+
+  private _fromNullableClientData(value: Data | null): unknown | null {
+    if (value === null) {
+      return null;
+    }
+    const decoded = this._ss.toObject(value);
+    return decoded ?? null;
   }
 
   private _toClientDataList(values: Iterable<unknown>): Data[] {
