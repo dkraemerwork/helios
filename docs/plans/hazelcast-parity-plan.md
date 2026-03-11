@@ -151,9 +151,9 @@ This means:
 | Ringbuffer | Yes | service-local | Yes | Not proven here | Protocol-only | no official-client interop proof in this spec; wire not unified into canonical shared message table |
 | Executor | Yes | Yes | Yes | Not proven here | Partial | durable executor path remains skeletal |
 | Scheduled executor | Yes | Yes (generic ops) | No active registered remote surface | Not proven here | Partial | `ScheduledExecutorMessageHandlers` exists, but no active registration path is established through `registerAllHandlers()` |
-| Transactions | Yes | Yes | Yes | Not proven here | Protocol-only | no official-client interop proof in this spec; coordinator state remains member-local |
+| Transactions | Yes | Yes | Yes | Not proven here | Protocol-only | published `hazelcast-client@5.6.0` exposes no public transaction API entrypoint to prove this remotely; coordinator state remains member-local |
 | CP atomics (AtomicLong / AtomicRef) | Yes | No | Yes | Yes | Partial | official interop proof exists, but CP remains single-node only |
-| CP groups / Latch / Semaphore | Yes | No | Yes | Not proven here | Protocol-only | server/protocol support exists, but no official-client interop proof is established here; CP remains single-node only |
+| CP groups / Latch / Semaphore | Yes | No | Yes | Yes | Partial | official-client proof exists for explicit single-node CP group/latch/semaphore access; distributed multi-member CP remains out of scope |
 | PN Counter | Yes | not audited here | Yes | Yes | Implemented | no blocker for the audited interop surface |
 | Flake ID | Yes | not audited here | Yes | Yes | Implemented | no blocker for the audited interop surface |
 | Cardinality estimator | Yes | not audited here | Yes | Not proven here | Protocol-only | no official-client interop proof in this spec |
@@ -575,7 +575,7 @@ This means:
 
 ### Claim boundary
 
-- this is protocol/server proof, not official-client parity proof in this audit
+- this remains protocol/server proof only because the published `hazelcast-client@5.6.0` package exposes no public transaction API entrypoint on `HazelcastClient` or `CPSubsystem` for live-client transaction interop
 - transaction coordinator state remains member-local, not partition-replicated
 
 ---
@@ -617,13 +617,14 @@ This means:
 - `src/cp/impl/CpSubsystemService.ts`
 - `src/server/clientprotocol/handlers/CpServiceHandlers.ts`
 
-### Proof
+### Official-client interop proof
 
 - `test/client/CpProtocolAdapter.test.ts`
+- `test/interop/suites/cp.test.ts`
 
 ### Claim boundary
 
-- this is protocol/server proof, not official-client parity proof in this audit
+- official-client proof now exists for CP group access through named `@group` proxies plus count down latch and semaphore operations against a live single-member Helios cluster
 - CP remains explicitly single-node embedded behavior, not multi-member distributed CP parity
 
 ---
@@ -719,6 +720,7 @@ The current remote proof inventory from the official `hazelcast-client` is:
 - reliable topic: `test/interop/suites/topic.test.ts`
 - replicated map: `test/interop/suites/replicatedmap.test.ts`
 - CP atomics (AtomicLong / AtomicReference): `test/interop/suites/atomics.test.ts`
+- CP groups / latch / semaphore (single-node only): `test/interop/suites/cp.test.ts`
 - PN counter: `test/interop/suites/pncounter.test.ts`
 - flake ID: `test/interop/suites/flakeid.test.ts`
 
@@ -1031,7 +1033,7 @@ These topics are already server/protocol-capable and already have official-clien
 
 ### 10.9 CP groups, count down latch, and semaphore
 
-- **Current status:** Protocol-only
+- **Current status:** Partial
 - **Minimum retained scope:** explicit embedded single-node CP scope for group access, latch init/countDown/await, semaphore acquire/release, timeout handling, destroy lifecycle, contention behavior, and reconnect/session-expiry outcomes
 - **Implementation gate:**
   - keep the claim boundary honest: either remain single-node CP only, or implement real multi-member CP semantics before broadening claims
