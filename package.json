@@ -24,14 +24,6 @@
     "./server": {
       "import": "./dist/src/server/HeliosServer.js",
       "types": "./dist/src/server/HeliosServer.d.ts"
-    },
-    "./client": {
-      "import": "./dist/src/client/index.js",
-      "types": "./dist/src/client/index.d.ts"
-    },
-    "./client/config": {
-      "import": "./dist/src/client/config/index.js",
-      "types": "./dist/src/client/config/index.d.ts"
     }
   },
   "files": [
@@ -71,6 +63,7 @@
     "test:interop:map": "./test/interop/run-interop.sh map",
     "test:interop:connection": "./test/interop/run-interop.sh connection",
     "test:interop:ringbuffer": "./test/interop/run-interop.sh ringbuffer",
+    "scan:no-helios-client": "bun run scripts/scan-no-helios-client.ts",
     "convert": "bun run scripts/convert-java-tests.ts",
     "prepack": "bun run build",
     "prepublishOnly": "bun run build"

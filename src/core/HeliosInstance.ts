@@ -7,14 +7,8 @@ import type { IMap } from "@zenystx/helios-core/map/IMap";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 
 /**
- * Primary interface for a Helios cluster member or client.
+ * Primary interface for a Helios cluster member.
  * Port of com.hazelcast.core.HazelcastInstance.
- *
- * This contract is shared between HeliosInstanceImpl (member) and HeliosClient
- * (remote client). Only methods with real distributed server-side runtime are
- * included. Member-only data structures (IList, ISet, MultiMap, ReplicatedMap)
- * that currently lack distributed service infrastructure are available only on
- * HeliosInstanceImpl directly and are not part of this shared contract.
  */
 export interface HeliosInstance {
   /** Returns the name of this instance. */
@@ -31,9 +25,7 @@ export interface HeliosInstance {
 
   /**
    * Returns a distributed object by service name and object name.
-   * Members may support additional service names beyond the shared remote-client
-   * contract; remote clients retain only map, queue, and topic here.
-   * @throws Error if the service name is not recognised or not retained.
+   * @throws Error if the service name is not recognised.
    */
   getDistributedObject(serviceName: string, name: string): DistributedObject;
 

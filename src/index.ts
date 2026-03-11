@@ -17,7 +17,7 @@ export { Helios } from "@zenystx/helios-core/Helios";
 export { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
 export type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 export { loadConfig } from "@zenystx/helios-core/config/ConfigLoader";
-export { ConfigValidationError, validateClientConfig, validateHeliosConfig } from "@zenystx/helios-core/config/ConfigValidator";
+export { ConfigValidationError, validateHeliosConfig } from "@zenystx/helios-core/config/ConfigValidator";
 export { EvictionConfig } from "@zenystx/helios-core/config/EvictionConfig";
 export { EvictionPolicy } from "@zenystx/helios-core/config/EvictionPolicy";
 export * as HazelcastDefaults from "@zenystx/helios-core/config/HazelcastDefaults";
@@ -166,10 +166,6 @@ export { blitzJobMetricsToJSON, vertexMetricsToJSON } from "@zenystx/helios-core
 // ── Version ───────────────────────────────────────────────────────────────────
 export { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 export { Version } from "@zenystx/helios-core/version/Version";
-
-// ── Remote Client ────────────────────────────────────────────────────────────
-export { ClientConfig } from "@zenystx/helios-core/client/config/ClientConfig";
-export { DEFERRED_CLIENT_FEATURES, HeliosClient } from "@zenystx/helios-core/client/HeliosClient";
 
 // ── CP Subsystem ─────────────────────────────────────────────────────────────
 export { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
