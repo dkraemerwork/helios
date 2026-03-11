@@ -6,7 +6,7 @@
  * Architecture:
  *   Binance WS → normalize to Quote → nc.publish('market.ticks', JSON)
  *
- * No HeliosClient needed. No binary protocol. No partition load.
+ * No Hazelcast remote client needed. No binary protocol. No partition load.
  * Pure NATS publish — sub-microsecond per message.
  *
  * Uses BlitzService.connect() to get a raw NATS connection to the embedded

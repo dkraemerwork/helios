@@ -11,46 +11,34 @@ Gap status legend:
 
 ---
 
-## 1. HazelcastClient (top-level client entry point)
+## 1. Official remote-client boundary
 
-| Method / Feature | Description | Helios Owner | Status |
+| Method / Feature | Description | Helios owner | Status |
 |---|---|---|---|
-| `HazelcastClient.newHazelcastClient(config)` | Create and connect client | `src/client/HeliosClient.ts` | PARTIAL |
-| `client.getMap(name)` | Get IMap proxy | `src/client/proxy/ClientMapProxy.ts` | PARTIAL |
-| `client.getQueue(name)` | Get IQueue proxy | `src/client/proxy/ClientQueueProxy.ts` | PARTIAL |
-| `client.getTopic(name)` | Get ITopic proxy | `src/client/proxy/ClientTopicProxy.ts` | PARTIAL |
-| `client.getReliableTopic(name)` | Get reliable topic proxy | `src/client/proxy/ClientReliableTopicProxy.ts` | PARTIAL |
-| `client.getSet(name)` | Get ISet proxy | `src/client/proxy/` | MISSING |
-| `client.getList(name)` | Get IList proxy | `src/client/proxy/` | MISSING |
-| `client.getMultiMap(name)` | Get MultiMap proxy | `src/client/proxy/` | MISSING |
-| `client.getReplicatedMap(name)` | Get ReplicatedMap proxy | `src/client/proxy/` | MISSING |
-| `client.getRingbuffer(name)` | Get Ringbuffer proxy | `src/client/proxy/` | MISSING |
-| `client.getExecutorService(name)` | Get IExecutorService proxy | `src/client/proxy/ClientExecutorProxy.ts` | PARTIAL |
-| `client.getScheduledExecutorService(name)` | Get IScheduledExecutorService proxy | `src/client/proxy/ClientScheduledExecutorProxy.ts` | PARTIAL |
-| `client.getFlakeIdGenerator(name)` | Get FlakeIdGenerator proxy | — | MISSING |
-| `client.getPNCounter(name)` | Get PNCounter proxy | — | MISSING |
-| `client.getCardinalityEstimator(name)` | Get CardinalityEstimator proxy | — | MISSING |
-| `client.getCPSubsystem()` | Get CP subsystem accessor | — | MISSING |
-| `client.getSql()` | Get SQL service | — | MISSING |
-| `client.getCluster()` | Get Cluster info | `src/cluster/` | PARTIAL |
-| `client.getLifecycleService()` | Get lifecycle service | `src/instance/lifecycle/HeliosLifecycleService.ts` | DONE |
-| `client.getPartitionService()` | Get partition service | `src/spi/PartitionService.ts` | DONE |
-| `client.addLifecycleListener(listener)` | Add lifecycle event listener | `src/instance/lifecycle/HeliosLifecycleService.ts` | DONE |
-| `client.removeLifecycleListener(id)` | Remove lifecycle listener | `src/instance/lifecycle/HeliosLifecycleService.ts` | DONE |
-| `client.addDistributedObjectListener(listener)` | Listen for distributed object creation/destruction | — | MISSING |
-| `client.removeDistributedObjectListener(id)` | Remove distributed object listener | — | MISSING |
-| `client.getDistributedObjects()` | List all active distributed objects | `src/client/impl/protocol/codec/ClientGetDistributedObjectsCodec.ts` | PARTIAL |
-| `client.getLocalEndpoint()` | Get local endpoint info | — | MISSING |
-| `client.shutdown()` | Graceful client shutdown | `src/client/HeliosClient.ts` | PARTIAL |
-| Failover support | Blue/green cluster failover | `src/client/config/ClientFailoverConfig.ts` | PARTIAL |
-| Statistics reporting | Client-side statistics collection | `src/client/impl/statistics/` | PARTIAL |
+| `Client.newHazelcastClient(config)` | Create and connect with the official package | Helios server client protocol | DONE |
+| `client.getMap(name)` | Get IMap proxy | Helios server runtime + client protocol | DONE |
+| `client.getQueue(name)` | Get IQueue proxy | Helios server runtime + client protocol | DONE |
+| `client.getList(name)` | Get IList proxy | Helios server runtime + client protocol | DONE |
+| `client.getSet(name)` | Get ISet proxy | Helios server runtime + client protocol | DONE |
+| `client.getMultiMap(name)` | Get MultiMap proxy | Helios server runtime + client protocol | DONE |
+| `client.getReliableTopic(name)` | Get reliable topic proxy | Helios server runtime + client protocol | DONE |
+| `client.getReplicatedMap(name)` | Get replicated map proxy | Helios server runtime + client protocol | DONE |
+| `client.getRingbuffer(name)` | Get ringbuffer proxy | Helios server runtime + client protocol | DONE |
+| `client.getCPSubsystem()` | CP atomics and single-node latch/semaphore proof | Helios server runtime + client protocol | DONE |
+| `client.getPNCounter(name)` | Get PN counter proxy | Helios server runtime + client protocol | DONE |
+| `client.getFlakeIdGenerator(name)` | Get flake ID generator proxy | Helios server runtime + client protocol | DONE |
+| `client.getSql()` | SQL access | Helios server runtime + client protocol | DONE |
+| `client.getTopic(name)` | Standard topic proxy | No public API in pinned package | MISSING |
+| `client.getCacheManager()` | Cache access | No public API in pinned package | MISSING |
+| `client.getExecutorService(name)` | Executor access | No public API in pinned package | MISSING |
+| `client.getScheduledExecutorService(name)` | Scheduled executor access | No public API in pinned package | MISSING |
 
 ---
 
 ## 2. IMap
 
 Server-side implementation: `src/map/impl/MapProxy.ts`  
-Client-side proxy: `src/client/proxy/ClientMapProxy.ts`  
+Official client proof: `test/interop/suites/map.test.ts`  
 Codec set: `src/client/impl/protocol/codec/Map*.ts`
 
 | Method | Description | Server Status | Client Codec |
@@ -178,7 +166,7 @@ Client codec: `src/client/impl/protocol/codec/Topic*.ts`
 ## 5. ReliableTopic (Ringbuffer-backed)
 
 Server-side: `src/topic/impl/reliable/ReliableTopicProxyImpl.ts`  
-Client proxy: `src/client/proxy/ClientReliableTopicProxy.ts`
+Official client proof: `test/interop/suites/topic.test.ts`
 
 | Method | Description | Status |
 |---|---|---|
@@ -393,7 +381,7 @@ Server-side: `src/cardinality/HyperLogLog.ts`, `src/cardinality/impl/HyperLogLog
 ## 15. IExecutorService
 
 Server-side: `src/executor/impl/ExecutorServiceProxy.ts`  
-Client proxy: `src/client/proxy/ClientExecutorProxy.ts`
+Remote status: protocol-capable on the server; no supported official-client proof at the pinned package boundary.
 
 | Method | Description | Status |
 |---|---|---|
@@ -499,7 +487,7 @@ Server-side: `src/transaction/impl/TransactionImpl.ts`, `src/transaction/Transac
 ## 20. Near Cache
 
 Server-side: `src/internal/nearcache/` and `src/map/impl/nearcache/`  
-Client: `src/client/impl/nearcache/`
+Remote boundary: only the official `hazelcast-client` package is supported; Helios ships no proprietary client near-cache runtime.
 
 | Feature | Description | Status |
 |---|---|---|
@@ -655,7 +643,7 @@ Source: `src/internal/cluster/`, `src/cluster/`
 
 ## 28. Connection Management
 
-Source: `src/client/connection/`, `src/server/clientprotocol/`
+Source: `src/server/clientprotocol/`, official-client interop in `test/interop/`
 
 | Feature | Description | Status |
 |---|---|---|
@@ -690,14 +678,11 @@ Source: `src/internal/partition/`, `src/spi/PartitionService.ts`
 
 ## 30. Configuration
 
-Source: `src/client/config/`, `src/config/`
+Source: `src/config/`
 
 | Config Class | Description | Status |
 |---|---|---|
-| `ClientConfig` | Top-level client config | PARTIAL |
-| `ClientNetworkConfig` | Network settings | PARTIAL |
-| `ClientConnectionStrategyConfig` | Reconnect strategy | PARTIAL |
-| `ConnectionRetryConfig` | Retry parameters | DONE |
+| Official `hazelcast-client` config | Remote-client config surface | External package |
 | `NearCacheConfig` | Near cache options | PARTIAL |
 | `SerializationConfig` | Serializer registry | PARTIAL |
 | `MapConfig` | Map eviction/TTL/backups | PARTIAL |

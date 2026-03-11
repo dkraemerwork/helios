@@ -75,43 +75,41 @@ Run a second node on port 5702 pointing back at 5701 — they'll form a cluster,
 
 ## Remote Client
 
-Connect to a running Helios cluster from a separate process using the binary client protocol.
+Connect to a running Helios cluster with the official `hazelcast-client` package.
 
 ```typescript
-import { HeliosClient } from "@zenystx/helios-core/client";
-import { ClientConfig } from "@zenystx/helios-core/client/config";
+import { Client } from "hazelcast-client";
 
-const config = new ClientConfig();
-config.setClusterName("dev");
-config.getNetworkConfig().addAddress("127.0.0.1:5701");
-
-const client = HeliosClient.newHeliosClient(config);
-await client.connect();
+const client = await Client.newHazelcastClient({
+  clusterName: "dev",
+  network: {
+    clusterMembers: ["127.0.0.1:5701"],
+  },
+});
 
 try {
-  const map = client.getMap<string, number>("scores");
+  const map = await client.getMap<string, number>("scores");
   await map.put("alice", 42);
-  console.log(await map.get("alice")); // 42
+  console.log(await map.get("alice"));
 
-  const queue = client.getQueue<string>("tasks");
+  const queue = await client.getQueue<string>("tasks");
   await queue.offer("build");
 
-  const topic = client.getTopic<string>("events");
-  topic.addMessageListener((msg) => console.log(msg.getMessageObject()));
+  const topic = await client.getReliableTopic<string>("events");
+  topic.addMessageListener((msg) => console.log(msg.messageObject));
   await topic.publish("hello");
 } finally {
-  client.shutdown();
+  await client.shutdown();
 }
 ```
 
-The remote client supports Map, Queue, Topic, distributed object lifecycle, near-cache, basic username/password authentication, and automatic reconnect with listener re-registration. `getReliableTopic()` remains member-only in v1. See `examples/native-app/src/client-*.ts` for auth, reconnect, and near-cache examples.
+Helios' supported remote boundary is the server-side client protocol plus live interoperability with the pinned official `hazelcast-client@5.6.0` package in `test/interop`.
 
-To require credentials on the member-side client protocol, configure the server and client with matching values:
+To require credentials on the member-side client protocol, configure the server and official client with matching values:
 
 ```typescript
 import { Helios, HeliosConfig } from "@zenystx/helios-core";
-import { HeliosClient } from "@zenystx/helios-core/client";
-import { ClientConfig } from "@zenystx/helios-core/client/config";
+import { Client } from "hazelcast-client";
 
 const serverConfig = new HeliosConfig("secured-cluster");
 serverConfig.getNetworkConfig().setClientProtocolPort(5701);
@@ -119,16 +117,19 @@ serverConfig.getNetworkConfig().setClientProtocolUsernamePasswordAuth("admin", "
 
 const member = Helios.newInstance(serverConfig);
 
-const clientConfig = new ClientConfig();
-clientConfig.setClusterName("secured-cluster");
-clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
-clientConfig.getSecurityConfig().setUsernamePasswordIdentity("admin", "secret");
-
-const client = HeliosClient.newHeliosClient(clientConfig);
-await client.connect();
+const client = await Client.newHazelcastClient({
+  clusterName: "secured-cluster",
+  network: {
+    clusterMembers: ["127.0.0.1:5701"],
+  },
+  security: {
+    usernamePassword: {
+      username: "admin",
+      password: "secret",
+    },
+  },
+});
 ```
-
-> **Note:** Some member-only data structures (IList, ISet, MultiMap, ReplicatedMap) are not available on the remote client. Use `HeliosInstanceImpl` directly for these. See `DEFERRED_CLIENT_FEATURES` for the full list of deferred capabilities.
 
 ---
 
