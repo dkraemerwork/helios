@@ -11,9 +11,11 @@ import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { Helios } from '@zenystx/helios-core/Helios';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
-import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { TransactionOptions, TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions';
 import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { beforeEach, describe, expect, test } from 'bun:test';
 
@@ -26,6 +28,39 @@ function makeMember(host: string, port: number, uuid?: string): Member {
 }
 
 const PARTITION_COUNT = 16; // Small for test speed
+const RUNTIME_BASE_PORT = 18680;
+
+async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs = 10_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!(await predicate())) {
+        if (Date.now() >= deadline) {
+            throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
+        }
+        await Bun.sleep(25);
+    }
+}
+
+function makeRuntimeConfig(name: string, port: number, peerPorts: number[] = []): HeliosConfig {
+    const config = new HeliosConfig(name);
+    config.getNetworkConfig().setPort(port).setClientProtocolPort(0).getJoin().getTcpIpConfig().setEnabled(true);
+    for (const peerPort of peerPorts) {
+        config.getNetworkConfig().getJoin().getTcpIpConfig().addMember(`localhost:${peerPort}`);
+    }
+    return config;
+}
+
+async function waitForClusterSize(instance: HeliosInstanceImpl, count: number): Promise<void> {
+    await waitUntil(() => instance.getCluster().getMembers().length === count);
+}
+
+function shutdownInstances(instances: HeliosInstanceImpl[]): void {
+    while (instances.length > 0) {
+        const instance = instances.pop()!;
+        if (instance.isRunning()) {
+            instance.shutdown();
+        }
+    }
+}
 
 describe('Block 21.0 — Backup Partition Recovery Parity', () => {
     let memberA: Member;
@@ -349,7 +384,7 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
                     execution: 'excluded',
                     ownershipTransfer: false,
                     restartRecovery: false,
-                    rationale: 'cache has service-local sync, but InternalPartitionServiceImpl does not own or claim cache recovery semantics',
+                    rationale: 'cache entries do not survive member restart through InternalPartitionServiceImpl and the runtime recovers empty',
                 },
                 {
                     serviceName: 'sql',
@@ -361,11 +396,11 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
                 },
                 {
                     serviceName: 'transaction',
-                    supported: false,
-                    execution: 'excluded',
-                    ownershipTransfer: false,
+                    supported: true,
+                    execution: 'service-local-backup-sync',
+                    ownershipTransfer: true,
                     restartRecovery: false,
-                    rationale: 'transaction coordinator state is member-local and is not recovered through the partition service',
+                    rationale: 'prepared transaction backup logs can be replayed by a surviving winner, while restarted coordinators rejoin empty',
                 },
             ]);
         });
@@ -374,7 +409,7 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
             expect(typeof service.getSupportedReplicatedServices).toBe('function');
             const matrix = service.getSupportedReplicatedServices();
             expect(Array.isArray(matrix)).toBe(true);
-            expect(matrix).toEqual(['map', 'queue', 'ringbuffer']);
+            expect(matrix).toEqual(['map', 'queue', 'ringbuffer', 'transaction']);
         });
 
         test('unsupported services are documented and excluded', () => {
@@ -389,15 +424,138 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
 
         test('unsupported services expose explicit reasons instead of deferred placeholders', () => {
             const reasons = service.getUnsupportedReplicatedServiceReasons();
-            expect(reasons.cache).toContain('does not own or claim cache recovery semantics');
+            expect(reasons.cache).toContain('runtime recovers empty');
             expect(reasons.sql).toContain('stateless');
-            expect(reasons.transaction).toContain('member-local');
 
             const unsupported = service.getUnsupportedReplicatedServices();
             expect(Object.keys(reasons).sort()).toEqual([...unsupported].sort());
         });
 
-        test('excluded recovery surfaces stay fail-closed in a live runtime', () => {
+        test('cache recovery surface restarts empty in a live runtime', async () => {
+            const cacheName = 'runtime-cache-recovery';
+            const portA = RUNTIME_BASE_PORT;
+            const config = makeRuntimeConfig('cache-recovery-a', portA);
+            const instance = new HeliosInstanceImpl(config);
+
+            try {
+                const cache = instance.getCache<string, string>(cacheName);
+                const engine = instance.getNodeEngine();
+                await cache.put(cacheName, engine.toData('key-1')!, engine.toData('value-1')!);
+                expect(await cache.size(cacheName)).toBe(1);
+
+                instance.shutdown();
+                await Bun.sleep(50);
+
+                const restarted = new HeliosInstanceImpl(makeRuntimeConfig('cache-recovery-b', portA));
+                try {
+                    const restartedCache = restarted.getCache<string, string>(cacheName);
+                    const restartedEngine = restarted.getNodeEngine();
+                    expect(await restartedCache.size(cacheName)).toBe(0);
+                    expect(await restartedCache.get(cacheName, restartedEngine.toData('key-1')!)).toBeNull();
+                } finally {
+                    restarted.shutdown();
+                }
+            } finally {
+                if (instance.isRunning()) {
+                    instance.shutdown();
+                }
+                await Bun.sleep(50);
+            }
+        }, 20_000);
+
+        test('sql recovery surface restarts empty in a live runtime', async () => {
+            const port = RUNTIME_BASE_PORT + 10;
+            const config = makeRuntimeConfig('sql-runtime-a', port);
+            const instance = new HeliosInstanceImpl(config);
+
+            try {
+                const people = instance.getMap<string, { name: string }>('people');
+                await people.put('1', { name: 'Ada' });
+                await people.put('2', { name: 'Grace' });
+
+                const result = instance.getSql().execute('SELECT name FROM people ORDER BY name');
+                expect(result.getQueryId()).toBeTruthy();
+                expect(instance.getSql().getActiveQueryIds()).toEqual([result.getQueryId()]);
+
+                instance.shutdown();
+                await Bun.sleep(50);
+
+                const restarted = new HeliosInstanceImpl(makeRuntimeConfig('sql-runtime-b', port));
+                try {
+                    expect(restarted.getSql().getActiveQueryIds()).toEqual([]);
+                } finally {
+                    restarted.shutdown();
+                }
+            } finally {
+                if (instance.isRunning()) {
+                    instance.shutdown();
+                }
+                await Bun.sleep(50);
+            }
+        }, 15_000);
+
+        test('transaction recovery transfers prepared state to a surviving winner and restarted coordinators rejoin empty', async () => {
+            const instances: HeliosInstanceImpl[] = [];
+            const portA = RUNTIME_BASE_PORT + 20;
+            const portB = RUNTIME_BASE_PORT + 21;
+            const portC = RUNTIME_BASE_PORT + 22;
+
+            try {
+                const nodeA = await Helios.newInstance(makeRuntimeConfig('tx-runtime-a', portA));
+                const nodeB = await Helios.newInstance(makeRuntimeConfig('tx-runtime-b', portB, [portA]));
+                const nodeC = await Helios.newInstance(makeRuntimeConfig('tx-runtime-c', portC, [portA, portB]));
+                instances.push(nodeA, nodeB, nodeC);
+
+                await waitForClusterSize(nodeA, 3);
+                await waitForClusterSize(nodeB, 3);
+                await waitForClusterSize(nodeC, 3);
+
+                const coordinator = (nodeA as any)._transactionCoordinator;
+                const tx = coordinator.newTransaction(new TransactionOptions().setTransactionType(TransactionType.TWO_PHASE).setDurability(2), 'runtime-owner');
+
+                await coordinator.beginTransaction(tx);
+                const nodeEngine = nodeA.getNodeEngine();
+                const keyData = nodeEngine.toData('runtime-key')!;
+                (nodeA as any)._clientTransactions.set(tx.getTxnId(), {
+                    transaction: tx,
+                    mapProxies: new Map(),
+                    queueProxies: new Map(),
+                    listProxies: new Map(),
+                    setProxies: new Map(),
+                    multiMapProxies: new Map(),
+                });
+
+                const map = (nodeA as any)._getTransactionalMap(tx.getTxnId(), 'runtime-map');
+                map.put(keyData, nodeEngine.toData('runtime-value')!);
+                await tx.prepare();
+                await waitUntil(() => (nodeB as any)._transactionManagerService.getBackupLog(tx.getTxnId()) !== null || (nodeC as any)._transactionManagerService.getBackupLog(tx.getTxnId()) !== null);
+
+                nodeA.shutdown();
+                await waitUntil(() => !nodeA.isRunning());
+
+                const [recoveredByB, recoveredByC] = await Promise.all([
+                    (nodeB as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId()),
+                    (nodeC as any)._transactionManagerService.recoverBackupLogsForCoordinator(nodeA.getLocalMemberId()),
+                ]);
+                expect(recoveredByB + recoveredByC).toBe(1);
+
+                const recoveryWinner = recoveredByB === 1 ? nodeB : nodeC;
+
+                const winnerEngine = recoveryWinner.getNodeEngine();
+                const recoveredStore = (recoveryWinner as any)._mapService.getOrCreateRecordStore('runtime-map', winnerEngine.getPartitionService().getPartitionId(keyData));
+                expect(winnerEngine.toObject<string>(recoveredStore.get(keyData))).toBe('runtime-value');
+
+                const restarted = await Helios.newInstance(makeRuntimeConfig('tx-runtime-restarted', portA, [portB, portC]));
+                instances.push(restarted);
+                await waitForClusterSize(restarted, 3);
+                expect((restarted as any)._transactionManagerService.getBackupLog(tx.getTxnId())).toBeNull();
+            } finally {
+                shutdownInstances(instances);
+                await Bun.sleep(50);
+            }
+        }, 20_000);
+
+        test('recovery scope matrix stays aligned with live runtime behavior', () => {
             const config = new HeliosConfig('recovery-matrix-runtime');
             config.getNetworkConfig().setPort(0).getJoin().getTcpIpConfig().setEnabled(true);
             const instance = new HeliosInstanceImpl(config);
@@ -414,8 +572,10 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
                     execution: 'excluded',
                 });
                 expect(partitionService.getReplicatedServiceRecoveryScope('transaction')).toMatchObject({
-                    supported: false,
-                    execution: 'excluded',
+                    supported: true,
+                    execution: 'service-local-backup-sync',
+                    ownershipTransfer: true,
+                    restartRecovery: false,
                 });
                 expect(partitionService.getMigrationAwareServices().has('cache')).toBe(false);
                 expect(partitionService.getMigrationAwareServices().has('sql')).toBe(false);

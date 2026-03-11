@@ -217,7 +217,7 @@ export class InternalPartitionServiceImpl {
             execution: 'excluded',
             ownershipTransfer: false,
             restartRecovery: false,
-            rationale: 'cache has service-local sync, but InternalPartitionServiceImpl does not own or claim cache recovery semantics',
+            rationale: 'cache entries do not survive member restart through InternalPartitionServiceImpl and the runtime recovers empty',
         },
         {
             serviceName: 'sql',
@@ -229,11 +229,11 @@ export class InternalPartitionServiceImpl {
         },
         {
             serviceName: 'transaction',
-            supported: false,
-            execution: 'excluded',
-            ownershipTransfer: false,
+            supported: true,
+            execution: 'service-local-backup-sync',
+            ownershipTransfer: true,
             restartRecovery: false,
-            rationale: 'transaction coordinator state is member-local and is not recovered through the partition service',
+            rationale: 'prepared transaction backup logs can be replayed by a surviving winner, while restarted coordinators rejoin empty',
         },
     ];
 
