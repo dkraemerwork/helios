@@ -9,6 +9,7 @@
  */
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { HazelcastSerializationService } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
 import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 import { describe, expect, spyOn, test } from 'bun:test';
@@ -19,6 +20,7 @@ describe('HeliosInstanceImpl serialization wiring (Block 15.5)', () => {
         const instance = new HeliosInstanceImpl(new HeliosConfig());
         const ss = instance.getNodeEngine().getSerializationService();
         expect(ss).toBeInstanceOf(SerializationServiceImpl);
+        expect(ss).toBeInstanceOf(HazelcastSerializationService);
         instance.shutdown();
     });
 

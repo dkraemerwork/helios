@@ -92,7 +92,7 @@ import { PartitionBackupReplicaAntiEntropyOp } from "@zenystx/helios-core/intern
 import { chunkNamespaceStates } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncRequest";
 import { PartitionReplicaSyncChunkAssembler, PartitionReplicaSyncResponse } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
-import { SerializationConfig } from "@zenystx/helios-core/internal/serialization/impl/SerializationConfig";
+import { HazelcastSerializationService } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService';
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
 import { blitzJobMetricsToJSON } from "@zenystx/helios-core/job/metrics/BlitzJobMetrics";
 import type { EntryProcessor } from "@zenystx/helios-core/map/EntryProcessor";
@@ -644,8 +644,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._name = this._config.getName();
 
     // Production SerializationServiceImpl — single shared instance for NodeEngine + NearCacheManager.
-    const serializationConfig = new SerializationConfig();
-    this._ss = new SerializationServiceImpl(serializationConfig);
+    const serializationConfig = this._config.getSerializationConfig();
+    this._ss = new HazelcastSerializationService(serializationConfig);
 
     // MapContainerService — must be registered before any map proxy creation
     this._mapService = new MapContainerService();
@@ -3246,6 +3246,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     registerAllHandlers({
       dispatcher: srv.getDispatcher(),
       topologyPublisher,
+      schemaService: this._ss.schemaService,
+      localMemberUuid: this.getLocalMemberId(),
       map: trackClientProtocolOperations(mapOps),
       queue: trackClientProtocolOperations(queueOps),
       topic: trackClientProtocolOperations(topicOps),

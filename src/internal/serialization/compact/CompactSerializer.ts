@@ -770,11 +770,20 @@ export class CompactStreamSerializer implements SerializerAdapter {
         this._schemaService.registerSchema(schema);
     }
 
+    isRegistered(cls: Function): boolean {
+        return this._serializersByClass.has(cls);
+    }
+
     getTypeId(): number {
         return SerializationConstants.TYPE_COMPACT;
     }
 
     write(out: ByteArrayObjectDataOutput, obj: unknown): void {
+        if (isCompactGenericRecordValue(obj)) {
+            this._writeGenericRecord(out, obj);
+            return;
+        }
+
         const cls = (obj as object).constructor as Function;
         const serializer = this._serializersByClass.get(cls);
         if (!serializer) {
@@ -887,6 +896,15 @@ export class CompactStreamSerializer implements SerializerAdapter {
         const captureWriter = new _SchemaCapturingWriter(fields, captureOut, this);
         serializer.write(captureWriter as unknown as CompactWriter, obj);
         return new Schema(serializer.getTypeName(), fields);
+    }
+
+    private _writeGenericRecord(out: ByteArrayObjectDataOutput, record: GenericRecord): void {
+        const schema = buildSchemaFromGenericRecord(record);
+        this._schemaService.registerSchema(schema);
+        out.writeLong(schema.schemaId);
+        const writer = new CompactWriter(schema, out, this);
+        writeGenericRecordToWriter(writer, schema, record);
+        writer.end();
     }
 }
 
@@ -1260,7 +1278,74 @@ function buildGenericRecord(
         }
     }
 
-    return new GenericRecordImpl(fieldMap, valueMap, true);
+    return new GenericRecordImpl(fieldMap, valueMap, true, schema.typeName);
+}
+
+function isCompactGenericRecordValue(obj: unknown): obj is GenericRecord {
+    if (typeof obj !== 'object' || obj === null) return false;
+    const record = obj as Record<string, unknown>;
+    return typeof record.getFieldNames === 'function'
+        && typeof record.getFieldKind === 'function'
+        && typeof record.isCompact === 'function'
+        && (record.isCompact as () => boolean)();
+}
+
+function buildSchemaFromGenericRecord(record: GenericRecord): Schema {
+    const fields: SchemaField[] = [];
+    for (const fieldName of record.getFieldNames()) {
+        fields.push({ fieldName, kind: record.getFieldKind(fieldName) });
+    }
+    return new Schema(record.getTypeName(), fields);
+}
+
+function writeGenericRecordToWriter(writer: CompactWriter, schema: Schema, record: GenericRecord): void {
+    for (const field of schema.fields) {
+        switch (field.kind) {
+            case FieldKind.BOOLEAN: writer.writeBoolean(field.fieldName, record.getBoolean(field.fieldName)); break;
+            case FieldKind.INT8: writer.writeInt8(field.fieldName, record.getInt8(field.fieldName)); break;
+            case FieldKind.INT16: writer.writeInt16(field.fieldName, record.getInt16(field.fieldName)); break;
+            case FieldKind.INT32: writer.writeInt32(field.fieldName, record.getInt32(field.fieldName)); break;
+            case FieldKind.INT64: writer.writeInt64(field.fieldName, record.getInt64(field.fieldName)); break;
+            case FieldKind.FLOAT32: writer.writeFloat32(field.fieldName, record.getFloat32(field.fieldName)); break;
+            case FieldKind.FLOAT64: writer.writeFloat64(field.fieldName, record.getFloat64(field.fieldName)); break;
+            case FieldKind.STRING: writer.writeString(field.fieldName, record.getString(field.fieldName)); break;
+            case FieldKind.DECIMAL: writer.writeDecimal(field.fieldName, record.getDecimal(field.fieldName)); break;
+            case FieldKind.TIME: writer.writeTime(field.fieldName, record.getTime(field.fieldName)); break;
+            case FieldKind.DATE: writer.writeDate(field.fieldName, record.getDate(field.fieldName)); break;
+            case FieldKind.TIMESTAMP: writer.writeTimestamp(field.fieldName, record.getTimestamp(field.fieldName)); break;
+            case FieldKind.TIMESTAMP_WITH_TIMEZONE: writer.writeTimestampWithTimezone(field.fieldName, record.getTimestampWithTimezone(field.fieldName)); break;
+            case FieldKind.COMPACT: writer.writeCompact(field.fieldName, record.getGenericRecord(field.fieldName)); break;
+            case FieldKind.NULLABLE_BOOLEAN: writer.writeNullableBoolean(field.fieldName, record.getNullableBoolean(field.fieldName)); break;
+            case FieldKind.NULLABLE_INT8: writer.writeNullableInt8(field.fieldName, record.getNullableInt8(field.fieldName)); break;
+            case FieldKind.NULLABLE_INT16: writer.writeNullableInt16(field.fieldName, record.getNullableInt16(field.fieldName)); break;
+            case FieldKind.NULLABLE_INT32: writer.writeNullableInt32(field.fieldName, record.getNullableInt32(field.fieldName)); break;
+            case FieldKind.NULLABLE_INT64: writer.writeNullableInt64(field.fieldName, record.getNullableInt64(field.fieldName)); break;
+            case FieldKind.NULLABLE_FLOAT32: writer.writeNullableFloat32(field.fieldName, record.getNullableFloat32(field.fieldName)); break;
+            case FieldKind.NULLABLE_FLOAT64: writer.writeNullableFloat64(field.fieldName, record.getNullableFloat64(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_BOOLEAN: writer.writeArrayOfBoolean(field.fieldName, record.getArrayOfBoolean(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_INT8: writer.writeArrayOfInt8(field.fieldName, record.getArrayOfInt8(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_INT16: writer.writeArrayOfInt16(field.fieldName, record.getArrayOfInt16(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_INT32: writer.writeArrayOfInt32(field.fieldName, record.getArrayOfInt32(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_INT64: writer.writeArrayOfInt64(field.fieldName, record.getArrayOfInt64(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_FLOAT32: writer.writeArrayOfFloat32(field.fieldName, record.getArrayOfFloat32(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_FLOAT64: writer.writeArrayOfFloat64(field.fieldName, record.getArrayOfFloat64(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_STRING: writer.writeArrayOfString(field.fieldName, record.getArrayOfString(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_DECIMAL: writer.writeArrayOfDecimal(field.fieldName, record.getArrayOfDecimal(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_TIME: writer.writeArrayOfTime(field.fieldName, record.getArrayOfTime(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_DATE: writer.writeArrayOfDate(field.fieldName, record.getArrayOfDate(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_TIMESTAMP: writer.writeArrayOfTimestamp(field.fieldName, record.getArrayOfTimestamp(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_TIMESTAMP_WITH_TIMEZONE: writer.writeArrayOfTimestampWithTimezone(field.fieldName, record.getArrayOfTimestampWithTimezone(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_COMPACT: writer.writeArrayOfCompact(field.fieldName, record.getArrayOfGenericRecord(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_BOOLEAN: writer.writeArrayOfNullableBoolean(field.fieldName, record.getArrayOfNullableBoolean(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_INT8: writer.writeArrayOfNullableInt8(field.fieldName, record.getArrayOfNullableInt8(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_INT16: writer.writeArrayOfNullableInt16(field.fieldName, record.getArrayOfNullableInt16(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_INT32: writer.writeArrayOfNullableInt32(field.fieldName, record.getArrayOfNullableInt32(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_INT64: writer.writeArrayOfNullableInt64(field.fieldName, record.getArrayOfNullableInt64(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_FLOAT32: writer.writeArrayOfNullableFloat32(field.fieldName, record.getArrayOfNullableFloat32(field.fieldName)); break;
+            case FieldKind.ARRAY_OF_NULLABLE_FLOAT64: writer.writeArrayOfNullableFloat64(field.fieldName, record.getArrayOfNullableFloat64(field.fieldName)); break;
+            default: throw new HazelcastSerializationError(`Unsupported GenericRecord field kind ${field.kind}`);
+        }
+    }
 }
 
 function readVarFieldValue(inp: ByteArrayObjectDataInput, field: SchemaField, serializer: CompactStreamSerializer): unknown {

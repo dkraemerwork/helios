@@ -101,6 +101,7 @@ export interface BigDecimal {
  * Implementations exist for both Portable and Compact formats.
  */
 export interface GenericRecord {
+    getTypeName(): string;
     /** Returns the field names present in this record. */
     getFieldNames(): ReadonlySet<string>;
 
@@ -238,16 +239,21 @@ export class GenericRecordImpl implements GenericRecord {
     private readonly _fields: Map<string, FieldKind>;
     private readonly _values: Map<string, unknown>;
     private readonly _compact: boolean;
+    private readonly _typeName: string;
 
     constructor(
         fields: Map<string, FieldKind>,
         values: Map<string, unknown>,
         compact: boolean,
+        typeName = 'GenericRecord',
     ) {
         this._fields = fields;
         this._values = values;
         this._compact = compact;
+        this._typeName = typeName;
     }
+
+    getTypeName(): string { return this._typeName; }
 
     getFieldNames(): ReadonlySet<string> {
         return new Set(this._fields.keys());
@@ -315,11 +321,11 @@ export class GenericRecordImpl implements GenericRecord {
     // ── builder factories ────────────────────────────────────────────────────
 
     newBuilder(): GenericRecordBuilder {
-        return new GenericRecordBuilderImpl(new Map(this._fields), new Map(), this._compact);
+        return new GenericRecordBuilderImpl(new Map(this._fields), new Map(), this._compact, this._typeName);
     }
 
     newBuilderWithClone(): GenericRecordBuilder {
-        return new GenericRecordBuilderImpl(new Map(this._fields), new Map(this._values), this._compact);
+        return new GenericRecordBuilderImpl(new Map(this._fields), new Map(this._values), this._compact, this._typeName);
     }
 
     // ── private helpers ──────────────────────────────────────────────────────
@@ -357,15 +363,18 @@ export class GenericRecordBuilderImpl implements GenericRecordBuilder {
     private readonly _fields: Map<string, FieldKind>;
     private readonly _values: Map<string, unknown>;
     private readonly _compact: boolean;
+    private readonly _typeName: string;
 
     constructor(
         fields: Map<string, FieldKind>,
         values: Map<string, unknown>,
         compact: boolean,
+        typeName = 'GenericRecord',
     ) {
         this._fields = fields;
         this._values = values;
         this._compact = compact;
+        this._typeName = typeName;
     }
 
     private _set(fieldName: string, kind: FieldKind, value: unknown): this {
@@ -423,6 +432,6 @@ export class GenericRecordBuilderImpl implements GenericRecordBuilder {
     setArrayOfNullableFloat64(f: string, v: (number | null)[] | null): this { return this._set(f, FieldKind.ARRAY_OF_NULLABLE_FLOAT64, v); }
 
     build(): GenericRecord {
-        return new GenericRecordImpl(new Map(this._fields), new Map(this._values), this._compact);
+        return new GenericRecordImpl(new Map(this._fields), new Map(this._values), this._compact, this._typeName);
     }
 }

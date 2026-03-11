@@ -13,6 +13,7 @@
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientSessionRegistry }   from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';
 import type { TopologyPublisher }        from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
+import type { SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
 import type { NearCacheInvalidationManager } from '@zenystx/helios-core/spi/impl/NearCacheInvalidationManager.js';
 
 import { registerClientServiceHandlers, DistributedObjectRegistry }
@@ -65,6 +66,8 @@ export interface RegisterAllHandlersOptions {
 
     // Client-service (ping, proxy lifecycle, cluster topology)
     topologyPublisher: TopologyPublisher;
+    schemaService?: SchemaService;
+    localMemberUuid?: string;
     objectRegistry?: DistributedObjectRegistry;
 
     // Data-structure services
@@ -111,6 +114,8 @@ export function registerAllHandlers(opts: RegisterAllHandlersOptions): void {
     registerClientServiceHandlers({
         dispatcher,
         topologyPublisher: opts.topologyPublisher,
+        schemaService: opts.schemaService,
+        localMemberUuid: opts.localMemberUuid,
         objectRegistry: opts.objectRegistry,
     });
 

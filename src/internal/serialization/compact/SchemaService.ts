@@ -150,7 +150,7 @@ export const SchemaIdCalculator = {
      * Matches the algorithm in Hazelcast Java RabinFingerprint.fingerprint64().
      */
     fingerprint(typeName: string, fields: readonly SchemaField[]): bigint {
-        let fp = BigInt.asUintN(64, -1n); // 0xffffffffffffffff
+        let fp = RABIN_INIT;
 
         // Type name
         const typeNameBytes = Buffer.from(typeName, 'utf8');
@@ -165,7 +165,7 @@ export const SchemaIdCalculator = {
             const nameBytes = Buffer.from(field.fieldName, 'utf8');
             fp = rabinFingerprintInt(fp, nameBytes.length);
             fp = rabinFingerprintBuffer(fp, nameBytes);
-            fp = rabinFingerprintByte(fp, field.kind);
+            fp = rabinFingerprintInt(fp, field.kind);
         }
 
         return BigInt.asIntN(64, fp);

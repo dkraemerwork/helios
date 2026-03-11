@@ -11,7 +11,7 @@ import { ClientSecurityConfig } from '@zenystx/helios-core/client/config/ClientS
 import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig.js';
 import { DEFAULT_CLUSTER_NAME } from '@zenystx/helios-core/config/HazelcastDefaults.js';
 import type { InstanceConfig } from '@zenystx/helios-core/core/InstanceConfig.js';
-import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig.js';
+import { HazelcastSerializationConfig } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService.js';
 
 /**
  * Port of {@code com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher}.
@@ -70,7 +70,7 @@ export class ClientConfig implements InstanceConfig {
     private readonly _networkConfig = new ClientNetworkConfig();
     private readonly _connectionStrategyConfig = new ClientConnectionStrategyConfig();
     private readonly _securityConfig = new ClientSecurityConfig();
-    private readonly _serializationConfig = new SerializationConfig();
+    private readonly _serializationConfig = new HazelcastSerializationConfig();
     private readonly _nearCacheConfigMap = new Map<string, NearCacheConfig>();
     private readonly _properties = new Map<string, string>();
 
@@ -104,7 +104,7 @@ export class ClientConfig implements InstanceConfig {
         return this._securityConfig;
     }
 
-    getSerializationConfig(): SerializationConfig {
+    getSerializationConfig(): HazelcastSerializationConfig {
         return this._serializationConfig;
     }
 

@@ -24,8 +24,12 @@ import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/Cl
 import { ClientCreateProxyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientCreateProxyCodec.js';
 import { ClientDestroyProxyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientDestroyProxyCodec.js';
 import { ClientGetDistributedObjectsCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientGetDistributedObjectsCodec.js';
+import { ListMultiFrameCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
+import { ListUUIDCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListUUIDCodec.js';
+import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
 import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
+import { Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { TopologyPublisher } from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
 import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
@@ -36,8 +40,10 @@ const CLIENT_PING_REQUEST_TYPE           = 0x000d00;
 const CLIENT_PING_RESPONSE_TYPE          = 0x000d01;
 const CLIENT_STATISTICS_REQUEST_TYPE     = 0x000c00;
 const CLIENT_STATISTICS_RESPONSE_TYPE    = 0x000c01;
-const CLIENT_TRIGGER_PARTITION_ASSIGN_REQUEST_TYPE  = 0x001300;
-const CLIENT_TRIGGER_PARTITION_ASSIGN_RESPONSE_TYPE = 0x001301;
+const CLIENT_SEND_SCHEMA_REQUEST_TYPE    = 0x001300;
+const CLIENT_SEND_SCHEMA_RESPONSE_TYPE   = 0x001301;
+const CLIENT_FETCH_SCHEMA_REQUEST_TYPE   = 0x001400;
+const CLIENT_FETCH_SCHEMA_RESPONSE_TYPE  = 0x001401;
 const CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE  = 0x000f00;
 const CLIENT_LOCAL_BACKUP_LISTENER_RESPONSE_TYPE = 0x000f01;
 
@@ -73,6 +79,8 @@ export class DistributedObjectRegistry {
 export interface ClientServiceHandlersOptions {
     dispatcher: ClientMessageDispatcher;
     topologyPublisher: TopologyPublisher;
+    schemaService?: SchemaService;
+    localMemberUuid?: string;
     objectRegistry?: DistributedObjectRegistry;
     logger?: ILogger;
 }
@@ -82,7 +90,7 @@ export interface ClientServiceHandlersOptions {
  * Call this once during server startup.
  */
 export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions): void {
-    const { dispatcher, topologyPublisher } = opts;
+    const { dispatcher, topologyPublisher, schemaService, localMemberUuid } = opts;
     const objectRegistry = opts.objectRegistry ?? new DistributedObjectRegistry();
 
     // ── Ping (0x000d00) ───────────────────────────────────────────────────────
@@ -134,12 +142,17 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
         return _encodeStatisticsResponse();
     });
 
-    // ── TriggerPartitionAssignment (0x001300) ─────────────────────────────────
-    // Client requests the server to trigger partition assignment.  In a
-    // single-member cluster the assignment is already stable; just respond.
-    dispatcher.register(CLIENT_TRIGGER_PARTITION_ASSIGN_REQUEST_TYPE, async (_msg, _session) => {
-        return _encodeTriggerPartitionAssignmentResponse();
-    });
+    if (schemaService) {
+        dispatcher.register(CLIENT_SEND_SCHEMA_REQUEST_TYPE, async (msg, _session) => {
+            schemaService.registerSchema(_decodeSchemaRequest(msg));
+            return _encodeSendSchemaResponse(localMemberUuid ?? null);
+        });
+
+        dispatcher.register(CLIENT_FETCH_SCHEMA_REQUEST_TYPE, async (msg, _session) => {
+            const schemaId = _decodeFetchSchemaRequest(msg);
+            return _encodeFetchSchemaResponse(schemaService.getSchema(schemaId) ?? null);
+        });
+    }
 
     // ── LocalBackupListener (0x000f00) ───────────────────────────────────────
     // The official client registers a backup listener during startup.
@@ -181,13 +194,30 @@ function _encodeStatisticsResponse(): ClientMessage {
     return msg;
 }
 
-function _encodeTriggerPartitionAssignmentResponse(): ClientMessage {
+function _encodeSendSchemaResponse(localMemberUuid: string | null): ClientMessage {
     const msg = CM.createForEncode();
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
     buf.fill(0);
-    buf.writeUInt32LE(CLIENT_TRIGGER_PARTITION_ASSIGN_RESPONSE_TYPE >>> 0, 0);
+    buf.writeUInt32LE(CLIENT_SEND_SCHEMA_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    ListUUIDCodec.encode(msg, localMemberUuid === null ? [] : [localMemberUuid]);
+    msg.setFinal();
+    return msg;
+}
+
+function _encodeFetchSchemaResponse(schema: Schema | null): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(CLIENT_FETCH_SCHEMA_RESPONSE_TYPE >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    if (schema === null) {
+        msg.add(CM.Frame.createStaticFrame(CM.IS_NULL_FLAG));
+    } else {
+        _encodeSchema(msg, schema);
+    }
     msg.setFinal();
     return msg;
 }
@@ -216,4 +246,43 @@ function _encodeLocalBackupListenerResponse(): ClientMessage {
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
+}
+
+function _decodeFetchSchemaRequest(msg: ClientMessage): bigint {
+    return FixedSizeTypesCodec.decodeLong(msg.getStartFrame().content, RESPONSE_HEADER_SIZE);
+}
+
+function _decodeSchemaRequest(msg: ClientMessage): Schema {
+    const iterator = msg.forwardFrameIterator();
+    iterator.next();
+    iterator.next();
+    const typeName = StringCodec.decode(iterator);
+    const fields = ListMultiFrameCodec.decode(iterator, _decodeFieldDescriptor);
+    iterator.next();
+    return new Schema(typeName, fields);
+}
+
+function _encodeSchema(msg: ClientMessage, schema: Schema): void {
+    msg.add(CM.Frame.createStaticFrame(CM.BEGIN_DATA_STRUCTURE_FLAG));
+    StringCodec.encode(msg, schema.typeName);
+    ListMultiFrameCodec.encode(msg, [...schema.fields], _encodeFieldDescriptor);
+    msg.add(CM.Frame.createStaticFrame(CM.END_DATA_STRUCTURE_FLAG));
+}
+
+function _encodeFieldDescriptor(msg: ClientMessage, field: SchemaField): void {
+    msg.add(CM.Frame.createStaticFrame(CM.BEGIN_DATA_STRUCTURE_FLAG));
+    const buf = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
+    FixedSizeTypesCodec.encodeInt(buf, 0, field.kind);
+    msg.add(new CM.Frame(buf));
+    StringCodec.encode(msg, field.fieldName);
+    msg.add(CM.Frame.createStaticFrame(CM.END_DATA_STRUCTURE_FLAG));
+}
+
+function _decodeFieldDescriptor(iterator: ClientMessage.ForwardFrameIterator): SchemaField {
+    iterator.next();
+    const initialFrame = iterator.next();
+    const kind = FixedSizeTypesCodec.decodeInt(initialFrame.content, 0);
+    const fieldName = StringCodec.decode(iterator);
+    iterator.next();
+    return { fieldName, kind };
 }

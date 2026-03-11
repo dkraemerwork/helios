@@ -16,6 +16,17 @@ import { SerializationConfig } from '@zenystx/helios-core/internal/serialization
 import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
 import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
 import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
+import {
+    CompactStreamSerializer,
+    type CompactSerializable,
+} from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
+import type { GenericRecord } from '@zenystx/helios-core/internal/serialization/GenericRecord';
+import {
+    PortableRegistry,
+    PortableSerializer,
+    type ClassDefinition,
+    type PortableFactory,
+} from '@zenystx/helios-core/internal/serialization/portable/PortableSerializer';
 
 // ── Built-in serializers ──
 import { BooleanArraySerializer } from '@zenystx/helios-core/internal/serialization/impl/serializers/BooleanArraySerializer';
@@ -43,11 +54,17 @@ import { UuidSerializer } from '@zenystx/helios-core/internal/serialization/impl
 
 export class SerializationServiceImpl implements InternalSerializationService {
     private readonly byteOrder: ByteOrder;
-    private readonly constantSerializers: (SerializerAdapter | null)[];
-    private readonly specialSerializers: Map<number, SerializerAdapter>;
-    private readonly customSerializers: Map<number, SerializerAdapter>;
+    protected readonly constantSerializers: (SerializerAdapter | null)[];
+    protected readonly specialSerializers: Map<number, SerializerAdapter>;
+    protected readonly customSerializers: Map<number, SerializerAdapter>;
+    private readonly customSerializerMatchers: Array<(obj: unknown) => SerializerAdapter | null>;
     private readonly bufferPool: BufferPool;
-    private readonly dataSerializableSerializer: DataSerializableSerializer;
+    protected readonly dataSerializableSerializer: DataSerializableSerializer;
+    readonly portableRegistry: PortableRegistry;
+    readonly compactSerializer: CompactStreamSerializer;
+    readonly schemaService;
+    private readonly portableSerializer: PortableSerializer;
+    private readonly globalSerializer: SerializerAdapter | null;
 
     constructor(config: SerializationConfig = new SerializationConfig()) {
         this.byteOrder = config.byteOrder;
@@ -88,12 +105,41 @@ export class SerializationServiceImpl implements InternalSerializationService {
         this.dataSerializableSerializer = new DataSerializableSerializer();
         register(this.dataSerializableSerializer);
 
+        this.portableRegistry = new PortableRegistry();
+        this.portableRegistry.portableVersion = config.portableVersion;
+        for (const [factoryId, factory] of config.portableFactories) {
+            this.portableRegistry.registerFactory(factoryId, factory);
+        }
+        for (const classDefinition of config.classDefinitions) {
+            this.portableRegistry.registerClassDefinition(classDefinition);
+        }
+        this.portableSerializer = new PortableSerializer(this.portableRegistry);
+        this.constantSerializers[-SerializationConstants.CONSTANT_TYPE_PORTABLE] = this.portableSerializer;
+
+        this.schemaService = config.schemaService;
+        this.compactSerializer = new CompactStreamSerializer(this.schemaService);
+        for (const serializer of config.compactSerializers) {
+            this.compactSerializer.registerSerializer(serializer);
+        }
+        this.constantSerializers[-SerializationConstants.TYPE_COMPACT] = this.compactSerializer;
+        this.constantSerializers[-SerializationConstants.TYPE_COMPACT_WITH_SCHEMA] = this.compactSerializer;
+
         // Language-specific serializers (typeId < -56)
         this.specialSerializers = new Map<number, SerializerAdapter>();
         this.specialSerializers.set(JavaScriptJsonSerializer.getTypeId(), JavaScriptJsonSerializer);
 
         // User-defined serializers (typeId > 0) — empty for now
         this.customSerializers = new Map<number, SerializerAdapter>();
+        this.customSerializerMatchers = [];
+        for (const serializer of config.customSerializers) {
+            this.registerCustomSerializer(serializer);
+        }
+        this.globalSerializer = config.globalSerializer === null
+            ? null
+            : toSerializerAdapter(config.globalSerializer);
+        if (this.globalSerializer !== null) {
+            this.customSerializers.set(this.globalSerializer.getTypeId(), this.globalSerializer);
+        }
 
         // BufferPool
         this.bufferPool = new BufferPool(this, this.byteOrder);
@@ -177,9 +223,39 @@ export class SerializationServiceImpl implements InternalSerializationService {
         this.bufferPool.clear();
     }
 
+    registerPortableFactory(factoryId: number, factory: PortableFactory): void {
+        this.portableRegistry.registerFactory(factoryId, factory);
+    }
+
+    registerClassDefinition(classDefinition: ClassDefinition): void {
+        this.portableRegistry.registerClassDefinition(classDefinition);
+    }
+
+    registerDataSerializableFactory(factoryId: number, factory: import('@zenystx/helios-core/internal/serialization/impl/SerializationConfig').DataSerializableFactory): void {
+        this.dataSerializableSerializer.registerFactory(factoryId, factory);
+    }
+
+    registerCompactSerializer<T>(serializer: CompactSerializable<T>): void {
+        this.compactSerializer.registerSerializer(serializer);
+    }
+
+    registerCustomSerializer(serializer: import('@zenystx/helios-core/internal/serialization/impl/SerializationConfig').CustomSerializer): void {
+        const adapter = toSerializerAdapter(serializer);
+        this.customSerializers.set(serializer.id, adapter);
+
+        if (typeof serializer.matches === 'function') {
+            this.customSerializerMatchers.push((obj) => serializer.matches!(obj) ? adapter : null);
+            return;
+        }
+
+        if (serializer.clazz) {
+            this.customSerializerMatchers.push((obj) => obj instanceof serializer.clazz! ? adapter : null);
+        }
+    }
+
     // ── Private dispatch ──
 
-    private serializerFor(obj: unknown): SerializerAdapter {
+    protected serializerFor(obj: unknown): SerializerAdapter {
         // 1. null / undefined
         if (obj == null) return NullSerializer;
 
@@ -190,7 +266,10 @@ export class SerializationServiceImpl implements InternalSerializationService {
             );
         }
 
-        // 3. number
+        // 3. Compact
+        if (isCompactSerializable(obj, this.compactSerializer)) return this.compactSerializer;
+
+        // 4. number
         if (typeof obj === 'number') {
             if (Object.is(obj, -0)) return DoubleSerializer;
             if (Number.isInteger(obj)) {
@@ -200,29 +279,39 @@ export class SerializationServiceImpl implements InternalSerializationService {
             return DoubleSerializer;
         }
 
-        // 4. bigint
+        // 5. bigint
         if (typeof obj === 'bigint') return LongSerializer;
 
-        // 5. boolean
+        // 6. boolean
         if (typeof obj === 'boolean') return BooleanSerializer;
 
-        // 6. string
+        // 7. string
         if (typeof obj === 'string') return StringSerializer;
 
-        // 7. Buffer (N8 FIX: Buffer.isBuffer, NOT instanceof Uint8Array)
+        // 8. Buffer (N8 FIX: Buffer.isBuffer, NOT instanceof Uint8Array)
         if (Buffer.isBuffer(obj)) return ByteArraySerializer;
 
-        // 8. IdentifiedDataSerializable duck-type (before array check)
+        // 9. IdentifiedDataSerializable duck-type (before array check)
         if (isIdentifiedDataSerializable(obj)) return this.dataSerializableSerializer;
 
-        // 9. Array
+        // 10. Portable duck-type (before array check)
+        if (isPortableSerializable(obj)) return this.portableSerializer;
+
+        // 11. Array
         if (Array.isArray(obj)) return this.arraySerializer(obj);
 
-        // 10. Fallback — JSON
+        // 12. Custom serializer
+        const customSerializer = this.customSerializerFor(obj);
+        if (customSerializer) return customSerializer;
+
+        // 13. Global serializer
+        if (this.globalSerializer) return this.globalSerializer;
+
+        // 14. Fallback — JSON
         return JavaScriptJsonSerializer;
     }
 
-    private arraySerializer(arr: unknown[]): SerializerAdapter {
+    protected arraySerializer(arr: unknown[]): SerializerAdapter {
         if (arr.length === 0) return JavaScriptJsonSerializer;
         if (arr.some(el => el == null)) return JavaScriptJsonSerializer;
 
@@ -251,7 +340,7 @@ export class SerializationServiceImpl implements InternalSerializationService {
         return JavaScriptJsonSerializer;
     }
 
-    private serializerForTypeId(typeId: number): SerializerAdapter {
+    protected serializerForTypeId(typeId: number): SerializerAdapter {
         let adapter: SerializerAdapter | null | undefined;
         if (typeId <= 0) {
             const index = -typeId;
@@ -273,6 +362,22 @@ export class SerializationServiceImpl implements InternalSerializationService {
         }
         return adapter;
     }
+
+    private customSerializerFor(obj: unknown): SerializerAdapter | null {
+        if (typeof obj === 'object' && obj !== null) {
+            const customId = (obj as { hzCustomId?: unknown }).hzCustomId;
+            if (typeof customId === 'number') {
+                return this.customSerializers.get(customId) ?? null;
+            }
+        }
+
+        for (const matcher of this.customSerializerMatchers) {
+            const serializer = matcher(obj);
+            if (serializer) return serializer;
+        }
+
+        return null;
+    }
 }
 
 function isIdentifiedDataSerializable(obj: unknown): boolean {
@@ -282,4 +387,37 @@ function isIdentifiedDataSerializable(obj: unknown): boolean {
         && typeof o.getClassId === 'function'
         && typeof o.writeData === 'function'
         && typeof o.readData === 'function';
+}
+
+function isPortableSerializable(obj: unknown): boolean {
+    if (typeof obj !== 'object' || obj === null) return false;
+    const portable = obj as Record<string, unknown>;
+    return typeof portable.getFactoryId === 'function'
+        && typeof portable.getClassId === 'function'
+        && typeof portable.writePortable === 'function'
+        && typeof portable.readPortable === 'function';
+}
+
+function isCompactSerializable(obj: unknown, compactSerializer: CompactStreamSerializer): boolean {
+    if (typeof obj !== 'object' || obj === null) return false;
+
+    if (isCompactGenericRecord(obj)) {
+        return true;
+    }
+
+    return compactSerializer.isRegistered((obj as object).constructor as Function);
+}
+
+function isCompactGenericRecord(obj: unknown): obj is GenericRecord {
+    if (typeof obj !== 'object' || obj === null) return false;
+    const record = obj as Record<string, unknown>;
+    return typeof record.isCompact === 'function' && (record.isCompact as () => boolean)();
+}
+
+function toSerializerAdapter(serializer: import('@zenystx/helios-core/internal/serialization/impl/SerializationConfig').StreamSerializer): SerializerAdapter {
+    return {
+        getTypeId: () => serializer.id,
+        read: (inp) => serializer.read(inp),
+        write: (out, obj) => serializer.write(out, obj),
+    };
 }

@@ -55,11 +55,17 @@ interface MemberSlot {
   instance: HeliosInstanceImpl | null;
 }
 
+export interface HeliosTestClusterOptions {
+  clusterName?: string;
+  configureMember?: (config: HeliosConfig, index: number) => void;
+}
+
 export class HeliosTestCluster {
   private readonly _clusterName: string;
   private readonly _instances: HeliosInstanceImpl[] = [];
   private readonly _memberBasePort: number;
   private readonly _clientBasePort: number;
+  private readonly _configureMember: ((config: HeliosConfig, index: number) => void) | null;
   private _memberSlots: MemberSlot[] = [];
   private _connectionInfo: ClusterConnectionInfo | null = null;
   private _started = false;
@@ -71,8 +77,10 @@ export class HeliosTestCluster {
    */
   private readonly _multicastPort: number;
 
-  constructor(clusterName?: string) {
+  constructor(options?: string | HeliosTestClusterOptions) {
+    const clusterName = typeof options === 'string' ? options : options?.clusterName;
     this._clusterName = clusterName ?? `interop-${++clusterCounter}-${Date.now()}`;
+    this._configureMember = typeof options === 'string' ? null : options?.configureMember ?? null;
     this._multicastPort = 40000 + Math.floor(Math.random() * 10000);
     this._memberBasePort = 17000 + Math.floor(Math.random() * 1000) * 3;
     this._clientBasePort = 22000 + Math.floor(Math.random() * 1000) * 3;
@@ -332,6 +340,7 @@ export class HeliosTestCluster {
     const instance = await Helios.newInstance(
       this._buildConfig(
         slot.name,
+        this._memberSlots.indexOf(slot),
         slot.memberPort,
         slot.clientPort,
         nodeCount,
@@ -354,6 +363,7 @@ export class HeliosTestCluster {
 
   private _buildConfig(
     nodeName: string,
+    index: number,
     memberPort: number,
     clientPort: number,
     nodeCount: number,
@@ -387,6 +397,8 @@ export class HeliosTestCluster {
       network.getJoin().getMulticastConfig().setEnabled(false);
       network.getJoin().getTcpIpConfig().setEnabled(false).clear();
     }
+
+    this._configureMember?.(cfg, index);
 
     return cfg;
   }
