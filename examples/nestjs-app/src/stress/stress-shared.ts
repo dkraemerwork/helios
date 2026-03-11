@@ -2,10 +2,14 @@ export const STRESS_MAP_NAME = 'stress-map';
 export const NEAR_CACHE_MAP_NAME = 'near-cache-map';
 export const HOT_MAP_NAME = 'hot-map';
 export const COLD_MAP_NAME = 'cold-map';
+export const QUOTE_ROLLUPS_MAP_NAME = 'quote-rollups';
 export const STRESS_QUEUE_NAME = 'stress-queue';
 export const STRESS_TOPIC_NAME = 'stress-topic';
 export const STRESS_MEMBER_TOPIC_NAME = 'stress-member-topic';
 export const STRESS_MEMBER_QUEUE_PREFIX = 'stress-member-queue';
+export const MARKET_TICKS_SUBJECT = 'market.ticks';
+export const BINANCE_MARKET_ROLLUPS_JOB_NAME = 'binance-market-rollups';
+export const STRESS_JOB_HOST_NATS_PORT = 4222;
 
 export function getMemberQueuePrefix(nodeName: string): string {
   return `${STRESS_MEMBER_QUEUE_PREFIX}-${nodeName}`;

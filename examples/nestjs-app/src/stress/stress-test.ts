@@ -30,6 +30,7 @@
  */
 
 import { Helios } from '@zenystx/helios-core/Helios';
+import { BlitzService } from '@zenystx/helios-blitz';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
@@ -43,11 +44,15 @@ import type { IQueue } from '@zenystx/helios-core/collection/IQueue';
 import type { ITopic } from '@zenystx/helios-core/topic/ITopic';
 import { resolve } from 'path';
 import {
+  BINANCE_MARKET_ROLLUPS_JOB_NAME,
   getMemberQueuePrefix,
   COLD_MAP_NAME,
   HOT_MAP_NAME,
+  MARKET_TICKS_SUBJECT,
   NEAR_CACHE_MAP_NAME,
+  QUOTE_ROLLUPS_MAP_NAME,
   STRESS_MAP_NAME,
+  STRESS_JOB_HOST_NATS_PORT,
   STRESS_MEMBER_TOPIC_NAME,
   STRESS_QUEUE_NAME,
   STRESS_TOPIC_NAME,
@@ -247,6 +252,7 @@ async function waitForReady(node: SpawnedNode, timeoutMs = 60_000): Promise<void
 interface ClientInfo {
   instance: HeliosInstanceImpl;
   executor: IExecutorService;
+  quoteRollupsMap: IMap<string, unknown>;
   stressMap: IMap<string, unknown>;
   nearCacheMap: IMap<string, unknown>;
   hotMap: IMap<string, unknown>;
@@ -258,6 +264,16 @@ interface ClientInfo {
 interface MonitorPayloadLike {
   queueStats?: Record<string, Record<string, unknown>>;
   topicStats?: Record<string, Record<string, unknown>>;
+}
+
+interface MonitorJobSnapshotLike {
+  id: string;
+  name: string;
+  status: string;
+}
+
+interface MonitorJobsPayloadLike {
+  jobs?: MonitorJobSnapshotLike[];
 }
 
 async function bootClient(): Promise<ClientInfo> {
@@ -283,6 +299,7 @@ async function bootClient(): Promise<ClientInfo> {
   config.addMapConfig(new MapConfig(STRESS_MAP_NAME));
   config.addMapConfig(new MapConfig(HOT_MAP_NAME));
   config.addMapConfig(new MapConfig(COLD_MAP_NAME));
+  config.addMapConfig(new MapConfig(QUOTE_ROLLUPS_MAP_NAME));
 
   const ncMapConfig = new MapConfig(NEAR_CACHE_MAP_NAME);
   ncMapConfig.setNearCacheConfig(new NearCacheConfig());
@@ -325,6 +342,7 @@ async function bootClient(): Promise<ClientInfo> {
   return {
     instance,
     executor,
+    quoteRollupsMap: instance.getMap(QUOTE_ROLLUPS_MAP_NAME),
     stressMap: instance.getMap(STRESS_MAP_NAME),
     nearCacheMap: instance.getMap(NEAR_CACHE_MAP_NAME),
     hotMap: instance.getMap(HOT_MAP_NAME),
@@ -346,6 +364,77 @@ async function fetchMonitorPayload(restPort: number): Promise<MonitorPayloadLike
   }
 
   return await response.json() as MonitorPayloadLike;
+}
+
+async function fetchMonitorJobs(restPort: number): Promise<MonitorJobsPayloadLike> {
+  const response = await fetch(`http://127.0.0.1:${restPort}/helios/monitor/jobs`);
+  if (!response.ok) {
+    throw new Error(`Monitor jobs endpoint ${restPort} returned ${response.status}`);
+  }
+
+  return await response.json() as MonitorJobsPayloadLike;
+}
+
+async function verifyJobHost(node: SpawnedNode, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const payload = await fetchMonitorJobs(node.restPort);
+    const job = payload.jobs?.find((candidate) => candidate.name === BINANCE_MARKET_ROLLUPS_JOB_NAME);
+    if (job?.status === 'RUNNING') {
+      process.stdout.write(`[verify] ${node.name} exposes running ${BINANCE_MARKET_ROLLUPS_JOB_NAME} job\n`);
+      return;
+    }
+
+    await Bun.sleep(500);
+  }
+
+  const payload = await fetchMonitorJobs(node.restPort);
+  throw new Error(
+    `Job host verification failed: ${JSON.stringify(payload.jobs ?? [])}`,
+  );
+}
+
+async function verifyQuoteRollupMaterialization(client: ClientInfo, timeoutMs = 15_000): Promise<void> {
+  const blitz = await BlitzService.connect({
+    servers: `nats://127.0.0.1:${STRESS_JOB_HOST_NATS_PORT}`,
+    connectTimeoutMs: 5_000,
+  });
+
+  const symbol = `STRESS${Date.now()}`;
+  const timestamp = Date.now();
+
+  try {
+    blitz.nc.publish(
+      MARKET_TICKS_SUBJECT,
+      new TextEncoder().encode(JSON.stringify({
+        symbol,
+        price: 101.25,
+        open: 100,
+        high: 102,
+        low: 99.5,
+        volume: 1234,
+        quoteVolume: 123_456,
+        timestamp,
+      })),
+    );
+    await blitz.nc.flush();
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const rollup = await client.quoteRollupsMap.get(symbol) as Record<string, unknown> | null;
+      if (rollup !== null) {
+        process.stdout.write(`[verify] quote rollup materialized for ${symbol}\n`);
+        return;
+      }
+
+      await Bun.sleep(250);
+    }
+
+    throw new Error(`Quote rollup did not materialize for ${symbol}`);
+  } finally {
+    await blitz.shutdown();
+  }
 }
 
 async function verifyMemberLocalQueueTopicTraffic(nodes: SpawnedNode[], timeoutMs = 20_000): Promise<void> {
@@ -697,6 +786,7 @@ async function main(): Promise<void> {
   process.stdout.write('[boot] all 3 server nodes ready\n');
 
   const spawnedNodes = [node1, node2, node3];
+  await verifyJobHost(node1);
 
   // Let the cluster fully form before starting the client
   process.stdout.write('[boot] waiting for cluster formation...\n');
@@ -797,6 +887,7 @@ async function main(): Promise<void> {
 
   process.stdout.write(`[stress] ${tasks.length} workload loops running\n`);
   await verifyMemberLocalQueueTopicTraffic(spawnedNodes);
+  await verifyQuoteRollupMaterialization(client);
 
   const startTime = Date.now();
   prevStatsTime = 0;

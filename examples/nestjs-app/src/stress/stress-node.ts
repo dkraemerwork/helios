@@ -19,6 +19,9 @@
 
 import { NestFactory } from '@nestjs/core';
 import { Module } from '@nestjs/common';
+import type { INestApplicationContext } from '@nestjs/common';
+import { BlitzService } from '@zenystx/helios-blitz';
+import { HELIOS_BLITZ_SERVICE_TOKEN, HeliosBlitzModule, HeliosBlitzService } from '@zenystx/helios-blitz/nestjs';
 import { HeliosModule } from '@zenystx/helios-nestjs';
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
@@ -33,12 +36,18 @@ import type { ITopic } from '@zenystx/helios-core/topic/ITopic';
 import type { DynamicModule } from '@nestjs/common';
 import { resolve } from 'path';
 import 'reflect-metadata';
+import { BinanceBlitzJobsService } from '../binance-quotes/binance-blitz-jobs.service';
+import { BinanceQuotesModule } from '../binance-quotes/binance-quotes.module';
 import {
+  BINANCE_MARKET_ROLLUPS_JOB_NAME,
   buildMemberQueueCandidates,
   COLD_MAP_NAME,
   HOT_MAP_NAME,
+  MARKET_TICKS_SUBJECT,
   NEAR_CACHE_MAP_NAME,
+  QUOTE_ROLLUPS_MAP_NAME,
   STRESS_MAP_NAME,
+  STRESS_JOB_HOST_NATS_PORT,
   STRESS_MEMBER_TOPIC_NAME,
   STRESS_QUEUE_NAME,
   STRESS_TOPIC_NAME,
@@ -98,12 +107,28 @@ function parseArgs(): NodeOptions {
 
 @Module({})
 class StressNodeModule {
-  static create(instance: HeliosInstanceImpl): DynamicModule {
+  static create(instance: HeliosInstanceImpl, blitzService: BlitzService | null): DynamicModule {
+    const imports: NonNullable<DynamicModule['imports']> = [HeliosModule.forRoot(instance)];
+
+    if (blitzService !== null) {
+      imports.push(
+        HeliosBlitzModule.forHeliosInstance({
+          provide: HELIOS_BLITZ_SERVICE_TOKEN,
+          useFactory: () => new HeliosBlitzService(blitzService),
+        }),
+        BinanceQuotesModule,
+      );
+    }
+
     return {
       module: StressNodeModule,
-      imports: [HeliosModule.forRoot(instance)],
+      imports,
     };
   }
+}
+
+function isJobHostNode(nodeName: string): boolean {
+  return nodeName === 'stress-node-1';
 }
 
 interface MemberQueueItem {
@@ -244,6 +269,7 @@ async function startMemberLocalTraffic(
 async function main(): Promise<void> {
   const opts = parseArgs();
   const tasksDir = resolve(import.meta.dirname, 'tasks');
+  const jobHost = isJobHostNode(opts.name);
 
   // ── Helios config ───────────────────────────────────────────────────────────
 
@@ -268,6 +294,7 @@ async function main(): Promise<void> {
   config.addMapConfig(new MapConfig(STRESS_MAP_NAME));
   config.addMapConfig(new MapConfig(HOT_MAP_NAME));
   config.addMapConfig(new MapConfig(COLD_MAP_NAME));
+  config.addMapConfig(new MapConfig(QUOTE_ROLLUPS_MAP_NAME));
 
   const ncMapConfig = new MapConfig(NEAR_CACHE_MAP_NAME);
   ncMapConfig.setNearCacheConfig(new NearCacheConfig());
@@ -324,39 +351,83 @@ async function main(): Promise<void> {
   instance.getMap(HOT_MAP_NAME);
   instance.getMap(COLD_MAP_NAME);
   instance.getMap(NEAR_CACHE_MAP_NAME);
+  instance.getMap(QUOTE_ROLLUPS_MAP_NAME);
   instance.getQueue(STRESS_QUEUE_NAME);
   instance.getTopic(STRESS_TOPIC_NAME);
   instance.getTopic(STRESS_MEMBER_TOPIC_NAME);
 
+  let blitzService: BlitzService | null = null;
+  if (jobHost) {
+    blitzService = await BlitzService.start({
+      embedded: {
+        port: STRESS_JOB_HOST_NATS_PORT,
+      },
+    });
+    instance.setBlitzService(blitzService);
+  }
+
   // ── Boot NestJS ─────────────────────────────────────────────────────────────
 
-  await NestFactory.createApplicationContext(StressNodeModule.create(instance), { logger: false });
+  let app: INestApplicationContext | null = null;
 
-  // ── Signal readiness ────────────────────────────────────────────────────────
+  try {
+    app = await NestFactory.createApplicationContext(StressNodeModule.create(instance, blitzService), {
+      logger: false,
+    });
 
-  process.stdout.write(
-    `[${opts.name}] started — tcp=${opts.tcpPort} rest=${opts.restPort} peers=${opts.peers.join(',') || 'none'}\n`,
-  );
-  process.stdout.write('HELIOS_NODE_READY\n');
-
-  const memberWorkloadsAbort = new AbortController();
-  void startMemberLocalTraffic(instance, opts, memberWorkloadsAbort.signal).catch((err: unknown) => {
-    if (memberWorkloadsAbort.signal.aborted) {
-      return;
+    if (jobHost) {
+      const blitzJobsService = app.get(BinanceBlitzJobsService);
+      const job = await blitzJobsService.ensureStarted(BINANCE_MARKET_ROLLUPS_JOB_NAME);
+      process.stdout.write(
+        `[${opts.name}] blitz job host active nats=nats://127.0.0.1:${STRESS_JOB_HOST_NATS_PORT} subject=${MARKET_TICKS_SUBJECT} job=${job.name}\n`,
+      );
     }
-    console.error(`[${opts.name}] member-local workload failed:`, err);
-  });
 
-  // ── Graceful shutdown ───────────────────────────────────────────────────────
+    // ── Signal readiness ────────────────────────────────────────────────────────
 
-  const shutdown = (): void => {
-    memberWorkloadsAbort.abort();
+    process.stdout.write(
+      `[${opts.name}] started — tcp=${opts.tcpPort} rest=${opts.restPort} peers=${opts.peers.join(',') || 'none'}\n`,
+    );
+    process.stdout.write('HELIOS_NODE_READY\n');
+
+    const memberWorkloadsAbort = new AbortController();
+    void startMemberLocalTraffic(instance, opts, memberWorkloadsAbort.signal).catch((err: unknown) => {
+      if (memberWorkloadsAbort.signal.aborted) {
+        return;
+      }
+      console.error(`[${opts.name}] member-local workload failed:`, err);
+    });
+
+    // ── Graceful shutdown ───────────────────────────────────────────────────────
+
+    let shuttingDown = false;
+
+    const shutdown = (): void => {
+      if (shuttingDown) {
+        return;
+      }
+
+      shuttingDown = true;
+      memberWorkloadsAbort.abort();
+
+      void (async () => {
+        try {
+          await app?.close();
+        } finally {
+          instance.shutdown();
+          process.exit(0);
+        }
+      })();
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  } catch (err) {
+    await app?.close().catch(() => {});
+    await blitzService?.shutdown().catch(() => {});
     instance.shutdown();
-    process.exit(0);
-  };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+    throw err;
+  }
 }
 
 main().catch((err: unknown) => {
