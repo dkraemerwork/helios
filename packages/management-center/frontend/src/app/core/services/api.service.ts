@@ -156,6 +156,7 @@ export interface AlertHistoryRecord {
   message: string;
   metricValue: number;
   threshold: number;
+  deliveryStatusJson: string;
 }
 
 export interface SystemEvent {
@@ -299,6 +300,12 @@ export class ApiService {
     ).then(response => response.jobs);
   }
 
+  getClusterJob(clusterId: string, jobId: string): Promise<JobSnapshot | null> {
+    return firstValueFrom(
+      this.http.get<{ job: JobSnapshot | null }>(`/api/clusters/${enc(clusterId)}/jobs/${enc(jobId)}`),
+    ).then(response => response.job);
+  }
+
   // ── Metrics & History ──────────────────────────────────────────────────
 
   getMetricsHistory(params: {
@@ -342,11 +349,19 @@ export class ApiService {
     return firstValueFrom(this.http.get<unknown[]>(`/api/topics/${enc(name)}/history`, { params: httpParams }));
   }
 
-  getJobHistory(jobId: string, params?: { from?: number; to?: number }): Promise<unknown[]> {
+  getJobHistory(
+    clusterId: string,
+    jobId: string,
+    cursor?: string,
+    limit?: number,
+  ): Promise<CursorPaginated<JobSnapshot>> {
     let httpParams = new HttpParams();
-    if (params?.from) httpParams = httpParams.set('from', String(params.from));
-    if (params?.to) httpParams = httpParams.set('to', String(params.to));
-    return firstValueFrom(this.http.get<unknown[]>(`/api/jobs/${enc(jobId)}/history`, { params: httpParams }));
+    httpParams = httpParams.set('clusterId', clusterId);
+    if (cursor) httpParams = httpParams.set('cursor', cursor);
+    if (limit) httpParams = httpParams.set('limit', String(limit));
+    return firstValueFrom(
+      this.http.get<CursorPaginated<JobSnapshot>>(`/api/jobs/${enc(jobId)}/history`, { params: httpParams }),
+    );
   }
 
   // ── Alerts ─────────────────────────────────────────────────────────────
@@ -354,25 +369,27 @@ export class ApiService {
   getAlertRules(clusterId?: string): Promise<AlertRule[]> {
     let params = new HttpParams();
     if (clusterId) params = params.set('clusterId', clusterId);
-    return firstValueFrom(this.http.get<AlertRule[]>('/api/alerts/rules', { params }));
+    return firstValueFrom(this.http.get<{ rules: AlertRule[] }>('/api/alerts/rules', { params }))
+      .then(response => response.rules);
   }
 
-  createAlertRule(rule: Omit<AlertRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<AlertRule> {
-    return firstValueFrom(this.http.post<AlertRule>('/api/alerts/rules', rule));
+  createAlertRule(rule: Omit<AlertRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ id: string }> {
+    return firstValueFrom(this.http.post<{ id: string }>('/api/alerts/rules', rule));
   }
 
-  updateAlertRule(id: string, rule: Partial<AlertRule>): Promise<AlertRule> {
-    return firstValueFrom(this.http.put<AlertRule>(`/api/alerts/rules/${enc(id)}`, rule));
+  updateAlertRule(id: string, rule: Partial<AlertRule>): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.put<{ ok: true }>(`/api/alerts/rules/${enc(id)}`, rule));
   }
 
-  deleteAlertRule(id: string): Promise<void> {
-    return firstValueFrom(this.http.delete<void>(`/api/alerts/rules/${enc(id)}`));
+  deleteAlertRule(id: string): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.delete<{ ok: true }>(`/api/alerts/rules/${enc(id)}`));
   }
 
   getActiveAlerts(clusterId?: string): Promise<AlertHistoryRecord[]> {
     let params = new HttpParams();
     if (clusterId) params = params.set('clusterId', clusterId);
-    return firstValueFrom(this.http.get<AlertHistoryRecord[]>('/api/alerts/active', { params }));
+    return firstValueFrom(this.http.get<{ alerts: AlertHistoryRecord[] }>('/api/alerts/active', { params }))
+      .then(response => response.alerts);
   }
 
   getAlertHistory(
@@ -389,8 +406,8 @@ export class ApiService {
     );
   }
 
-  acknowledgeAlert(id: number): Promise<void> {
-    return firstValueFrom(this.http.post<void>(`/api/alerts/${id}/acknowledge`, {}));
+  acknowledgeAlert(id: number): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.post<{ ok: true }>(`/api/alerts/${id}/acknowledge`, {}));
   }
 
   // ── Users ──────────────────────────────────────────────────────────────
@@ -474,33 +491,33 @@ export class ApiService {
     );
   }
 
-  cancelJob(jobId: string): Promise<{ success: boolean }> {
+  cancelJob(clusterId: string, jobId: string): Promise<{ success: boolean }> {
     return firstValueFrom(
-      this.http.post<{ success: boolean }>(`/api/admin/jobs/${enc(jobId)}/cancel`, {}),
+      this.http.post<{ success: boolean }>(`/api/admin/jobs/${enc(jobId)}/cancel`, { clusterId }),
     );
   }
 
-  restartJob(jobId: string): Promise<{ success: boolean }> {
+  restartJob(clusterId: string, jobId: string): Promise<{ success: boolean }> {
     return firstValueFrom(
-      this.http.post<{ success: boolean }>(`/api/admin/jobs/${enc(jobId)}/restart`, {}),
+      this.http.post<{ success: boolean }>(`/api/admin/jobs/${enc(jobId)}/restart`, { clusterId }),
     );
   }
 
-  clearMap(name: string): Promise<{ success: boolean }> {
+  clearMap(clusterId: string, name: string): Promise<{ success: boolean }> {
     return firstValueFrom(
-      this.http.post<{ success: boolean }>(`/api/admin/maps/${enc(name)}/clear`, {}),
+      this.http.post<{ success: boolean }>(`/api/admin/maps/${enc(name)}/clear`, { clusterId }),
     );
   }
 
-  evictMap(name: string): Promise<{ success: boolean }> {
+  evictMap(clusterId: string, name: string): Promise<{ success: boolean }> {
     return firstValueFrom(
-      this.http.post<{ success: boolean }>(`/api/admin/maps/${enc(name)}/evict`, {}),
+      this.http.post<{ success: boolean }>(`/api/admin/maps/${enc(name)}/evict`, { clusterId }),
     );
   }
 
-  triggerGc(): Promise<{ success: boolean }> {
+  triggerGc(clusterId: string): Promise<{ success: boolean }> {
     return firstValueFrom(
-      this.http.post<{ success: boolean }>('/api/admin/gc', {}),
+      this.http.post<{ success: boolean }>('/api/admin/gc', { clusterId }),
     );
   }
 

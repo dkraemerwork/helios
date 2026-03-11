@@ -85,13 +85,15 @@ export class MapDetailComponent implements OnInit, OnDestroy {
   }
 
   async clearMap(): Promise<void> {
+    if (!this.clusterId) return;
     if (!confirm(`Are you sure you want to clear map "${this.mapName}"? This will delete all entries.`)) return;
-    await this.executeAction(() => this.apiService.clearMap(this.mapName), 'Map cleared successfully');
+    await this.executeAction(() => this.apiService.clearMap(this.clusterId!, this.mapName), 'Map cleared successfully');
   }
 
   async evictMap(): Promise<void> {
+    if (!this.clusterId) return;
     if (!confirm(`Are you sure you want to evict all entries from map "${this.mapName}"?`)) return;
-    await this.executeAction(() => this.apiService.evictMap(this.mapName), 'Map evicted successfully');
+    await this.executeAction(() => this.apiService.evictMap(this.clusterId!, this.mapName), 'Map evicted successfully');
   }
 
   private async executeAction(fn: () => Promise<{ success: boolean }>, successMsg: string): Promise<void> {

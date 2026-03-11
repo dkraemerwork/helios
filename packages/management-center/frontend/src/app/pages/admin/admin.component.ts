@@ -90,10 +90,11 @@ export class AdminComponent implements OnInit {
   }
 
   async triggerGc(): Promise<void> {
+    if (!this.clusterId) return;
     this.actionLoading.set(true);
     this.actionResult.set(null);
     try {
-      const result = await this.apiService.triggerGc();
+      const result = await this.apiService.triggerGc(this.clusterId);
       this.actionResult.set({
         success: result.success,
         message: result.success ? 'GC triggered successfully' : 'GC trigger failed',

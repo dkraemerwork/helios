@@ -227,15 +227,17 @@ export class SsrStateService {
   private async getClusterAlertsState(
     clusterId: string,
   ): Promise<Record<string, unknown>> {
-    const [activeAlerts, rules] = await Promise.all([
+    const [activeAlerts, rules, history] = await Promise.all([
       this.queryActiveAlerts(clusterId),
       this.queryAlertRules(clusterId),
+      this.queryAlertHistory(clusterId),
     ]);
 
     return {
       _ssrTimestamp: nowMs(),
       activeAlerts,
       alertRules: rules,
+      alertHistory: history,
     };
   }
 
@@ -333,6 +335,19 @@ export class SsrStateService {
     });
 
     return result.rows.map(rowToAlertRule);
+  }
+
+  private async queryAlertHistory(clusterId: string): Promise<AlertHistoryRecord[]> {
+    const client = await this.connectionFactory.getClient();
+    const result = await client.execute({
+      sql: `SELECT * FROM alert_history
+            WHERE cluster_id = ?
+            ORDER BY id DESC
+            LIMIT ?`,
+      args: [clusterId, TRANSFER_STATE_LIMIT],
+    });
+
+    return result.rows.map(rowToAlertHistory);
   }
 }
 

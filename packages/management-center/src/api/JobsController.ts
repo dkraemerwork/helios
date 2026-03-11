@@ -66,4 +66,19 @@ export class JobsController {
     const jobs = await this.jobsService.getActiveJobs(clusterId);
     return { jobs };
   }
+
+  @Get('clusters/:clusterId/jobs/:jobId')
+  @RequireRoles('viewer')
+  async jobDetail(
+    @Param('clusterId') clusterId: string,
+    @Param('jobId') jobId: string,
+  ): Promise<{ job: JobSnapshot | null }> {
+    const record = await this.authRepo.getClusterById(clusterId);
+    if (!record) {
+      throw new NotFoundError(`Cluster ${clusterId} not found`);
+    }
+
+    const job = await this.jobsService.getJobById(clusterId, jobId);
+    return { job };
+  }
 }
