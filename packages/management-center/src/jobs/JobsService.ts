@@ -331,7 +331,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 function toTimestampOrNull(val: unknown): number | null {
   if (val === null || val === undefined) return null;
   const n = Number(val);
-  return Number.isNaN(n) ? null : n;
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function rowToJobSnapshot(row: Record<string, unknown>): JobSnapshot {

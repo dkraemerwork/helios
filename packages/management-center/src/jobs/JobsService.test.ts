@@ -121,6 +121,60 @@ describe('JobsService', () => {
     ]);
   });
 
+  test('preserves exported runtime fields without fabricating terminal timestamps', async () => {
+    const service = Object.create(JobsService.prototype) as JobsService;
+    const subject = service as any;
+    let inserted: unknown[] = [];
+
+    subject.connectorService = {
+      fetchJobs: async () => ({
+        jobs: [
+          {
+            id: 'job-3',
+            name: 'Light Job',
+            status: 'RUNNING',
+            executionStartTime: 500,
+            executionCompletionTime: -1,
+            lightJob: true,
+            supportsCancel: true,
+            supportsRestart: false,
+            vertices: [{ name: 'source', type: 'source', processedItems: 0, emittedItems: 7 }],
+            edges: [],
+            metrics: {
+              vertices: {
+                source: { itemsIn: 0, itemsOut: 7 },
+              },
+            },
+          },
+        ],
+      }),
+    };
+    subject.topologySerializer = {
+      serializeVertices: (value: unknown) => JSON.stringify(value),
+      serializeEdges: (value: unknown) => JSON.stringify(value),
+    };
+    subject.eventEmitter = { emit: () => {} };
+    subject.lastKnownStatus = new Map();
+    subject.insertSnapshots = async (snapshots: unknown[]) => {
+      inserted = snapshots;
+    };
+
+    await service.fetchAndStoreJobs('stress');
+
+    expect(inserted).toHaveLength(1);
+    expect((inserted[0] as { completionTime: number | null }).completionTime).toBeNull();
+    expect(JSON.parse((inserted[0] as { verticesJson: string }).verticesJson)).toEqual([
+      {
+        id: 'source',
+        name: 'source',
+        type: 'source',
+        processedItems: 0,
+        emittedItems: 7,
+        parallelism: null,
+      },
+    ]);
+  });
+
   test('emits an empty jobs payload when the cluster reports no jobs', async () => {
     const emitted: Array<{ event: string; payload: unknown }> = [];
     const service = Object.create(JobsService.prototype) as JobsService;

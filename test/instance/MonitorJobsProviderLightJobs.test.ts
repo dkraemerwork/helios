@@ -90,11 +90,11 @@ describe('Monitor jobs provider', () => {
     expect(jobs[0]?.vertices).toHaveLength(3);
     expect(jobs[0]?.vertices[0]).toMatchObject({
       name: 'nats-subject:market.ticks',
-      status: 'UNKNOWN',
-      parallelism: 1,
       processedItems: 0,
       emittedItems: 10,
     });
+    expect(jobs[0]?.vertices[0]).not.toHaveProperty('status');
+    expect(jobs[0]?.vertices[0]).not.toHaveProperty('parallelism');
     expect(jobs[0]?.edges).toHaveLength(2);
     expect(jobs[0]?.metrics?.['vertices']).toBeDefined();
   });

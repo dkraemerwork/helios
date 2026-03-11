@@ -5834,10 +5834,18 @@ export class HeliosInstanceImpl implements HeliosInstance {
                       type: vertex.type,
                       ...(metricVertex !== null
                         ? {
-                            status: String(metricVertex['status'] ?? 'UNKNOWN'),
-                            parallelism: typeof metricVertex['parallelism'] === 'number' ? metricVertex['parallelism'] : descriptor.parallelism,
-                            processedItems: typeof metricVertex['itemsIn'] === 'number' ? metricVertex['itemsIn'] : 0,
-                            emittedItems: typeof metricVertex['itemsOut'] === 'number' ? metricVertex['itemsOut'] : 0,
+                            ...(typeof metricVertex['status'] === 'string'
+                              ? { status: metricVertex['status'] }
+                              : {}),
+                            ...(typeof metricVertex['parallelism'] === 'number'
+                              ? { parallelism: metricVertex['parallelism'] }
+                              : {}),
+                            ...(typeof metricVertex['itemsIn'] === 'number'
+                              ? { processedItems: metricVertex['itemsIn'] }
+                              : {}),
+                            ...(typeof metricVertex['itemsOut'] === 'number'
+                              ? { emittedItems: metricVertex['itemsOut'] }
+                              : {}),
                           }
                         : {}),
                     };
@@ -5845,11 +5853,21 @@ export class HeliosInstanceImpl implements HeliosInstance {
                 : (metrics?.['vertices'] && typeof metrics['vertices'] === 'object'
                     ? Object.entries(metrics['vertices'] as Record<string, Record<string, unknown>>).map(([name, value]) => ({
                         name,
-                        type: String((value as Record<string, unknown>)['type'] ?? 'operator'),
-                        status: String((value as Record<string, unknown>)['status'] ?? 'UNKNOWN'),
-                        parallelism: Number((value as Record<string, unknown>)['parallelism'] ?? 0),
-                        processedItems: Number((value as Record<string, unknown>)['itemsIn'] ?? 0),
-                        emittedItems: Number((value as Record<string, unknown>)['itemsOut'] ?? 0),
+                        type: typeof (value as Record<string, unknown>)['type'] === 'string'
+                          ? String((value as Record<string, unknown>)['type'])
+                          : 'operator',
+                        ...(typeof (value as Record<string, unknown>)['status'] === 'string'
+                          ? { status: String((value as Record<string, unknown>)['status']) }
+                          : {}),
+                        ...(typeof (value as Record<string, unknown>)['parallelism'] === 'number'
+                          ? { parallelism: Number((value as Record<string, unknown>)['parallelism']) }
+                          : {}),
+                        ...(typeof (value as Record<string, unknown>)['itemsIn'] === 'number'
+                          ? { processedItems: Number((value as Record<string, unknown>)['itemsIn']) }
+                          : {}),
+                        ...(typeof (value as Record<string, unknown>)['itemsOut'] === 'number'
+                          ? { emittedItems: Number((value as Record<string, unknown>)['itemsOut']) }
+                          : {}),
                       }))
                     : []),
               edges: descriptor?.edges ?? [],

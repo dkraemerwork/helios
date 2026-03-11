@@ -200,7 +200,7 @@ export interface JobTopologyVertex {
   id: string;
   name: string;
   type: string;
-  status: string;
+  status?: string;
   parallelism: number | null;
   processedItems: number | null;
   emittedItems: number | null;
@@ -223,12 +223,13 @@ export function normalizePersistedVertices(
     const vertex = asRecord(entry);
     const id = asString(vertex['id']) || asString(vertex['name']) || `vertex-${index}`;
     const metricVertex = asRecord(metricVertices[id] ?? metricVertices[asString(vertex['name'])]);
+    const status = asString(metricVertex['status']) || asString(vertex['status']);
 
     return {
       id,
       name: asString(vertex['name']) || id,
       type: asString(vertex['type']) || 'operator',
-      status: asString(metricVertex['status']) || 'UNKNOWN',
+      ...(status ? { status } : {}),
       parallelism: toNullableNumber(metricVertex['parallelism'] ?? vertex['parallelism']),
       processedItems: toNullableNumber(metricVertex['itemsIn'] ?? metricVertex['processedItems'] ?? metricVertex['receivedCount'] ?? vertex['processedItems']),
       emittedItems: toNullableNumber(metricVertex['itemsOut'] ?? metricVertex['emittedItems'] ?? metricVertex['emittedCount'] ?? vertex['emittedItems']),
