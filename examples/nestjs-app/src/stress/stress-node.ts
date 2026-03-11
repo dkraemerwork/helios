@@ -143,6 +143,104 @@ interface MemberTopicMessage {
   emittedAt: number;
 }
 
+interface RestartableBlitzBridge {
+  shutdown(): Promise<void>;
+  readonly isClosed: boolean;
+  readonly jsm?: unknown;
+  getClusterSize(): number;
+  getRunningJobCount(): number;
+  getJobCounters(): ReturnType<BlitzService['getJobCounters']>;
+  getJobs(name?: string): ReturnType<BlitzService['getJobs']>;
+  getJobDescriptor(id: string): ReturnType<BlitzService['getJobDescriptor']>;
+  getJobMetadata(id: string): ReturnType<BlitzService['getJobMetadata']>;
+  cancelJob(id: string): Promise<void>;
+  restartJob(id: string): Promise<void>;
+}
+
+function createRestartableBlitzBridge(
+  blitzService: BlitzService,
+  getJobsService: () => BinanceBlitzJobsService | null,
+): RestartableBlitzBridge {
+  const restartableJobIds = new Set<string>();
+
+  return {
+    get isClosed() {
+      return blitzService.isClosed;
+    },
+    get jsm() {
+      return blitzService.jsm;
+    },
+    shutdown(): Promise<void> {
+      return blitzService.shutdown();
+    },
+    getClusterSize(): number {
+      return blitzService.getClusterSize();
+    },
+    getRunningJobCount(): number {
+      return blitzService.getRunningJobCount();
+    },
+    getJobCounters(): ReturnType<BlitzService['getJobCounters']> {
+      return blitzService.getJobCounters();
+    },
+    getJobs(name?: string): ReturnType<BlitzService['getJobs']> {
+      const jobs = blitzService.getJobs(name);
+      for (const job of jobs) {
+        restartableJobIds.add(job.id);
+      }
+      return jobs;
+    },
+    getJobDescriptor(id: string): ReturnType<BlitzService['getJobDescriptor']> {
+      return blitzService.getJobDescriptor(id);
+    },
+    async getJobMetadata(id: string): ReturnType<BlitzService['getJobMetadata']> {
+      const metadata = await blitzService.getJobMetadata(id);
+      if (metadata === null) {
+        return null;
+      }
+
+      const jobsService = getJobsService();
+      if (jobsService === null) {
+        return metadata;
+      }
+
+      const state = jobsService.getState();
+      if (state.jobId === id) {
+        restartableJobIds.add(id);
+      }
+
+      return restartableJobIds.has(id)
+        ? { ...metadata, supportsRestart: true }
+        : metadata;
+    },
+    cancelJob(id: string): Promise<void> {
+      return blitzService.cancelJob(id);
+    },
+    async restartJob(id: string): Promise<void> {
+      const jobsService = getJobsService();
+      if (jobsService === null) {
+        await blitzService.restartJob(id);
+        return;
+      }
+
+      const state = jobsService.getState();
+      const shouldHandleExampleJob = restartableJobIds.has(id) || state.jobId === id;
+      if (!shouldHandleExampleJob) {
+        await blitzService.restartJob(id);
+        return;
+      }
+
+      const jobName = state.jobName ?? BINANCE_MARKET_ROLLUPS_JOB_NAME;
+      if (state.jobId === id && state.status === 'RUNNING') {
+        await jobsService.stop();
+      }
+
+      const restartedJob = await jobsService.ensureStarted(jobName);
+      restartableJobIds.add(id);
+      restartableJobIds.add(restartedJob.id);
+    },
+  };
+}
+
 async function waitForClusterSize(
   instance: HeliosInstanceImpl,
   expectedMembers: number,
@@ -291,6 +389,15 @@ async function main(): Promise<void> {
   config.getNetworkConfig().getRestApiConfig().setEnabled(true).setPort(opts.restPort).enableAllGroups();
   config.getMonitorConfig().setEnabled(true);
 
+  if (jobHost) {
+    config.setBlitzConfig({
+      enabled: true,
+      mode: 'embedded-local',
+      localPort: STRESS_JOB_HOST_NATS_PORT + 1000,
+      localClusterPort: STRESS_JOB_HOST_NATS_PORT + 2000,
+    });
+  }
+
   // Maps — all nodes register the same set so partition ownership is consistent
   config.addMapConfig(new MapConfig(STRESS_MAP_NAME));
   config.addMapConfig(new MapConfig(HOT_MAP_NAME));
@@ -365,6 +472,7 @@ async function main(): Promise<void> {
       },
     });
     instance.setBlitzService(blitzService);
+    instance.getBlitzLifecycleManager()?.onLocalNodeStarted();
   }
 
   // ── Boot NestJS ─────────────────────────────────────────────────────────────
@@ -378,6 +486,7 @@ async function main(): Promise<void> {
 
     if (jobHost) {
       blitzJobsService = app.get(BinanceBlitzJobsService);
+      instance.setBlitzService(createRestartableBlitzBridge(blitzService!, () => blitzJobsService));
       const job = await blitzJobsService!.ensureStarted(BINANCE_MARKET_ROLLUPS_JOB_NAME);
       process.stdout.write(
         `[${opts.name}] blitz job host active nats=nats://127.0.0.1:${STRESS_JOB_HOST_NATS_PORT} subject=${MARKET_TICKS_SUBJECT} job=${job.name}\n`,
@@ -415,7 +524,6 @@ async function main(): Promise<void> {
         try {
           await blitzJobsService?.stop().catch(() => {});
           await app?.close().catch(() => {});
-          await blitzService?.shutdown().catch(() => {});
           await instance.shutdownAsync().catch(() => {});
         } finally {
           process.exit(0);
@@ -428,7 +536,6 @@ async function main(): Promise<void> {
   } catch (err) {
     await blitzJobsService?.stop().catch(() => {});
     await app?.close().catch(() => {});
-    await blitzService?.shutdown().catch(() => {});
     await instance.shutdownAsync().catch(() => {});
     throw err;
   }

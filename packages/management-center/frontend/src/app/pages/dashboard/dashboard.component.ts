@@ -147,7 +147,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
-    const clusterId = this.route.snapshot.paramMap.get('id');
+    const clusterId = this.route.parent?.snapshot.paramMap.get('id') ?? null;
     if (clusterId) {
       this.clusterStore.setActiveCluster(clusterId);
       this.wsService.subscribe(clusterId, 'all');
