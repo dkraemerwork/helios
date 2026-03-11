@@ -158,8 +158,8 @@ import { RetryableException } from "@zenystx/helios-core/spi/impl/operationservi
 import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
 import { SqlResult } from "@zenystx/helios-core/sql/impl/SqlResult";
 import type { SqlColumnType } from "@zenystx/helios-core/sql/impl/SqlRowMetadata";
-import { SqlService } from "@zenystx/helios-core/sql/impl/SqlService";
-import { SqlStatement } from "@zenystx/helios-core/sql/impl/SqlStatement";
+import { SqlExecutionError, SqlService, SqlTimeoutError } from "@zenystx/helios-core/sql/impl/SqlService";
+import { SqlStatement, SqlStatementParseError } from "@zenystx/helios-core/sql/impl/SqlStatement";
 import type { ITopic } from "@zenystx/helios-core/topic/ITopic";
 import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats";
 import type { Message } from "@zenystx/helios-core/topic/Message";
@@ -3095,8 +3095,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const sqlOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlServiceOperations = {
-      execute: async (sql, params, timeoutMs, cursorBufferSize, partitionArgumentIndex, queryId) =>
-        this._executeClientSql(sql, params, timeoutMs, cursorBufferSize, partitionArgumentIndex, queryId),
+      execute: async (sql, params, timeoutMs, cursorBufferSize, partitionArgumentIndex, queryId, returnRawResult, schema, expectedResultType) =>
+        this._executeClientSql(sql, params, timeoutMs, cursorBufferSize, partitionArgumentIndex, queryId, returnRawResult, schema, expectedResultType),
       fetch: async (queryId, cursorBufferSize) =>
         this._fetchClientSql(queryId, cursorBufferSize),
       close: async (queryId) =>
@@ -3669,10 +3669,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
     error: unknown,
   ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlError {
     const message = error instanceof Error ? error.message : String(error);
+    let code = -1;
+    if (error instanceof SqlStatementParseError) {
+      code = 1008;
+    } else if (error instanceof SqlTimeoutError) {
+      code = 1004;
+    }
+
     return {
-      code: -1,
+      code,
       message,
-      originatingMemberId: this.getLocalMemberId(),
+      originatingMemberId: this.getCluster().getLocalMember().getUuid(),
       suggestion: null,
     };
   }
@@ -3692,11 +3699,21 @@ export class HeliosInstanceImpl implements HeliosInstance {
     cursorBufferSize: number,
     partitionArgumentIndex: number,
     queryId: ClientSqlQueryId,
+    _returnRawResult: boolean,
+    schema: string | null,
+    expectedResultType: number,
   ): import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').SqlExecuteResult {
     const queryKey = this._clientSqlQueryKey(queryId);
     this._closeStoredClientSqlResult(queryKey);
 
     try {
+      if (schema !== null) {
+        throw new SqlExecutionError(
+          'Only the default schema is supported for the retained IMap SQL surface',
+          queryKey,
+        );
+      }
+
       const statement = new SqlStatement(
         sql,
         params.map((param) => this._ss.toObject(param)),
@@ -3710,6 +3727,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
       const result = this._getOrCreateSqlService().executeStatement(statement);
       if (result.isUpdateCount()) {
+        if (expectedResultType === 1) {
+          result.close();
+          throw new SqlExecutionError('SQL statement returned an update count, but rows were required', queryKey);
+        }
+
         const updateCount = BigInt(result.getUpdateCount());
         result.close();
         return {
@@ -3721,6 +3743,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
           isInfiniteRows: false,
           partitionArgumentIndex,
         };
+      }
+
+      if (expectedResultType === 2) {
+        result.close();
+        throw new SqlExecutionError('SQL statement returned rows, but an update count was required', queryKey);
       }
 
       const rowPage = this._toProtocolSqlPage(result, cursorBufferSize);

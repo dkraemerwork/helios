@@ -2,6 +2,7 @@ import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/i
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import {
     BOOLEAN_SIZE_IN_BYTES,
+    BYTE_SIZE_IN_BYTES,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
@@ -16,8 +17,8 @@ import { SerializationConfig } from '@zenystx/helios-core/internal/serialization
 import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 import { afterEach, describe, expect, test } from 'bun:test';
 
-const SQL_EXECUTE_REQUEST_TYPE = 0x210100;
-const SQL_FETCH_REQUEST_TYPE = 0x210200;
+const SQL_EXECUTE_REQUEST_TYPE = 0x210400;
+const SQL_FETCH_REQUEST_TYPE = 0x210500;
 const SQL_CLOSE_REQUEST_TYPE = 0x210300;
 
 const EXEC_SHUTDOWN_REQUEST_TYPE = 0x0a0100;
@@ -28,7 +29,7 @@ const EXEC_SUBMIT_TO_PARTITION_REQUEST_TYPE = 0x0a0600;
 const EXEC_SUBMIT_TO_MEMBER_REQUEST_TYPE = 0x0a0700;
 
 const INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
-const RESPONSE_VALUE_OFFSET = INITIAL_FRAME_SIZE;
+const RESPONSE_VALUE_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES;
 
 type QueryId = {
     localHigh: bigint;
@@ -79,30 +80,29 @@ function buildSqlExecuteRequest(
     sql: string,
     params: Data[],
     cursorBufferSize: number,
+    options?: {
+        expectedResultType?: number;
+        schema?: string | null;
+    },
 ): ClientMessage {
-    const extraBytes = LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + (4 * LONG_SIZE_IN_BYTES) + BOOLEAN_SIZE_IN_BYTES + 1;
+    const extraBytes = LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + 1 + BOOLEAN_SIZE_IN_BYTES;
     const { msg, frame } = createRequest(SQL_EXECUTE_REQUEST_TYPE, correlationId, extraBytes);
     let offset = INITIAL_FRAME_SIZE;
     frame.writeBigInt64LE(30_000n, offset);
     offset += LONG_SIZE_IN_BYTES;
     frame.writeInt32LE(cursorBufferSize, offset);
     offset += INT_SIZE_IN_BYTES;
-    frame.writeInt32LE(-1, offset);
-    offset += INT_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.localHigh, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.localLow, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.globalHigh, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.globalLow, offset);
-    offset += LONG_SIZE_IN_BYTES;
+    frame.writeUInt8(options?.expectedResultType ?? 0, offset);
+    offset += 1;
     frame.writeUInt8(0, offset);
-    offset += BOOLEAN_SIZE_IN_BYTES;
-    frame.writeUInt8(2, offset);
     StringCodec.encode(msg, sql);
     encodeDataList(msg, params);
-    msg.add(ClientMessage.NULL_FRAME);
+    if (options?.schema === null || options?.schema === undefined) {
+        msg.add(ClientMessage.NULL_FRAME);
+    } else {
+        StringCodec.encode(msg, options.schema);
+    }
+    encodeSqlQueryId(msg, queryId);
     msg.setFinal();
     return msg;
 }
@@ -111,34 +111,30 @@ function buildSqlFetchRequest(correlationId: number, queryId: QueryId, cursorBuf
     const { msg, frame } = createRequest(
         SQL_FETCH_REQUEST_TYPE,
         correlationId,
-        INT_SIZE_IN_BYTES + (4 * LONG_SIZE_IN_BYTES),
+        INT_SIZE_IN_BYTES,
     );
-    let offset = INITIAL_FRAME_SIZE;
-    frame.writeInt32LE(cursorBufferSize, offset);
-    offset += INT_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.localHigh, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.localLow, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.globalHigh, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.globalLow, offset);
+    frame.writeInt32LE(cursorBufferSize, INITIAL_FRAME_SIZE);
+    encodeSqlQueryId(msg, queryId);
     msg.setFinal();
     return msg;
 }
 
 function buildSqlCloseRequest(correlationId: number, queryId: QueryId): ClientMessage {
-    const { msg, frame } = createRequest(SQL_CLOSE_REQUEST_TYPE, correlationId, 4 * LONG_SIZE_IN_BYTES);
-    let offset = INITIAL_FRAME_SIZE;
-    frame.writeBigInt64LE(queryId.localHigh, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.localLow, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.globalHigh, offset);
-    offset += LONG_SIZE_IN_BYTES;
-    frame.writeBigInt64LE(queryId.globalLow, offset);
+    const { msg } = createRequest(SQL_CLOSE_REQUEST_TYPE, correlationId);
+    encodeSqlQueryId(msg, queryId);
     msg.setFinal();
     return msg;
+}
+
+function encodeSqlQueryId(msg: ClientMessage, queryId: QueryId): void {
+    msg.add(ClientMessage.Frame.createStaticFrame(ClientMessage.BEGIN_DATA_STRUCTURE_FLAG));
+    const frame = Buffer.alloc(4 * LONG_SIZE_IN_BYTES);
+    frame.writeBigInt64LE(queryId.globalHigh, 0);
+    frame.writeBigInt64LE(queryId.globalLow, LONG_SIZE_IN_BYTES);
+    frame.writeBigInt64LE(queryId.localHigh, LONG_SIZE_IN_BYTES * 2);
+    frame.writeBigInt64LE(queryId.localLow, LONG_SIZE_IN_BYTES * 3);
+    msg.add(new ClientMessageFrame(frame));
+    msg.add(ClientMessage.Frame.createStaticFrame(ClientMessage.END_DATA_STRUCTURE_FLAG));
 }
 
 function buildNameRequest(messageType: number, correlationId: number, name: string): ClientMessage {
@@ -265,6 +261,7 @@ function decodeNullableSqlMetadata(
             iterator.next();
             break;
         }
+        iterator.next();
         const columnFrame = iterator.next();
         const type = columnFrame.content.readInt32LE(0);
         const name = StringCodec.decode(iterator);
@@ -285,12 +282,12 @@ function decodeNullableSqlPage(
     }
 
     iterator.next();
-    const header = iterator.next().content;
-    const last = header.readUInt8(0) !== 0;
-    const columnCount = header.readInt32LE(BOOLEAN_SIZE_IN_BYTES);
+    const last = iterator.next().content.readUInt8(0) !== 0;
+    const columnTypesFrame = iterator.next().content;
+    const columnCount = columnTypesFrame.length / INT_SIZE_IN_BYTES;
     const columnTypes: number[] = [];
     for (let index = 0; index < columnCount; index++) {
-        columnTypes.push(iterator.next().content.readUInt8(0));
+        columnTypes.push(columnTypesFrame.readInt32LE(index * INT_SIZE_IN_BYTES));
     }
 
     const columns: unknown[][] = [];
@@ -302,6 +299,11 @@ function decodeNullableSqlPage(
             if (frame?.isEndFrame()) {
                 iterator.next();
                 break;
+            }
+            if (frame?.isNullFrame()) {
+                iterator.next();
+                values.push(null);
+                continue;
             }
             values.push(ss.toObject(DataCodec.decode(iterator)));
         }
@@ -319,17 +321,20 @@ function decodeNullableSqlError(iterator: ReturnType<ClientMessage['forwardFrame
     }
 
     iterator.next();
-    iterator.next();
-    const message = StringCodec.decode(iterator);
-    StringCodec.decode(iterator);
-    const suggestionFrame = iterator.peekNext();
-    if (suggestionFrame?.isNullFrame()) {
+    const errorFrame = iterator.next();
+    const messageFrame = iterator.peekNext();
+    const message = messageFrame?.isNullFrame() ? null : StringCodec.decode(iterator);
+    if (messageFrame?.isNullFrame()) {
         iterator.next();
-    } else {
+    }
+    const suggestionFrame = iterator.peekNext();
+    if (!suggestionFrame?.isNullFrame()) {
         StringCodec.decode(iterator);
+    } else {
+        iterator.next();
     }
     iterator.next();
-    return message;
+    return message ?? `SQL error ${errorFrame.content.readInt32LE(0)}`;
 }
 
 function pageRows(page: DecodedSqlPage | null): unknown[][] {
@@ -410,6 +415,38 @@ describe('sql and executor protocol adapters', () => {
         expect(insertResponse.errorMessage).toBeNull();
         expect(insertResponse.updateCount).toBe(1n);
         expect((await people.get('3'))?.name).toBe('Linus');
+
+        const expectedTypeErrorResponse = decodeSqlExecuteResponse(
+            (await dispatcher.dispatch(
+                buildSqlExecuteRequest(
+                    6,
+                    { localHigh: 9n, localLow: 10n, globalHigh: 11n, globalLow: 12n },
+                    'SELECT name FROM people ORDER BY name',
+                    [],
+                    1,
+                    { expectedResultType: 2 },
+                ),
+                session,
+            ))!,
+            ss,
+        );
+        expect(expectedTypeErrorResponse.errorMessage).toContain('update count was required');
+
+        const schemaErrorResponse = decodeSqlExecuteResponse(
+            (await dispatcher.dispatch(
+                buildSqlExecuteRequest(
+                    7,
+                    { localHigh: 13n, localLow: 14n, globalHigh: 15n, globalLow: 16n },
+                    'SELECT name FROM people',
+                    [],
+                    1,
+                    { schema: 'tenant_a' },
+                ),
+                session,
+            ))!,
+            ss,
+        );
+        expect(schemaErrorResponse.errorMessage).toContain('default schema');
         expect(instance.getSql().getActiveQueryIds()).toEqual([]);
         ss.destroy();
     });
