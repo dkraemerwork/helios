@@ -196,8 +196,61 @@ export class TopologySerializer {
   }
 }
 
+export interface JobTopologyVertex {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  parallelism: number | null;
+  processedItems: number | null;
+  emittedItems: number | null;
+}
+
 function toSafeNumber(value: unknown, fallback: number): number {
   if (value === null || value === undefined) return fallback;
   const n = Number(value);
   return Number.isNaN(n) ? fallback : n;
+}
+
+export function normalizePersistedVertices(
+  vertices: unknown,
+  metrics: Record<string, unknown>,
+): JobTopologyVertex[] {
+  const topology = Array.isArray(vertices) ? vertices : [];
+  const metricVertices = asRecord(metrics['vertices']);
+
+  return topology.map((entry, index) => {
+    const vertex = asRecord(entry);
+    const id = asString(vertex['id']) || asString(vertex['name']) || `vertex-${index}`;
+    const metricVertex = asRecord(metricVertices[id] ?? metricVertices[asString(vertex['name'])]);
+
+    return {
+      id,
+      name: asString(vertex['name']) || id,
+      type: asString(vertex['type']) || 'operator',
+      status: asString(metricVertex['status']) || 'UNKNOWN',
+      parallelism: toNullableNumber(metricVertex['parallelism'] ?? vertex['parallelism']),
+      processedItems: toNullableNumber(metricVertex['itemsIn'] ?? metricVertex['processedItems'] ?? metricVertex['receivedCount'] ?? vertex['processedItems']),
+      emittedItems: toNullableNumber(metricVertex['itemsOut'] ?? metricVertex['emittedItems'] ?? metricVertex['emittedCount'] ?? vertex['emittedItems']),
+    };
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }

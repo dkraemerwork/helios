@@ -18,6 +18,8 @@ function makeVertex(name: string, type: 'source' | 'operator' | 'sink', override
   return {
     name,
     type,
+    status: 'RUNNING',
+    parallelism: 1,
     itemsIn: 0,
     itemsOut: 0,
     queueSize: 0,
@@ -44,6 +46,25 @@ function makeSnapshotMetrics(overrides?: Partial<SnapshotMetrics>): SnapshotMetr
     lastSnapshotBytes: 0,
     lastSnapshotTimestamp: 0,
     ...overrides,
+  };
+}
+
+function makeExecutionResponse(
+  jobId: string,
+  requestId: string,
+  memberId: string,
+  metrics: VertexMetrics[],
+  executionStartTime = 100,
+  executionCompletionTime = -1,
+): JobCommand {
+  return {
+    type: 'METRICS_RESPONSE',
+    jobId,
+    requestId,
+    memberId,
+    metrics,
+    executionStartTime,
+    executionCompletionTime,
   };
 }
 
@@ -159,11 +180,13 @@ function createMockExecutor(memberId = 'master-1'): BlitzJobExecutor & {
   stoppedJobs: Array<{ jobId: string; reason: string }>;
   localMetrics: Map<string, VertexMetrics[]>;
   snapshotMetricsMap: Map<string, SnapshotMetrics>;
+  executionTimestamps: Map<string, { startTime: number; completionTime: number }>;
 } {
   const startedJobs: string[] = [];
   const stoppedJobs: Array<{ jobId: string; reason: string }> = [];
   const localMetrics = new Map<string, VertexMetrics[]>();
   const snapshotMetricsMap = new Map<string, SnapshotMetrics>();
+  const executionTimestamps = new Map<string, { startTime: number; completionTime: number }>();
 
   return {
     memberId,
@@ -171,10 +194,12 @@ function createMockExecutor(memberId = 'master-1'): BlitzJobExecutor & {
     stoppedJobs,
     localMetrics,
     snapshotMetricsMap,
+    executionTimestamps,
     startExecution: async (plan: any) => { startedJobs.push(plan.jobId); },
     stopExecution: async (jobId: string, reason: string) => { stoppedJobs.push({ jobId, reason }); },
     waitForCompletion: async () => {},
     getLocalMetrics: (jobId: string) => localMetrics.get(jobId) ?? null,
+    getExecutionTimestamps: (jobId: string) => executionTimestamps.get(jobId) ?? null,
     getLocalSnapshotMetrics: (jobId: string) => snapshotMetricsMap.get(jobId) ?? null,
     injectSnapshotBarrier: () => {},
   } as any;
@@ -356,26 +381,28 @@ describe('MetricsCollector — ITopic Protocol', () => {
     const requestId = (collectCmd as any).requestId;
 
     // Simulate METRICS_RESPONSE from both members
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE',
+    topic.injectMessage(makeExecutionResponse(
       jobId,
       requestId,
-      memberId: 'member-a',
-      metrics: [
+      'member-a',
+      [
         makeVertex('src', 'source', { itemsOut: 50 }),
         makeVertex('sink', 'sink', { itemsIn: 50 }),
       ],
-    });
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE',
+      100,
+      -1,
+    ));
+    topic.injectMessage(makeExecutionResponse(
       jobId,
       requestId,
-      memberId: 'member-b',
-      metrics: [
+      'member-b',
+      [
         makeVertex('src', 'source', { itemsOut: 70 }),
         makeVertex('sink', 'sink', { itemsIn: 70 }),
       ],
-    });
+      120,
+      -1,
+    ));
 
     const result = await metricsPromise;
 
@@ -383,6 +410,8 @@ describe('MetricsCollector — ITopic Protocol', () => {
     expect(result).toBeDefined();
     expect((result as any).totalIn).toBe(120);
     expect((result as any).totalOut).toBe(120);
+    expect((result as any).executionStartTime).toBe(100);
+    expect((result as any).executionCompletionTime).toBe(-1);
   });
 
   it('handles partial response with timeout — returns available data', async () => {
@@ -400,13 +429,14 @@ describe('MetricsCollector — ITopic Protocol', () => {
     const requestId = (collectCmd as any).requestId;
 
     // Only member-a responds; member-b times out
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE',
+    topic.injectMessage(makeExecutionResponse(
       jobId,
       requestId,
-      memberId: 'member-a',
-      metrics: [makeVertex('src', 'source', { itemsOut: 50 })],
-    });
+      'member-a',
+      [makeVertex('src', 'source', { itemsOut: 50 })],
+      100,
+      -1,
+    ));
 
     // Wait for timeout (coordinator uses short timeout in tests)
     const result = await metricsPromise;
@@ -453,29 +483,16 @@ describe('MetricsCollector — ITopic Protocol', () => {
     const requestId = (collectCmd as any).requestId;
 
     // Send response with wrong requestId
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE',
+    topic.injectMessage(makeExecutionResponse(
       jobId,
-      requestId: 'wrong-id',
-      memberId: 'member-a',
-      metrics: [makeVertex('src', 'source', { itemsOut: 999 })],
-    });
+      'wrong-id',
+      'member-a',
+      [makeVertex('src', 'source', { itemsOut: 999 })],
+    ));
 
     // Send correct responses
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE',
-      jobId,
-      requestId,
-      memberId: 'member-a',
-      metrics: [makeVertex('src', 'source', { itemsOut: 10 })],
-    });
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE',
-      jobId,
-      requestId,
-      memberId: 'member-b',
-      metrics: [makeVertex('src', 'source', { itemsOut: 20 })],
-    });
+    topic.injectMessage(makeExecutionResponse(jobId, requestId, 'member-a', [makeVertex('src', 'source', { itemsOut: 10 })]));
+    topic.injectMessage(makeExecutionResponse(jobId, requestId, 'member-b', [makeVertex('src', 'source', { itemsOut: 20 })]));
 
     const result = await metricsPromise;
     expect((result as any).totalIn).toBe(30);
@@ -493,21 +510,9 @@ describe('MetricsCollector — ITopic Protocol', () => {
     const requestId = (collectCmd as any).requestId;
 
     // Duplicate from member-a
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE', jobId, requestId,
-      memberId: 'member-a',
-      metrics: [makeVertex('src', 'source', { itemsOut: 50 })],
-    });
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE', jobId, requestId,
-      memberId: 'member-a',
-      metrics: [makeVertex('src', 'source', { itemsOut: 999 })],
-    });
-    topic.injectMessage({
-      type: 'METRICS_RESPONSE', jobId, requestId,
-      memberId: 'member-b',
-      metrics: [makeVertex('src', 'source', { itemsOut: 30 })],
-    });
+    topic.injectMessage(makeExecutionResponse(jobId, requestId, 'member-a', [makeVertex('src', 'source', { itemsOut: 50 })]));
+    topic.injectMessage(makeExecutionResponse(jobId, requestId, 'member-a', [makeVertex('src', 'source', { itemsOut: 999 })]));
+    topic.injectMessage(makeExecutionResponse(jobId, requestId, 'member-b', [makeVertex('src', 'source', { itemsOut: 30 })]));
 
     const result = await metricsPromise;
     // Should use first response from member-a (50), not duplicate (999)

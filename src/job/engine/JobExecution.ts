@@ -1,5 +1,5 @@
 import type { ExecutionPlan } from '../ExecutionPlan.js';
-import type { VertexMetrics } from '../metrics/BlitzJobMetrics.js';
+import type { JobExecutionTimestamps, VertexMetrics } from '../metrics/BlitzJobMetrics.js';
 import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 import type { Sink } from '@zenystx/helios-blitz/sink/Sink.js';
 import type { ProcessingGuarantee } from '../JobConfig.js';
@@ -44,6 +44,20 @@ interface VertexRuntime {
   distributedSenders: DistributedEdgeSender[];
   /** Distributed receivers attached to this vertex's incoming distributed edges. */
   distributedReceivers: DistributedEdgeReceiver[];
+  status: VertexExecutionStatus;
+}
+
+type VertexExecutionStatus = 'STARTING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+function resolveStopStatus(currentStatus: VertexExecutionStatus): VertexExecutionStatus {
+  switch (currentStatus) {
+    case 'FAILED':
+    case 'COMPLETED':
+    case 'CANCELLED':
+      return currentStatus;
+    default:
+      return 'CANCELLED';
+  }
 }
 
 /**
@@ -71,6 +85,7 @@ export class JobExecution {
   private readonly _startTime = Date.now();
   /** T13: wall-clock time when the job finishes naturally. -1 while running. */
   private _completionTime = -1;
+  private _status: VertexExecutionStatus = 'STARTING';
 
   constructor(config: JobExecutionConfig) {
     this.config = config;
@@ -90,10 +105,22 @@ export class JobExecution {
     return this._completionTime;
   }
 
+  get status(): VertexExecutionStatus {
+    return this._status;
+  }
+
+  getExecutionTimestamps(): JobExecutionTimestamps {
+    return {
+      startTime: this._startTime,
+      completionTime: this._completionTime,
+    };
+  }
+
   /**
    * Wire up the DAG and start all processing loops.
    */
   async start(): Promise<void> {
+    this._status = 'RUNNING';
     const { plan, sources, sinks, operatorFns, guarantee, maxProcessorAccumulatedRecords } = this.config;
     const { pipeline } = plan;
     const signal = this.abortController.signal;
@@ -135,9 +162,12 @@ export class JobExecution {
           const sourceProc = new SourceProcessor(source, outbox, vertexDesc.name, 0);
           this.sourceProcessors.push(sourceProc);
 
-          const promise = sourceProc.run(signal).catch(err => {
-            if (!signal.aborted) throw err;
-          });
+          const promise = this._wrapVertexPromise(
+            vertexDesc.name,
+            sourceProc.run(signal).catch(err => {
+              if (!signal.aborted) throw err;
+            }),
+          );
 
           this.vertexRuntimes.push({
             name: vertexDesc.name,
@@ -149,6 +179,7 @@ export class JobExecution {
             itemsOut: 0,
             distributedSenders: [],
             distributedReceivers: [],
+            status: 'RUNNING',
           });
           promises.push(promise);
           break;
@@ -177,9 +208,12 @@ export class JobExecution {
 
           const operatorProc = new OperatorProcessor(fn, mode, inbox, outbox, vertexDesc.name, 0);
 
-          const promise = operatorProc.run(signal).catch(err => {
-            if (!signal.aborted) throw err;
-          });
+          const promise = this._wrapVertexPromise(
+            vertexDesc.name,
+            operatorProc.run(signal).catch(err => {
+              if (!signal.aborted) throw err;
+            }),
+          );
 
           this.vertexRuntimes.push({
             name: vertexDesc.name,
@@ -191,6 +225,7 @@ export class JobExecution {
             itemsOut: 0,
             distributedSenders: [],
             distributedReceivers: [],
+            status: 'RUNNING',
           });
           promises.push(promise);
           break;
@@ -211,9 +246,12 @@ export class JobExecution {
 
           const sinkProc = new SinkProcessor(sink, inbox, vertexDesc.name, 0);
 
-          const promise = sinkProc.run(signal).then(() => {}).catch(err => {
-            if (!signal.aborted) throw err;
-          });
+          const promise = this._wrapVertexPromise(
+            vertexDesc.name,
+            sinkProc.run(signal).then(() => {}).catch(err => {
+              if (!signal.aborted) throw err;
+            }),
+          );
 
           this.vertexRuntimes.push({
             name: vertexDesc.name,
@@ -224,6 +262,7 @@ export class JobExecution {
             itemsOut: 0,
             distributedSenders: [],
             distributedReceivers: [],
+            status: 'RUNNING',
           });
           promises.push(promise);
           break;
@@ -234,6 +273,9 @@ export class JobExecution {
     this._completionPromise = Promise.allSettled(promises).then((results) => {
       // T13: record completion time when all vertex promises settle
       this._completionTime = Date.now();
+      if (this._status !== 'CANCELLED') {
+        this._status = results.some((result) => result.status === 'rejected') ? 'FAILED' : 'COMPLETED';
+      }
       return results;
     });
   }
@@ -260,9 +302,16 @@ export class JobExecution {
    * Stop all processing loops.
    */
   async stop(): Promise<void> {
+    this._status = resolveStopStatus(this._status);
+    for (const runtime of this.vertexRuntimes) {
+      runtime.status = resolveStopStatus(runtime.status);
+    }
     this.abortController.abort();
     if (this._completionPromise) {
       await this._completionPromise;
+    }
+    if (this._completionTime < 0) {
+      this._completionTime = Date.now();
     }
   }
 
@@ -328,12 +377,12 @@ export class JobExecution {
 
       if (vr.sourceProcessor) {
         // Sources have no inbox — itemsIn is 0, itemsOut = items emitted
-        itemsOut = (vr.sourceProcessor as any).offset ?? 0;
+        itemsOut = vr.sourceProcessor.getEmittedCount();
       } else if (vr.operatorProcessor) {
         // Operators: itemsIn = itemsProcessed (items received), itemsOut = items emitted
-        const processed = (vr.operatorProcessor as any).itemsProcessed ?? 0;
+        const processed = vr.operatorProcessor.getItemsProcessed();
         itemsIn = processed;
-        itemsOut = processed;
+        itemsOut = vr.operatorProcessor.getItemsEmitted();
         const latency = vr.operatorProcessor.getLatencyMetrics();
         latencyP50Ms = latency.latencyP50Ms;
         latencyP99Ms = latency.latencyP99Ms;
@@ -347,7 +396,7 @@ export class JobExecution {
         userMetrics = latency.userMetrics.size > 0 ? latency.userMetrics : undefined;
       } else if (vr.sinkProcessor) {
         // Sinks: itemsIn = items written, no outbox
-        itemsIn = (vr.sinkProcessor as any).itemsWritten ?? 0;
+        itemsIn = vr.sinkProcessor.getItemsWritten();
       }
 
       // Aggregate distributed traffic from all attached senders/receivers
@@ -380,6 +429,8 @@ export class JobExecution {
       return {
         name: vr.name,
         type: vr.type,
+        status: vr.status,
+        parallelism: this.config.plan.pipeline.parallelism,
         itemsIn,
         itemsOut,
         queueSize: vr.outbox?.size ?? 0,
@@ -403,5 +454,24 @@ export class JobExecution {
         ...(userMetrics ? { userMetrics } : {}),
       };
     });
+  }
+
+  private _wrapVertexPromise(vertexName: string, promise: Promise<void>): Promise<void> {
+    return promise.then(
+      (value) => {
+        const runtime = this.vertexRuntimes.find((candidate) => candidate.name === vertexName);
+        if (runtime && runtime.status !== 'CANCELLED') {
+          runtime.status = 'COMPLETED';
+        }
+        return value;
+      },
+      (error) => {
+        const runtime = this.vertexRuntimes.find((candidate) => candidate.name === vertexName);
+        if (runtime) {
+          runtime.status = this.abortController.signal.aborted ? 'CANCELLED' : 'FAILED';
+        }
+        throw error;
+      },
+    );
   }
 }

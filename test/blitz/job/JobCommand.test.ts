@@ -12,7 +12,7 @@ describe('JobCommand', () => {
       { type: 'EXECUTION_FAILED', jobId: 'j1', memberId: 'm1', error: 'oops' },
       { type: 'EXECUTION_COMPLETED', jobId: 'j1', memberId: 'm1' },
       { type: 'COLLECT_METRICS', jobId: 'j1', requestId: 'r1' },
-      { type: 'METRICS_RESPONSE', jobId: 'j1', requestId: 'r1', memberId: 'm1', metrics: [] },
+      { type: 'METRICS_RESPONSE', jobId: 'j1', requestId: 'r1', memberId: 'm1', metrics: [], executionStartTime: 100, executionCompletionTime: -1 },
     ];
     expect(commands).toHaveLength(9);
     const types = commands.map((c) => c.type);

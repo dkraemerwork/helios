@@ -93,6 +93,8 @@ export class HeliosBlitzService implements OnModuleDestroy {
         participatingMembers: string[];
         supportsCancel: boolean;
         supportsRestart: boolean;
+        executionStartTime: number | null;
+        executionCompletionTime: number | null;
     } | null> {
         return this.blitz.getJobMetadata(id);
     }

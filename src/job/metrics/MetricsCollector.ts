@@ -1,4 +1,4 @@
-import type { BlitzJobMetrics, SnapshotMetrics, VertexMetrics } from './BlitzJobMetrics.js';
+import type { BlitzJobMetrics, JobExecutionTimestamps, SnapshotMetrics, VertexMetrics } from './BlitzJobMetrics.js';
 import { MetricUnit } from './MetricUnit.js';
 
 /**
@@ -24,10 +24,12 @@ export class MetricsCollector {
   static aggregate(
     memberMetrics: Map<string, VertexMetrics[]>,
     snapshotMetrics: SnapshotMetrics,
-    executionTimestamps?: { startTime: number; completionTime: number }[],
+    executionTimestamps?: JobExecutionTimestamps[],
   ): BlitzJobMetrics {
     const vertexAccumulators = new Map<string, {
       type: 'source' | 'operator' | 'sink';
+      statuses: Set<NonNullable<VertexMetrics['status']>>;
+      parallelism: number | undefined;
       itemsIn: number;
       itemsOut: number;
       queueSize: number;
@@ -60,6 +62,8 @@ export class MetricsCollector {
         if (!acc) {
           acc = {
             type: vm.type,
+            statuses: new Set(),
+            parallelism: undefined,
             itemsIn: 0,
             itemsOut: 0,
             queueSize: 0,
@@ -85,6 +89,12 @@ export class MetricsCollector {
           vertexAccumulators.set(vm.name, acc);
         }
 
+        if (vm.status !== undefined) {
+          acc.statuses.add(vm.status);
+        }
+        if (vm.parallelism !== undefined) {
+          acc.parallelism = Math.max(acc.parallelism ?? 0, vm.parallelism);
+        }
         acc.itemsIn += vm.itemsIn;
         acc.itemsOut += vm.itemsOut;
         acc.queueSize += vm.queueSize;
@@ -150,6 +160,8 @@ export class MetricsCollector {
       const merged: VertexMetrics = {
         name,
         type: acc.type,
+        status: resolveVertexStatus(acc.statuses),
+        parallelism: acc.parallelism,
         itemsIn: acc.itemsIn,
         itemsOut: acc.itemsOut,
         queueSize: acc.queueSize,
@@ -208,4 +220,13 @@ export class MetricsCollector {
       executionCompletionTime,
     };
   }
+}
+
+function resolveVertexStatus(statuses: ReadonlySet<NonNullable<VertexMetrics['status']>>): VertexMetrics['status'] {
+  if (statuses.has('FAILED')) return 'FAILED';
+  if (statuses.has('CANCELLED')) return 'CANCELLED';
+  if (statuses.has('RUNNING')) return 'RUNNING';
+  if (statuses.has('STARTING')) return 'STARTING';
+  if (statuses.has('COMPLETED')) return 'COMPLETED';
+  return undefined;
 }

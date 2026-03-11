@@ -30,6 +30,8 @@ export interface BlitzJobMetadata {
     participatingMembers: string[];
     supportsCancel: boolean;
     supportsRestart: boolean;
+    executionStartTime: number | null;
+    executionCompletionTime: number | null;
 }
 
 /**
@@ -103,6 +105,7 @@ export class BlitzService {
     private _coordinator: BlitzJobCoordinator | null = null;
     private readonly _jobs = new Map<string, BlitzJob>();
     private readonly _standaloneExecutions = new Map<string, JobExecution>();
+    private readonly _standaloneExecutionTimestamps = new Map<string, { startTime: number; completionTime: number | null }>();
     private readonly _jobDescriptors = new Map<string, PipelineDescriptor>();
 
     private constructor(
@@ -469,6 +472,12 @@ export class BlitzService {
             participatingMembers: ['local'],
             supportsCancel: !isTerminalStatus(job.getStatus()),
             supportsRestart: false,
+            executionStartTime: this._standaloneExecutions.get(id)?.startTime ?? this._standaloneExecutionTimestamps.get(id)?.startTime ?? null,
+            executionCompletionTime: normalizeCompletionTime(
+                this._standaloneExecutions.get(id)?.completionTime
+                ?? this._standaloneExecutionTimestamps.get(id)?.completionTime
+                ?? null,
+            ),
         };
     }
 
@@ -578,6 +587,10 @@ export class BlitzService {
                 stopRequested = true;
                 if (execution) {
                     await execution.stop();
+                    this._standaloneExecutionTimestamps.set(jobId, {
+                        startTime: execution.startTime,
+                        completionTime: execution.completionTime >= 0 ? execution.completionTime : Date.now(),
+                    });
                     this._standaloneExecutions.delete(jobId);
                 }
                 transitionTo(JobStatus.CANCELLED);
@@ -593,7 +606,7 @@ export class BlitzService {
                 }
                 return this._collectStandaloneMetricsFromSnapshots(
                     jobId,
-                    this._buildStandaloneMetrics(pipeline, sourceMetrics, operatorMetrics, sinkMetrics),
+                    this._buildStandaloneMetrics(pipeline, sourceMetrics, operatorMetrics, sinkMetrics, status),
                 );
             },
         };
@@ -605,11 +618,19 @@ export class BlitzService {
 
         execution = this._createStandaloneExecution(jobId, pipeline, config, resources);
         this._standaloneExecutions.set(jobId, execution);
+        this._standaloneExecutionTimestamps.set(jobId, {
+            startTime: execution.startTime,
+            completionTime: null,
+        });
 
         this._runStandalonePipeline(jobId, execution, completeIfNeeded, (err) => {
             if (!terminalized) {
                 transitionTo(JobStatus.FAILED);
             }
+            this._standaloneExecutionTimestamps.set(jobId, {
+                startTime: execution.startTime,
+                completionTime: execution.completionTime >= 0 ? execution.completionTime : Date.now(),
+            });
             this._standaloneExecutions.delete(jobId);
             this._emit(BlitzEvent.JOB_FAILED, { jobId, name: config.name, error: err instanceof Error ? err.message : String(err) });
         });
@@ -723,6 +744,10 @@ export class BlitzService {
                 await execution.start();
                 const results = await execution.whenComplete();
                 const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+                this._standaloneExecutionTimestamps.set(jobId, {
+                    startTime: execution.startTime,
+                    completionTime: execution.completionTime >= 0 ? execution.completionTime : Date.now(),
+                });
                 this._standaloneExecutions.delete(jobId);
                 if (failure) {
                     onError(failure.reason);
@@ -770,12 +795,17 @@ export class BlitzService {
         sourceMetrics: Map<string, number>,
         operatorMetrics: Map<string, { itemsIn: number; itemsOut: number }>,
         sinkMetrics: Map<string, number>,
+        status: JobStatus,
     ): import('@zenystx/helios-core/job/metrics/BlitzJobMetrics').VertexMetrics[] {
+        const descriptor = pipeline.toDescriptor();
+        const vertexStatus = this._toVertexStatus(status);
         return pipeline.vertices.map((vertex) => {
             if (vertex.type === 'source') {
                 return {
                     name: vertex.name,
                     type: 'source',
+                    status: vertexStatus,
+                    parallelism: descriptor.parallelism,
                     itemsIn: 0,
                     itemsOut: sourceMetrics.get(vertex.name) ?? 0,
                     queueSize: 0,
@@ -798,6 +828,8 @@ export class BlitzService {
                 return {
                     name: vertex.name,
                     type: 'sink',
+                    status: vertexStatus,
+                    parallelism: descriptor.parallelism,
                     itemsIn: sinkMetrics.get(vertex.name) ?? 0,
                     itemsOut: 0,
                     queueSize: 0,
@@ -820,6 +852,8 @@ export class BlitzService {
             return {
                 name: vertex.name,
                 type: 'operator',
+                status: vertexStatus,
+                parallelism: descriptor.parallelism,
                 itemsIn: operator.itemsIn,
                 itemsOut: operator.itemsOut,
                 queueSize: 0,
@@ -867,6 +901,27 @@ export class BlitzService {
             // Status iterator closes when the connection closes — swallow.
         });
     }
+
+    private _toVertexStatus(status: JobStatus): 'STARTING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' {
+        switch (status) {
+            case JobStatus.COMPLETED:
+                return 'COMPLETED';
+            case JobStatus.FAILED:
+                return 'FAILED';
+            case JobStatus.CANCELLED:
+                return 'CANCELLED';
+            case JobStatus.STARTING:
+            case JobStatus.NOT_RUNNING:
+            case JobStatus.RESTARTING:
+                return 'STARTING';
+            default:
+                return 'RUNNING';
+        }
+    }
+}
+
+function normalizeCompletionTime(value: number | null): number | null {
+    return value === null || value < 0 ? null : value;
 }
 
 /**

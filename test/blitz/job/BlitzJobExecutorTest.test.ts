@@ -208,7 +208,40 @@ describe('BlitzJobExecutor — multi-job management', () => {
     expect(metrics).not.toBeNull();
     if (metrics) {
       expect(metrics.length).toBeGreaterThan(0);
+      expect(metrics[0]?.parallelism).toBe(1);
+      expect(metrics[0]?.status).toBe('COMPLETED');
     }
+  });
+
+  it('exposes execution timestamps for tracked jobs', async () => {
+    const collected: number[] = [];
+    const source = arraySource([1, 2]);
+    const sink = collectSink(collected);
+
+    const pipeline: PipelineDescriptor = {
+      name: 'timestamps-test',
+      vertices: [vertex('source', 'source'), vertex('sink', 'sink')],
+      edges: [edge('source', 'sink')],
+      parallelism: 1,
+    };
+    const plan = computeExecutionPlan('job-timestamps', pipeline, ['member-1'], authority);
+
+    const executor = new BlitzJobExecutor('member-1');
+
+    await executor.startExecution(plan, {
+      sources: new Map([['source', source]]),
+      sinks: new Map([['sink', sink]]),
+      operatorFns: new Map(),
+      guarantee: ProcessingGuarantee.NONE,
+      maxProcessorAccumulatedRecords: 1024,
+    });
+
+    await executor.waitForCompletion('job-timestamps', 5000);
+
+    const timestamps = executor.getExecutionTimestamps('job-timestamps');
+    expect(timestamps).not.toBeNull();
+    expect(timestamps!.startTime).toBeGreaterThan(0);
+    expect(timestamps!.completionTime).toBeGreaterThanOrEqual(timestamps!.startTime);
   });
 
   it('injects snapshot barrier into all source processors of a job', async () => {

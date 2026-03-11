@@ -1,5 +1,5 @@
 import type { ExecutionPlan } from './ExecutionPlan.js';
-import type { VertexMetrics } from './metrics/BlitzJobMetrics.js';
+import type { JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
 import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 import type { Sink } from '@zenystx/helios-blitz/sink/Sink.js';
 import type { ProcessingGuarantee } from './JobConfig.js';
@@ -22,6 +22,7 @@ export interface ExecutionResources {
 export class BlitzJobExecutor {
   private readonly _memberId: string;
   private readonly _executions = new Map<string, JobExecution>();
+  private readonly _completedExecutionTimestamps = new Map<string, JobExecutionTimestamps>();
 
   constructor(memberId: string) {
     this._memberId = memberId;
@@ -62,6 +63,7 @@ export class BlitzJobExecutor {
     if (!exec) return;
 
     await exec.stop();
+    this._completedExecutionTimestamps.set(jobId, exec.getExecutionTimestamps());
     this._executions.delete(jobId);
   }
 
@@ -83,6 +85,15 @@ export class BlitzJobExecutor {
     if (!exec) return null;
 
     return exec.getMetrics();
+  }
+
+  getExecutionTimestamps(jobId: string): JobExecutionTimestamps | null {
+    const exec = this._executions.get(jobId);
+    if (exec) {
+      return exec.getExecutionTimestamps();
+    }
+
+    return this._completedExecutionTimestamps.get(jobId) ?? null;
   }
 
   /**

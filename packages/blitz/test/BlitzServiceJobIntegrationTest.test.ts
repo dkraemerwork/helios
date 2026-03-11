@@ -123,7 +123,11 @@ describe('Block 23.12 — BlitzService Job Integration', () => {
         participatingMembers: ['local'],
         supportsCancel: true,
         supportsRestart: false,
+        executionStartTime: expect.any(Number),
+        executionCompletionTime: null,
       });
+      const metrics = await job.getMetrics();
+      expect(Array.isArray(metrics)).toBe(false);
       await fresh.cancelJob(job.id);
       await fresh.shutdown();
     });
@@ -218,6 +222,8 @@ describe('Block 23.12 — BlitzService Job Integration', () => {
       const metadata = await nestService.getJobMetadata(job.id);
       expect(metadata?.lightJob).toBe(true);
       expect(metadata?.supportsRestart).toBe(false);
+      expect(metadata?.executionStartTime).toEqual(expect.any(Number));
+      expect(metadata?.executionCompletionTime).toBeNull();
       await nestService.cancelJob(job.id);
     });
   });

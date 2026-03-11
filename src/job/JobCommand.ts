@@ -1,5 +1,5 @@
 import type { ExecutionPlan } from './ExecutionPlan.js';
-import type { VertexMetrics } from './metrics/BlitzJobMetrics.js';
+import type { JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
 
 export type JobCommand =
   | { type: 'START_EXECUTION'; jobId: string; plan: ExecutionPlan }
@@ -10,4 +10,7 @@ export type JobCommand =
   | { type: 'EXECUTION_FAILED'; jobId: string; memberId: string; error: string }
   | { type: 'EXECUTION_COMPLETED'; jobId: string; memberId: string }
   | { type: 'COLLECT_METRICS'; jobId: string; requestId: string }
-  | { type: 'METRICS_RESPONSE'; jobId: string; requestId: string; memberId: string; metrics: VertexMetrics[] };
+  | ({ type: 'METRICS_RESPONSE'; jobId: string; requestId: string; memberId: string; metrics: VertexMetrics[] } & {
+      executionStartTime: JobExecutionTimestamps['startTime'];
+      executionCompletionTime: JobExecutionTimestamps['completionTime'];
+    });

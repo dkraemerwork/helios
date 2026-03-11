@@ -33,6 +33,8 @@ export interface MonitorJobSnapshot {
     name: string;
     status: string;
     submittedAt: number;
+    executionStartTime: number | null;
+    executionCompletionTime: number | null;
     lightJob: boolean;
     supportsCancel: boolean;
     supportsRestart: boolean;

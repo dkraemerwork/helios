@@ -76,4 +76,8 @@ export class SinkProcessor<T> {
   getSnapshotState(): unknown {
     return { itemsWritten: this.itemsWritten };
   }
+
+  getItemsWritten(): number {
+    return this.itemsWritten;
+  }
 }

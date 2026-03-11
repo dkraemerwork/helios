@@ -604,6 +604,8 @@ describe('Block 23.INT — End-to-end Blitz Job Supervision acceptance', () => {
       jobId: job.id,
       requestId: collectCmd.requestId,
       memberId: 'member-a',
+      executionStartTime: 100,
+      executionCompletionTime: -1,
       metrics: [
         { name: 'e2e-source', type: 'source', itemsIn: 0, itemsOut: 50, queueSize: 0, queueCapacity: 1024, latencyP50Ms: 1, latencyP99Ms: 5, latencyMaxMs: 10, distributedItemsIn: 0, distributedItemsOut: 0, distributedBytesIn: 0, distributedBytesOut: 0, topObservedWm: -1, coalescedWm: -1, lastForwardedWm: -1, lastForwardedWmLatency: -1 },
         { name: 'e2e-sink', type: 'sink', itemsIn: 50, itemsOut: 0, queueSize: 0, queueCapacity: 1024, latencyP50Ms: 2, latencyP99Ms: 4, latencyMaxMs: 8, distributedItemsIn: 0, distributedItemsOut: 0, distributedBytesIn: 0, distributedBytesOut: 0, topObservedWm: -1, coalescedWm: -1, lastForwardedWm: -1, lastForwardedWmLatency: -1 },
@@ -614,6 +616,8 @@ describe('Block 23.INT — End-to-end Blitz Job Supervision acceptance', () => {
       jobId: job.id,
       requestId: collectCmd.requestId,
       memberId: 'member-b',
+      executionStartTime: 120,
+      executionCompletionTime: -1,
       metrics: [
         { name: 'e2e-source', type: 'source', itemsIn: 0, itemsOut: 30, queueSize: 0, queueCapacity: 1024, latencyP50Ms: 2, latencyP99Ms: 6, latencyMaxMs: 12, distributedItemsIn: 0, distributedItemsOut: 0, distributedBytesIn: 0, distributedBytesOut: 0, topObservedWm: -1, coalescedWm: -1, lastForwardedWm: -1, lastForwardedWmLatency: -1 },
         { name: 'e2e-sink', type: 'sink', itemsIn: 30, itemsOut: 0, queueSize: 0, queueCapacity: 1024, latencyP50Ms: 1, latencyP99Ms: 3, latencyMaxMs: 5, distributedItemsIn: 0, distributedItemsOut: 0, distributedBytesIn: 0, distributedBytesOut: 0, topObservedWm: -1, coalescedWm: -1, lastForwardedWm: -1, lastForwardedWmLatency: -1 },

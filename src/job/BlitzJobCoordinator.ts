@@ -5,7 +5,7 @@ import type { PipelineDescriptor } from './PipelineDescriptor.js';
 import type { ResolvedJobConfig } from './JobConfig.js';
 import type { BlitzJobExecutor } from './BlitzJobExecutor.js';
 import type { Message } from '../topic/Message.js';
-import type { VertexMetrics, BlitzJobMetrics } from './metrics/BlitzJobMetrics.js';
+import type { BlitzJobMetrics, JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
 import { ProcessingGuarantee } from './JobConfig.js';
 import { JobRecord } from './JobRecord.js';
 import { JobStatus, isTerminalStatus } from './JobStatus.js';
@@ -33,6 +33,7 @@ interface PendingMetricsRequest {
   requestId: string;
   expectedMembers: Set<string>;
   responses: Map<string, VertexMetrics[]>;
+  executionTimestamps: Map<string, JobExecutionTimestamps>;
   resolve: (result: BlitzJobMetrics) => void;
   timeoutTimer: ReturnType<typeof setTimeout>;
 }
@@ -125,11 +126,13 @@ export class BlitzJobCoordinator {
       config,
       pipelineDescriptor: pipeline,
       submittedAt: Date.now(),
-      participatingMembers: [...this._memberIds],
-      lastSnapshotId: null,
-      failureReason: null,
-      lightJob: false,
-    });
+        participatingMembers: [...this._memberIds],
+        lastSnapshotId: null,
+        failureReason: null,
+        lightJob: false,
+        executionStartTime: null,
+        executionCompletionTime: null,
+      });
 
     // Store in IMap
     await this._imap.set(jobId, record);
@@ -339,6 +342,8 @@ export class BlitzJobCoordinator {
     participatingMembers: string[];
     supportsCancel: boolean;
     supportsRestart: boolean;
+    executionStartTime: number | null;
+    executionCompletionTime: number | null;
   } | null> {
     const lightJob = this._lightJobs.get(jobId);
     if (lightJob) {
@@ -347,6 +352,8 @@ export class BlitzJobCoordinator {
         participatingMembers: [this._executor.memberId],
         supportsCancel: !isTerminalStatus(lightJob.getStatus()),
         supportsRestart: false,
+        executionStartTime: lightJob.getSubmissionTime(),
+        executionCompletionTime: isTerminalStatus(lightJob.getStatus()) ? lightJob.getSubmissionTime() : null,
       };
     }
 
@@ -360,6 +367,8 @@ export class BlitzJobCoordinator {
       participatingMembers: [...record.participatingMembers],
       supportsCancel: !isTerminalStatus(record.status),
       supportsRestart: !record.lightJob,
+      executionStartTime: record.executionStartTime,
+      executionCompletionTime: record.executionCompletionTime,
     };
   }
 
@@ -525,7 +534,25 @@ export class BlitzJobCoordinator {
   }
 
   private async _updateStatus(jobId: string, record: JobRecord, newStatus: JobStatus): Promise<void> {
-    const updated = record.withStatus(newStatus);
+    const now = Date.now();
+    let updated = record.withStatus(newStatus);
+    switch (newStatus) {
+      case JobStatus.RUNNING:
+        updated = updated.withExecutionTimestamps(record.executionStartTime ?? now, null);
+        break;
+      case JobStatus.COMPLETED:
+      case JobStatus.FAILED:
+      case JobStatus.CANCELLED:
+        updated = updated.withExecutionTimestamps(record.executionStartTime, now);
+        break;
+      case JobStatus.NOT_RUNNING:
+      case JobStatus.STARTING:
+      case JobStatus.RESTARTING:
+        updated = updated.withExecutionTimestamps(null, null);
+        break;
+      default:
+        break;
+    }
     await this._imap.set(jobId, updated);
     this._jobStatuses.set(jobId, newStatus);
     this._trackStatusTransition(newStatus);
@@ -616,6 +643,11 @@ export class BlitzJobCoordinator {
       if (pending.responses.has(cmd.memberId)) return;
 
       pending.responses.set(cmd.memberId, cmd.metrics);
+      pending.executionTimestamps.set(cmd.memberId, {
+        startTime: cmd.executionStartTime,
+        completionTime: cmd.executionCompletionTime,
+      });
+      void this._persistExecutionTimestamps(cmd.jobId, cmd.executionStartTime, cmd.executionCompletionTime);
 
       const allReceived = [...pending.expectedMembers].every(m => pending.responses.has(m));
       if (allReceived) {
@@ -635,7 +667,11 @@ export class BlitzJobCoordinator {
       lastSnapshotTimestamp: 0,
     };
 
-    const result = MetricsCollector.aggregate(pending.responses, snapshotMetrics);
+    const result = MetricsCollector.aggregate(
+      pending.responses,
+      snapshotMetrics,
+      [...pending.executionTimestamps.values()],
+    );
     pending.resolve(result);
   }
 
@@ -721,6 +757,7 @@ export class BlitzJobCoordinator {
         requestId,
         expectedMembers,
         responses: new Map(),
+        executionTimestamps: new Map(),
         resolve,
         timeoutTimer,
       };
@@ -733,6 +770,30 @@ export class BlitzJobCoordinator {
 
   private async _getAllJobRecords(): Promise<JobRecord[]> {
     return (this._imap as any).values() as JobRecord[];
+  }
+
+  private async _persistExecutionTimestamps(
+    jobId: string,
+    startTime: number,
+    completionTime: number,
+  ): Promise<void> {
+    const record = await this._imap.get(jobId);
+    if (record === null) {
+      return;
+    }
+
+    const nextStartTime = record.executionStartTime === null
+      ? startTime
+      : Math.min(record.executionStartTime, startTime);
+    const nextCompletionTime = completionTime >= 0
+      ? Math.max(record.executionCompletionTime ?? completionTime, completionTime)
+      : record.executionCompletionTime;
+
+    if (nextStartTime === record.executionStartTime && nextCompletionTime === record.executionCompletionTime) {
+      return;
+    }
+
+    await this._imap.set(jobId, record.withExecutionTimestamps(nextStartTime, nextCompletionTime));
   }
 
   private _scheduleScaleUp(_memberId: string): void {

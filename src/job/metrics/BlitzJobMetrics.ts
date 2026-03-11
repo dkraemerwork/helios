@@ -1,6 +1,8 @@
 export interface VertexMetrics {
   readonly name: string;
   readonly type: 'source' | 'operator' | 'sink';
+  readonly status?: 'STARTING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  readonly parallelism?: number;
   readonly itemsIn: number;
   readonly itemsOut: number;
   readonly queueSize: number;
@@ -69,11 +71,18 @@ export interface BlitzJobMetrics {
   readonly executionCompletionTime: number;
 }
 
+export interface JobExecutionTimestamps {
+  readonly startTime: number;
+  readonly completionTime: number;
+}
+
 /** Convert a VertexMetrics to a plain JSON-serializable object (Maps → plain objects). */
 export function vertexMetricsToJSON(vm: VertexMetrics): Record<string, unknown> {
   return {
     name: vm.name,
     type: vm.type,
+    status: vm.status,
+    parallelism: vm.parallelism,
     itemsIn: vm.itemsIn,
     itemsOut: vm.itemsOut,
     queueSize: vm.queueSize,

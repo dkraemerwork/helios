@@ -87,6 +87,8 @@ describe('JobRecord', () => {
       lastSnapshotId: null,
       failureReason: null,
       lightJob: false,
+      executionStartTime: null,
+      executionCompletionTime: null,
     });
 
     expect(record.id).toBe('job-1');
@@ -99,6 +101,8 @@ describe('JobRecord', () => {
     expect(record.lastSnapshotId).toBeNull();
     expect(record.failureReason).toBeNull();
     expect(record.lightJob).toBe(false);
+    expect(record.executionStartTime).toBeNull();
+    expect(record.executionCompletionTime).toBeNull();
   });
 
   it('should support status updates via withStatus()', () => {
@@ -113,6 +117,8 @@ describe('JobRecord', () => {
       lastSnapshotId: null,
       failureReason: null,
       lightJob: false,
+      executionStartTime: null,
+      executionCompletionTime: null,
     });
 
     const updated = record.withStatus(JobStatus.RUNNING);
@@ -134,6 +140,8 @@ describe('JobRecord', () => {
       lastSnapshotId: null,
       failureReason: null,
       lightJob: false,
+      executionStartTime: null,
+      executionCompletionTime: null,
     });
 
     const failed = record.withStatus(JobStatus.FAILED).withFailureReason('OOM');
@@ -153,10 +161,33 @@ describe('JobRecord', () => {
       lastSnapshotId: null,
       failureReason: null,
       lightJob: false,
+      executionStartTime: null,
+      executionCompletionTime: null,
     });
 
     const updated = record.withLastSnapshotId('snap-42');
     expect(updated.lastSnapshotId).toBe('snap-42');
+  });
+
+  it('should support execution timestamp updates', () => {
+    const record = new JobRecord({
+      id: 'job-5',
+      name: 'time-test',
+      status: JobStatus.RUNNING,
+      config: makeConfig(),
+      pipelineDescriptor: makePipeline(),
+      submittedAt: Date.now(),
+      participatingMembers: ['m1'],
+      lastSnapshotId: null,
+      failureReason: null,
+      lightJob: false,
+      executionStartTime: null,
+      executionCompletionTime: null,
+    });
+
+    const updated = record.withExecutionTimestamps(100, 200);
+    expect(updated.executionStartTime).toBe(100);
+    expect(updated.executionCompletionTime).toBe(200);
   });
 });
 

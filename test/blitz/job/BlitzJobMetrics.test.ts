@@ -10,6 +10,8 @@ describe('BlitzJobMetrics', () => {
     const vertexMetrics: VertexMetrics = {
       name: 'source-1',
       type: 'source',
+      status: 'RUNNING',
+      parallelism: 1,
       itemsIn: 1000,
       itemsOut: 950,
       queueSize: 50,
@@ -60,6 +62,8 @@ describe('BlitzJobMetrics', () => {
       const m: VertexMetrics = {
         name: `v-${t}`,
         type: t,
+        status: 'RUNNING',
+        parallelism: 1,
         itemsIn: 0,
         itemsOut: 0,
         queueSize: 0,

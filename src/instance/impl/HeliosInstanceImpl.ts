@@ -5824,12 +5824,34 @@ export class HeliosInstanceImpl implements HeliosInstance {
               supportsCancel: metadata?.supportsCancel ?? true,
               supportsRestart: metadata?.supportsRestart ?? false,
               participatingMembers: metadata?.participatingMembers ?? [],
-              vertices: descriptor?.vertices ?? (metrics?.['vertices'] && typeof metrics['vertices'] === 'object'
-                ? Object.entries(metrics['vertices'] as Record<string, Record<string, unknown>>).map(([name, value]) => ({
-                    name,
-                    type: String((value as Record<string, unknown>)['type'] ?? 'operator'),
-                  }))
-                : []),
+              vertices: descriptor?.vertices !== undefined
+                ? descriptor.vertices.map((vertex) => {
+                    const metricVertex = metrics?.['vertices'] && typeof metrics['vertices'] === 'object'
+                      ? (metrics['vertices'] as Record<string, Record<string, unknown>>)[vertex.name] ?? null
+                      : null;
+                    return {
+                      name: vertex.name,
+                      type: vertex.type,
+                      ...(metricVertex !== null
+                        ? {
+                            status: String(metricVertex['status'] ?? 'UNKNOWN'),
+                            parallelism: typeof metricVertex['parallelism'] === 'number' ? metricVertex['parallelism'] : descriptor.parallelism,
+                            processedItems: typeof metricVertex['itemsIn'] === 'number' ? metricVertex['itemsIn'] : 0,
+                            emittedItems: typeof metricVertex['itemsOut'] === 'number' ? metricVertex['itemsOut'] : 0,
+                          }
+                        : {}),
+                    };
+                  })
+                : (metrics?.['vertices'] && typeof metrics['vertices'] === 'object'
+                    ? Object.entries(metrics['vertices'] as Record<string, Record<string, unknown>>).map(([name, value]) => ({
+                        name,
+                        type: String((value as Record<string, unknown>)['type'] ?? 'operator'),
+                        status: String((value as Record<string, unknown>)['status'] ?? 'UNKNOWN'),
+                        parallelism: Number((value as Record<string, unknown>)['parallelism'] ?? 0),
+                        processedItems: Number((value as Record<string, unknown>)['itemsIn'] ?? 0),
+                        emittedItems: Number((value as Record<string, unknown>)['itemsOut'] ?? 0),
+                      }))
+                    : []),
               edges: descriptor?.edges ?? [],
               metrics,
             });

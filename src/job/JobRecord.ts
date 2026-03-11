@@ -13,6 +13,8 @@ export interface JobRecordInit {
   readonly lastSnapshotId: string | null;
   readonly failureReason: string | null;
   readonly lightJob: boolean;
+  readonly executionStartTime: number | null;
+  readonly executionCompletionTime: number | null;
 }
 
 /**
@@ -29,6 +31,8 @@ export class JobRecord {
   readonly lastSnapshotId: string | null;
   readonly failureReason: string | null;
   readonly lightJob: boolean;
+  readonly executionStartTime: number | null;
+  readonly executionCompletionTime: number | null;
 
   constructor(init: JobRecordInit) {
     this.id = init.id;
@@ -41,6 +45,8 @@ export class JobRecord {
     this.lastSnapshotId = init.lastSnapshotId;
     this.failureReason = init.failureReason;
     this.lightJob = init.lightJob;
+    this.executionStartTime = init.executionStartTime;
+    this.executionCompletionTime = init.executionCompletionTime;
   }
 
   withStatus(status: JobStatus): JobRecord {
@@ -59,6 +65,14 @@ export class JobRecord {
     return new JobRecord({ ...this.toInit(), participatingMembers: members });
   }
 
+  withExecutionTimestamps(startTime: number | null, completionTime: number | null): JobRecord {
+    return new JobRecord({
+      ...this.toInit(),
+      executionStartTime: startTime,
+      executionCompletionTime: completionTime,
+    });
+  }
+
   private toInit(): JobRecordInit {
     return {
       id: this.id,
@@ -71,6 +85,8 @@ export class JobRecord {
       lastSnapshotId: this.lastSnapshotId,
       failureReason: this.failureReason,
       lightJob: this.lightJob,
+      executionStartTime: this.executionStartTime,
+      executionCompletionTime: this.executionCompletionTime,
     };
   }
 }

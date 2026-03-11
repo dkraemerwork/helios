@@ -15,7 +15,7 @@ import { ClusterStateStore } from '../connector/ClusterStateStore.js';
 import { TursoConnectionFactory } from '../persistence/TursoConnectionFactory.js';
 import { AsyncSerialQueue } from '../persistence/AsyncSerialQueue.js';
 import { ConfigService } from '../config/ConfigService.js';
-import { TopologySerializer } from './TopologySerializer.js';
+import { normalizePersistedVertices, TopologySerializer } from './TopologySerializer.js';
 import { nowMs } from '../shared/time.js';
 import type { JobSnapshot, CursorPaginatedResult } from '../shared/types.js';
 
@@ -126,6 +126,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       const vertices = job['vertices'] ?? dag?.['vertices'] ?? [];
       const edges = job['edges'] ?? dag?.['edges'] ?? [];
       const metrics = job['metrics'] ?? {};
+      const normalizedMetrics = toRecord(metrics);
+      const normalizedVertices = normalizePersistedVertices(vertices, normalizedMetrics);
 
       snapshots.push({
         clusterId,
@@ -134,12 +136,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         status,
         timestamp: now,
         executionStartTime: toTimestampOrNull(job['executionStartTime'] ?? job['startTime']),
-        completionTime: toTimestampOrNull(job['completionTime'] ?? job['endTime']),
+        completionTime: toTimestampOrNull(job['executionCompletionTime'] ?? job['completionTime'] ?? job['endTime']),
         lightJob: Boolean(job['lightJob']),
         supportsCancel: job['supportsCancel'] !== false,
         supportsRestart: job['supportsRestart'] === true,
-        metricsJson: JSON.stringify(metrics),
-        verticesJson: this.topologySerializer.serializeVertices(vertices),
+        metricsJson: JSON.stringify(normalizedMetrics),
+        verticesJson: this.topologySerializer.serializeVertices(normalizedVertices),
         edgesJson: this.topologySerializer.serializeEdges(edges),
       });
     }
@@ -318,6 +320,12 @@ function normalizeJobsResponse(raw: unknown): Array<Record<string, unknown>> {
   }
 
   return [];
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 function toTimestampOrNull(val: unknown): number | null {

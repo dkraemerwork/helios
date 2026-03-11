@@ -24,7 +24,7 @@ describe('JobsService', () => {
       }),
     };
     subject.topologySerializer = {
-      serializeVertices: () => '[]',
+      serializeVertices: (value: unknown) => JSON.stringify(value),
       serializeEdges: () => '[]',
     };
     subject.eventEmitter = {
@@ -47,11 +47,78 @@ describe('JobsService', () => {
           jobId: 'job-1',
           jobName: 'Stress Pipeline',
           status: 'RUNNING',
+          executionStartTime: 123,
+          completionTime: null,
           lightJob: true,
           supportsRestart: false,
         },
       ],
     });
+    expect(JSON.parse((emitted[0]?.payload as { jobs: Array<{ verticesJson: string }> }).jobs[0]!.verticesJson)).toEqual([]);
+  });
+
+  test('normalizes persisted topology vertices from runtime metrics', async () => {
+    const service = Object.create(JobsService.prototype) as JobsService;
+    const subject = service as any;
+    let inserted: unknown[] = [];
+
+    subject.connectorService = {
+      fetchJobs: async () => ({
+        jobs: [
+          {
+            id: 'job-2',
+            name: 'Topology Job',
+            status: 'RUNNING',
+            executionStartTime: 500,
+            completionTime: null,
+            lightJob: false,
+            supportsCancel: true,
+            supportsRestart: true,
+            vertices: [{ name: 'source', type: 'source' }, { name: 'sink', type: 'sink' }],
+            edges: [{ from: 'source', to: 'sink', edgeType: 'LOCAL' }],
+            metrics: {
+              vertices: {
+                source: { status: 'RUNNING', parallelism: 2, itemsIn: 0, itemsOut: 7 },
+                sink: { status: 'RUNNING', parallelism: 2, itemsIn: 7, itemsOut: 0 },
+              },
+            },
+          },
+        ],
+      }),
+    };
+    subject.topologySerializer = {
+      serializeVertices: (value: unknown) => JSON.stringify(value),
+      serializeEdges: (value: unknown) => JSON.stringify(value),
+    };
+    subject.eventEmitter = { emit: () => {} };
+    subject.lastKnownStatus = new Map();
+    subject.insertSnapshots = async (snapshots: unknown[]) => {
+      inserted = snapshots;
+    };
+
+    await service.fetchAndStoreJobs('stress');
+
+    expect(inserted).toHaveLength(1);
+    expect(JSON.parse((inserted[0] as { verticesJson: string }).verticesJson)).toEqual([
+      {
+        id: 'source',
+        name: 'source',
+        type: 'source',
+        status: 'RUNNING',
+        parallelism: 2,
+        processedItems: 0,
+        emittedItems: 7,
+      },
+      {
+        id: 'sink',
+        name: 'sink',
+        type: 'sink',
+        status: 'RUNNING',
+        parallelism: 2,
+        processedItems: 7,
+        emittedItems: 0,
+      },
+    ]);
   });
 
   test('emits an empty jobs payload when the cluster reports no jobs', async () => {
@@ -63,7 +130,7 @@ describe('JobsService', () => {
       fetchJobs: async () => ({ jobs: [] }),
     };
     subject.topologySerializer = {
-      serializeVertices: () => '[]',
+      serializeVertices: (value: unknown) => JSON.stringify(value),
       serializeEdges: () => '[]',
     };
     subject.eventEmitter = {

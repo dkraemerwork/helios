@@ -70,11 +70,13 @@ describe('Monitor jobs provider', () => {
         participatingMembers: ['local'],
         supportsCancel: true,
         supportsRestart: false,
+        executionStartTime: 123,
+        executionCompletionTime: null,
       }),
     } as never);
 
     const provider = (instance as unknown as {
-      _createMonitorJobsProvider(): { getActiveJobs(): Promise<Array<{ vertices: unknown[]; edges: unknown[]; lightJob: boolean; supportsRestart: boolean; participatingMembers: string[]; metrics: Record<string, unknown> | null }>> };
+      _createMonitorJobsProvider(): { getActiveJobs(): Promise<Array<{ vertices: unknown[]; edges: unknown[]; lightJob: boolean; supportsRestart: boolean; participatingMembers: string[]; executionStartTime: number | null; executionCompletionTime: number | null; metrics: Record<string, unknown> | null }>> };
     })._createMonitorJobsProvider();
 
     const jobs = await provider.getActiveJobs();
@@ -83,7 +85,16 @@ describe('Monitor jobs provider', () => {
     expect(jobs[0]?.lightJob).toBe(true);
     expect(jobs[0]?.supportsRestart).toBe(false);
     expect(jobs[0]?.participatingMembers).toEqual(['local']);
+    expect(jobs[0]?.executionStartTime).toBe(123);
+    expect(jobs[0]?.executionCompletionTime).toBeNull();
     expect(jobs[0]?.vertices).toHaveLength(3);
+    expect(jobs[0]?.vertices[0]).toMatchObject({
+      name: 'nats-subject:market.ticks',
+      status: 'UNKNOWN',
+      parallelism: 1,
+      processedItems: 0,
+      emittedItems: 10,
+    });
     expect(jobs[0]?.edges).toHaveLength(2);
     expect(jobs[0]?.metrics?.['vertices']).toBeDefined();
   });
@@ -108,6 +119,8 @@ describe('Monitor jobs provider', () => {
         participatingMembers: ['member-a', 'member-b'],
         supportsCancel: true,
         supportsRestart: true,
+        executionStartTime: 456,
+        executionCompletionTime: null,
       }),
     } as never);
 

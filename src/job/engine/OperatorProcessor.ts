@@ -34,6 +34,7 @@ export class OperatorProcessor {
   private readonly processorIndex: number;
 
   private itemsProcessed = 0;
+  private itemsEmitted = 0;
   private readonly latencyTracker = new LatencyTracker(1024);
 
   /** Single-input watermark tracker (edgeCount = 1 for operator vertices). */
@@ -87,6 +88,7 @@ export class OperatorProcessor {
                 value: v,
                 timestamp: item.timestamp,
               });
+              this.itemsEmitted++;
             }
           } else if (this.mode === 'filter') {
             if (transformed !== undefined && transformed !== null) {
@@ -95,6 +97,7 @@ export class OperatorProcessor {
                 value: transformed,
                 timestamp: item.timestamp,
               });
+              this.itemsEmitted++;
             }
           } else {
             await this.outbox.send({
@@ -102,6 +105,7 @@ export class OperatorProcessor {
               value: transformed,
               timestamp: item.timestamp,
             });
+            this.itemsEmitted++;
           }
           this.latencyTracker.record(Date.now() - item.timestamp);
           this.itemsProcessed++;
@@ -153,5 +157,13 @@ export class OperatorProcessor {
 
   getSnapshotState(): unknown {
     return { itemsProcessed: this.itemsProcessed };
+  }
+
+  getItemsProcessed(): number {
+    return this.itemsProcessed;
+  }
+
+  getItemsEmitted(): number {
+    return this.itemsEmitted;
   }
 }

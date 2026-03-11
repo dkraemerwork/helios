@@ -109,4 +109,8 @@ export class SourceProcessor<T> {
   getSnapshotState(): unknown {
     return { offset: this.offset };
   }
+
+  getEmittedCount(): number {
+    return this.offset;
+  }
 }

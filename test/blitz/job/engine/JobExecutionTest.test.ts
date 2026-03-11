@@ -208,6 +208,8 @@ describe('JobExecution — full DAG wiring', () => {
     const names = metrics.map(m => m.name);
     expect(names).toContain('source');
     expect(names).toContain('sink');
+    expect(metrics.every((metric) => metric.parallelism === 1)).toBe(true);
+    expect(metrics.every((metric) => metric.status === 'COMPLETED')).toBe(true);
   });
 
   it('injects snapshot barriers into source processors', async () => {
