@@ -367,7 +367,7 @@ export class DashboardGateway
     clusterId: string;
     action: string;
     result: unknown;
-    userId: string;
+    actorUserId: string;
   }): void {
     this.broadcastToRoom(payload.clusterId, 'admin:result', payload);
   }

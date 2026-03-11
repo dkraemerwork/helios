@@ -56,4 +56,34 @@ describe('DashboardGateway', () => {
       ],
     });
   });
+
+  test('forwards admin action events with actor user context', () => {
+    const gateway = Object.create(DashboardGateway.prototype) as DashboardGateway;
+    const subject = gateway as any;
+    const broadcasts: Array<{ clusterId: string; event: string; data: unknown }> = [];
+
+    subject.broadcastToRoom = (clusterId: string, event: string, data: unknown) => {
+      broadcasts.push({ clusterId, event, data });
+    };
+
+    subject.onAdminActionCompleted({
+      clusterId: 'stress',
+      action: 'cancelJob',
+      result: { success: true },
+      actorUserId: 'user-1',
+    });
+
+    expect(broadcasts).toEqual([
+      {
+        clusterId: 'stress',
+        event: 'admin:result',
+        data: {
+          clusterId: 'stress',
+          action: 'cancelJob',
+          result: { success: true },
+          actorUserId: 'user-1',
+        },
+      },
+    ]);
+  });
 });
