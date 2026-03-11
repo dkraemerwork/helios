@@ -82,6 +82,7 @@ import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
 import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
@@ -403,6 +404,23 @@ function extractHostFromAddress(address: string): string {
 
 function formatUrlHost(host: string): string {
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}
+
+function parseAdminClusterState(state: string): ClusterState {
+  switch (state) {
+    case ClusterState.ACTIVE:
+      return ClusterState.ACTIVE;
+    case ClusterState.FROZEN:
+      return ClusterState.FROZEN;
+    case ClusterState.PASSIVE:
+      return ClusterState.PASSIVE;
+    case ClusterState.NO_MIGRATION:
+      return ClusterState.NO_MIGRATION;
+    default:
+      throw new Error(
+        `Invalid cluster state: '${state}'. Valid values: ACTIVE, FROZEN, PASSIVE, NO_MIGRATION`,
+      );
+  }
 }
 
 function clientDataFingerprint(data: Data): string {
@@ -5766,17 +5784,19 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _createAdminOperationsProvider(): AdminOperationsProvider {
     return {
       setClusterState: (state: string): void => {
-        // Cluster state is a soft label in Helios (no hard enforcement like Hazelcast).
-        // The ClusterServiceImpl tracks it if present.
-        const validStates = ['ACTIVE', 'FROZEN', 'PASSIVE', 'NO_MIGRATION'];
-        if (!validStates.includes(state)) {
-          throw new Error(`Invalid cluster state: '${state}'. Valid values: ${validStates.join(', ')}`);
-        }
-        // For single-node or coordinator-less mode, this is a no-op label.
-        // In clustered mode, the cluster coordinator would propagate this.
+        const clusterState = parseAdminClusterState(state);
+
         if (this._clusterCoordinator !== null) {
-          (this._clusterCoordinator as unknown as { setClusterState?(s: string): void }).setClusterState?.(state);
+          this._clusterCoordinator.setClusterState(clusterState);
+          return;
         }
+
+        if (this._cluster instanceof ClusterServiceImpl) {
+          this._cluster.setClusterState(clusterState);
+          return;
+        }
+
+        throw new Error('Cluster state changes require a cluster service.');
       },
 
       cancelJob: async (jobId: string): Promise<void> => {

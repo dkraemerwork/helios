@@ -13,6 +13,7 @@
 import { Helios } from '@zenystx/helios-core/Helios';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import { afterEach, describe, expect, it } from 'bun:test';
 
 const BASE_PORT = 16900;
@@ -180,6 +181,19 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
         // All entries should be gone on A
         expect(mapA.size()).toBe(0);
+    });
+
+    it('cluster state changes propagate to follower nodes', async () => {
+        const [a, b] = await startTwoNodeCluster();
+
+        const coordinator = (a as any)._clusterCoordinator as { setClusterState(state: ClusterState): void };
+        coordinator.setClusterState(ClusterState.FROZEN);
+
+        await waitUntil(() => a.getClusterState() === ClusterState.FROZEN && b.getClusterState() === ClusterState.FROZEN);
+
+        coordinator.setClusterState(ClusterState.ACTIVE);
+
+        await waitUntil(() => a.getClusterState() === ClusterState.ACTIVE && b.getClusterState() === ClusterState.ACTIVE);
     });
 
     // ── Test 5: set from non-owner routes to owner ──

@@ -749,6 +749,7 @@ function writeMembershipMessage(out: ByteArrayObjectDataOutput, message: Finaliz
     writeWireMembers(out, message.members);
     writeAddress(out, message.masterAddress);
     out.writeString(message.clusterId);
+    out.writeString(message.clusterState ?? null);
 }
 
 function readMembershipMessage(inp: ByteArrayObjectDataInput, type: 'FINALIZE_JOIN' | 'MEMBERS_UPDATE'): FinalizeJoinMsg | MembersUpdateMsg {
@@ -758,10 +759,12 @@ function readMembershipMessage(inp: ByteArrayObjectDataInput, type: 'FINALIZE_JO
         members: readWireMembers(inp),
         masterAddress: readAddress(inp),
         clusterId: readRequiredString(inp),
+        clusterState: inp.readString() ?? undefined,
     };
 }
 
 function writePartitionState(out: ByteArrayObjectDataOutput, message: PartitionStateMsg): void {
+    out.writeString(message.clusterState ?? null);
     out.writeInt(message.versions.length);
     for (const version of message.versions) {
         out.writeLong(BigInt(version));
@@ -782,6 +785,7 @@ function writePartitionState(out: ByteArrayObjectDataOutput, message: PartitionS
 }
 
 function readPartitionState(inp: ByteArrayObjectDataInput): PartitionStateMsg {
+    const clusterState = inp.readString() ?? undefined;
     const versionCount = inp.readInt();
     const versions = new Array<number>(versionCount);
     for (let index = 0; index < versionCount; index++) {
@@ -801,7 +805,7 @@ function readPartitionState(inp: ByteArrayObjectDataInput): PartitionStateMsg {
         }
         partitions[rowIndex] = row;
     }
-    return { type: 'PARTITION_STATE', versions, partitions };
+    return { type: 'PARTITION_STATE', clusterState, versions, partitions };
 }
 
 function writeTransactionBackupMessage(out: ByteArrayObjectDataOutput, message: TransactionBackupMessage): void {

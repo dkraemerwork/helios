@@ -298,11 +298,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
     async clear(): Promise<void> {
         await this._ensureMapDataStore();
         const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
-        const promises: Promise<void>[] = [];
         for (let i = 0; i < partitionCount; i++) {
-            promises.push(this._invokeOnPartition<void>(new ClearOperation(this._name), i));
+            await this._invokeOnPartition<void>(new ClearOperation(this._name), i);
         }
-        await Promise.all(promises);
         // External store clear: flush remaining external entries via MapDataStore.clear()
         // This handles entries that exist in the external store but not in RecordStores
         // (e.g., pre-seeded data). ClearOperation handles per-partition record cleanup above.

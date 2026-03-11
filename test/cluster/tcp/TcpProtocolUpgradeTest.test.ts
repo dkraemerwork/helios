@@ -106,6 +106,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         ],
         masterAddress: { host: "127.0.0.1", port: 5701 },
         clusterId: "cluster-uuid",
+        clusterState: "FROZEN",
       };
       const buf = strategy.serialize(msg);
       const result = strategy.deserialize(buf);
@@ -138,6 +139,7 @@ describe("TCP Protocol Upgrade (Block 16.A5)", () => {
         ],
         masterAddress: { host: "10.0.0.1", port: 5701 },
         clusterId: "cluster-uuid",
+        clusterState: "ACTIVE",
       };
       const buf = strategy.serialize(msg);
       expect(strategy.deserialize(buf)).toEqual(msg);

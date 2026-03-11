@@ -84,6 +84,7 @@ export interface FinalizeJoinMsg {
   readonly members: WireMemberInfo[];
   readonly masterAddress: { host: string; port: number };
   readonly clusterId: string;
+  readonly clusterState?: string;
 }
 
 /** Member list publish: broadcast updated member list to all nodes. */
@@ -93,12 +94,14 @@ export interface MembersUpdateMsg {
   readonly members: WireMemberInfo[];
   readonly masterAddress: { host: string; port: number };
   readonly clusterId: string;
+  readonly clusterState?: string;
 }
 
 export interface PartitionStateMsg {
   readonly type: "PARTITION_STATE";
   readonly versions: number[];
   readonly partitions: (WirePartitionReplica | null)[][];
+  readonly clusterState?: string;
 }
 
 /** Periodic heartbeat. */

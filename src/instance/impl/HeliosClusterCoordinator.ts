@@ -21,6 +21,7 @@ import { HeliosBlitzCoordinator } from "@zenystx/helios-core/instance/impl/blitz
 import { ClusterJoinManager } from "@zenystx/helios-core/internal/cluster/impl/ClusterJoinManager";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { MembersView } from "@zenystx/helios-core/internal/cluster/impl/MembersView";
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import { PartitionMigrationEvent } from '@zenystx/helios-core/internal/partition/PartitionMigrationEvent';
 import { PartitionReplica } from "@zenystx/helios-core/internal/partition/PartitionReplica";
 import type { PartitionRuntimeState } from "@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl";
@@ -208,6 +209,16 @@ export class HeliosClusterCoordinator {
 
   getInternalPartitionService(): InternalPartitionServiceImpl {
     return this._partitionService;
+  }
+
+  getClusterState(): ClusterState {
+    return this._clusterService.getClusterState();
+  }
+
+  setClusterState(state: ClusterState): void {
+    this._clusterService.setClusterState(state);
+    this._broadcastClusterState();
+    this._notifyMembershipChanged();
   }
 
   isJoined(): boolean {
@@ -422,16 +433,17 @@ export class HeliosClusterCoordinator {
       const masterAddress =
         this._clusterService.getMasterAddress() ?? this._localAddress;
 
-      this._transport.send(message.joinerUuid, {
-        type: "FINALIZE_JOIN",
-        memberListVersion: memberMap.getVersion(),
-        members: wireMembers,
-        masterAddress: {
-          host: masterAddress.getHost(),
-          port: masterAddress.getPort(),
-        },
-        clusterId: this._clusterService.getClusterId() ?? this._instanceName,
-      });
+        this._transport.send(message.joinerUuid, {
+          type: "FINALIZE_JOIN",
+          memberListVersion: memberMap.getVersion(),
+          members: wireMembers,
+          masterAddress: {
+            host: masterAddress.getHost(),
+            port: masterAddress.getPort(),
+          },
+          clusterId: this._clusterService.getClusterId() ?? this._instanceName,
+          clusterState: this._clusterService.getClusterState(),
+        });
 
       for (const member of members) {
         if (
@@ -449,6 +461,7 @@ export class HeliosClusterCoordinator {
             port: masterAddress.getPort(),
           },
           clusterId: this._clusterService.getClusterId() ?? this._instanceName,
+          clusterState: this._clusterService.getClusterState(),
         });
       }
 
@@ -463,6 +476,9 @@ export class HeliosClusterCoordinator {
     );
     this._clusterService.setClusterId(message.clusterId);
     this._clusterService.setJoined(true);
+    if (message.clusterState !== undefined) {
+      this._clusterService.setClusterState(this._parseClusterState(message.clusterState));
+    }
     this._clusterService.setMemberMap(
       MembersView.createNew(
         message.memberListVersion,
@@ -480,6 +496,9 @@ export class HeliosClusterCoordinator {
     );
     this._clusterService.setClusterId(message.clusterId);
     this._clusterService.setJoined(true);
+    if (message.clusterState !== undefined) {
+      this._clusterService.setClusterState(this._parseClusterState(message.clusterState));
+    }
     this._clusterService.setMemberMap(
       MembersView.createNew(
         message.memberListVersion,
@@ -492,6 +511,9 @@ export class HeliosClusterCoordinator {
   }
 
   private _handlePartitionState(message: PartitionStateMsg): void {
+    if (message.clusterState !== undefined) {
+      this._clusterService.setClusterState(this._parseClusterState(message.clusterState));
+    }
     this._applyRuntimeStateWithPromotionLifecycle(
       this._fromWirePartitionState(message),
     );
@@ -549,6 +571,7 @@ export class HeliosClusterCoordinator {
             port: masterAddress.getPort(),
           },
           clusterId: this._clusterService.getClusterId() ?? this._instanceName,
+          clusterState: this._clusterService.getClusterState(),
         });
       }
       this._broadcastPartitionState();
@@ -698,6 +721,7 @@ export class HeliosClusterCoordinator {
     const runtimeState = this._toRuntimeState(this._partitionService);
     this._transport.broadcast({
       type: "PARTITION_STATE",
+      clusterState: this._clusterService.getClusterState(),
       versions: runtimeState.versions,
       partitions: runtimeState.partitions.map((replicas) =>
         replicas.map((replica) =>
@@ -713,6 +737,55 @@ export class HeliosClusterCoordinator {
         ),
       ),
     });
+  }
+
+  private _broadcastClusterState(): void {
+    this._broadcastPartitionState();
+
+    if (!this._clusterService.isMaster()) {
+      return;
+    }
+
+    const wireMembers = (this._clusterService.getMembers() as MemberImpl[]).map((member) =>
+      this._toWireMember(member),
+    );
+    const masterAddress = this._clusterService.getMasterAddress() ?? this._localAddress;
+    const clusterId = this._clusterService.getClusterId() ?? this._instanceName;
+    const clusterState = this._clusterService.getClusterState();
+    const memberListVersion = this._clusterService.getMemberMap().getVersion();
+
+    for (const member of this._clusterService.getMembers() as MemberImpl[]) {
+      if (member.getUuid() === this._localMember.getUuid()) {
+        continue;
+      }
+
+      this._transport.send(member.getUuid(), {
+        type: "MEMBERS_UPDATE",
+        memberListVersion,
+        members: wireMembers,
+        masterAddress: {
+          host: masterAddress.getHost(),
+          port: masterAddress.getPort(),
+        },
+        clusterId,
+        clusterState,
+      });
+    }
+  }
+
+  private _parseClusterState(state: string): ClusterState {
+    switch (state) {
+      case ClusterState.ACTIVE:
+        return ClusterState.ACTIVE;
+      case ClusterState.FROZEN:
+        return ClusterState.FROZEN;
+      case ClusterState.PASSIVE:
+        return ClusterState.PASSIVE;
+      case ClusterState.NO_MIGRATION:
+        return ClusterState.NO_MIGRATION;
+      default:
+        throw new Error(`Unknown cluster state '${state}'`);
+    }
   }
 
   private _toWireMember(member: MemberImpl): WireMemberInfo {
