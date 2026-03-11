@@ -47,6 +47,8 @@ Primary code anchors:
 Execution conventions already present in the repository and assumed by this plan:
 
 - official remote-client interop is pinned to `hazelcast-client@5.6.0` from `test/interop/package.json`; changing that version requires updating the pinned version, interop package, and this plan together
+- final closure in this document is bounded by the public API surface actually exposed by that pinned package; server/client-protocol capability without a public `hazelcast-client@5.6.0` entrypoint does not count as supported remote parity
+- any Hazelcast topic absent from the pinned package's public API surface remains a literal full-Hazelcast parity blocker, but not a blocker to pinned-surface closure so long as Helios does not claim it remotely
 - interop suites live under `test/interop/suites/*.test.ts`
 - interop suite execution uses `./test/interop/run-interop.sh`
 - root verification commands use existing `package.json` scripts such as `bun test`, `bun run build`, and `bun run test:interop`
@@ -136,28 +138,28 @@ This means:
 | Topic | Member runtime | Inter-member wire | Client protocol | Official client interop | Honest status | Main gap |
 |---|---|---|---|---|---|---|
 | Transport / framing | Yes | Yes | N/A | Indirect via interop suites | Implemented | no protocol/version negotiation in `HELLO`; malformed-frame handling is too quiet |
-| Membership / discovery | Yes | Yes | Partial | Partial | Partial | continuous topology-change publication still needs stronger proof |
+| Membership / discovery | Yes | Yes | Yes | Yes | Implemented | keep topology publication and reconnect proof green |
 | Serialization / data model | Yes | Yes | Yes | Yes | Implemented | broader Java-only serializer surfaces remain intentionally unclaimed beyond the retained proven families |
-| Partition routing / invocation / backups / recovery | Yes | Yes | N/A | Indirect via interop suites | Partial | recovery support is selective; migration parity still needs targeted audit |
-| IMap | Yes | Yes | Yes | Yes | Partial | official-client interop is strong, but full Hazelcast IMap breadth is still broader |
-| Queue | Yes | Yes | Yes | Yes | Partial | official-client interop exists, but broader Hazelcast queue semantics still need stronger fault-mode proof |
-| List | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface; broader semantic parity still needs ongoing maintenance |
-| Set | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface; broader semantic parity still needs ongoing maintenance |
-| MultiMap | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface; broader semantic parity still needs ongoing maintenance |
-| Topic | Yes | Yes | Yes | Not proven here | Partial | standard topic has server/runtime support, but official interop proof in this audit is for reliable topic, not standard topic |
+| Partition routing / invocation / backups / recovery | Yes | Yes | N/A | Indirect via interop suites | Implemented for retained scope | retained recovery namespaces and migration behavior must keep matching the audited proof |
+| IMap | Yes | Yes | Yes | Yes | Implemented for retained scope | full Hazelcast IMap breadth is still broader than the claimed scope |
+| Queue | Yes | Yes | Yes | Yes | Implemented for retained scope | broader Hazelcast queue semantics still need ongoing maintenance beyond the retained scope |
+| List | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface |
+| Set | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface |
+| MultiMap | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface |
+| Topic | Yes | Yes | Yes | N/A at pinned boundary | Excluded from pinned-surface closure | `hazelcast-client@5.6.0` exposes no public standard-topic API; this remains a literal full-parity blocker |
 | Reliable topic | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface |
 | Replicated map | Yes | Yes | Yes | Yes | Implemented | no blocker for the audited interop surface |
-| Cache | Yes | service-local | Yes | Not proven here | Protocol-only | no official-client interop proof in this spec; no Java JCache claim |
-| Ringbuffer | Yes | service-local | Yes | Not proven here | Protocol-only | no official-client interop proof in this spec; wire not unified into canonical shared message table |
-| Executor | Yes | Yes | Yes | Not proven here | Partial | durable executor path remains skeletal |
-| Scheduled executor | Yes | Yes (generic ops) | No active registered remote surface | Not proven here | Partial | `ScheduledExecutorMessageHandlers` exists, but no active registration path is established through `registerAllHandlers()` |
-| Transactions | Yes | Yes | Yes | Not proven here | Protocol-only | published `hazelcast-client@5.6.0` exposes no public transaction API entrypoint to prove this remotely; coordinator state remains member-local |
-| CP atomics (AtomicLong / AtomicRef) | Yes | No | Yes | Yes | Partial | official interop proof exists, but CP remains single-node only |
-| CP groups / Latch / Semaphore | Yes | No | Yes | Yes | Partial | official-client proof exists for explicit single-node CP group/latch/semaphore access; distributed multi-member CP remains out of scope |
+| Cache | Yes | service-local | Yes | N/A at pinned boundary | Excluded from pinned-surface closure | `hazelcast-client@5.6.0` exposes no public cache API; do not claim JCache / JSR-107 parity |
+| Ringbuffer | Yes | service-local | Yes | Yes | Implemented for retained scope | ringbuffer wire remains service-local, but the pinned official client interop path is green |
+| Executor | Yes | Yes | Yes | N/A at pinned boundary | Excluded from pinned-surface closure | `hazelcast-client@5.6.0` exposes no public executor API; durable executor also remains narrower than Hazelcast |
+| Scheduled executor | Yes | Yes (generic ops) | Yes | N/A at pinned boundary | Excluded from pinned-surface closure | `hazelcast-client@5.6.0` exposes no public scheduled-executor API |
+| Transactions | Yes | Yes | Yes | N/A at pinned boundary | Excluded from pinned-surface closure | `hazelcast-client@5.6.0` exposes no public transaction API entrypoint; coordinator state remains member-local |
+| CP atomics (AtomicLong / AtomicRef) | Yes | No | Yes | Yes | Implemented for retained scope | CP remains explicitly single-node only |
+| CP groups / Latch / Semaphore | Yes | No | Yes | Yes | Implemented for retained scope | distributed multi-member CP remains out of scope |
 | PN Counter | Yes | not audited here | Yes | Yes | Implemented | no blocker for the audited interop surface |
 | Flake ID | Yes | not audited here | Yes | Yes | Implemented | no blocker for the audited interop surface |
-| Cardinality estimator | Yes | not audited here | Yes | Not proven here | Protocol-only | no official-client interop proof in this spec |
-| SQL | Yes | N/A | Yes | Not proven here | Partial | current SQL is IMap-oriented and narrower than Hazelcast SQL |
+| Cardinality estimator | Yes | not audited here | Yes | N/A at pinned boundary | Excluded from pinned-surface closure | `hazelcast-client@5.6.0` exposes no public cardinality-estimator API |
+| SQL | Yes | N/A | Yes | Yes | Implemented for retained scope | current SQL remains IMap-oriented and narrower than Hazelcast SQL |
 | Blitz | Yes | Yes | N/A | N/A | Replacement, not parity | do not call this Jet parity |
 
 ---
@@ -459,7 +461,7 @@ This means:
 
 - the official interop suite in this audit proves **reliable topic** via `hazelcast-client.getReliableTopic(...)`
 - it does **not** by itself prove standard topic parity through the official client
-- standard topic remains implemented server-side, but should be described as partial until official-client proof is added or the claim is narrowed
+- the pinned `hazelcast-client@5.6.0` package exposes no public standard-topic entrypoint, so standard topic stays outside the supported remote claim boundary while Helios remains pinned to that package
 
 ---
 
@@ -481,6 +483,7 @@ This means:
 ### Official-client interop proof
 
 - `test/interop/suites/replicatedmap.test.ts`
+- `test/interop/suites/ringbuffer.test.ts`
 
 ### Additional proof
 
@@ -491,7 +494,7 @@ This means:
 ### Claim boundary
 
 - replicated map has end-to-end official-client interop proof
-- ringbuffer is server/protocol-capable in this audit, but not yet officially proven through `hazelcast-client` interop
+- ringbuffer now has end-to-end official-client interop proof for the retained add/read/capacity/size lifecycle surface through `hazelcast-client@5.6.0`
 - ringbuffer wire remains outside the canonical shared cluster message table
 
 ---
@@ -516,7 +519,8 @@ This means:
 
 ### Claim boundary
 
-- this is server/protocol proof, not official-client parity proof
+- the pinned official client exposes no public cache API entrypoint, so cache is not part of the supported remote parity boundary
+- this remains server/protocol proof only at the current pinned-client boundary
 - do **not** claim Java JCache / JSR-107 compatibility
 - cache is not in the supported partition-owned recovery namespace sync set
 
@@ -549,7 +553,7 @@ This means:
 ### Claim boundary
 
 - durable executor is still skeletal / placeholder-backed and not parity-claimable
-- scheduled executor is not yet established as an active official-client remote surface in this spec
+- the pinned official client exposes no public executor or scheduled-executor API entrypoint, so neither surface is part of pinned-surface remote parity closure
 
 ---
 
@@ -656,7 +660,7 @@ This means:
 ### Claim boundary
 
 - PN counter and flake ID have official-client interop proof in this audit
-- cardinality estimator is protocol/server-capable here, but not yet officially proven via `hazelcast-client` interop in this spec
+- the pinned official client exposes no public cardinality-estimator API entrypoint, so cardinality estimator is outside the supported remote parity boundary
 
 ---
 
@@ -675,11 +679,12 @@ This means:
 ### Proof
 
 - `test/client/SqlExecutorProtocolAdapter.test.ts`
+- `test/interop/suites/sql.test.ts`
 
 ### Claim boundary
 
 - current SQL is materially narrower than Hazelcast SQL
-- this is not yet an official-client interop parity claim in this spec
+- the retained SQL surface is now proven through official `hazelcast-client@5.6.0` interop
 
 ---
 
@@ -713,21 +718,26 @@ The current remote proof inventory from the official `hazelcast-client` is:
 
 - connection: `test/interop/suites/connection.test.ts`
 - lifecycle: `test/interop/suites/lifecycle.test.ts`
+- topology publication and membership refresh: `test/interop/suites/topology.test.ts`
 - map: `test/interop/suites/map.test.ts`
 - queue: `test/interop/suites/queue.test.ts`
 - list + set: `test/interop/suites/collections.test.ts`
 - multimap: `test/interop/suites/multimap.test.ts`
 - reliable topic: `test/interop/suites/topic.test.ts`
 - replicated map: `test/interop/suites/replicatedmap.test.ts`
+- ringbuffer: `test/interop/suites/ringbuffer.test.ts`
 - CP atomics (AtomicLong / AtomicReference): `test/interop/suites/atomics.test.ts`
 - CP groups / latch / semaphore (single-node only): `test/interop/suites/cp.test.ts`
 - PN counter: `test/interop/suites/pncounter.test.ts`
 - flake ID: `test/interop/suites/flakeid.test.ts`
+- SQL: `test/interop/suites/sql.test.ts`
+- retained serialization families and evolution rules: `test/interop/suites/serialization.test.ts`
+- full harness baseline for three-member join/restart/malformed-input coverage: `test/interop/suites/harness-baseline.test.ts`
 
 Important truth boundaries:
 
 - the topic interop suite proves **reliable topic**, not standard topic
-- there is no official-client interop proof in this spec yet for cache, ringbuffer, transactions, SQL, scheduled executor, executor, or cardinality estimator
+- the pinned `hazelcast-client@5.6.0` package exposes no public remote API for standard topic, cache, transactions, executor, scheduled executor, or cardinality estimator
 - CP interop here is single-member client/server proof, not distributed CP parity
 
 ---
@@ -782,8 +792,9 @@ The following categories require cleanup:
 3. **Replace docs/examples**
    - rewrite README and examples to use `hazelcast-client`
 
-4. **Delete client package surface**
-   - remove `src/client/**` exports and package subpath exports
+4. **Delete public client package surface**
+   - remove `src/client/**` public exports and package subpath exports
+   - internal protocol codecs/messages may remain package-private where the server runtime still imports them as implementation details
 
 5. **Delete narrowing/deferred-client contract tests**
    - remove `DEFERRED_CLIENT_FEATURES` contract tests and retained-client closure tests
@@ -801,7 +812,7 @@ HeliosClient removal is complete only when:
 - no root exports publish `HeliosClient`, `ClientConfig`, or `DEFERRED_CLIENT_FEATURES`
 - `HeliosInstance.ts` comments no longer describe a shared member/remote contract with `HeliosClient`
 - no parity claim references a Helios-owned remote client
-- every claimed remote topic is backed by official-client interop or marked partial/protocol-only/out-of-scope
+- every claimed remote topic is backed by official-client interop or explicitly excluded by the pinned official-client API boundary
 
 ---
 
@@ -830,27 +841,24 @@ These are the present blockers that still constrain stronger parity claims:
 7. **Single-node CP**
    - CP remains single-node embedded behavior, not distributed multi-member CP parity.
 
-8. **Scheduled executor remote path**
-   - scheduled executor member runtime exists, but `ScheduledExecutorMessageHandlers` is not established as an active registered path through `registerAllHandlers()` in this spec.
+8. **Pinned official-client API gaps that block literal full parity**
+   - standard topic, cache, transactions, executor, scheduled executor, and cardinality estimator have no public `hazelcast-client@5.6.0` entrypoint, so Helios cannot honestly claim remote parity for them while staying pinned.
 
 9. **Serialization beyond retained scope**
-   - retained serializer families, schema evolution rules, and client/member compatibility are now audited and proven, but broader Java-only serializer breadth remains intentionally unclaimed outside that retained scope.
-
-10. **Missing official-client proof areas**
-    - cache, ringbuffer, transactions, SQL, executor, scheduled executor, and cardinality estimator still need official-client interop proof before stronger remote parity claims.
+    - retained serializer families, schema evolution rules, and client/member compatibility are now audited and proven, but broader Java-only serializer breadth remains intentionally unclaimed outside that retained scope.
 
 ---
 
 ## 10. Execution requirements before final parity claims
 
-The following items convert the current partial / protocol-only status into release gates. A final Hazelcast parity claim is allowed for each topic only when both the implementation gate and the proof gate are satisfied.
+The following items convert the current retained-scope status into release gates. A final pinned-official-client parity claim is allowed for each topic only when both the implementation gate and the proof gate are satisfied.
 
 For every topic in sections `10.0` through `10.14`, **retained scope** means the exact subset of Hazelcast behavior this plan intends to ship and claim as complete. Behavior outside the retained scope does not block completion, but it must either:
 
 - fail closed with automated proof, or
 - remain absent from docs, examples, exports, and parity wording so it is not implied
 
-Topics listed in sections `10.0` through `10.14` are **mandatory completion topics**. They may not be reclassified to `Out of scope`, `unsupported`, `member-only`, or any equivalent narrower status to force the plan to pass.
+Topics listed in sections `10.0` through `10.14` are **mandatory completion topics** only when the pinned official client exposes a public entrypoint for them. Topics absent from the public `hazelcast-client@5.6.0` surface remain literal full-Hazelcast parity blockers, but they are excluded from pinned-surface closure and must stay absent from supported remote claims.
 
 Retained scope may be narrowed only within the concrete behavior already named in the topic section. It may not be reduced to a trivial or no-op subset simply to satisfy local tests.
 
@@ -860,7 +868,7 @@ These topics are already server/protocol-capable and already have official-clien
 
 #### 10.0.1 IMap
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Minimum retained scope:** remote IMap must cover the concrete behaviors already claimed in section `6.6`, including partition-routed CRUD, backup-aware behavior, the retained query/predicate surface already proven in official-client suites, and any MapStore or near-cache behavior that remains advertised in final docs/examples
 - **Implementation gate:**
   - close any remaining gap between the final retained IMap claim and the actual shipped remote behavior
@@ -869,11 +877,11 @@ These topics are already server/protocol-capable and already have official-clien
   - keep official-client IMap interop green for the retained scope
   - add multi-member and failure/recovery tests for every retained distributed IMap behavior that still lacks final proof
 - **Parity claim rule:**
-  - final completion is blocked while IMap remains `Partial`
+  - IMap remains claimable only for the retained officially proven scope
 
 #### 10.0.2 Queue
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Minimum retained scope:** remote queue must cover the concrete behaviors already claimed in section `6.7`, including offer/poll/peek/size/isEmpty/clear, ordering semantics, and the retained distributed/failure behavior used by the final parity wording
 - **Implementation gate:**
   - close any remaining gap between the final retained queue claim and the actual shipped remote behavior
@@ -882,7 +890,7 @@ These topics are already server/protocol-capable and already have official-clien
   - keep official-client queue interop green for the retained scope
   - add multi-member and failure-mode proof for every retained distributed queue behavior still missing final evidence
 - **Parity claim rule:**
-  - final completion is blocked while Queue remains `Partial`
+  - Queue remains claimable only for the retained officially proven scope
 
 #### 10.0.3 Already-proven implemented remote surfaces that must not regress
 
@@ -901,7 +909,7 @@ These topics are already server/protocol-capable and already have official-clien
 
 #### 10.0.4 CP atomics (AtomicLong / AtomicReference)
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Minimum retained scope:** remote CP atomics must cover AtomicLong and AtomicReference behavior already claimed in section `6.14`, including get/set/update operations, compare-and-set behavior, null handling for AtomicReference, and explicit single-node CP scope
 - **Implementation gate:**
   - close any remaining gap between the final retained CP-atomics claim and the actual shipped remote behavior
@@ -910,25 +918,24 @@ These topics are already server/protocol-capable and already have official-clien
   - keep official-client CP atomics interop green for AtomicLong and AtomicReference
   - add any missing failure-mode or reconnect proof required by the final retained CP-atomics claim
 - **Parity claim rule:**
-  - final completion is blocked while CP atomics remain `Partial`
+  - CP atomics remain claimable only for the retained officially proven single-node scope
 
 ### 10.1 Standard topic
 
-- **Current status:** Partial
+- **Current status:** Excluded from pinned-surface closure
 - **Implementation gate:**
-  - make standard topic a first-class remote surface, not just a server-side capability beside reliable topic
-  - implement and verify publish, subscription, listener registration/removal, ordering, local-vs-remote delivery, and disconnect/reconnect listener lifecycle semantics to match the retained Hazelcast topic scope
-  - make loss/overflow semantics explicit so standard topic is not accidentally relying on reliable-topic behavior
+  - keep standard topic support member-side only for claim purposes while the pinned official client exposes no public API entrypoint
+  - ensure docs/examples/exports do not imply supported remote standard-topic access
+  - keep standard-topic behavior separate from reliable-topic claims so the reliable-topic proof is not overstated
 - **Proof gate:**
-  - add official-client interop coverage using `hazelcast-client.getTopic(...)`
-  - prove publish/receive, multiple listeners, remove-listener, member-to-client fanout, and reconnect behavior against a live Helios cluster
+  - keep a repo-wide wording audit proving no supported remote claim depends on a non-existent public `hazelcast-client@5.6.0` standard-topic API
   - retain member-side regression tests for topic ordering and listener cleanup under member leave and client disconnect
 - **Parity claim rule:**
-  - do not promote standard topic beyond partial until official-client standard-topic suites pass
+  - do not claim supported remote standard-topic parity while Helios remains pinned to `hazelcast-client@5.6.0`
 
 ### 10.2 Cache
 
-- **Current status:** Protocol-only
+- **Current status:** Excluded from pinned-surface closure
 - **Minimum retained scope:** remote distributed cache must cover create/get/put/remove/replace/getAll/putAll/clear/destroy, listener delivery, expiry behavior, invalidation behavior, and explicit recovery semantics for the claimed durability scope
 - **Implementation gate:**
   - define the honest retained scope as distributed cache behavior, not Java JCache API parity
@@ -936,29 +943,28 @@ These topics are already server/protocol-capable and already have official-clien
   - decide and document whether near-cache behavior is supported; if yes, implement invalidation correctness and stale-read boundaries
   - either add cache to supported recovery/state-sync scope or explicitly fence parity claims to non-recovered cache state
 - **Proof gate:**
-  - add official-client interop suites for create/get/put/remove/replace/getAll/putAll/clear/destroy and listener delivery
-  - add expiry and invalidation acceptance coverage with a live client and multi-member cluster
-  - add recovery tests covering restart or ownership transfer for whatever cache durability scope is claimed
+  - keep protocol/server acceptance coverage green for the retained distributed-cache behavior
+  - keep docs/examples/exports free of any supported remote cache claim because the pinned official client exposes no public cache API
 - **Parity claim rule:**
-  - final parity language may cover distributed cache only after remote interop and the claimed recovery/expiry semantics are proven; never call this JCache / JSR-107 parity
+  - never claim supported remote cache parity while pinned to `hazelcast-client@5.6.0`; never call this JCache / JSR-107 parity
 
 ### 10.3 Ringbuffer
 
-- **Current status:** Protocol-only
+- **Current status:** Implemented for retained scope
 - **Implementation gate:**
   - harden ringbuffer capacity, overflow policy, sequence semantics, batch reads, head/tail advancement, and item loss behavior
   - decide whether the service-local wire remains acceptable or must be unified into the canonical cluster message table for the final parity claim
   - verify backup/state-sync behavior and recovery semantics for retained ringbuffer durability scope
 - **Proof gate:**
-  - add official-client interop suites for add/readOne/readMany/addAll/capacity/size/headSequence/tailSequence/remainingCapacity
+  - keep official-client interop green for add/readOne/readMany/addAll/capacity/size/headSequence/tailSequence/remainingCapacity
   - add multi-member tests for sequence continuity, overflow behavior, and ownership transfer/recovery
   - add reconnect tests to prove client-visible sequence/error semantics match the retained Hazelcast scope
 - **Parity claim rule:**
-  - ringbuffer cannot move beyond protocol-only until official-client ringbuffer interop passes and retained durability semantics are explicitly tested
+  - ringbuffer remains claimable only for the retained officially proven scope
 
 ### 10.4 Transactions
 
-- **Current status:** Protocol-only
+- **Current status:** Excluded from pinned-surface closure
 - **Minimum retained scope:** remote transactions must cover begin/commit/rollback, timeout behavior, map + queue participation, duplicate-retry handling, and explicit member-loss outcome semantics for the claimed transaction mode
 - **Implementation gate:**
   - define the retained transaction scope precisely: supported transaction types, timeout behavior, supported data structures, and isolation/locking expectations
@@ -966,52 +972,52 @@ These topics are already server/protocol-capable and already have official-clien
   - either replicate coordinator state to the extent required by the claim or explicitly narrow the parity statement to member-local coordinator semantics
   - document non-goals such as XA if not implemented
 - **Proof gate:**
-  - add official-client interop suites for begin/commit/rollback with map and queue operations through live `hazelcast-client` paths
   - add failure tests for member loss during active transaction, prepare/commit interruption, timeout expiry, and duplicate client retry behavior
   - keep durability tests proving exactly what survives restart/failover and what fails closed
+  - keep docs/examples/exports free of any supported remote transaction claim because the pinned official client exposes no public transaction API
 - **Parity claim rule:**
-  - do not claim transaction parity beyond the explicitly tested retained scope, and do not imply distributed coordinator failover unless it is implemented and proven
+  - do not claim supported remote transaction parity while pinned to `hazelcast-client@5.6.0`, and do not imply distributed coordinator failover unless it is implemented and proven
 
 ### 10.5 Executor
 
-- **Current status:** Partial
+- **Current status:** Excluded from pinned-surface closure
 - **Minimum retained scope:** plain executor remote scope must cover submit/execute/result/cancel, partition/member targeting, shutdown behavior, and explicit member-loss/retry boundaries; durable executor is excluded unless separately implemented and proven
 - **Implementation gate:**
   - separate plain executor parity from durable executor parity; the latter stays unclaimable until it is truly durable
   - harden task submission, partition/member targeting, result retrieval, cancellation, callback/completion behavior, and shutdown lifecycle for the plain executor surface
   - for durable executor, implement durable submission records, result retrieval, dispose semantics, restart/failover behavior, and cleanup lifecycle
 - **Proof gate:**
-  - add official-client interop suites for plain executor submit/execute/result/cancel against a live cluster if that remote scope is claimed
   - add multi-member execution tests for routing, cancellation, member loss, and retry boundaries
   - add restart/failover recovery tests for durable executor before any durable-executor parity claim
+  - keep docs/examples/exports free of any supported remote executor claim because the pinned official client exposes no public executor API
 - **Parity claim rule:**
-  - the `Executor` topic may be promoted only for the retained plain-executor scope once official-client interop passes for that scope
+  - do not claim supported remote executor parity while pinned to `hazelcast-client@5.6.0`
   - durable executor does not stop completion only if it remains explicitly excluded from docs/parity wording and any durable-only remote surface is inactive/unreachable end to end or fail-closed with automated tests
 
 ### 10.6 Scheduled executor
 
-- **Current status:** Partial
+- **Current status:** Excluded from pinned-surface closure
 - **Implementation gate:**
   - register `ScheduledExecutorMessageHandlers` through the live handler registration path and prove the remote path is active
   - implement one-shot and repeated scheduling, named task lifecycle, cancellation, result retrieval, shutdown/destroy behavior, and partition/member targeting semantics
   - define and implement retained behavior for missed executions, duplicate prevention, and restart/failover handling
 - **Proof gate:**
-  - add official-client interop suites for schedule, scheduleAtFixedRate, cancel, dispose/destroy, and result retrieval using a live cluster
   - add timing-tolerant acceptance tests for repeated execution, cancellation races, and member leave/restart scenarios
   - add registration-path tests proving the handlers are actually reachable through `registerAllHandlers()`
+  - keep docs/examples/exports free of any supported remote scheduled-executor claim because the pinned official client exposes no public scheduled-executor API
 - **Parity claim rule:**
-  - no scheduled executor parity claim is allowed while the remote path is only present in code but not proven active end to end
+  - no supported remote scheduled-executor parity claim is allowed while Helios remains pinned to `hazelcast-client@5.6.0`
 
 ### 10.7 SQL
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Minimum retained scope:** remote SQL must cover the claimed `execute` path, paging/cursor lifecycle, close/cancel behavior, parameter binding, supported DML/SELECT subset, and explicit unsupported-syntax/error handling
 - **Implementation gate:**
   - define the exact retained SQL scope Helios intends to claim, including statement classes, options, supported data sources, and known exclusions from Hazelcast SQL breadth
   - expose the supported SQL surface as a real remote feature with stable cursor paging, close/cancel lifecycle, parameter binding, and error mapping
   - harden reconnect/failure semantics so cursor invalidation, retry, and cancellation behavior are explicit and consistent
 - **Proof gate:**
-  - add official-client interop suites for `execute`, paging, cursor exhaustion, close, cancel, parameterized statements, and supported DML/SELECT behavior against live Helios members
+  - keep official-client interop green for `execute`, paging, cursor exhaustion, close, cancel, parameterized statements, and supported DML/SELECT behavior against live Helios members
   - add negative tests for unsupported syntax/options so the narrowed SQL scope is executable and documented
   - add cluster-failure tests for cursor loss, member restart, and cancellation races
 - **Parity claim rule:**
@@ -1019,21 +1025,21 @@ These topics are already server/protocol-capable and already have official-clien
 
 ### 10.8 Cardinality estimator
 
-- **Current status:** Protocol-only
+- **Current status:** Excluded from pinned-surface closure
 - **Minimum retained scope:** remote estimator scope must cover add/addHash/estimate, destroy lifecycle, accuracy-tolerance behavior, and explicit ownership/durability semantics for the claimed mode
 - **Implementation gate:**
   - verify and harden estimator creation, add/addHash, merge semantics if retained, precision/config behavior, and reset/destroy lifecycle
   - define whether estimator state is partition-owned, replicated, or best-effort only, and align implementation to that claim
 - **Proof gate:**
-  - add official-client interop suites for add/addHash/estimate and lifecycle behavior through live `hazelcast-client` use
   - add accuracy-tolerance tests and multi-member ownership/restart tests for the retained durability scope
   - add negative tests for invalid input and destroyed-object access behavior
+  - keep docs/examples/exports free of any supported remote cardinality-estimator claim because the pinned official client exposes no public API for it
 - **Parity claim rule:**
-  - do not claim cardinality-estimator parity until remote interop exists and the estimator's durability/accuracy contract is explicitly tested
+  - do not claim supported remote cardinality-estimator parity while pinned to `hazelcast-client@5.6.0`
 
 ### 10.9 CP groups, count down latch, and semaphore
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Minimum retained scope:** explicit embedded single-node CP scope for group access, latch init/countDown/await, semaphore acquire/release, timeout handling, destroy lifecycle, contention behavior, and reconnect/session-expiry outcomes
 - **Implementation gate:**
   - keep the claim boundary honest: either remain single-node CP only, or implement real multi-member CP semantics before broadening claims
@@ -1044,13 +1050,13 @@ These topics are already server/protocol-capable and already have official-clien
   - add tests for acquire/release, init/countDown/await, timeout, destroy, concurrent contention, and reconnect behavior
   - if any broader distributed CP claim is made, add multi-member consensus/failover tests; otherwise keep tests and wording explicitly single-member/single-node
 - **Parity claim rule:**
-  - this topic may be promoted only for explicit embedded single-node CP scope
+  - this topic remains claimable only for explicit embedded single-node CP scope
   - multi-member distributed CP does not block completion unless the claim is widened to include it
   - no document may imply distributed multi-member CP parity without consensus-grade implementation and tests
 
 ### 10.10 Topology publication
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Implementation gate:**
   - ensure topology changes are continuously published to connected clients, not just available at startup
   - harden member-add, member-remove, endpoint-update, duplicate-connection resolution, and incompatible-peer rejection flows
@@ -1060,7 +1066,7 @@ These topics are already server/protocol-capable and already have official-clien
   - add multi-member acceptance tests for duplicate-connection resolution and incompatible-peer rejection
   - prove `hazelcast-client` cluster view updates without requiring reconnect for the retained scenarios
 - **Parity claim rule:**
-  - transport/membership parity cannot be elevated while topology publication is only proven for initial connect
+  - transport/membership claims remain bounded to the retained officially proven topology-update scenarios
 
 ### 10.11 Handshake and version negotiation
 
@@ -1092,7 +1098,7 @@ These topics are already server/protocol-capable and already have official-clien
 
 ### 10.13 Recovery scope
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Implementation gate:**
   - replace the current selective-recovery statement with a named supported matrix for each retained service
   - either extend partition-owned recovery/state-sync beyond `map`, `queue`, and `ringbuffer`, or narrow every parity claim to the actually recovered namespaces
@@ -1186,25 +1192,25 @@ The implementation agent must execute these work packages in order. A work packa
 
 - **Depends on:** `WP2`
 - **Covers:** `10.1 Standard topic`, `10.3 Ringbuffer`
-- **Required outcome:** standard topic and ringbuffer both work as active remote surfaces with retained ordering, overflow, reconnect, lifecycle, and ownership semantics
+- **Required outcome:** standard topic is explicitly excluded from the pinned remote boundary because the official client exposes no public API for it, while ringbuffer is proven as an active remote surface for the retained ordering/overflow/reconnect/lifecycle scope
 
 ##### WP4 — Cache and estimator surfaces
 
 - **Depends on:** `WP2`
 - **Covers:** `10.2 Cache`, `10.8 Cardinality estimator`
-- **Required outcome:** cache scope remains distributed-cache-only and never JCache; retained expiry, invalidation, listener, lifecycle, estimator accuracy, and durability behavior are implemented and explicit
+- **Required outcome:** cache and cardinality-estimator boundaries are explicit at the pinned official-client surface, with no remote support claim beyond what the official package can actually reach; cache remains distributed-cache-only and never JCache
 
 ##### WP5 — Transactional and CP surfaces
 
 - **Depends on:** `WP2`
 - **Covers:** `10.4 Transactions`, `10.9 CP groups, count down latch, and semaphore`
-- **Required outcome:** retained transaction scope and retained CP scope are explicit; unsupported distributed semantics fail closed instead of being implied; timeout, retry, cleanup, and reconnect behavior match the claim
+- **Required outcome:** transactions are explicitly excluded from pinned-surface remote parity because the official client exposes no public API for them; retained CP scope is explicit; unsupported distributed semantics fail closed instead of being implied; timeout, retry, cleanup, and reconnect behavior match the claim
 
 ##### WP6 — Compute surfaces
 
 - **Depends on:** `WP2`
 - **Covers:** `10.5 Executor`, `10.6 Scheduled executor`
-- **Required outcome:** plain executor parity is separated from durable executor parity; scheduled executor handlers are proven active through the real registration path; lifecycle, targeting, cancellation, result, and restart semantics are implemented for the retained scope
+- **Required outcome:** executor and scheduled-executor boundaries are explicit at the pinned official-client surface, with no remote parity claim beyond what the official package can actually reach; any internal protocol/server capability remains non-claimable remotely while those public API gaps remain
 
 ##### WP7 — SQL surface
 
@@ -1212,11 +1218,11 @@ The implementation agent must execute these work packages in order. A work packa
 - **Covers:** `10.7 SQL`
 - **Required outcome:** retained SQL scope is explicit; remote cursor paging, close/cancel lifecycle, parameter binding, reconnect behavior, and error mapping are stable for that exact scope
 
-##### WP8 — HeliosClient removal and parity closure
+##### WP8 — HeliosClient removal and pinned-surface parity closure
 
 - **Depends on:** `WP1` AND `WP2` AND `WP3` AND `WP4` AND `WP5` AND `WP6` AND `WP7` (all must be `PASS`)
 - **Covers:** section `8` and section `11`
-- **Required outcome:** no in-scope topic remains `Partial` or `Protocol-only`; every retained remote claim is proven with official `hazelcast-client`; `HeliosClient` removal gates are satisfied; docs/examples/exports match the completed implementation exactly
+- **Required outcome:** no in-scope pinned-client topic remains `Partial` or `Protocol-only`; every retained remote claim is proven with official `hazelcast-client`; `HeliosClient` removal gates are satisfied; docs/examples/exports match the completed implementation exactly
 
 #### 10.15.3 Parallelism rule
 
@@ -1288,7 +1294,7 @@ For this section, **green** means:
 
 ### 11.1 Binary completion rule
 
-Final Hazelcast parity is **Complete** only if every required gate below is **PASS**.
+Final pinned official-client parity closure is **Complete** only if every required gate below is **PASS**.
 
 If any gate is **FAIL**, the outcome is **Not complete**.
 
@@ -1300,7 +1306,7 @@ The following never count as completion:
 - single-node proof for a distributed claim
 - manual, skipped, placeholder, or doc-only proof
 
-For section `11`, **in-scope topics** means the mandatory completion topics in sections `10.0` through `10.14`.
+For section `11`, **in-scope topics** means the mandatory completion topics in sections `10.0` through `10.14` that are reachable through the public `hazelcast-client@5.6.0` API surface.
 
 A proof gate is satisfied only by checked-in automated tests that run in CI. Manual verification, temporary scripts, local-only harnesses, or narrowed ad hoc test subsets never satisfy proof gates.
 
@@ -1321,14 +1327,14 @@ Per-topic completion requires these additional proof gates:
 - `Membership / discovery / topology` — multi-member join/leave/reconnect and continuous topology publication are proven
 - `Serialization / data model` — every claimed serializer family and claimed evolution rule is proven member-to-member and client-to-member
 - `Partition routing / invocation / backups / recovery` — routing, backup visibility, and every claimed recovery namespace are proven in multi-member failure tests
-- `IMap`, `Queue`, `List`, `Set`, `MultiMap`, `Reliable topic`, `Replicated map`, `PN Counter`, `Flake ID` — every claimed remote feature passes official `hazelcast-client` interop
-- `Topic` — standard topic has its own official-client proof; reliable-topic proof does not satisfy this gate
-- `Cache`, `Ringbuffer`, `Transactions`, `Executor`, `Scheduled executor`, `Cardinality estimator`, `SQL`, `CP groups / Latch / Semaphore` — final parity credit is allowed only after official `hazelcast-client` interop passes for the exact claimed scope
+- `IMap`, `Queue`, `List`, `Set`, `MultiMap`, `Reliable topic`, `Replicated map`, `Ringbuffer`, `SQL`, `PN Counter`, `Flake ID` — every claimed remote feature passes official `hazelcast-client` interop
+- `Topic`, `Cache`, `Transactions`, `Executor`, `Scheduled executor`, `Cardinality estimator` — no final remote parity credit is allowed while the pinned official client lacks a public API entrypoint; these surfaces must remain outside supported remote claims
+- `CP groups / Latch / Semaphore` — final parity credit is allowed only after official `hazelcast-client` interop passes for the exact claimed single-node scope
 - `CP atomics (AtomicLong / AtomicRef)` and `CP groups / Latch / Semaphore` — any retained claim must explicitly stay scoped to embedded single-node CP unless real distributed CP exists and is proven
 
 ### 11.3 Global parity gates
 
-Final Hazelcast parity is **PASS** only when all of the following are true:
+Final pinned official-client parity closure is **PASS** only when all of the following are true:
 
 - every in-scope topic gate in `11.2` is **PASS**
 - no in-scope topic remains `Partial` or `Protocol-only`
@@ -1344,7 +1350,8 @@ Final Hazelcast parity is **PASS** only when all of the following are true:
 
 `HeliosClient` removal is **PASS** only when all of the following are true:
 
-- `src/client/HeliosClient.ts`, `src/client/index.ts`, and the shipped `src/client/**` remote-client implementation are deleted and are not retained under any renamed, relocated, or dormant proprietary replacement path in the repository
+- `src/client/HeliosClient.ts`, `src/client/index.ts`, and every shipped proprietary remote-client product export are deleted and are not retained under any renamed, relocated, or dormant replacement path in the repository
+- retained `src/client/**` files, if any, are package-private protocol/message helpers rather than a supported Helios-owned remote client SDK
 - `package.json` no longer exports `./client` or `./client/config`
 - root exports no longer publish `HeliosClient`, `ClientConfig`, or `DEFERRED_CLIENT_FEATURES`
 - no active docs, examples, tests, or parity claims depend on `HeliosClient`
@@ -1361,6 +1368,7 @@ These exclusions are mandatory. Violating any one makes the outcome **Not comple
 - `JCache / JSR-107 exclusion` — cache may be claimed only as Helios distributed cache support; any Java `javax.cache`, `JCache`, or `JSR-107` parity claim is an automatic fail
 - `Jet -> Blitz exclusion` — Blitz may be described only as a Helios-native replacement; any claim that Blitz work counts as Hazelcast Jet parity or Jet completion credit is an automatic fail
 - `Distributed CP exclusion` — CP atomics, CP groups, latch, and semaphore may be claimed only at explicit embedded single-node scope unless real multi-member consensus semantics are implemented and proven; any wording that implies distributed CP parity is an automatic fail
+- `Pinned-client API-surface exclusion` — if `hazelcast-client@5.6.0` exposes no public entrypoint for a Hazelcast surface, Helios may not claim remote parity for that surface while staying pinned; those gaps remain literal full-Hazelcast parity blockers and must stay absent from supported remote wording
 
 ---
 

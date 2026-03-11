@@ -4,6 +4,8 @@ This directory contains acceptance tests that use the **official `hazelcast-clie
 
 Every test in this directory connects to a real Helios server instance using the same client library that production Hazelcast users deploy. If these tests pass, Helios is provably compatible with the official Hazelcast Node.js client.
 
+Important boundary: this workspace proves only the public API surface exposed by pinned `hazelcast-client@5.6.0`. Standard topic, cache, transactions, executor, scheduled executor, and cardinality estimator are not covered here because that package does not expose public entrypoints for them.
+
 ---
 
 ## What These Tests Prove
@@ -11,16 +13,22 @@ Every test in this directory connects to a real Helios server instance using the
 | Suite | What Is Verified |
 |-------|-----------------|
 | `connection` | Client connects, discovers members, handles auth failure and timeout |
+| `topology` | Member-list publication stays current across join/leave events |
 | `map` | Full IMap API: CRUD, TTL, entry listeners, keySet/values/entrySet, putAll, getAll |
 | `queue` | IQueue: offer, poll, peek, size, isEmpty, clear, FIFO order, blocking poll |
-| `topic` | ITopic: publish, subscribe, multiple listeners, removeListener |
+| `topic` | Reliable topic: publish, subscribe, multiple listeners, removeListener |
+| `ringbuffer` | Ringbuffer: add, readOne/readMany, capacity, size, remainingCapacity |
 | `collections` | IList + ISet: add, get, remove, contains, size, clear |
+| `serialization` | Retained serializer families and evolution rules across client/member round trips |
 | `multimap` | MultiMap: put, get, remove, containsKey, size, keySet, values |
 | `replicatedmap` | ReplicatedMap: put, get, remove, size, containsKey, containsValue |
+| `sql` | Retained SQL surface: execute, parameter binding, paging, updates, close/cancel |
 | `atomics` | AtomicLong + AtomicReference via CP subsystem: CAS, increment, decrement |
+| `cp` | CP group addressing plus count down latch and semaphore on explicit single-node scope |
 | `flakeid` | FlakeIdGenerator: unique ID generation, bulk uniqueness |
 | `pncounter` | PNCounter CRDT: addAndGet, subtractAndGet, getAndAdd, getAndSubtract |
 | `lifecycle` | Client shutdown, reconnect cycles, lifecycle listeners, server-side disconnect |
+| `harness-baseline` | Three-member harness, restart/recovery baseline, malformed-input guardrails |
 
 ---
 
@@ -40,13 +48,19 @@ test/interop/
     ├── map.test.ts
     ├── queue.test.ts
     ├── topic.test.ts
+    ├── ringbuffer.test.ts
     ├── collections.test.ts
+    ├── serialization.test.ts
     ├── multimap.test.ts
     ├── replicatedmap.test.ts
+    ├── sql.test.ts
     ├── atomics.test.ts
+    ├── cp.test.ts
     ├── flakeid.test.ts
     ├── pncounter.test.ts
-    └── lifecycle.test.ts
+    ├── topology.test.ts
+    ├── lifecycle.test.ts
+    └── harness-baseline.test.ts
 ```
 
 ### HeliosTestCluster

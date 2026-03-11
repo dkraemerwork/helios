@@ -99,7 +99,7 @@ describe('Official Client - serialization parity', () => {
   beforeEach(async () => {
     cluster = new HeliosTestCluster({
       configureMember: (config) => {
-        const configWithSerialization = config as typeof config & {
+        const configWithSerialization = config as unknown as {
           _serializationConfig?: HazelcastSerializationConfig;
           getSerializationConfig?: () => HazelcastSerializationConfig;
         };

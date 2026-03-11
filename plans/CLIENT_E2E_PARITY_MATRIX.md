@@ -1,6 +1,8 @@
 ## Helios Client Parity Matrix
 
-Control document for `plans/CLIENT_E2E_PARITY_PLAN.md` and `plans/CLIENT_E2E_EXECUTION_BACKLOG.md`.
+Historical archive for the removed proprietary `HeliosClient` product surface.
+
+Current supported remote boundary is the server-side client protocol plus interoperability with pinned official `hazelcast-client@5.6.0`; this file no longer defines active release claims.
 
 Topic dependency note:
 
