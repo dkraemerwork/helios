@@ -1,5 +1,5 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { EntryListIntegerUUIDCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/EntryListIntegerUUIDCodec';
+import { ClientMessage } from '../../../../../../src/client/impl/protocol/ClientMessage';
+import { EntryListIntegerUUIDCodec } from '../../../../../../src/client/impl/protocol/codec/builtin/EntryListIntegerUUIDCodec';
 import { describe, expect, it } from 'bun:test';
 
 const UUID_A = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';

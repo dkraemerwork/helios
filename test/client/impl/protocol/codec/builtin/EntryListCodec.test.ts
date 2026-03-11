@@ -1,7 +1,7 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { EntryListCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/EntryListCodec';
-import { ListLongCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListLongCodec';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec';
+import { ClientMessage } from '../../../../../../src/client/impl/protocol/ClientMessage';
+import { EntryListCodec } from '../../../../../../src/client/impl/protocol/codec/builtin/EntryListCodec';
+import { ListLongCodec } from '../../../../../../src/client/impl/protocol/codec/builtin/ListLongCodec';
+import { StringCodec } from '../../../../../../src/client/impl/protocol/codec/builtin/StringCodec';
 import { describe, expect, it } from 'bun:test';
 
 function roundTripStringBigint(entries: Array<[string, bigint[]]>): Array<[string, bigint[]]> {

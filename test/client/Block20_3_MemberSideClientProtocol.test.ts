@@ -23,17 +23,17 @@
  * 19. Integration: HeliosInstanceImpl starts ClientProtocolServer
  * 20. E2E verification: raw socket auth → request → response → disconnect
  */
-import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
-import { ClientMessage, ClientMessageFrame } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
-import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
-import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
-import { MapGetEntryViewCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapGetEntryViewCodec.js";
-import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
-import { QueueAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js";
-import { QueueOfferCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueOfferCodec";
-import { StringCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js";
+import { AuthenticationStatus } from "../../src/client/impl/protocol/AuthenticationStatus";
+import { ClientMessage, ClientMessageFrame } from "../../src/client/impl/protocol/ClientMessage";
+import { ClientMessageReader } from "../../src/client/impl/protocol/ClientMessageReader";
+import { ClientMessageWriter } from "../../src/client/impl/protocol/ClientMessageWriter";
+import { ClientAuthenticationCodec } from "../../src/client/impl/protocol/codec/ClientAuthenticationCodec";
+import { MapAddEntryListenerCodec } from "../../src/client/impl/protocol/codec/MapAddEntryListenerCodec";
+import { MapGetEntryViewCodec } from "../../src/client/impl/protocol/codec/MapGetEntryViewCodec.js";
+import { MapPutCodec } from "../../src/client/impl/protocol/codec/MapPutCodec";
+import { QueueAddListenerCodec } from "../../src/client/impl/protocol/codec/QueueAddListenerCodec.js";
+import { QueueOfferCodec } from "../../src/client/impl/protocol/codec/QueueOfferCodec";
+import { StringCodec } from "../../src/client/impl/protocol/codec/builtin/StringCodec.js";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 import { afterEach, describe, expect, test } from "bun:test";
 

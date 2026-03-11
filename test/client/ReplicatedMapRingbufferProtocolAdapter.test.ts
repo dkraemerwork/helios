@@ -1,12 +1,12 @@
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { ClientMessage, ClientMessageFrame } from '../../src/client/impl/protocol/ClientMessage';
+import { MapAddEntryListenerCodec } from '../../src/client/impl/protocol/codec/MapAddEntryListenerCodec';
+import { DataCodec } from '../../src/client/impl/protocol/codec/builtin/DataCodec.js';
 import {
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
-import { ListLongCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListLongCodec.js';
+} from '../../src/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../src/client/impl/protocol/codec/builtin/StringCodec.js';
+import { ListLongCodec } from '../../src/client/impl/protocol/codec/builtin/ListLongCodec.js';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';

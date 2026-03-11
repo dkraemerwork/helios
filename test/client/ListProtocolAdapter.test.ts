@@ -1,12 +1,12 @@
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ListAddListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { ClientMessage, ClientMessageFrame } from '../../src/client/impl/protocol/ClientMessage';
+import { ListAddListenerCodec } from '../../src/client/impl/protocol/codec/ListAddListenerCodec.js';
+import { DataCodec } from '../../src/client/impl/protocol/codec/builtin/DataCodec.js';
 import {
     FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+} from '../../src/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../src/client/impl/protocol/codec/builtin/StringCodec.js';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';

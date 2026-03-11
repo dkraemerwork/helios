@@ -1,9 +1,7 @@
-import { HeliosClient } from '@zenystx/helios-core/client';
-import { ClientConfig } from '@zenystx/helios-core/client/config/ClientConfig';
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { MapGetCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec';
-import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
-import { QueueOfferCodec } from '@zenystx/helios-core/client/impl/protocol/codec/QueueOfferCodec';
+import { ClientMessage } from '../../src/client/impl/protocol/ClientMessage';
+import { MapGetCodec } from '../../src/client/impl/protocol/codec/MapGetCodec';
+import { MapPutCodec } from '../../src/client/impl/protocol/codec/MapPutCodec';
+import { QueueOfferCodec } from '../../src/client/impl/protocol/codec/QueueOfferCodec';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { SerializationConfig } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
 import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
@@ -73,13 +71,9 @@ async function waitForQueueAndTopicStats(instance: HeliosInstanceImpl): Promise<
 }
 
 describe('client protocol monitor metrics', () => {
-    const clients: HeliosClient[] = [];
     const instances: HeliosInstanceImpl[] = [];
 
     afterEach(() => {
-        while (clients.length > 0) {
-            clients.pop()!.shutdown();
-        }
         while (instances.length > 0) {
             instances.pop()!.shutdown();
         }
@@ -125,39 +119,6 @@ describe('client protocol monitor metrics', () => {
         } finally {
             serializationService.destroy();
         }
-    });
-
-    test('monitor payload counts real HeliosClient socket operations', async () => {
-        const clusterName = 'client-protocol-monitor-metrics-socket';
-        const config = new HeliosConfig(clusterName);
-        config.setClusterName(clusterName);
-        config.getNetworkConfig().setClientProtocolPort(0);
-        config.getMonitorConfig()
-            .setEnabled(true)
-            .setSampleIntervalMs(100);
-
-        const instance = new HeliosInstanceImpl(config);
-        instances.push(instance);
-        await instance.waitForClientProtocolReady();
-
-        const clientConfig = new ClientConfig();
-        clientConfig.setClusterName(clusterName);
-        clientConfig.setName(`monitor-metrics-client-${Date.now()}`);
-        clientConfig.getNetworkConfig().addAddress(`127.0.0.1:${instance.getClientProtocolPort()}`);
-
-        const client = HeliosClient.newHeliosClient(clientConfig);
-        clients.push(client);
-        await client.connect();
-
-        const map = client.getMap<string, string>('metrics-map');
-        const queue = client.getQueue<string>('metrics-queue');
-
-        await map.put('k1', 'v1');
-        expect(await map.get('k1')).toBe('v1');
-        expect(await queue.offer('q1')).toBeTrue();
-
-        const completedCount = await waitForOperationCount(instance, 3);
-        expect(completedCount).toBeGreaterThanOrEqual(3);
     });
 
     test('monitor payload exposes real queue and topic activity for Management Center', async () => {

@@ -1,7 +1,7 @@
 /**
  * Port of com.hazelcast.client.impl.protocol.AuthenticationStatusTest
  */
-import { AuthenticationStatus } from '@zenystx/helios-core/client/impl/protocol/AuthenticationStatus';
+import { AuthenticationStatus } from '../../../../src/client/impl/protocol/AuthenticationStatus';
 import { describe, expect, it } from 'bun:test';
 
 describe('AuthenticationStatus', () => {

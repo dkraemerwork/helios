@@ -1,13 +1,13 @@
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { ClientMessage, ClientMessageFrame } from '../../src/client/impl/protocol/ClientMessage';
+import { DataCodec } from '../../src/client/impl/protocol/codec/builtin/DataCodec.js';
 import {
     BOOLEAN_SIZE_IN_BYTES,
     BYTE_SIZE_IN_BYTES,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+} from '../../src/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../src/client/impl/protocol/codec/builtin/StringCodec.js';
 import { ExecutorConfig } from '@zenystx/helios-core/config/ExecutorConfig';
 import { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';

@@ -1,10 +1,10 @@
 import { test } from "bun:test";
 import { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
-import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
-import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
+import { ClientAuthenticationCodec } from "../../src/client/impl/protocol/codec/ClientAuthenticationCodec";
+import { ClientMessage } from "../../src/client/impl/protocol/ClientMessage";
+import { ClientMessageWriter } from "../../src/client/impl/protocol/ClientMessageWriter";
+import { ClientMessageReader } from "../../src/client/impl/protocol/ClientMessageReader";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 
 function serialize(msg: ClientMessage): Buffer {

@@ -1,5 +1,5 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ListLongCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListLongCodec';
+import { ClientMessage } from '../../../../../../src/client/impl/protocol/ClientMessage';
+import { ListLongCodec } from '../../../../../../src/client/impl/protocol/codec/builtin/ListLongCodec';
 import { describe, expect, it } from 'bun:test';
 
 function roundTrip(values: bigint[]): bigint[] {

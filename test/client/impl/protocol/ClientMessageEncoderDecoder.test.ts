@@ -2,14 +2,14 @@
  * Port of com.hazelcast.client.impl.protocol.ClientMessageEncoderDecoderTest
  * and related codec round-trip tests.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/ClientMessageReader';
-import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
-import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec';
-import { ClientCreateProxyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientCreateProxyCodec';
-import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec';
-import { QueueAddListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js';
-import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec';
+import { ClientMessage } from '../../../../src/client/impl/protocol/ClientMessage';
+import { ClientMessageReader } from '../../../../src/client/impl/protocol/ClientMessageReader';
+import { ClientMessageWriter } from '../../../../src/client/impl/protocol/ClientMessageWriter';
+import { ClientAuthenticationCodec } from '../../../../src/client/impl/protocol/codec/ClientAuthenticationCodec';
+import { ClientCreateProxyCodec } from '../../../../src/client/impl/protocol/codec/ClientCreateProxyCodec';
+import { MapAddEntryListenerCodec } from '../../../../src/client/impl/protocol/codec/MapAddEntryListenerCodec';
+import { QueueAddListenerCodec } from '../../../../src/client/impl/protocol/codec/QueueAddListenerCodec.js';
+import { MapPutCodec } from '../../../../src/client/impl/protocol/codec/MapPutCodec';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';

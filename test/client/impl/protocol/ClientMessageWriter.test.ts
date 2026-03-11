@@ -1,8 +1,8 @@
 /**
  * Port of com.hazelcast.client.impl.protocol.ClientMessageWriterTest
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
+import { ClientMessage } from '../../../../src/client/impl/protocol/ClientMessage';
+import { ClientMessageWriter } from '../../../../src/client/impl/protocol/ClientMessageWriter';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { describe, expect, it } from 'bun:test';
 
