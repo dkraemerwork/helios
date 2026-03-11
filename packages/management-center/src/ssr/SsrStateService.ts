@@ -138,6 +138,9 @@ export class SsrStateService {
       case 'members':
         return this.getClusterMembersState(clusterId, now);
       case 'jobs':
+        if (segments.length >= 4) {
+          return this.getClusterJobDetailState(clusterId, segments[3]!);
+        }
         return this.getClusterJobsState(clusterId);
       case 'alerts':
         return this.getClusterAlertsState(clusterId);
@@ -221,6 +224,22 @@ export class SsrStateService {
     return {
       _ssrTimestamp: nowMs(),
       activeJobs,
+    };
+  }
+
+  private async getClusterJobDetailState(
+    clusterId: string,
+    jobId: string,
+  ): Promise<Record<string, unknown>> {
+    const [job, jobHistory] = await Promise.all([
+      this.jobsService.getJobById(clusterId, jobId),
+      this.jobsService.getJobHistory(clusterId, jobId, TRANSFER_STATE_LIMIT),
+    ]);
+
+    return {
+      _ssrTimestamp: nowMs(),
+      job,
+      jobHistory,
     };
   }
 

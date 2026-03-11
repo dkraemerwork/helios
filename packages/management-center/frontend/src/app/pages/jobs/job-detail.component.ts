@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService, type CursorPaginated, type JobSnapshot } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SsrStateService } from '../../core/services/ssr-state.service';
 import { ClusterStore } from '../../core/store/cluster.store';
 
 interface JobMetricEntry {
@@ -221,6 +222,7 @@ export class JobDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly clusterStore = inject(ClusterStore);
   private readonly apiService = inject(ApiService);
+  private readonly ssrState = inject(SsrStateService);
   readonly authService = inject(AuthService);
 
   jobId = '';
@@ -246,7 +248,22 @@ export class JobDetailComponent implements OnInit {
     }
 
     this.clusterStore.setActiveCluster(this.clusterId);
-    await Promise.all([this.loadJob(), this.loadHistory()]);
+
+    const ssrJob = this.ssrState.getStateKey<JobSnapshot>('job');
+    const ssrHistory = this.ssrState.getStateKey<CursorPaginated<JobSnapshot>>('jobHistory');
+
+    if (ssrJob?.clusterId === this.clusterId && ssrJob.jobId === this.jobId) {
+      this.applyJobSnapshot(ssrJob);
+    }
+
+    if (ssrHistory && ssrHistory.items.every(entry => entry.clusterId === this.clusterId && entry.jobId === this.jobId)) {
+      this.history.set(ssrHistory);
+    }
+
+    await Promise.all([
+      this.job() ? Promise.resolve() : this.loadJob(),
+      this.history().items.length > 0 ? Promise.resolve() : this.loadHistory(),
+    ]);
   }
 
   async cancelJob(): Promise<void> {
@@ -301,17 +318,12 @@ export class JobDetailComponent implements OnInit {
     }
 
     const job = await this.apiService.getClusterJob(this.clusterId, this.jobId);
-    this.job.set(job);
     if (!job) {
+      this.job.set(null);
       return;
     }
 
-    this.jobName.set(job.jobName);
-    this.supportsCancel.set(job.supportsCancel);
-    this.supportsRestart.set(job.supportsRestart);
-    this.metricEntries.set(parseMetrics(job.metricsJson));
-    this.topologyVertices.set(parseVertices(job.verticesJson));
-    this.topologyEdges.set(parseEdges(job.edgesJson));
+    this.applyJobSnapshot(job);
   }
 
   private async loadHistory(): Promise<void> {
@@ -332,12 +344,28 @@ export class JobDetailComponent implements OnInit {
     return vertex?.name ?? vertexId;
   }
 
-  private async executeAction(fn: () => Promise<{ success: boolean }>, successMsg: string): Promise<void> {
+  private applyJobSnapshot(job: JobSnapshot): void {
+    this.job.set(job);
+    this.jobName.set(job.jobName);
+    this.supportsCancel.set(job.supportsCancel);
+    this.supportsRestart.set(job.supportsRestart);
+    this.metricEntries.set(parseMetrics(job.metricsJson));
+    this.topologyVertices.set(parseVertices(job.verticesJson));
+    this.topologyEdges.set(parseEdges(job.edgesJson));
+  }
+
+  private async executeAction(fn: () => Promise<{ success: boolean; error?: string }>, successMsg: string): Promise<void> {
     this.actionLoading.set(true);
     this.actionResult.set(null);
     try {
       const result = await fn();
-      this.actionResult.set({ success: result.success, message: result.success ? successMsg : 'Action failed' });
+      if (result.success) {
+        await Promise.all([this.loadJob(), this.loadHistory()]);
+      }
+      this.actionResult.set({
+        success: result.success,
+        message: result.success ? successMsg : (result.error ?? 'Action failed'),
+      });
     } catch (err) {
       this.actionResult.set({ success: false, message: err instanceof Error ? err.message : 'Action failed' });
     } finally {

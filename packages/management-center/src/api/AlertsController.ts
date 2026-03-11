@@ -393,6 +393,13 @@ export class AlertsController {
       createdAt: now,
     });
 
+    this.eventEmitter.emit('alert.resolved', {
+      clusterId: alert.clusterId,
+      ruleId: alert.ruleId,
+      memberAddr: alert.memberAddr,
+      message: alert.message,
+    });
+
     return { ok: true };
   }
 }
