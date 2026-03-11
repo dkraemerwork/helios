@@ -13,8 +13,10 @@
 import { Helios } from "@zenystx/helios-core/Helios";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
+import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 import { afterEach, describe, expect, it } from "bun:test";
 
 // Ports in the 15780+ range — unlikely to conflict with other tests.
@@ -141,6 +143,80 @@ describe("Multi-node TCP integration", () => {
       return { owner: left, backup: right };
     }
     return { owner: right, backup: left };
+  }
+
+  function getRingbufferState(
+    instance: HeliosInstanceImpl,
+    ringbufferName: string,
+  ): {
+    ownerId: string | null;
+    size: number;
+    headSequence: number;
+    tailSequence: number;
+    items: string[];
+  } {
+    const service = instance.getRingbufferService();
+    const partitionId = service.getRingbufferPartitionId(ringbufferName);
+    const container = service.getContainerOrNull(
+      partitionId,
+      RingbufferService.getRingbufferNamespace(ringbufferName),
+    );
+    if (container === null) {
+      return {
+        ownerId: instance.getPartitionOwnerId(partitionId),
+        size: 0,
+        headSequence: -1,
+        tailSequence: -1,
+        items: [],
+      };
+    }
+    const nodeEngine = instance.getNodeEngine();
+    const items: string[] = [];
+    for (
+      let sequence = container.headSequence();
+      sequence <= container.tailSequence();
+      sequence++
+    ) {
+      const item = nodeEngine.toObject<string>(
+        container.getRingbuffer().read(sequence) as any,
+      );
+      if (item !== null) {
+        items.push(item);
+      }
+    }
+    return {
+      ownerId: instance.getPartitionOwnerId(partitionId),
+      size: container.size(),
+      headSequence: container.headSequence(),
+      tailSequence: container.tailSequence(),
+      items,
+    };
+  }
+
+  function resolveRingbufferOwnerAndBackup(
+    left: HeliosInstanceImpl,
+    right: HeliosInstanceImpl,
+    ringbufferName: string,
+  ): {
+    owner: HeliosInstanceImpl;
+    backup: HeliosInstanceImpl;
+  } {
+    const leftState = getRingbufferState(left, ringbufferName);
+    if (leftState.ownerId === left.getLocalMemberId()) {
+      return { owner: left, backup: right };
+    }
+    return { owner: right, backup: left };
+  }
+
+  async function readRingbufferItems(
+    instance: HeliosInstanceImpl,
+    ringbufferName: string,
+  ): Promise<string[]> {
+    const service = (instance as any)._distributedRingbufferService;
+    const items = await service.readMany(ringbufferName, 0, 1, 100);
+    return items.map((item: unknown) =>
+      instance.getNodeEngine().toObject<string>(item as any),
+    );
   }
 
   // ── Tests ─────────────────────────────────────────────────────────────
@@ -404,6 +480,111 @@ describe("Multi-node TCP integration", () => {
     await waitForQueueReplicaState(currentOwner, currentBackup, queueName, 1);
     expect(await currentOwner.getQueue<string>(queueName).poll()).toBe("job-2");
     await waitForQueueReplicaState(currentOwner, currentBackup, queueName, 0);
+  }, 30_000);
+
+  it("ringbuffer_backup_is_promoted_when_owner_shuts_down", async () => {
+    const ringbufferConfig = new RingbufferConfig("events")
+      .setCapacity(10)
+      .setBackupCount(1);
+    const nodeA = await startNode("ringbuffer-owner-a", 23, [], (config) =>
+      config.addRingbufferConfig(ringbufferConfig),
+    );
+    const nodeB = await startNode(
+      "ringbuffer-owner-b",
+      24,
+      [BASE_PORT + 23],
+      (config) => config.addRingbufferConfig(ringbufferConfig),
+    );
+
+    await waitForPeers(nodeA, 1);
+    await waitForClusterSize(nodeA, 2);
+    await waitForClusterSize(nodeB, 2);
+
+    const ringbufferName = "events";
+    const items = ["event-1", "event-2", "event-3"];
+    const { owner, backup } = resolveRingbufferOwnerAndBackup(
+      nodeA,
+      nodeB,
+      ringbufferName,
+    );
+    const ownerService = (owner as any)._distributedRingbufferService;
+
+    for (const item of items) {
+      await ownerService.add(ringbufferName, owner.getNodeEngine().toData(item)!);
+    }
+
+    owner.shutdown();
+
+    await waitUntil(() => !owner.isRunning());
+    await waitForClusterSize(backup, 1);
+    await waitUntil(
+      () => getRingbufferState(backup, ringbufferName).size === items.length,
+      10_000,
+    );
+    const recoveredItems = await readRingbufferItems(backup, ringbufferName);
+    const state = getRingbufferState(backup, ringbufferName);
+
+    expect(recoveredItems).toEqual(items);
+    expect(state.size).toBe(3);
+    expect(state.headSequence).toBe(0);
+    expect(state.tailSequence).toBe(2);
+  }, 30_000);
+
+  it("promoted_ringbuffer_owner_keeps_state_when_a_member_restarts", async () => {
+    const ringbufferConfig = new RingbufferConfig("events")
+      .setCapacity(10)
+      .setBackupCount(1);
+    const nodeA = await startNode("ringbuffer-sync-a", 25, [], (config) =>
+      config.addRingbufferConfig(ringbufferConfig),
+    );
+    const nodeB = await startNode(
+      "ringbuffer-sync-b",
+      26,
+      [BASE_PORT + 25],
+      (config) => config.addRingbufferConfig(ringbufferConfig),
+    );
+
+    await waitForPeers(nodeA, 1);
+    await waitForClusterSize(nodeA, 2);
+    await waitForClusterSize(nodeB, 2);
+
+    const ringbufferName = "events";
+    const items = ["event-1", "event-2", "event-3"];
+    const { owner, backup } = resolveRingbufferOwnerAndBackup(
+      nodeA,
+      nodeB,
+      ringbufferName,
+    );
+    const ownerService = (owner as any)._distributedRingbufferService;
+    for (const item of items) {
+      await ownerService.add(ringbufferName, owner.getNodeEngine().toData(item)!);
+    }
+    const restartPort = owner === nodeA ? BASE_PORT + 25 : BASE_PORT + 26;
+
+    owner.shutdown();
+    await waitUntil(() => !owner.isRunning());
+    await waitForClusterSize(backup, 1);
+
+    const restarted = await startNode(
+      "ringbuffer-sync-restarted",
+      restartPort - BASE_PORT,
+      [backup.getConfig().getNetworkConfig().getPort()],
+      (config) => config.addRingbufferConfig(ringbufferConfig),
+    );
+
+    await waitForPeers(backup, 1);
+    await waitForClusterSize(backup, 2);
+    await waitForClusterSize(restarted, 2);
+    await waitUntil(
+      () => getRingbufferState(backup, ringbufferName).size === items.length,
+      10_000,
+    );
+
+    const survivorState = getRingbufferState(backup, ringbufferName);
+
+    expect(survivorState.items).toEqual(items);
+    expect(survivorState.headSequence).toBe(0);
+    expect(survivorState.tailSequence).toBe(2);
   }, 30_000);
 
   it("topic_config_without_global_ordering_publishes_after_peer_loss", async () => {

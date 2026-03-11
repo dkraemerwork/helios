@@ -10,8 +10,10 @@
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberImpl } from '@zenystx/helios-core/cluster/impl/MemberImpl';
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { InternalPartitionServiceImpl } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 import { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager';
+import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 import { beforeEach, describe, expect, test } from 'bun:test';
 
@@ -315,12 +317,64 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
     // ── R8: Service-state replication closure ────────────────────
 
     describe('R8 — Service-state replication closure', () => {
+        test('recovery matrix is explicit per retained service', () => {
+            expect(service.getRecoveryScopeMatrix()).toEqual([
+                {
+                    serviceName: 'map',
+                    supported: true,
+                    execution: 'partition-namespace-sync',
+                    ownershipTransfer: true,
+                    restartRecovery: true,
+                    rationale: 'map partitions are migration-aware namespaces and participate in promotion-first repair plus replica sync',
+                },
+                {
+                    serviceName: 'queue',
+                    supported: true,
+                    execution: 'service-local-backup-sync',
+                    ownershipTransfer: true,
+                    restartRecovery: true,
+                    rationale: 'queue state is owner-routed, replicated to configured backups, and re-synced on membership changes',
+                },
+                {
+                    serviceName: 'ringbuffer',
+                    supported: true,
+                    execution: 'service-local-backup-sync',
+                    ownershipTransfer: true,
+                    restartRecovery: true,
+                    rationale: 'ringbuffer state is replicated to backups and re-synced when ownership or membership changes',
+                },
+                {
+                    serviceName: 'cache',
+                    supported: false,
+                    execution: 'excluded',
+                    ownershipTransfer: false,
+                    restartRecovery: false,
+                    rationale: 'cache has service-local sync, but InternalPartitionServiceImpl does not own or claim cache recovery semantics',
+                },
+                {
+                    serviceName: 'sql',
+                    supported: false,
+                    execution: 'excluded',
+                    ownershipTransfer: false,
+                    restartRecovery: false,
+                    rationale: 'sql execution is stateless and does not own partition-backed replica state',
+                },
+                {
+                    serviceName: 'transaction',
+                    supported: false,
+                    execution: 'excluded',
+                    ownershipTransfer: false,
+                    restartRecovery: false,
+                    rationale: 'transaction coordinator state is member-local and is not recovered through the partition service',
+                },
+            ]);
+        });
+
         test('supported service matrix is explicitly defined', () => {
             expect(typeof service.getSupportedReplicatedServices).toBe('function');
             const matrix = service.getSupportedReplicatedServices();
             expect(Array.isArray(matrix)).toBe(true);
-            // Maps must be in the supported list
-            expect(matrix).toContain('map');
+            expect(matrix).toEqual(['map', 'queue', 'ringbuffer']);
         });
 
         test('unsupported services are documented and excluded', () => {
@@ -335,12 +389,40 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
 
         test('unsupported services expose explicit reasons instead of deferred placeholders', () => {
             const reasons = service.getUnsupportedReplicatedServiceReasons();
-            expect(reasons.cache).toContain('MigrationAwareService');
+            expect(reasons.cache).toContain('does not own or claim cache recovery semantics');
             expect(reasons.sql).toContain('stateless');
             expect(reasons.transaction).toContain('member-local');
 
             const unsupported = service.getUnsupportedReplicatedServices();
             expect(Object.keys(reasons).sort()).toEqual([...unsupported].sort());
+        });
+
+        test('excluded recovery surfaces stay fail-closed in a live runtime', () => {
+            const config = new HeliosConfig('recovery-matrix-runtime');
+            config.getNetworkConfig().setPort(0).getJoin().getTcpIpConfig().setEnabled(true);
+            const instance = new HeliosInstanceImpl(config);
+            try {
+                const partitionService = (instance as any)._clusterCoordinator.getInternalPartitionService() as InternalPartitionServiceImpl;
+                expect(partitionService.getReplicatedServiceRecoveryScope('cache')).toMatchObject({
+                    supported: false,
+                    execution: 'excluded',
+                    ownershipTransfer: false,
+                    restartRecovery: false,
+                });
+                expect(partitionService.getReplicatedServiceRecoveryScope('sql')).toMatchObject({
+                    supported: false,
+                    execution: 'excluded',
+                });
+                expect(partitionService.getReplicatedServiceRecoveryScope('transaction')).toMatchObject({
+                    supported: false,
+                    execution: 'excluded',
+                });
+                expect(partitionService.getMigrationAwareServices().has('cache')).toBe(false);
+                expect(partitionService.getMigrationAwareServices().has('sql')).toBe(false);
+                expect(partitionService.getMigrationAwareServices().has('transaction')).toBe(false);
+            } finally {
+                instance.shutdown();
+            }
         });
     });
 

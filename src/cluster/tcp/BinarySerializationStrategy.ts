@@ -19,7 +19,11 @@ import type {
     RecoverySyncResponseMsg,
     ReliableTopicBackupMsg,
     ReliableTopicMessageMsg,
+    RingbufferBackupMsg,
+    RingbufferResponseMsg,
+    RingbufferRequestMsg,
     ReplicatedMapStateSyncMsg,
+    RingbufferBackupAckMsg,
     SetEventMsg,
     SetResponseMsg,
     SetStateSyncMsg,
@@ -106,6 +110,10 @@ const MESSAGE_TYPE_TO_ID = {
     REPLICATED_MAP_STATE_ACK: 58,
     TXN_BACKUP_REPLICATION: 59,
     TXN_BACKUP_REPLICATION_ACK: 60,
+    RINGBUFFER_REQUEST: 61,
+    RINGBUFFER_RESPONSE: 62,
+    RINGBUFFER_BACKUP: 63,
+    RINGBUFFER_BACKUP_ACK: 64,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -281,6 +289,27 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return;
             case 'QUEUE_EVENT':
                 writeQueueEvent(out, message);
+                return;
+            case 'RINGBUFFER_REQUEST':
+                out.writeString(message.requestId);
+                out.writeString(message.sourceNodeId);
+                out.writeString(message.rbName);
+                out.writeString(message.operation);
+                out.writeLong(BigInt(message.sequence ?? -1));
+                out.writeInt(message.minCount ?? -1);
+                out.writeInt(message.maxCount ?? -1);
+                out.writeInt(message.overflowPolicy ?? -1);
+                writeOptionalEncodedData(out, message.data ?? null);
+                writeEncodedDataArray(out, message.dataList ?? []);
+                return;
+            case 'RINGBUFFER_RESPONSE':
+                writeRingbufferResponse(out, message);
+                return;
+            case 'RINGBUFFER_BACKUP':
+                writeRingbufferBackup(out, message);
+                return;
+            case 'RINGBUFFER_BACKUP_ACK':
+                out.writeString(message.requestId);
                 return;
             case 'TOPIC_MESSAGE':
                 out.writeString(message.topicName);
@@ -589,6 +618,37 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 return { type: 'QUEUE_STATE_ACK', requestId: readRequiredString(inp), queueName: readRequiredString(inp), version: Number(inp.readLong()) };
             case 'QUEUE_EVENT':
                 return readQueueEvent(inp);
+            case 'RINGBUFFER_REQUEST': {
+                const requestId = readRequiredString(inp);
+                const sourceNodeId = readRequiredString(inp);
+                const rbName = readRequiredString(inp);
+                const operation = readRequiredString(inp);
+                const sequence = readMinusOneAsUndefined(inp);
+                const minCount = readIntMinusOneAsUndefined(inp);
+                const maxCount = readIntMinusOneAsUndefined(inp);
+                const overflowPolicy = readIntMinusOneAsUndefined(inp);
+                const data = readOptionalEncodedData(inp) ?? undefined;
+                const dataList = readEncodedDataArray(inp) ?? undefined;
+                return {
+                    type: 'RINGBUFFER_REQUEST',
+                    requestId,
+                    sourceNodeId,
+                    rbName,
+                    operation,
+                    ...(sequence !== undefined ? { sequence } : {}),
+                    ...(minCount !== undefined ? { minCount } : {}),
+                    ...(maxCount !== undefined ? { maxCount } : {}),
+                    ...(overflowPolicy !== undefined ? { overflowPolicy } : {}),
+                    ...(data !== undefined ? { data } : {}),
+                    ...(dataList !== undefined ? { dataList } : {}),
+                };
+            }
+            case 'RINGBUFFER_RESPONSE':
+                return readRingbufferResponse(inp);
+            case 'RINGBUFFER_BACKUP':
+                return readRingbufferBackup(inp);
+            case 'RINGBUFFER_BACKUP_ACK':
+                return { type: 'RINGBUFFER_BACKUP_ACK', requestId: readRequiredString(inp) };
             case 'TOPIC_MESSAGE':
                 return { type: 'TOPIC_MESSAGE', topicName: readRequiredString(inp), data: readEncodedData(inp), publishTime: Number(inp.readLong()), sourceNodeId: readRequiredString(inp), sequence: readMinusOneAsNull(inp) };
             case 'TOPIC_PUBLISH_REQUEST':
@@ -720,11 +780,14 @@ export class BinarySerializationStrategy implements SerializationStrategy {
             case 'TOPIC_ACK':
             case 'RELIABLE_TOPIC_PUBLISH_ACK':
             case 'RELIABLE_TOPIC_BACKUP_ACK':
+            case 'RINGBUFFER_RESPONSE':
+            case 'RINGBUFFER_BACKUP_ACK':
             case 'MEMBERS_VIEW_RESPONSE':
             case 'QUEUE_RESPONSE':
                 return FLAG_IS_RESPONSE | (message.type === 'OPERATION_RESPONSE' && message.error !== null ? FLAG_IS_ERROR : 0);
             case 'BACKUP':
             case 'RELIABLE_TOPIC_BACKUP':
+            case 'RINGBUFFER_BACKUP':
                 return FLAG_IS_BACKUP;
             case 'QUEUE_EVENT':
             case 'LIST_EVENT':
@@ -1190,6 +1253,72 @@ function readQueueEvent(inp: ByteArrayObjectDataInput): QueueEventMsg {
         eventType: readRequiredString(inp) as QueueEventMsg['eventType'],
         sourceNodeId: readRequiredString(inp),
         data: readOptionalEncodedData(inp),
+    };
+}
+
+function writeRingbufferResponse(out: ByteArrayObjectDataOutput, message: RingbufferResponseMsg): void {
+    out.writeString(message.requestId);
+    out.writeBoolean(message.success);
+    out.writeString(message.resultType);
+    out.writeLong(BigInt(message.numberResult ?? 0));
+    writeOptionalEncodedData(out, message.data ?? null);
+    writeEncodedDataArray(out, message.dataList ?? []);
+    out.writeString(message.error ?? null);
+}
+
+function readRingbufferResponse(inp: ByteArrayObjectDataInput): RingbufferResponseMsg {
+    const requestId = readRequiredString(inp);
+    const success = inp.readBoolean();
+    const resultType = readRequiredString(inp) as RingbufferResponseMsg['resultType'];
+    const numberResult = Number(inp.readLong());
+    const data = readOptionalEncodedData(inp) ?? undefined;
+    const dataList = readEncodedDataArray(inp) ?? undefined;
+    const error = inp.readString() ?? undefined;
+
+    return {
+        type: 'RINGBUFFER_RESPONSE',
+        requestId,
+        success,
+        resultType,
+        ...(resultType === 'number' ? { numberResult } : {}),
+        ...(resultType === 'data' && data !== undefined ? { data } : {}),
+        ...(resultType === 'data-array' && dataList !== undefined ? { dataList } : {}),
+        ...(error !== undefined ? { error } : {}),
+    };
+}
+
+function writeRingbufferBackup(out: ByteArrayObjectDataOutput, message: RingbufferBackupMsg): void {
+    out.writeString(message.requestId);
+    out.writeString(message.sourceNodeId);
+    out.writeString(message.rbName);
+    out.writeLong(BigInt(message.headSequence));
+    out.writeLong(BigInt(message.tailSequence));
+    out.writeInt(message.items.length);
+    for (const item of message.items) {
+        out.writeLong(BigInt(item.sequence));
+        writeEncodedData(out, item.data);
+    }
+}
+
+function readRingbufferBackup(inp: ByteArrayObjectDataInput): RingbufferBackupMsg {
+    const requestId = inp.readString();
+    const sourceNodeId = readRequiredString(inp);
+    const rbName = readRequiredString(inp);
+    const headSequence = Number(inp.readLong());
+    const tailSequence = Number(inp.readLong());
+    const itemCount = inp.readInt();
+    const items = new Array<RingbufferBackupMsg['items'][number]>(itemCount);
+    for (let index = 0; index < itemCount; index++) {
+        items[index] = { sequence: Number(inp.readLong()), data: readEncodedData(inp) };
+    }
+    return {
+        type: 'RINGBUFFER_BACKUP',
+        requestId,
+        sourceNodeId,
+        rbName,
+        headSequence,
+        tailSequence,
+        items,
     };
 }
 

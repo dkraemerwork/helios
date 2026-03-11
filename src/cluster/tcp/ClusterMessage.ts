@@ -550,6 +550,46 @@ export interface ReplicatedMapStateAckMsg {
   readonly version: number;
 }
 
+export interface RingbufferRequestMsg {
+  readonly type: "RINGBUFFER_REQUEST";
+  readonly requestId: string;
+  readonly sourceNodeId: string;
+  readonly rbName: string;
+  readonly operation: string;
+  readonly sequence?: number;
+  readonly minCount?: number;
+  readonly maxCount?: number;
+  readonly overflowPolicy?: number;
+  readonly data?: EncodedData;
+  readonly dataList?: EncodedData[];
+}
+
+export interface RingbufferResponseMsg {
+  readonly type: "RINGBUFFER_RESPONSE";
+  readonly requestId: string;
+  readonly success: boolean;
+  readonly resultType: "none" | "number" | "data" | "data-array";
+  readonly numberResult?: number;
+  readonly data?: EncodedData;
+  readonly dataList?: EncodedData[];
+  readonly error?: string;
+}
+
+export interface RingbufferBackupMsg {
+  readonly type: "RINGBUFFER_BACKUP";
+  readonly requestId: string | null;
+  readonly sourceNodeId: string;
+  readonly rbName: string;
+  readonly headSequence: number;
+  readonly tailSequence: number;
+  readonly items: Array<{ sequence: number; data: EncodedData }>;
+}
+
+export interface RingbufferBackupAckMsg {
+  readonly type: "RINGBUFFER_BACKUP_ACK";
+  readonly requestId: string;
+}
+
 // ── Blitz topology protocol messages ─────────────────────────────────
 
 export interface BlitzNodeRegisterMsg {
@@ -655,6 +695,10 @@ export type ClusterMessage =
   | ReplicatedMapClearMsg
   | ReplicatedMapStateSyncMsg
   | ReplicatedMapStateAckMsg
+  | RingbufferRequestMsg
+  | RingbufferResponseMsg
+  | RingbufferBackupMsg
+  | RingbufferBackupAckMsg
   | BlitzNodeRegisterMsg
   | BlitzNodeRemoveMsg
   | BlitzTopologyRequestMsg

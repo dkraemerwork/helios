@@ -100,6 +100,17 @@ export interface RecoveryMetrics {
     partitionsLost: number;
 }
 
+export type ServiceRecoveryExecution = 'partition-namespace-sync' | 'service-local-backup-sync' | 'excluded';
+
+export interface ServiceRecoveryScope {
+    serviceName: string;
+    supported: boolean;
+    execution: ServiceRecoveryExecution;
+    ownershipTransfer: boolean;
+    restartRecovery: boolean;
+    rationale: string;
+}
+
 type PartitionLostListener = (event: PartitionLostEvent) => void;
 
 interface PartitionNamespaceAwareService extends MigrationAwareService {
@@ -174,21 +185,57 @@ export class InternalPartitionServiceImpl {
         maxParallelSyncs: 20,
     };
 
-    /** Supported partition-owned services with namespace replication wiring. */
-    private static readonly SUPPORTED_SERVICES = ['map', 'queue', 'ringbuffer'];
-    /**
-     * Services intentionally excluded from partition-state replication.
-     *
-     * These are not temporary stub hooks inside the recovery pipeline:
-     * - cache: data service exists, but no MigrationAwareService / namespace sync wiring
-     * - sql: query engine is stateless and has no partition-owned replica state
-     * - transaction: coordinator state is member-local, not partition-replicated
-     */
-    private static readonly UNSUPPORTED_SERVICE_REASONS = {
-        cache: 'cache has no MigrationAwareService implementation or namespace replica sync path',
-        sql: 'sql execution is stateless and does not own partition-backed replica state',
-        transaction: 'transaction coordinator state is member-local and not replicated through the partition service',
-    } as const;
+    /** Explicit recovery scope for retained services. */
+    private static readonly RECOVERY_SCOPE_MATRIX: readonly ServiceRecoveryScope[] = [
+        {
+            serviceName: 'map',
+            supported: true,
+            execution: 'partition-namespace-sync',
+            ownershipTransfer: true,
+            restartRecovery: true,
+            rationale: 'map partitions are migration-aware namespaces and participate in promotion-first repair plus replica sync',
+        },
+        {
+            serviceName: 'queue',
+            supported: true,
+            execution: 'service-local-backup-sync',
+            ownershipTransfer: true,
+            restartRecovery: true,
+            rationale: 'queue state is owner-routed, replicated to configured backups, and re-synced on membership changes',
+        },
+        {
+            serviceName: 'ringbuffer',
+            supported: true,
+            execution: 'service-local-backup-sync',
+            ownershipTransfer: true,
+            restartRecovery: true,
+            rationale: 'ringbuffer state is replicated to backups and re-synced when ownership or membership changes',
+        },
+        {
+            serviceName: 'cache',
+            supported: false,
+            execution: 'excluded',
+            ownershipTransfer: false,
+            restartRecovery: false,
+            rationale: 'cache has service-local sync, but InternalPartitionServiceImpl does not own or claim cache recovery semantics',
+        },
+        {
+            serviceName: 'sql',
+            supported: false,
+            execution: 'excluded',
+            ownershipTransfer: false,
+            restartRecovery: false,
+            rationale: 'sql execution is stateless and does not own partition-backed replica state',
+        },
+        {
+            serviceName: 'transaction',
+            supported: false,
+            execution: 'excluded',
+            ownershipTransfer: false,
+            restartRecovery: false,
+            rationale: 'transaction coordinator state is member-local and is not recovered through the partition service',
+        },
+    ];
 
     constructor(partitionCount: number = 271) {
         this._partitionCount = partitionCount;
@@ -771,16 +818,34 @@ export class InternalPartitionServiceImpl {
 
     // ── Service-state replication closure (R8) ──────────────────
 
+    getRecoveryScopeMatrix(): ServiceRecoveryScope[] {
+        return InternalPartitionServiceImpl.RECOVERY_SCOPE_MATRIX.map((scope) => ({ ...scope }));
+    }
+
+    getReplicatedServiceRecoveryScope(serviceName: string): ServiceRecoveryScope | null {
+        const scope = InternalPartitionServiceImpl.RECOVERY_SCOPE_MATRIX.find((entry) => entry.serviceName === serviceName);
+        return scope === undefined ? null : { ...scope };
+    }
+
     getSupportedReplicatedServices(): string[] {
-        return [...InternalPartitionServiceImpl.SUPPORTED_SERVICES];
+        return InternalPartitionServiceImpl.RECOVERY_SCOPE_MATRIX
+            .filter((scope) => scope.supported)
+            .map((scope) => scope.serviceName);
     }
 
     getUnsupportedReplicatedServices(): string[] {
-        return Object.keys(InternalPartitionServiceImpl.UNSUPPORTED_SERVICE_REASONS);
+        return InternalPartitionServiceImpl.RECOVERY_SCOPE_MATRIX
+            .filter((scope) => !scope.supported)
+            .map((scope) => scope.serviceName);
     }
 
     getUnsupportedReplicatedServiceReasons(): Record<string, string> {
-        return { ...InternalPartitionServiceImpl.UNSUPPORTED_SERVICE_REASONS };
+        return InternalPartitionServiceImpl.RECOVERY_SCOPE_MATRIX
+            .filter((scope) => !scope.supported)
+            .reduce<Record<string, string>>((reasons, scope) => {
+                reasons[scope.serviceName] = scope.rationale;
+                return reasons;
+            }, {});
     }
 
     // ── Existing API preserved ──────────────────────────────────
