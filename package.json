@@ -69,6 +69,7 @@
     "test:interop": "./test/interop/run-interop.sh",
     "test:interop:map": "./test/interop/run-interop.sh map",
     "test:interop:connection": "./test/interop/run-interop.sh connection",
+    "test:interop:ringbuffer": "./test/interop/run-interop.sh ringbuffer",
     "convert": "bun run scripts/convert-java-tests.ts",
     "prepack": "bun run build",
     "prepublishOnly": "bun run build"

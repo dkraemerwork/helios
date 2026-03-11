@@ -33,7 +33,7 @@ export class AddOperation extends AbstractRingBufferOperation implements BackupA
         const ringbuffer = this.getRingBufferContainer();
 
         if (this.overflowPolicy === OverflowPolicy.FAIL) {
-            if (ringbuffer.remainingCapacity() < 1) {
+            if (Math.max(0, ringbuffer.getCapacity() - ringbuffer.size()) < 1) {
                 this.resultSequence = -1;
                 return;
             }

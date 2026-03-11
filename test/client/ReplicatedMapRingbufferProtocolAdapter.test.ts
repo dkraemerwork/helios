@@ -6,6 +6,7 @@ import {
     LONG_SIZE_IN_BYTES,
 } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+import { ListLongCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListLongCodec.js';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
 import { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
@@ -260,16 +261,7 @@ function decodeRingbufferReadManyResponse<T>(message: ClientMessage, ss: Seriali
         iterator.next();
         return { readCount, nextSeq, items, itemSeqs: null };
     }
-    iterator.next();
-    const itemSeqs: bigint[] = [];
-    while (iterator.hasNext()) {
-        const next = iterator.peekNext();
-        if (next?.isEndFrame()) {
-            iterator.next();
-            break;
-        }
-        itemSeqs.push(iterator.next().content.readBigInt64LE(0));
-    }
+    const itemSeqs = ListLongCodec.decode(iterator);
     return { readCount, nextSeq, items, itemSeqs };
 }
 

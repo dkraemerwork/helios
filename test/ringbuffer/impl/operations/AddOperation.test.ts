@@ -48,6 +48,29 @@ function fillContainer(count: number): void {
 }
 
 describe('AddOperation', () => {
+    test('whenFailOverflowPolicy_andTtlDisabledAndFull_thenAddFails', async () => {
+        const ttlDisabledConfig = new RingbufferConfig('ttl-disabled').setCapacity(CAPACITY);
+        service.addRingbufferConfig(ttlDisabledConfig);
+        const ttlDisabledContainer = service.getOrCreateContainer(
+            service.getRingbufferPartitionId('ttl-disabled'),
+            RingbufferService.getRingbufferNamespace('ttl-disabled'),
+            ttlDisabledConfig,
+        );
+        for (let k = 0; k < CAPACITY; k++) {
+            ttlDisabledContainer.add(nodeEngine.toData('item')!);
+        }
+
+        const op = new AddOperation('ttl-disabled', nodeEngine.toData('item')!, OverflowPolicy.FAIL);
+        op.setPartitionId(service.getRingbufferPartitionId('ttl-disabled'));
+        op.setNodeEngine(nodeEngine);
+
+        await op.run();
+
+        expect(op.shouldBackup()).toBe(false);
+        expect(op.shouldNotify()).toBe(false);
+        expect(op.getResponse()).toBe(-1);
+    });
+
     test('whenFailOverflowPolicy_andNoRemainingCapacity_thenNoBackup', async () => {
         fillContainer(CAPACITY);
 

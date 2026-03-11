@@ -22,6 +22,7 @@ import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@z
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
 import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
+import { ListLongCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListLongCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
@@ -162,13 +163,7 @@ function _encodeReadManyResponse(result: {
     if (result.itemSeqs === null) {
         msg.add(CM.NULL_FRAME);
     } else {
-        msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
-        for (const seq of result.itemSeqs) {
-            const seqBuf = Buffer.allocUnsafe(LONG_SIZE_IN_BYTES);
-            seqBuf.writeBigInt64LE(seq, 0);
-            msg.add(new CM.Frame(seqBuf));
-        }
-        msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+        ListLongCodec.encode(msg, result.itemSeqs);
     }
     msg.setFinal();
     return msg;

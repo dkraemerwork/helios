@@ -228,7 +228,7 @@ export class DistributedRingbufferService {
         const d = options?.data;
         if (d === undefined) throw new Error("NullPointerException");
         const overflowPolicy = options?.overflowPolicy ?? OverflowPolicy.OVERWRITE.getId();
-        if (overflowPolicy === OverflowPolicy.FAIL.getId() && container.remainingCapacity() < 1) {
+        if (overflowPolicy === OverflowPolicy.FAIL.getId() && this._remainingAddSlotCount(container) < 1) {
           return this._numberResponse(-1);
         }
         const seq = container.add(d as unknown as never);
@@ -244,7 +244,7 @@ export class DistributedRingbufferService {
         const overflowPolicy = options?.overflowPolicy ?? OverflowPolicy.OVERWRITE.getId();
         if (
           overflowPolicy === OverflowPolicy.FAIL.getId()
-          && container.remainingCapacity() < list.length
+          && this._remainingAddSlotCount(container) < list.length
         ) {
           return this._numberResponse(-1);
         }
@@ -304,6 +304,10 @@ export class DistributedRingbufferService {
       seq++;
     }
     return result;
+  }
+
+  private _remainingAddSlotCount(container: { getCapacity(): number; size(): number }): number {
+    return Math.max(0, container.getCapacity() - container.size());
   }
 
   private async _awaitMinItems(

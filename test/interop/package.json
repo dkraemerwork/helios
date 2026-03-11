@@ -10,6 +10,7 @@
     "test:map": "bun test --timeout 60000 suites/map.test.ts",
     "test:queue": "bun test --timeout 60000 suites/queue.test.ts",
     "test:topic": "bun test --timeout 60000 suites/topic.test.ts",
+    "test:ringbuffer": "bun test --timeout 60000 suites/ringbuffer.test.ts",
     "test:collections": "bun test --timeout 60000 suites/collections.test.ts",
     "test:serialization": "bun test --timeout 60000 suites/serialization.test.ts",
     "test:multimap": "bun test --timeout 60000 suites/multimap.test.ts",
