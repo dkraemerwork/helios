@@ -270,6 +270,7 @@ async function main(): Promise<void> {
   const opts = parseArgs();
   const tasksDir = resolve(import.meta.dirname, 'tasks');
   const jobHost = isJobHostNode(opts.name);
+  let blitzJobsService: BinanceBlitzJobsService | null = null;
 
   // ── Helios config ───────────────────────────────────────────────────────────
 
@@ -376,8 +377,8 @@ async function main(): Promise<void> {
     });
 
     if (jobHost) {
-      const blitzJobsService = app.get(BinanceBlitzJobsService);
-      const job = await blitzJobsService.ensureStarted(BINANCE_MARKET_ROLLUPS_JOB_NAME);
+      blitzJobsService = app.get(BinanceBlitzJobsService);
+      const job = await blitzJobsService!.ensureStarted(BINANCE_MARKET_ROLLUPS_JOB_NAME);
       process.stdout.write(
         `[${opts.name}] blitz job host active nats=nats://127.0.0.1:${STRESS_JOB_HOST_NATS_PORT} subject=${MARKET_TICKS_SUBJECT} job=${job.name}\n`,
       );
@@ -412,9 +413,11 @@ async function main(): Promise<void> {
 
       void (async () => {
         try {
-          await app?.close();
+          await blitzJobsService?.stop().catch(() => {});
+          await app?.close().catch(() => {});
+          await blitzService?.shutdown().catch(() => {});
+          await instance.shutdownAsync().catch(() => {});
         } finally {
-          instance.shutdown();
           process.exit(0);
         }
       })();
@@ -423,9 +426,10 @@ async function main(): Promise<void> {
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
   } catch (err) {
+    await blitzJobsService?.stop().catch(() => {});
     await app?.close().catch(() => {});
     await blitzService?.shutdown().catch(() => {});
-    instance.shutdown();
+    await instance.shutdownAsync().catch(() => {});
     throw err;
   }
 }

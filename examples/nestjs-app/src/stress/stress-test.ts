@@ -211,6 +211,66 @@ function spawnNode(name: string, tcpPort: number, restPort: number, peers: strin
   return { name, proc, restPort };
 }
 
+async function stopNode(node: SpawnedNode): Promise<void> {
+  node.proc.kill('SIGINT');
+
+  const exitResult = await Promise.race([
+    node.proc.exited.then(() => 'exited' as const),
+    Bun.sleep(15_000).then(() => 'timeout' as const),
+  ]);
+
+  if (exitResult === 'timeout') {
+    node.proc.kill('SIGKILL');
+    await node.proc.exited;
+  }
+}
+
+async function readProcessOutput(proc: ReturnType<typeof Bun.spawn>): Promise<string> {
+  const stdout = proc.stdout;
+  if (!stdout || typeof stdout === 'number') {
+    await proc.exited;
+    return '';
+  }
+
+  const text = await new Response(stdout).text();
+  await proc.exited;
+  return text;
+}
+
+async function stopEmbeddedNatsIfOrphaned(port: number): Promise<void> {
+  const listProc = Bun.spawn(['lsof', '-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], {
+    stdout: 'pipe',
+    stderr: 'ignore',
+  });
+  const pidOutput = await readProcessOutput(listProc);
+  const pids = [...new Set(pidOutput
+    .split(/\s+/)
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value) && value > 0))];
+
+  await Promise.allSettled(pids.map(async (pid) => {
+    const psProc = Bun.spawn(['ps', '-p', String(pid), '-o', 'command='], {
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
+    const command = (await readProcessOutput(psProc)).trim();
+    if (!command.includes('nats-server') || !command.includes('helios-blitz-embedded')) {
+      return;
+    }
+
+    process.kill(pid, 'SIGTERM');
+    await Bun.sleep(1_000);
+
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+
+    process.kill(pid, 'SIGKILL');
+  }));
+}
+
 /**
  * Wait for a spawned node's stdout to contain "HELIOS_NODE_READY", then drain
  * the pipe in the background so the buffer never fills and blocks the child.
@@ -753,6 +813,8 @@ function printStats(stats: Stats, elapsedSec: number, executor: IExecutorService
 
 async function main(): Promise<void> {
   const opts = parseArgs();
+  const spawnedNodes: SpawnedNode[] = [];
+  let client: ClientInfo | null = null;
 
   console.log(`
 \x1b[36m╔══════════════════════════════════════════════════════════════════════╗
@@ -770,48 +832,50 @@ async function main(): Promise<void> {
 
   // ── Spawn server nodes ──────────────────────────────────────────────────────
 
-  const node1 = spawnNode('stress-node-1', 15701, 18081, []);
-  process.stdout.write('[boot] waiting for stress-node-1 (first member)...\n');
-  await waitForReady(node1);
-  process.stdout.write('[boot] stress-node-1 ready\n');
+  try {
+    const node1 = spawnNode('stress-node-1', 15701, 18081, []);
+    spawnedNodes.push(node1);
+    process.stdout.write('[boot] waiting for stress-node-1 (first member)...\n');
+    await waitForReady(node1);
+    process.stdout.write('[boot] stress-node-1 ready\n');
 
-  // Brief pause to ensure the TCP listener is fully bound before joiners connect
-  await Bun.sleep(500);
+    // Brief pause to ensure the TCP listener is fully bound before joiners connect
+    await Bun.sleep(500);
 
-  const node2 = spawnNode('stress-node-2', 15702, 18082, ['127.0.0.1:15701']);
-  const node3 = spawnNode('stress-node-3', 15703, 18083, ['127.0.0.1:15701']);
+    const node2 = spawnNode('stress-node-2', 15702, 18082, ['127.0.0.1:15701']);
+    const node3 = spawnNode('stress-node-3', 15703, 18083, ['127.0.0.1:15701']);
+    spawnedNodes.push(node2, node3);
 
-  process.stdout.write('[boot] waiting for stress-node-2 and stress-node-3...\n');
-  await Promise.all([waitForReady(node2), waitForReady(node3)]);
-  process.stdout.write('[boot] all 3 server nodes ready\n');
+    process.stdout.write('[boot] waiting for stress-node-2 and stress-node-3...\n');
+    await Promise.all([waitForReady(node2), waitForReady(node3)]);
+    process.stdout.write('[boot] all 3 server nodes ready\n');
 
-  const spawnedNodes = [node1, node2, node3];
-  await verifyJobHost(node1);
+    await verifyJobHost(node1);
 
-  // Let the cluster fully form before starting the client
-  process.stdout.write('[boot] waiting for cluster formation...\n');
-  await Bun.sleep(3_000);
+    // Let the cluster fully form before starting the client
+    process.stdout.write('[boot] waiting for cluster formation...\n');
+    await Bun.sleep(3_000);
 
-  // ── Boot client node ────────────────────────────────────────────────────────
+    // ── Boot client node ────────────────────────────────────────────────────────
 
-  const client = await bootClient();
+    client = await bootClient();
 
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (client.instance.getCluster().getMembers().length >= 4) break;
-    await Bun.sleep(200);
-  }
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      if (client.instance.getCluster().getMembers().length >= 4) break;
+      await Bun.sleep(200);
+    }
 
-  const memberCount = client.instance.getCluster().getMembers().length;
-  const transport = client.instance.getTransportStats();
-  process.stdout.write(
-    `[boot] cluster: ${memberCount} members, ${transport.peerCount} TCP peers, ${transport.openChannels} channels\n`,
-  );
-  if (memberCount < 4) {
-    process.stdout.write('[boot] WARNING: expected 4 members — continuing anyway\n');
-  }
+    const memberCount = client.instance.getCluster().getMembers().length;
+    const transport = client.instance.getTransportStats();
+    process.stdout.write(
+      `[boot] cluster: ${memberCount} members, ${transport.peerCount} TCP peers, ${transport.openChannels} channels\n`,
+    );
+    if (memberCount < 4) {
+      process.stdout.write('[boot] WARNING: expected 4 members — continuing anyway\n');
+    }
 
-  console.log(`
+    console.log(`
 \x1b[1;33m  ╔══════════════════════════════════════════════════════════════════╗
   ║  Management Center:                                            ║
   ║                                                                ║
@@ -826,103 +890,104 @@ async function main(): Promise<void> {
 
   // ── Seed maps ───────────────────────────────────────────────────────────────
 
-  const stats = createStats();
+    const stats = createStats();
 
-  process.stdout.write('[stress] seeding maps...\n');
-  for (let batch = 0; batch < 5; batch++) {
-    const seeds: Promise<void>[] = [];
-    for (let i = batch * 100; i < (batch + 1) * 100; i++) {
-      seeds.push(
-        client.stressMap.set(`k-${i}`, i).catch(() => {}),
-        client.nearCacheMap.set(`nc-${i}`, i).catch(() => {}),
-        client.hotMap.set(`xn-${i}`, i).catch(() => {}),
-        Promise.resolve(client.stressQueue.offer({ seq: i, producer: -1, createdAt: Date.now() }))
-          .then(() => undefined)
-          .catch(() => undefined),
-      );
+    process.stdout.write('[stress] seeding maps...\n');
+    for (let batch = 0; batch < 5; batch++) {
+      const seeds: Promise<void>[] = [];
+      for (let i = batch * 100; i < (batch + 1) * 100; i++) {
+        seeds.push(
+          client.stressMap.set(`k-${i}`, i).catch(() => {}),
+          client.nearCacheMap.set(`nc-${i}`, i).catch(() => {}),
+          client.hotMap.set(`xn-${i}`, i).catch(() => {}),
+          Promise.resolve(client.stressQueue.offer({ seq: i, producer: -1, createdAt: Date.now() }))
+            .then(() => undefined)
+            .catch(() => undefined),
+        );
+      }
+      await Promise.all(seeds);
     }
-    await Promise.all(seeds);
-  }
-  process.stdout.write('[stress] seeded maps and queue\n');
+    process.stdout.write('[stress] seeded maps and queue\n');
 
-  const queueListenerId = client.stressQueue.addItemListener({
-    itemAdded: () => {
-      stats.queueListenerAdds++;
-    },
-    itemRemoved: () => {
-      stats.queueListenerRemoves++;
-    },
-  });
-  const topicListenerId = client.stressTopic.addMessageListener(() => {
-    stats.topicReceives++;
-  });
-  stats.queueListenerAdds++;
-  stats.topicListenerAdds++;
+    const queueListenerId = client.stressQueue.addItemListener({
+      itemAdded: () => {
+        stats.queueListenerAdds++;
+      },
+      itemRemoved: () => {
+        stats.queueListenerRemoves++;
+      },
+    });
+    const topicListenerId = client.stressTopic.addMessageListener(() => {
+      stats.topicReceives++;
+    });
+    stats.queueListenerAdds++;
+    stats.topicListenerAdds++;
 
-  // ── Launch workloads ────────────────────────────────────────────────────────
+    // ── Launch workloads ────────────────────────────────────────────────────────
 
-  console.log('\n'.repeat(20));
+    console.log('\n'.repeat(20));
 
-  const abort = new AbortController();
-  const tasks: Promise<void>[] = [];
+    const abort = new AbortController();
+    const tasks: Promise<void>[] = [];
 
-  for (let i = 0; i < opts.mapConcurrency; i++) {
-    tasks.push(mapWorkload(client.stressMap, stats, abort.signal));
-  }
-  for (let i = 0; i < opts.nearCacheConcurrency; i++) {
-    tasks.push(nearCacheWorkload(client.nearCacheMap, stats, abort.signal));
-  }
-  for (let i = 0; i < opts.crossNodeConcurrency; i++) {
-    tasks.push(crossNodeWorkload(client.hotMap, client.coldMap, stats, abort.signal));
-  }
-  for (let i = 0; i < opts.queueConcurrency; i++) {
-    tasks.push(queueWorkload(client.stressQueue, stats, abort.signal, i));
-  }
-  for (let i = 0; i < opts.topicConcurrency; i++) {
-    tasks.push(topicWorkload(client.stressTopic, stats, abort.signal, i));
-  }
-  for (let i = 0; i < opts.executorConcurrency; i++) {
-    tasks.push(executorWorkload(client.executor, stats, abort.signal));
-  }
+    for (let i = 0; i < opts.mapConcurrency; i++) {
+      tasks.push(mapWorkload(client.stressMap, stats, abort.signal));
+    }
+    for (let i = 0; i < opts.nearCacheConcurrency; i++) {
+      tasks.push(nearCacheWorkload(client.nearCacheMap, stats, abort.signal));
+    }
+    for (let i = 0; i < opts.crossNodeConcurrency; i++) {
+      tasks.push(crossNodeWorkload(client.hotMap, client.coldMap, stats, abort.signal));
+    }
+    for (let i = 0; i < opts.queueConcurrency; i++) {
+      tasks.push(queueWorkload(client.stressQueue, stats, abort.signal, i));
+    }
+    for (let i = 0; i < opts.topicConcurrency; i++) {
+      tasks.push(topicWorkload(client.stressTopic, stats, abort.signal, i));
+    }
+    for (let i = 0; i < opts.executorConcurrency; i++) {
+      tasks.push(executorWorkload(client.executor, stats, abort.signal));
+    }
 
-  process.stdout.write(`[stress] ${tasks.length} workload loops running\n`);
-  await verifyMemberLocalQueueTopicTraffic(spawnedNodes);
-  await verifyQuoteRollupMaterialization(client);
+    process.stdout.write(`[stress] ${tasks.length} workload loops running\n`);
+    await verifyMemberLocalQueueTopicTraffic(spawnedNodes);
+    await verifyQuoteRollupMaterialization(client);
 
-  const startTime = Date.now();
-  prevStatsTime = 0;
+    const startTime = Date.now();
+    prevStatsTime = 0;
 
-  const statsInterval = setInterval(() => {
-    printStats(stats, (Date.now() - startTime) / 1000, client.executor);
-  }, 1_000);
+    const activeClient = client;
+    const statsInterval = setInterval(() => {
+      printStats(stats, (Date.now() - startTime) / 1000, activeClient.executor);
+    }, 1_000);
 
-  // ── Run for duration ────────────────────────────────────────────────────────
+    // ── Run for duration ────────────────────────────────────────────────────────
 
-  await Bun.sleep(opts.durationSec * 1_000);
+    await Bun.sleep(opts.durationSec * 1_000);
 
-  // ── Shutdown ────────────────────────────────────────────────────────────────
+    // ── Shutdown ────────────────────────────────────────────────────────────────
 
-  process.stdout.write('\n\n[stress] stopping workloads...\n');
-  abort.abort();
-  clearInterval(statsInterval);
+    process.stdout.write('\n\n[stress] stopping workloads...\n');
+    abort.abort();
+    clearInterval(statsInterval);
 
-  await Promise.race([Promise.allSettled(tasks), Bun.sleep(5_000)]);
+    await Promise.race([Promise.allSettled(tasks), Bun.sleep(5_000)]);
 
-  client.stressQueue.removeItemListener(queueListenerId);
-  client.stressTopic.removeMessageListener(topicListenerId);
-  stats.queueListenerRemoves++;
-  stats.topicListenerRemoves++;
+    client.stressQueue.removeItemListener(queueListenerId);
+    client.stressTopic.removeMessageListener(topicListenerId);
+    stats.queueListenerRemoves++;
+    stats.topicListenerRemoves++;
 
-  const totalElapsed = (Date.now() - startTime) / 1000;
-  const totalMap = stats.mapPuts + stats.mapGets + stats.mapDeletes;
-  const totalNc = stats.nearCacheHits + stats.nearCacheMisses;
-  const totalXn = stats.crossNodeWrites + stats.crossNodeReads;
-  const totalQueue = stats.queueOffers + stats.queuePolls;
-  const totalTopic = stats.topicPublishes + stats.topicReceives;
-  const totalAll = totalMap + totalNc + totalXn + totalQueue + totalTopic + stats.executorCompleted;
-  const totalErrors = stats.mapErrors + stats.nearCacheErrors + stats.crossNodeErrors + stats.queueErrors + stats.topicErrors + stats.executorErrors;
+    const totalElapsed = (Date.now() - startTime) / 1000;
+    const totalMap = stats.mapPuts + stats.mapGets + stats.mapDeletes;
+    const totalNc = stats.nearCacheHits + stats.nearCacheMisses;
+    const totalXn = stats.crossNodeWrites + stats.crossNodeReads;
+    const totalQueue = stats.queueOffers + stats.queuePolls;
+    const totalTopic = stats.topicPublishes + stats.topicReceives;
+    const totalAll = totalMap + totalNc + totalXn + totalQueue + totalTopic + stats.executorCompleted;
+    const totalErrors = stats.mapErrors + stats.nearCacheErrors + stats.crossNodeErrors + stats.queueErrors + stats.topicErrors + stats.executorErrors;
 
-  console.log(`
+    console.log(`
 \x1b[36m╔══════════════════════════════════════════════════════════════════════╗
 ║                       FINAL RESULTS                                ║
 ╠══════════════════════════════════════════════════════════════════════╣\x1b[0m
@@ -960,16 +1025,21 @@ async function main(): Promise<void> {
 \x1b[36m╚══════════════════════════════════════════════════════════════════════╝\x1b[0m
 `);
 
-  process.stdout.write('[shutdown] killing server nodes...\n');
-  for (const node of spawnedNodes) {
-    node.proc.kill();
+    process.stdout.write('[shutdown] killing server nodes...\n');
+    await Promise.allSettled(spawnedNodes.map((node) => stopNode(node)));
+    await stopEmbeddedNatsIfOrphaned(STRESS_JOB_HOST_NATS_PORT);
+
+    process.stdout.write('[shutdown] stopping client node...\n');
+    client.instance.shutdown();
+
+    process.stdout.write('[shutdown] done.\n');
+    process.exit(0);
+  } catch (err) {
+    await Promise.allSettled(spawnedNodes.map((node) => stopNode(node)));
+    await stopEmbeddedNatsIfOrphaned(STRESS_JOB_HOST_NATS_PORT);
+    client?.instance.shutdown();
+    throw err;
   }
-
-  process.stdout.write('[shutdown] stopping client node...\n');
-  client.instance.shutdown();
-
-  process.stdout.write('[shutdown] done.\n');
-  process.exit(0);
 }
 
 main().catch((err: unknown) => {
