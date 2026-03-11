@@ -137,7 +137,7 @@ This means:
 
 | Topic | Member runtime | Inter-member wire | Client protocol | Official client interop | Honest status | Main gap |
 |---|---|---|---|---|---|---|
-| Transport / framing | Yes | Yes | N/A | Indirect via interop suites | Implemented | no protocol/version negotiation in `HELLO`; malformed-frame handling is too quiet |
+| Transport / framing | Yes | Yes | N/A | Indirect via interop suites | Implemented | keep negotiated-handshake and malformed-input proof green |
 | Membership / discovery | Yes | Yes | Yes | Yes | Implemented | keep topology publication and reconnect proof green |
 | Serialization / data model | Yes | Yes | Yes | Yes | Implemented | broader Java-only serializer surfaces remain intentionally unclaimed beyond the retained proven families |
 | Partition routing / invocation / backups / recovery | Yes | Yes | N/A | Indirect via interop suites | Implemented for retained scope | retained recovery namespaces and migration behavior must keep matching the audited proof |
@@ -193,8 +193,8 @@ This means:
 ### Claim boundary
 
 - `ClusterMessage.ts` still contains stale JSON-oriented commentary; executable truth is the binary transport code and tests.
-- `HELLO` still lacks explicit protocol/version negotiation metadata.
-- decode failures in `_onData()` are still swallowed instead of forcing an explicit close path.
+- `HELLO` now carries explicit protocol identity, version-range, and capability metadata, and incompatible peers fail closed with structured close reasons.
+- malformed frame paths now close connections explicitly with observable reasons instead of silently swallowing decode failures.
 
 ---
 
@@ -820,14 +820,14 @@ HeliosClient removal is complete only when:
 
 These are the present blockers that still constrain stronger parity claims:
 
-1. **Handshake compatibility posture**
-   - `HELLO` has no explicit protocol/version negotiation metadata.
+1. **Handshake compatibility beyond retained scope**
+   - negotiated protocol/version/capability metadata and fail-closed rejection are now proven for the retained transport surface, but broader rolling-upgrade compatibility outside those retained scenarios remains intentionally unclaimed.
 
-2. **Malformed frame handling**
-   - decode failures are still silently dropped instead of becoming explicit close + reason + metrics/logging events.
+2. **Malformed frame handling beyond retained scope**
+   - retained malformed-input scenarios are now explicit, observable, and fail-closed, but broader hostile-traffic auditing outside the retained tested set remains intentionally unclaimed.
 
-3. **Continuous topology publication proof**
-   - startup-time client connectivity is proven, but continuous topology-change publication still needs stronger proof.
+3. **Topology publication maintenance**
+   - startup and post-start topology publication are now proven for the retained scenarios; duplicate-connection and incompatible-peer regression coverage must stay green.
 
 4. **Selective recovery scope**
    - partition-owned recovery parity is currently limited to supported namespaces (`map`, `queue`, `ringbuffer`).
@@ -1070,7 +1070,7 @@ These topics are already server/protocol-capable and already have official-clien
 
 ### 10.11 Handshake and version negotiation
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Implementation gate:**
   - extend `HELLO` to carry explicit protocol identity and version/capability negotiation metadata
   - implement fail-closed behavior for incompatible protocol versions or required-capability mismatches
@@ -1080,11 +1080,11 @@ These topics are already server/protocol-capable and already have official-clien
   - add rolling-upgrade style cluster tests proving mixed-version behavior is either supported and correct or rejected deterministically
   - emit and assert structured close reasons / metrics for handshake rejection paths
 - **Parity claim rule:**
-  - no final transport parity claim is allowed while handshake compatibility is implicit rather than negotiated and explicitly tested
+  - transport parity remains bounded to the retained negotiated protocol/version/capability scenarios that are explicitly tested and fail closed
 
 ### 10.12 Malformed frame handling
 
-- **Current status:** Partial
+- **Current status:** Implemented for retained scope
 - **Implementation gate:**
   - convert decode failures from silent drop behavior into explicit connection close, reason capture, and observable metrics/logging
   - differentiate malformed-length, truncated-frame, unknown-message, and deserialization-failure handling where the protocol contract requires different outcomes
@@ -1094,7 +1094,7 @@ These topics are already server/protocol-capable and already have official-clien
   - assert explicit close behavior, connection cleanup, and structured metrics/log output for each malformed path
   - add regression tests ensuring one bad connection does not destabilize unrelated peers
 - **Parity claim rule:**
-  - framing parity remains partial until malformed input handling is explicit, observable, and fail-closed
+  - framing parity remains bounded to the retained malformed-input scenarios that are explicit, observable, and fail-closed in automated proof
 
 ### 10.13 Recovery scope
 
