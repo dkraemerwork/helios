@@ -87,6 +87,11 @@ class CustomPayload {
   constructor(public label: string) {}
 }
 
+enum DeliveryState {
+  READY = 'READY',
+  WAITING = 'WAITING',
+}
+
 describe('Official Client - serialization parity', () => {
   let cluster: HeliosTestCluster;
   let hzClient: Awaited<ReturnType<typeof Client.newHazelcastClient>>;
@@ -168,23 +173,29 @@ describe('Official Client - serialization parity', () => {
     expect(await map.get('member')).toEqual(new ClientIds(2, 'member-ids'));
   });
 
-  it('fails closed for Portable on the official client boundary, so it is not part of the retained scope', async () => {
+  it('proves Portable compatibility in both directions on the official client boundary', async () => {
     const map = await hzClient.getMap<string, unknown>('interop-serialization-portable');
     await map.put('client', new ClientPortable(3, 'portable-client'));
 
     const memberMap = cluster.getRunningInstances()[0]!.getMap<string, unknown>('interop-serialization-portable');
-    await expect(memberMap.get('client')).rejects.toThrow();
+    expect(await memberMap.get('client')).toEqual(new MemberPortable(3, 'portable-client'));
+
+    await memberMap.put('member', new MemberPortable(4, 'portable-member'));
+    expect(await map.get('member')).toEqual(new ClientPortable(4, 'portable-member'));
   });
 
-  it('fails closed for Compact on the official client boundary, so it is not part of the retained scope', async () => {
+  it('proves Compact compatibility in both directions on the official client boundary', async () => {
     const map = await hzClient.getMap<string, unknown>('interop-serialization-compact');
     await map.put('client', new ClientCompact(5, 'compact-client', null));
 
     const memberMap = cluster.getRunningInstances()[0]!.getMap<string, unknown>('interop-serialization-compact');
-    await expect(memberMap.get('client')).rejects.toThrow();
+    expect(await memberMap.get('client')).toEqual(new MemberCompact(5, 'compact-client', null));
+
+    await memberMap.put('member', new MemberCompact(6, 'compact-member', 41));
+    expect(await map.get('member')).toEqual(new ClientCompact(6, 'compact-member', 41));
   });
 
-  it('fails closed for Compact GenericRecord on the official client boundary, so it is not retained', async () => {
+  it('proves Compact GenericRecord compatibility in both directions on the official client boundary', async () => {
     const map = await hzClient.getMap<string, unknown>('interop-serialization-generic-record');
     const clientRecord = GenericRecords.compact(
       'interop-generic-record',
@@ -194,7 +205,41 @@ describe('Official Client - serialization parity', () => {
     await map.put('client', clientRecord);
 
     const memberMap = cluster.getRunningInstances()[0]!.getMap<string, any>('interop-serialization-generic-record');
-    await expect(memberMap.get('client')).rejects.toThrow();
+    const memberRecord = await memberMap.get('client');
+    expect(memberRecord.isCompact()).toBe(true);
+    expect(memberRecord.getTypeName()).toBe('interop-generic-record');
+    expect(memberRecord.getInt32('id')).toBe(7);
+    expect(memberRecord.getString('name')).toBe('client-record');
+    expect(memberRecord.getNullableInt32('maybeAge')).toBeNull();
+
+    await memberMap.put('member', memberRecord.newBuilder()
+      .setInt32('id', 8)
+      .setString('name', 'member-record')
+      .setNullableInt32('maybeAge', 12)
+      .build());
+    const clientRead = await map.get('member') as any;
+    expect(clientRead.getSchema().typeName).toBe('interop-generic-record');
+    expect(clientRead.getInt32('id')).toBe(8);
+    expect(clientRead.getString('name')).toBe('member-record');
+    expect(clientRead.getNullableInt32('maybeAge')).toBe(12);
+  });
+
+  it('proves retained collection and enum payloads across live client/member boundaries', async () => {
+    const list = await hzClient.getList<DeliveryState>('interop-serialization-enum-list');
+    await list.add(DeliveryState.READY);
+    await list.add(DeliveryState.WAITING);
+
+    const memberList = cluster.getRunningInstances()[0]!.getList<DeliveryState>('interop-serialization-enum-list');
+    expect(await memberList.get(0)).toBe(DeliveryState.READY);
+    expect(await memberList.get(1)).toBe(DeliveryState.WAITING);
+
+    await memberList.add(DeliveryState.READY);
+    expect(await list.get(2)).toBe(DeliveryState.READY);
+
+    const set = await hzClient.getSet<DeliveryState>('interop-serialization-enum-set');
+    await set.add(DeliveryState.READY);
+    const memberSet = cluster.getRunningInstances()[0]!.getSet<DeliveryState>('interop-serialization-enum-set');
+    expect(await memberSet.contains(DeliveryState.READY)).toBe(true);
   });
 
   it('proves retained custom and global serializer behavior across the client/member boundary', async () => {

@@ -20,6 +20,11 @@ export class DataSerializableSerializer implements SerializerAdapter {
     }
 
     registerFactory(factoryId: number, factory: DataSerializableFactory): void {
+        if (this.factories.has(factoryId)) {
+            throw new HazelcastSerializationError(
+                `DataSerializableFactory already registered for factoryId ${factoryId}`,
+            );
+        }
         this.factories.set(factoryId, factory);
     }
 

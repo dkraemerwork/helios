@@ -219,6 +219,7 @@ export class PortableWriter {
     private readonly _out: ByteArrayObjectDataOutput;
     private readonly _registry: PortableRegistry;
     private readonly _classDef: ClassDefinition;
+    private readonly _begin: number;
 
     /** Positions in the output buffer where each field's offset is stored. */
     private readonly _offsetPositions: number[];
@@ -233,168 +234,187 @@ export class PortableWriter {
         this._out = out;
         this._registry = registry;
         this._classDef = classDef;
+        this._begin = out.pos;
 
         const fieldCount = classDef.getFieldCount();
-        // Reserve space: fieldCount * 4-byte offsets table
+        out.writeZeroBytes(4);
+        out.writeInt(fieldCount);
         this._offsetsPos = out.pos;
         this._offsetPositions = new Array<number>(fieldCount);
-        for (let i = 0; i < fieldCount; i++) {
-            this._offsetPositions[i] = out.pos;
-            out.writeInt(0); // placeholder
+        for (let i = 0; i < fieldCount + 1; i++) {
+            if (i < fieldCount) {
+                this._offsetPositions[i] = out.pos;
+            }
+            out.writeInt(0);
         }
     }
 
-    private _recordFieldOffset(fieldName: string): void {
+    end(): void {
+        this._out.writeInt(this._offsetsPos + this._classDef.getFieldCount() * 4, this._out.pos);
+        this._out.writeInt(this._begin, this._out.pos);
+    }
+
+    private _recordFieldOffset(fieldName: string, fieldType: PortableFieldType): FieldDefinition {
         const fd = this._classDef.getField(fieldName);
         if (!fd) {
             throw new HazelcastSerializationError(
                 `No field '${fieldName}' in ClassDefinition classId=${this._classDef.classId}`,
             );
         }
-        const pos = this._out.pos - this._offsetsPos - this._classDef.getFieldCount() * 4;
-        this._out.writeInt(this._offsetPositions[fd.index], pos);
+        this._out.writeInt(this._offsetPositions[fd.index], this._out.pos);
+        this._out.writeShort(fieldName.length);
+        const fieldNameBytes = Buffer.from(fieldName);
+        this._out.writeBytes(fieldNameBytes, 0, fieldNameBytes.length);
+        this._out.writeByte(fieldType);
+        return fd;
     }
 
     writeInt(fieldName: string, value: number): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.INT);
         this._out.writeInt(value);
     }
 
     writeLong(fieldName: string, value: bigint): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.LONG);
         this._out.writeLong(value);
     }
 
     writeBoolean(fieldName: string, value: boolean): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.BOOLEAN);
         this._out.writeBoolean(value);
     }
 
     writeByte(fieldName: string, value: number): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.BYTE);
         this._out.writeByte(value);
     }
 
     writeChar(fieldName: string, value: number): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.CHAR);
         this._out.writeChar(value);
     }
 
     writeShort(fieldName: string, value: number): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.SHORT);
         this._out.writeShort(value);
     }
 
     writeFloat(fieldName: string, value: number): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.FLOAT);
         this._out.writeFloat(value);
     }
 
     writeDouble(fieldName: string, value: number): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.DOUBLE);
         this._out.writeDouble(value);
     }
 
     writeString(fieldName: string, value: string | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.STRING);
         this._out.writeString(value);
     }
 
     writeDecimal(fieldName: string, value: BigDecimal | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.DECIMAL);
         writeDecimalToOutput(this._out, value);
     }
 
     writeTime(fieldName: string, value: LocalTime | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.TIME);
         writeTimeToOutput(this._out, value);
     }
 
     writeDate(fieldName: string, value: LocalDate | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.DATE);
         writeDateToOutput(this._out, value);
     }
 
     writeTimestamp(fieldName: string, value: LocalDateTime | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.TIMESTAMP);
         writeTimestampToOutput(this._out, value);
     }
 
     writeTimestampWithTimezone(fieldName: string, value: OffsetDateTime | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.TIMESTAMP_WITH_TIMEZONE);
         writeTimestampWithTimezoneToOutput(this._out, value);
     }
 
     writePortable(fieldName: string, portable: Portable | null): void {
-        this._recordFieldOffset(fieldName);
+        const fieldDefinition = this._recordFieldOffset(fieldName, PortableFieldType.PORTABLE);
         if (portable === null) {
-            this._out.writeBoolean(true); // null flag
+            this._out.writeBoolean(true);
+            this._out.writeInt(fieldDefinition.factoryId);
+            this._out.writeInt(fieldDefinition.classId);
             return;
         }
-        this._out.writeBoolean(false); // not null
-        const cd = this._registry.lookupOrRegister(portable);
-        this._registry.writePortable(this._out, portable, cd);
+        this._out.writeBoolean(false);
+        this._out.writeInt(fieldDefinition.factoryId);
+        this._out.writeInt(fieldDefinition.classId);
+        this._registry.writePortableObject(this._out, portable);
     }
 
     writeByteArray(fieldName: string, value: Buffer | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.BYTE_ARRAY);
         this._out.writeByteArray(value);
     }
 
     writeBooleanArray(fieldName: string, value: boolean[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.BOOLEAN_ARRAY);
         this._out.writeBooleanArray(value);
     }
 
     writeCharArray(fieldName: string, value: number[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.CHAR_ARRAY);
         this._out.writeCharArray(value);
     }
 
     writeShortArray(fieldName: string, value: number[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.SHORT_ARRAY);
         this._out.writeShortArray(value);
     }
 
     writeIntArray(fieldName: string, value: number[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.INT_ARRAY);
         this._out.writeIntArray(value);
     }
 
     writeLongArray(fieldName: string, value: bigint[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.LONG_ARRAY);
         this._out.writeLongArray(value);
     }
 
     writeFloatArray(fieldName: string, value: number[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.FLOAT_ARRAY);
         this._out.writeFloatArray(value);
     }
 
     writeDoubleArray(fieldName: string, value: number[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.DOUBLE_ARRAY);
         this._out.writeDoubleArray(value);
     }
 
     writeStringArray(fieldName: string, value: string[] | null): void {
-        this._recordFieldOffset(fieldName);
+        this._recordFieldOffset(fieldName, PortableFieldType.STRING_ARRAY);
         this._out.writeStringArray(value);
     }
 
     writePortableArray(fieldName: string, portables: Portable[] | null): void {
-        this._recordFieldOffset(fieldName);
+        const fieldDefinition = this._recordFieldOffset(fieldName, PortableFieldType.PORTABLE_ARRAY);
         if (portables === null) {
             this._out.writeInt(-1);
+            this._out.writeInt(fieldDefinition.factoryId);
+            this._out.writeInt(fieldDefinition.classId);
             return;
         }
         this._out.writeInt(portables.length);
+        this._out.writeInt(fieldDefinition.factoryId);
+        this._out.writeInt(fieldDefinition.classId);
         if (portables.length === 0) return;
-        const first = portables[0];
-        const cd = this._registry.lookupOrRegister(first);
-        this._out.writeInt(cd.factoryId);
-        this._out.writeInt(cd.classId);
-        for (const p of portables) {
-            this._registry.writePortable(this._out, p, cd);
+        const innerOffsetsPos = this._out.pos;
+        this._out.writeZeroBytes(portables.length * 4);
+        for (let index = 0; index < portables.length; index++) {
+            this._out.writeInt(innerOffsetsPos + index * 4, this._out.pos);
+            this._registry.writePortableObject(this._out, portables[index]!);
         }
     }
 }
@@ -405,21 +425,25 @@ export class PortableReader {
     private readonly _inp: ByteArrayObjectDataInput;
     private readonly _registry: PortableRegistry;
     private readonly _classDef: ClassDefinition;
-    private readonly _dataStartPos: number;
+    private readonly _finalPos: number;
     private readonly _offsetsPos: number;
 
     constructor(
         inp: ByteArrayObjectDataInput,
         registry: PortableRegistry,
         classDef: ClassDefinition,
-        dataStartPos: number,
+        finalPos: number,
         offsetsPos: number,
     ) {
         this._inp = inp;
         this._registry = registry;
         this._classDef = classDef;
-        this._dataStartPos = dataStartPos;
+        this._finalPos = finalPos;
         this._offsetsPos = offsetsPos;
+    }
+
+    end(): void {
+        this._inp.position(this._finalPos);
     }
 
     private _seekToField(fieldName: string): void {
@@ -429,9 +453,9 @@ export class PortableReader {
                 `No field '${fieldName}' in ClassDefinition classId=${this._classDef.classId}`,
             );
         }
-        // Read offset from the offsets table
         const offset = this._inp.readInt(this._offsetsPos + fd.index * 4);
-        this._inp.position(this._dataStartPos + offset);
+        const fieldNameLength = this._inp.readShort(offset);
+        this._inp.position(offset + 2 + fieldNameLength + 1);
     }
 
     readInt(fieldName: string): number {
@@ -564,7 +588,10 @@ export class PortableReader {
         const factoryId = this._inp.readInt();
         const classId = this._inp.readInt();
         const result: Portable[] = new Array(len);
+        const offsetsPos = this._inp.position();
         for (let i = 0; i < len; i++) {
+            const pos = this._inp.readInt(offsetsPos + i * 4);
+            this._inp.position(pos);
             result[i] = this._registry.readPortableWithIds(this._inp, factoryId, classId);
         }
         return result;
@@ -583,11 +610,25 @@ export class PortableRegistry {
     portableVersion: number = 0;
 
     registerFactory(factoryId: number, factory: PortableFactory): void {
+        if (this._factories.has(factoryId)) {
+            throw new HazelcastSerializationError(
+                `PortableFactory already registered for factoryId ${factoryId}`,
+            );
+        }
         this._factories.set(factoryId, factory);
     }
 
     registerClassDefinition(cd: ClassDefinition): void {
         const key = `${cd.factoryId}:${cd.classId}:${cd.version}`;
+        const existing = this._classDefs.get(key);
+        if (existing) {
+            if (!sameClassDefinition(existing, cd)) {
+                throw new HazelcastSerializationError(
+                    `Conflicting ClassDefinition already registered for factoryId=${cd.factoryId}, classId=${cd.classId}, version=${cd.version}`,
+                );
+            }
+            return;
+        }
         this._classDefs.set(key, cd);
     }
 
@@ -613,15 +654,15 @@ export class PortableRegistry {
         // Write header: factoryId, classId, version
         out.writeInt(cd.factoryId);
         out.writeInt(cd.classId);
-        out.writeInt(cd.version);
+        this.writePortableObject(out, portable, cd);
+    }
 
-        const fieldCount = cd.getFieldCount();
+    writePortableObject(out: ByteArrayObjectDataOutput, portable: Portable, classDefinition?: ClassDefinition): void {
+        const cd = classDefinition ?? this.lookupOrRegister(portable);
+        out.writeInt(cd.version);
         const writer = new PortableWriter(out, this, cd);
         portable.writePortable(writer);
-        // fieldCount placeholder in the header — write after writer is done
-        // (In Hazelcast Java the fieldCount is encoded at a known offset.)
-        // We embed it right after version: patch it back
-        void fieldCount; // used implicitly through ClassDefinition
+        writer.end();
     }
 
     readPortable(inp: ByteArrayObjectDataInput): Portable {
@@ -651,15 +692,17 @@ export class PortableRegistry {
             );
         }
 
-        const fieldCount = cd.getFieldCount();
-        // offsetsPos: right after the header (factoryId/classId/version already consumed)
+        const finalPos = inp.readInt();
+        const fieldCount = inp.readInt();
+        if (fieldCount !== cd.getFieldCount()) {
+            throw new HazelcastSerializationError(
+                `Field count[${fieldCount}] in stream does not match with class definition[${cd.getFieldCount()}]`,
+            );
+        }
         const offsetsPos = inp.position();
-        // Skip the offsets table
-        inp.position(offsetsPos + fieldCount * 4);
-        const dataStartPos = inp.position();
-
-        const reader = new PortableReader(inp, this, cd, dataStartPos, offsetsPos);
+        const reader = new PortableReader(inp, this, cd, finalPos, offsetsPos);
         portable.readPortable(reader);
+        reader.end();
         return portable;
     }
 }
@@ -686,6 +729,30 @@ export class PortableSerializer implements SerializerAdapter {
     read(inp: ByteArrayObjectDataInput): unknown {
         return this._registry.readPortable(inp);
     }
+}
+
+function sameClassDefinition(left: ClassDefinition, right: ClassDefinition): boolean {
+    const leftFields = left.getFields();
+    const rightFields = right.getFields();
+    if (leftFields.length !== rightFields.length) {
+        return false;
+    }
+
+    for (let index = 0; index < leftFields.length; index++) {
+        const leftField = leftFields[index];
+        const rightField = rightFields[index];
+        if (
+            leftField.name !== rightField.name
+            || leftField.type !== rightField.type
+            || leftField.factoryId !== rightField.factoryId
+            || leftField.classId !== rightField.classId
+            || leftField.version !== rightField.version
+        ) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // ── Temporal type helpers (shared with CompactSerializer) ─────────────────────

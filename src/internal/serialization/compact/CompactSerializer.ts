@@ -102,6 +102,10 @@ function isBooleanKind(kind: FieldKind): boolean {
     return kind === FieldKind.BOOLEAN;
 }
 
+const BYTE_OFFSET_READER_RANGE = 255;
+const SHORT_OFFSET_READER_RANGE = 65535;
+const NULL_OFFSET = -1;
+
 // ── Compact object interface ──────────────────────────────────────────────────
 
 export interface CompactSerializable<T = unknown> {
@@ -128,36 +132,12 @@ export class CompactWriter {
     private readonly _fixedValues: (unknown)[];
     /** Variable-size field values by field index */
     private readonly _varValues: (unknown)[];
-    /** Boolean bit positions: [fieldIndex] → bit offset within the boolean area */
-    private readonly _booleanBitPositions: Map<number, number>;
-    private readonly _fixedFieldIndices: number[];
-    private readonly _booleanFieldIndices: number[];
-    private readonly _varFieldIndices: number[];
-
     constructor(schema: Schema, out: ByteArrayObjectDataOutput, serializer: CompactStreamSerializer) {
         this._schema = schema;
         this._out = out;
         this._serializer = serializer;
-
-        this._fixedFieldIndices = [];
-        this._booleanFieldIndices = [];
-        this._varFieldIndices = [];
-        this._booleanBitPositions = new Map();
         this._fixedValues = new Array(schema.getFieldCount());
         this._varValues = new Array(schema.getFieldCount());
-
-        let boolBit = 0;
-        for (let i = 0; i < schema.getFieldCount(); i++) {
-            const field = schema.fields[i];
-            if (isBooleanKind(field.kind)) {
-                this._booleanFieldIndices.push(i);
-                this._booleanBitPositions.set(i, boolBit++);
-            } else if (isFixedSize(field.kind)) {
-                this._fixedFieldIndices.push(i);
-            } else {
-                this._varFieldIndices.push(i);
-            }
-        }
     }
 
     // ── write methods ────────────────────────────────────────────────────────
@@ -330,69 +310,88 @@ export class CompactWriter {
         this._varValues[this._schema.getFieldIndex(fieldName)] = value;
     }
 
-    /**
-     * Flush all collected values to the output stream in Compact wire format.
-     *
-     * Layout:
-     *   [fixedDataLength:int]
-     *   [booleanBytes: ceil(boolCount/8)]
-     *   [fixedFields in order: 1/2/4/8 bytes each]
-     *   [varFields in order, each: [length:int][-1=null|data]]
-     *   [offsetTable: varFieldCount * int, offsets relative to start of var-data area]
-     */
     end(): void {
         const out = this._out;
+        const variableFieldCount = this._schema.numberVarSizeFields;
+        const dataStartPosition = variableFieldCount === 0 ? out.pos : out.pos + 4;
 
-        // ── 1. Fixed-size section ────────────────────────────────────────────
-        // We need to know the total fixed size before writing it, so use a temp buffer
-        const fixedOut = new ByteArrayObjectDataOutput(64, null, out.getByteOrder());
+        if (variableFieldCount !== 0) {
+            out.writeZeroBytes(this._schema.fixedSizeFieldsLength + 4);
+        } else {
+            out.writeZeroBytes(this._schema.fixedSizeFieldsLength);
+        }
 
-        // Boolean bits packed into bytes
-        const boolCount = this._booleanFieldIndices.length;
-        if (boolCount > 0) {
-            const boolBytes = Math.ceil(boolCount / 8);
-            const packed = new Uint8Array(boolBytes);
-            for (let i = 0; i < boolCount; i++) {
-                const fieldIdx = this._booleanFieldIndices[i];
-                const bitPos = this._booleanBitPositions.get(fieldIdx)!;
-                const v = this._fixedValues[fieldIdx] as boolean | undefined;
-                if (v) {
-                    packed[Math.floor(bitPos / 8)] |= (1 << (bitPos % 8));
-                }
+        for (let index = 0; index < this._schema.getFieldCount(); index++) {
+            const field = this._schema.fields[index]!;
+            const value = this._fixedValues[index];
+            if (field.kind === FieldKind.BOOLEAN) {
+                out.writeBooleanBit(dataStartPosition + (field.offset ?? 0), field.bitOffset ?? 0, Boolean(value));
+                continue;
             }
-            for (let i = 0; i < boolBytes; i++) fixedOut.writeByte(packed[i]);
+            if (!isFixedSize(field.kind)) {
+                continue;
+            }
+            writeFixedField(out, field, value, dataStartPosition + (field.offset ?? 0));
         }
 
-        // Fixed numeric fields
-        for (const idx of this._fixedFieldIndices) {
-            const field = this._schema.fields[idx];
-            const v = this._fixedValues[idx];
-            writeFixedField(fixedOut, field, v);
+        if (variableFieldCount === 0) {
+            return;
         }
 
-        const fixedDataLength = fixedOut.pos;
-
-        // ── 2. Variable-size section ─────────────────────────────────────────
-        const varOut = new ByteArrayObjectDataOutput(256, null, out.getByteOrder());
-        const varOffsets: number[] = [];
-
-        for (const idx of this._varFieldIndices) {
-            varOffsets.push(varOut.pos);
-            const field = this._schema.fields[idx];
-            const v = this._varValues[idx];
-            writeVarField(varOut, field, v, this._serializer);
+        const variableOffsets = new Array<number>(variableFieldCount).fill(-1);
+        for (let index = 0; index < this._schema.getFieldCount(); index++) {
+            const field = this._schema.fields[index]!;
+            if (isFixedSize(field.kind) || field.kind === FieldKind.BOOLEAN) {
+                continue;
+            }
+            const fieldIndex = field.index ?? 0;
+            const value = this._varValues[index];
+            if (value === null || value === undefined) {
+                variableOffsets[fieldIndex] = -1;
+                continue;
+            }
+            variableOffsets[fieldIndex] = out.pos - dataStartPosition;
+            writeVarField(out, field, value, this._serializer);
         }
 
-        // ── 3. Write to main output ──────────────────────────────────────────
-        out.writeInt(fixedDataLength);
-        out.writeBytes(fixedOut.buffer, 0, fixedOut.pos);
-        out.writeBytes(varOut.buffer, 0, varOut.pos);
-
-        // Offset table (one int per variable field, relative to var-data start)
-        for (const offset of varOffsets) {
-            out.writeInt(offset);
-        }
+        const dataLength = out.pos - dataStartPosition;
+        out.writeInt(dataStartPosition - 4, dataLength);
+        writeCompactOffsets(out, dataLength, variableOffsets);
     }
+}
+
+function writeCompactOffsets(out: ByteArrayObjectDataOutput, dataLength: number, offsets: number[]): void {
+    if (dataLength < BYTE_OFFSET_READER_RANGE) {
+        for (const offset of offsets) {
+            out.writeByte(offset === NULL_OFFSET ? 0xff : offset);
+        }
+        return;
+    }
+
+    if (dataLength < SHORT_OFFSET_READER_RANGE) {
+        for (const offset of offsets) {
+            out.writeShort(offset === NULL_OFFSET ? NULL_OFFSET : (offset > 0x7fff ? offset - 0x10000 : offset));
+        }
+        return;
+    }
+
+    for (const offset of offsets) {
+        out.writeInt(offset);
+    }
+}
+
+function readCompactByteOffset(input: ByteArrayObjectDataInput, variableOffsetsPos: number, index: number): number {
+    const offset = input.readByte(variableOffsetsPos + index) & 0xff;
+    return offset === 0xff ? NULL_OFFSET : offset;
+}
+
+function readCompactShortOffset(input: ByteArrayObjectDataInput, variableOffsetsPos: number, index: number): number {
+    const offset = input.readShort(variableOffsetsPos + index * 2);
+    return offset === NULL_OFFSET ? NULL_OFFSET : offset & 0xffff;
+}
+
+function readCompactIntOffset(input: ByteArrayObjectDataInput, variableOffsetsPos: number, index: number): number {
+    return input.readInt(variableOffsetsPos + index * 4);
 }
 
 // ── CompactReader ─────────────────────────────────────────────────────────────
@@ -402,219 +401,235 @@ export class CompactReader {
     private readonly _schema: Schema;
     private readonly _serializer: CompactStreamSerializer;
 
-    /** Absolute position of the first byte of the fixed-data area. */
-    private readonly _fixedDataStart: number;
-    /** Absolute position of the first byte of the variable-data area. */
-    private readonly _varDataStart: number;
-    /** Absolute position of the offset table (end of var data). */
-    private readonly _offsetTableStart: number;
-    /** End position of the full compact record. */
+    private readonly _dataStartPosition: number;
+    private readonly _variableOffsetsPosition: number;
     private readonly _dataEnd: number;
-
-    /** Variable field indices (in schema order). */
-    private readonly _varFieldIndices: number[];
-    /** Fixed non-boolean field indices. */
-    private readonly _fixedFieldIndices: number[];
-
-    /** Cumulative byte offset of each fixed non-boolean field within the fixed area. */
-    private readonly _fixedOffsets: number[];
-    /** Bit position of each boolean field within the packed boolean area. */
-    private readonly _boolBitPositions: Map<number, number>;
-    /** Number of bytes used by packed booleans at the start of fixed area. */
-    private readonly _boolByteCount: number;
+    private readonly _offsetReader: (input: ByteArrayObjectDataInput, variableOffsetsPos: number, index: number) => number;
 
     constructor(
         inp: ByteArrayObjectDataInput,
         schema: Schema,
         serializer: CompactStreamSerializer,
-        fixedDataStart: number,
-        varDataStart: number,
-        offsetTableStart: number,
+        dataStartPosition: number,
+        variableOffsetsPosition: number,
         dataEnd: number,
+        offsetReader: (input: ByteArrayObjectDataInput, variableOffsetsPos: number, index: number) => number,
     ) {
         this._inp = inp;
         this._schema = schema;
         this._serializer = serializer;
-        this._fixedDataStart = fixedDataStart;
-        this._varDataStart = varDataStart;
-        this._offsetTableStart = offsetTableStart;
+        this._dataStartPosition = dataStartPosition;
+        this._variableOffsetsPosition = variableOffsetsPosition;
         this._dataEnd = dataEnd;
-
-        this._varFieldIndices = [];
-        this._fixedFieldIndices = [];
-        this._fixedOffsets = [];
-        this._boolBitPositions = new Map();
-
-        let boolBit = 0;
-        let fixedOffset = 0;
-        const booleans: number[] = [];
-
-        for (let i = 0; i < schema.getFieldCount(); i++) {
-            const field = schema.fields[i];
-            if (isBooleanKind(field.kind)) {
-                booleans.push(i);
-                this._boolBitPositions.set(i, boolBit++);
-            } else if (isFixedSize(field.kind)) {
-                this._fixedFieldIndices.push(i);
-                this._fixedOffsets.push(fixedOffset);
-                fixedOffset += fixedSizeInBytes(field.kind);
-            } else {
-                this._varFieldIndices.push(i);
-            }
-        }
-        this._boolByteCount = booleans.length > 0 ? Math.ceil(booleans.length / 8) : 0;
+        this._offsetReader = offsetReader;
     }
 
-    /** Ordinal of a var field among all var fields (for offset table lookup). */
-    private _varOrdinal(fieldIndex: number): number {
-        return this._varFieldIndices.indexOf(fieldIndex);
-    }
-
-    private _readVarOffset(varOrdinal: number): number {
-        if (this._offsetTableStart === 0) {
-            throw new HazelcastSerializationError('CompactReader not fully initialised');
+    private _seekToFixed(fieldName: string): void {
+        const field = this._schema.getField(fieldName);
+        if (!field || field.offset === undefined) {
+            throw new HazelcastSerializationError(`Field '${fieldName}' is not a fixed field`);
         }
-        return this._inp.readInt(this._offsetTableStart + varOrdinal * 4);
-    }
-
-    private _seekToFixed(fieldIndex: number): void {
-        const fixedOrdinal = this._fixedFieldIndices.indexOf(fieldIndex);
-        if (fixedOrdinal < 0) {
-            throw new HazelcastSerializationError(`Field ${fieldIndex} is not a fixed field`);
-        }
-        // Booleans are packed at the start of fixed area; fixed scalars follow
-        const pos = this._fixedDataStart + this._boolByteCount + this._fixedOffsets[fixedOrdinal];
-        this._inp.position(pos);
+        this._inp.position(this._dataStartPosition + field.offset);
     }
 
     private _seekToVar(fieldName: string): void {
-        const fieldIndex = this._schema.getFieldIndex(fieldName);
-        const varOrdinal = this._varOrdinal(fieldIndex);
-        const offset = this._readVarOffset(varOrdinal);
-        this._inp.position(this._varDataStart + offset);
+        const field = this._schema.getField(fieldName);
+        if (!field || field.index === undefined) {
+            throw new HazelcastSerializationError(`Field '${fieldName}' is not a variable-size field`);
+        }
+        const offset = this._offsetReader(this._inp, this._variableOffsetsPosition, field.index);
+        if (offset === NULL_OFFSET) {
+            throw new HazelcastSerializationError(`Field '${fieldName}' is null`);
+        }
+        this._inp.position(this._dataStartPosition + offset);
+    }
+
+    private _nullableVarPosition(fieldName: string): number {
+        const field = this._schema.getField(fieldName);
+        if (!field || field.index === undefined) {
+            return NULL_OFFSET;
+        }
+        const offset = this._offsetReader(this._inp, this._variableOffsetsPosition, field.index);
+        return offset === NULL_OFFSET ? NULL_OFFSET : this._dataStartPosition + offset;
     }
 
     private _boolAt(fieldName: string): boolean {
-        const fieldIndex = this._schema.getFieldIndex(fieldName);
-        const bitPos = this._boolBitPositions.get(fieldIndex);
-        if (bitPos === undefined) {
+        const field = this._schema.getField(fieldName);
+        if (!field || field.offset === undefined || field.bitOffset === undefined) {
             throw new HazelcastSerializationError(`Field '${fieldName}' is not a BOOLEAN field`);
         }
-        const bytePos = this._fixedDataStart + Math.floor(bitPos / 8);
+        const bytePos = this._dataStartPosition + field.offset;
         const byte_ = this._inp.readByte(bytePos) & 0xff;
-        return ((byte_ >> (bitPos % 8)) & 1) === 1;
+        return ((byte_ >> field.bitOffset) & 1) === 1;
     }
 
     // ── read methods ─────────────────────────────────────────────────────────
 
     readBoolean(fieldName: string): boolean {
+        if (!this._schema.hasField(fieldName)) {
+            return false;
+        }
         return this._boolAt(fieldName);
     }
 
     readInt8(fieldName: string): number {
-        const idx = this._schema.getFieldIndex(fieldName);
-        this._seekToFixed(idx);
+        if (!this._schema.hasField(fieldName)) {
+            return 0;
+        }
+        this._seekToFixed(fieldName);
         return this._inp.readByte();
     }
 
     readInt16(fieldName: string): number {
-        const idx = this._schema.getFieldIndex(fieldName);
-        this._seekToFixed(idx);
+        if (!this._schema.hasField(fieldName)) {
+            return 0;
+        }
+        this._seekToFixed(fieldName);
         return this._inp.readShort();
     }
 
     readInt32(fieldName: string): number {
-        const idx = this._schema.getFieldIndex(fieldName);
-        this._seekToFixed(idx);
+        if (!this._schema.hasField(fieldName)) {
+            return 0;
+        }
+        this._seekToFixed(fieldName);
         return this._inp.readInt();
     }
 
     readInt64(fieldName: string): bigint {
-        const idx = this._schema.getFieldIndex(fieldName);
-        this._seekToFixed(idx);
+        if (!this._schema.hasField(fieldName)) {
+            return 0n;
+        }
+        this._seekToFixed(fieldName);
         return this._inp.readLong();
     }
 
     readFloat32(fieldName: string): number {
-        const idx = this._schema.getFieldIndex(fieldName);
-        this._seekToFixed(idx);
+        if (!this._schema.hasField(fieldName)) {
+            return 0;
+        }
+        this._seekToFixed(fieldName);
         return this._inp.readFloat();
     }
 
     readFloat64(fieldName: string): number {
-        const idx = this._schema.getFieldIndex(fieldName);
-        this._seekToFixed(idx);
+        if (!this._schema.hasField(fieldName)) {
+            return 0;
+        }
+        this._seekToFixed(fieldName);
         return this._inp.readDouble();
     }
 
     readString(fieldName: string): string | null {
-        this._seekToVar(fieldName);
+        if (!this._schema.hasField(fieldName)) {
+            return null;
+        }
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) {
+            return null;
+        }
+        this._inp.position(position);
         return this._inp.readString();
     }
 
     readDecimal(fieldName: string): BigDecimal | null {
-        this._seekToVar(fieldName);
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
         return readDecimalFromInput(this._inp);
     }
 
     readTime(fieldName: string): LocalTime | null {
-        this._seekToVar(fieldName);
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
         return readTimeFromInput(this._inp);
     }
 
     readDate(fieldName: string): LocalDate | null {
-        this._seekToVar(fieldName);
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
         return readDateFromInput(this._inp);
     }
 
     readTimestamp(fieldName: string): LocalDateTime | null {
-        this._seekToVar(fieldName);
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
         return readTimestampFromInput(this._inp);
     }
 
     readTimestampWithTimezone(fieldName: string): OffsetDateTime | null {
-        this._seekToVar(fieldName);
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
         return readTimestampWithTimezoneFromInput(this._inp);
     }
 
     readCompact<T>(fieldName: string): T | null {
-        this._seekToVar(fieldName);
+        if (!this._schema.hasField(fieldName)) {
+            return null;
+        }
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
         return this._serializer.readNestedCompact<T>(this._inp);
     }
 
     readNullableBoolean(fieldName: string): boolean | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readBoolean());
+        if (!this._schema.hasField(fieldName)) {
+            return null;
+        }
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readBoolean();
     }
 
     readNullableInt8(fieldName: string): number | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readByte());
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readByte();
     }
 
     readNullableInt16(fieldName: string): number | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readShort());
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readShort();
     }
 
     readNullableInt32(fieldName: string): number | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readInt());
+        if (!this._schema.hasField(fieldName)) {
+            return null;
+        }
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readInt();
     }
 
     readNullableInt64(fieldName: string): bigint | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readLong());
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readLong();
     }
 
     readNullableFloat32(fieldName: string): number | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readFloat());
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readFloat();
     }
 
     readNullableFloat64(fieldName: string): number | null {
-        this._seekToVar(fieldName);
-        return readNullable(this._inp, () => this._inp.readDouble());
+        const position = this._nullableVarPosition(fieldName);
+        if (position === NULL_OFFSET) return null;
+        this._inp.position(position);
+        return this._inp.readDouble();
     }
 
     readArrayOfBoolean(fieldName: string): boolean[] | null {
@@ -758,8 +773,29 @@ export class CompactStreamSerializer implements SerializerAdapter {
      */
     registerSerializer<T>(serializer: CompactSerializable<T>): void {
         const cls = serializer.getClass() as unknown as Function;
+        const existingByClass = this._serializersByClass.get(cls);
+        if (existingByClass && existingByClass !== serializer) {
+            throw new HazelcastSerializationError(
+                `Compact serializer already registered for class '${cls.name}'`,
+            );
+        }
+
+        const typeName = serializer.getTypeName();
+        const existingByTypeName = this._serializersByTypeName.get(typeName);
+        if (existingByTypeName && existingByTypeName !== serializer) {
+            throw new HazelcastSerializationError(
+                `Compact serializer already registered for typeName '${typeName}'`,
+            );
+        }
+
+        if (isCompactReservedClass(cls)) {
+            throw new HazelcastSerializationError(
+                `Compact serializer for class '${cls.name}' conflicts with a built-in serializer`,
+            );
+        }
+
         this._serializersByClass.set(cls, serializer as CompactSerializable<unknown>);
-        this._serializersByTypeName.set(serializer.getTypeName(), serializer as CompactSerializable<unknown>);
+        this._serializersByTypeName.set(typeName, serializer as CompactSerializable<unknown>);
     }
 
     /**
@@ -847,45 +883,41 @@ export class CompactStreamSerializer implements SerializerAdapter {
     private _readWithSchema(inp: ByteArrayObjectDataInput, schema: Schema): unknown {
         const serializer = this._serializersByTypeName.get(schema.typeName);
 
-        // 1. Read fixed-data length and compute section positions
-        const fixedDataLength = inp.readInt();
-        const fixedDataStart = inp.position();
+        const variableFieldCount = schema.numberVarSizeFields;
+        let dataStartPosition: number;
+        let variableOffsetsPosition: number;
+        let dataEnd: number;
+        let offsetReader = readCompactIntOffset;
 
-        // Var fields are all fields that are neither fixed-size scalars nor booleans
-        const varFields = schema.fields.filter(f => !isFixedSize(f.kind) && !isBooleanKind(f.kind));
-        const varFieldCount = varFields.length;
-        const varDataStart = fixedDataStart + fixedDataLength;
-
-        // 2. Sequentially scan through variable-size fields to locate
-        //    the offset table (which lives at the end of var data).
-        //    We record each field's start offset relative to varDataStart
-        //    so that buildGenericRecord can use them for random-access.
-        inp.position(varDataStart);
-        const varFieldStartOffsets: number[] = [];
-        for (let vi = 0; vi < varFieldCount; vi++) {
-            varFieldStartOffsets.push(inp.position() - varDataStart);
-            skipVarField(inp, varFields[vi], this);
+        if (variableFieldCount !== 0) {
+            const dataLength = inp.readInt();
+            dataStartPosition = inp.position();
+            variableOffsetsPosition = dataStartPosition + dataLength;
+            if (dataLength < BYTE_OFFSET_READER_RANGE) {
+                offsetReader = readCompactByteOffset;
+                dataEnd = variableOffsetsPosition + variableFieldCount;
+            } else if (dataLength < SHORT_OFFSET_READER_RANGE) {
+                offsetReader = readCompactShortOffset;
+                dataEnd = variableOffsetsPosition + variableFieldCount * 2;
+            } else {
+                dataEnd = variableOffsetsPosition + variableFieldCount * 4;
+            }
+        } else {
+            dataStartPosition = inp.position();
+            variableOffsetsPosition = 0;
+            dataEnd = dataStartPosition + schema.fixedSizeFieldsLength;
         }
-        const offsetTableStart = inp.position();
-        // The offset table itself is varFieldCount * 4 bytes; skip it
-        const dataEnd = offsetTableStart + varFieldCount * 4;
 
-        // 3. Build a fully-initialised CompactReader
-        const reader = new CompactReader(inp, schema, this, fixedDataStart, varDataStart, offsetTableStart, dataEnd);
+        const reader = new CompactReader(inp, schema, this, dataStartPosition, variableOffsetsPosition, dataEnd, offsetReader);
 
         if (serializer) {
             const result = serializer.read(reader);
-            inp.position(dataEnd);
+            reader.advance();
             return result;
         }
 
-        // No registered serializer — materialise a GenericRecord
-        const genericRecord = buildGenericRecord(
-            inp, schema, this,
-            fixedDataStart, fixedDataLength,
-            varDataStart, varFieldStartOffsets, offsetTableStart,
-        );
-        inp.position(dataEnd);
+        const genericRecord = buildGenericRecord(reader, schema);
+        reader.advance();
         return genericRecord;
     }
 
@@ -973,14 +1005,14 @@ class _SchemaCapturingWriter {
 
 // ── Wire-format helpers ───────────────────────────────────────────────────────
 
-function writeFixedField(out: ByteArrayObjectDataOutput, field: SchemaField, v: unknown): void {
+function writeFixedField(out: ByteArrayObjectDataOutput, field: SchemaField, v: unknown, position: number): void {
     switch (field.kind) {
-        case FieldKind.INT8:    out.writeByte(v as number); break;
-        case FieldKind.INT16:   out.writeShort(v as number); break;
-        case FieldKind.INT32:   out.writeInt(v as number); break;
-        case FieldKind.INT64:   out.writeLong(v as bigint); break;
-        case FieldKind.FLOAT32: out.writeFloat(v as number); break;
-        case FieldKind.FLOAT64: out.writeDouble(v as number); break;
+        case FieldKind.INT8:    out.writeByte(position, v as number); break;
+        case FieldKind.INT16:   out.writeShort(position, v as number); break;
+        case FieldKind.INT32:   out.writeInt(position, v as number); break;
+        case FieldKind.INT64:   out.writeLong(position, v as bigint); break;
+        case FieldKind.FLOAT32: out.writeFloat(position, v as number); break;
+        case FieldKind.FLOAT64: out.writeDouble(position, v as number); break;
         default: break;
     }
 }
@@ -1015,25 +1047,25 @@ function writeVarField(
             serializer.writeNestedCompact(out, v);
             break;
         case FieldKind.NULLABLE_BOOLEAN:
-            writeNullable(out, v as boolean | null, (o, n) => o.writeBoolean(n));
+            out.writeBoolean(v as boolean);
             break;
         case FieldKind.NULLABLE_INT8:
-            writeNullable(out, v as number | null, (o, n) => o.writeByte(n));
+            out.writeByte(v as number);
             break;
         case FieldKind.NULLABLE_INT16:
-            writeNullable(out, v as number | null, (o, n) => o.writeShort(n));
+            out.writeShort(v as number);
             break;
         case FieldKind.NULLABLE_INT32:
-            writeNullable(out, v as number | null, (o, n) => o.writeInt(n));
+            out.writeInt(v as number);
             break;
         case FieldKind.NULLABLE_INT64:
-            writeNullable(out, v as bigint | null, (o, n) => o.writeLong(n));
+            out.writeLong(v as bigint);
             break;
         case FieldKind.NULLABLE_FLOAT32:
-            writeNullable(out, v as number | null, (o, n) => o.writeFloat(n));
+            out.writeFloat(v as number);
             break;
         case FieldKind.NULLABLE_FLOAT64:
-            writeNullable(out, v as number | null, (o, n) => o.writeDouble(n));
+            out.writeDouble(v as number);
             break;
         case FieldKind.ARRAY_OF_BOOLEAN:
             writeBooleanArray(out, v as boolean[] | null);
@@ -1220,65 +1252,65 @@ function elementKindOf(arrayKind: FieldKind): FieldKind {
     }
 }
 
-function buildGenericRecord(
-    inp: ByteArrayObjectDataInput,
-    schema: Schema,
-    serializer: CompactStreamSerializer,
-    fixedDataStart: number,
-    _fixedDataLength: number,
-    varDataStart: number,
-    varFieldStartOffsets: number[],
-    _offsetTableStart: number,
-): GenericRecord {
+function buildGenericRecord(reader: CompactReader, schema: Schema): GenericRecord {
     const fieldMap = new Map<string, FieldKind>();
     const valueMap = new Map<string, unknown>();
-
-    let boolBit = 0;
-    let fixedOffset = 0;
-    let varOrdinal = 0;
-    let boolByteCount = 0;
-    const boolFields: number[] = [];
-
-    for (let i = 0; i < schema.getFieldCount(); i++) {
-        if (isBooleanKind(schema.fields[i].kind)) boolFields.push(i);
-    }
-    boolByteCount = boolFields.length > 0 ? Math.ceil(boolFields.length / 8) : 0;
 
     for (let i = 0; i < schema.getFieldCount(); i++) {
         const field = schema.fields[i];
         fieldMap.set(field.fieldName, field.kind);
-
-        if (isBooleanKind(field.kind)) {
-            const bytePos = fixedDataStart + Math.floor(boolBit / 8);
-            const byte_ = inp.readByte(bytePos) & 0xff;
-            const value = ((byte_ >> (boolBit % 8)) & 1) === 1;
-            valueMap.set(field.fieldName, value);
-            boolBit++;
-        } else if (isFixedSize(field.kind)) {
-            inp.position(fixedDataStart + boolByteCount + fixedOffset);
-            const size = fixedSizeInBytes(field.kind);
-            let value: unknown;
-            switch (field.kind) {
-                case FieldKind.INT8:    value = inp.readByte(); break;
-                case FieldKind.INT16:   value = inp.readShort(); break;
-                case FieldKind.INT32:   value = inp.readInt(); break;
-                case FieldKind.INT64:   value = inp.readLong(); break;
-                case FieldKind.FLOAT32: value = inp.readFloat(); break;
-                case FieldKind.FLOAT64: value = inp.readDouble(); break;
-                default: value = undefined; break;
-            }
-            valueMap.set(field.fieldName, value);
-            fixedOffset += size;
-        } else {
-            // Variable field
-            inp.position(varDataStart + varFieldStartOffsets[varOrdinal]);
-            const value = readVarFieldValue(inp, field, serializer);
-            valueMap.set(field.fieldName, value);
-            varOrdinal++;
-        }
+        valueMap.set(field.fieldName, readFieldValue(reader, field));
     }
 
     return new GenericRecordImpl(fieldMap, valueMap, true, schema.typeName);
+}
+
+function readFieldValue(reader: CompactReader, field: SchemaField): unknown {
+    switch (field.kind) {
+        case FieldKind.BOOLEAN: return reader.readBoolean(field.fieldName);
+        case FieldKind.INT8: return reader.readInt8(field.fieldName);
+        case FieldKind.INT16: return reader.readInt16(field.fieldName);
+        case FieldKind.INT32: return reader.readInt32(field.fieldName);
+        case FieldKind.INT64: return reader.readInt64(field.fieldName);
+        case FieldKind.FLOAT32: return reader.readFloat32(field.fieldName);
+        case FieldKind.FLOAT64: return reader.readFloat64(field.fieldName);
+        case FieldKind.STRING: return reader.readString(field.fieldName);
+        case FieldKind.DECIMAL: return reader.readDecimal(field.fieldName);
+        case FieldKind.TIME: return reader.readTime(field.fieldName);
+        case FieldKind.DATE: return reader.readDate(field.fieldName);
+        case FieldKind.TIMESTAMP: return reader.readTimestamp(field.fieldName);
+        case FieldKind.TIMESTAMP_WITH_TIMEZONE: return reader.readTimestampWithTimezone(field.fieldName);
+        case FieldKind.COMPACT: return reader.readCompact(field.fieldName);
+        case FieldKind.NULLABLE_BOOLEAN: return reader.readNullableBoolean(field.fieldName);
+        case FieldKind.NULLABLE_INT8: return reader.readNullableInt8(field.fieldName);
+        case FieldKind.NULLABLE_INT16: return reader.readNullableInt16(field.fieldName);
+        case FieldKind.NULLABLE_INT32: return reader.readNullableInt32(field.fieldName);
+        case FieldKind.NULLABLE_INT64: return reader.readNullableInt64(field.fieldName);
+        case FieldKind.NULLABLE_FLOAT32: return reader.readNullableFloat32(field.fieldName);
+        case FieldKind.NULLABLE_FLOAT64: return reader.readNullableFloat64(field.fieldName);
+        case FieldKind.ARRAY_OF_BOOLEAN: return reader.readArrayOfBoolean(field.fieldName);
+        case FieldKind.ARRAY_OF_INT8: return reader.readArrayOfInt8(field.fieldName);
+        case FieldKind.ARRAY_OF_INT16: return reader.readArrayOfInt16(field.fieldName);
+        case FieldKind.ARRAY_OF_INT32: return reader.readArrayOfInt32(field.fieldName);
+        case FieldKind.ARRAY_OF_INT64: return reader.readArrayOfInt64(field.fieldName);
+        case FieldKind.ARRAY_OF_FLOAT32: return reader.readArrayOfFloat32(field.fieldName);
+        case FieldKind.ARRAY_OF_FLOAT64: return reader.readArrayOfFloat64(field.fieldName);
+        case FieldKind.ARRAY_OF_STRING: return reader.readArrayOfString(field.fieldName);
+        case FieldKind.ARRAY_OF_DECIMAL: return reader.readArrayOfDecimal(field.fieldName);
+        case FieldKind.ARRAY_OF_TIME: return reader.readArrayOfTime(field.fieldName);
+        case FieldKind.ARRAY_OF_DATE: return reader.readArrayOfDate(field.fieldName);
+        case FieldKind.ARRAY_OF_TIMESTAMP: return reader.readArrayOfTimestamp(field.fieldName);
+        case FieldKind.ARRAY_OF_TIMESTAMP_WITH_TIMEZONE: return reader.readArrayOfTimestampWithTimezone(field.fieldName);
+        case FieldKind.ARRAY_OF_COMPACT: return reader.readArrayOfCompact(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_BOOLEAN: return reader.readArrayOfNullableBoolean(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_INT8: return reader.readArrayOfNullableInt8(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_INT16: return reader.readArrayOfNullableInt16(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_INT32: return reader.readArrayOfNullableInt32(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_INT64: return reader.readArrayOfNullableInt64(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_FLOAT32: return reader.readArrayOfNullableFloat32(field.fieldName);
+        case FieldKind.ARRAY_OF_NULLABLE_FLOAT64: return reader.readArrayOfNullableFloat64(field.fieldName);
+        default: return null;
+    }
 }
 
 function isCompactGenericRecordValue(obj: unknown): obj is GenericRecord {
@@ -1288,6 +1320,16 @@ function isCompactGenericRecordValue(obj: unknown): obj is GenericRecord {
         && typeof record.getFieldKind === 'function'
         && typeof record.isCompact === 'function'
         && (record.isCompact as () => boolean)();
+}
+
+function isCompactReservedClass(cls: Function): boolean {
+    return cls === String
+        || cls === Number
+        || cls === Boolean
+        || cls === Buffer
+        || cls === Date
+        || cls === BigInt
+        || cls === Array;
 }
 
 function buildSchemaFromGenericRecord(record: GenericRecord): Schema {

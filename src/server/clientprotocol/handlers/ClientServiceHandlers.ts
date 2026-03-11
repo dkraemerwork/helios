@@ -29,7 +29,7 @@ import { ListUUIDCodec } from '@zenystx/helios-core/client/impl/protocol/codec/b
 import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
 import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
 import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
-import { Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
+import { compactFieldKindFromWire, compactFieldKindToWire, Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { TopologyPublisher } from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
 import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
@@ -272,7 +272,7 @@ function _encodeSchema(msg: ClientMessage, schema: Schema): void {
 function _encodeFieldDescriptor(msg: ClientMessage, field: SchemaField): void {
     msg.add(CM.Frame.createStaticFrame(CM.BEGIN_DATA_STRUCTURE_FLAG));
     const buf = Buffer.allocUnsafe(INT_SIZE_IN_BYTES);
-    FixedSizeTypesCodec.encodeInt(buf, 0, field.kind);
+    FixedSizeTypesCodec.encodeInt(buf, 0, compactFieldKindToWire(field.kind));
     msg.add(new CM.Frame(buf));
     StringCodec.encode(msg, field.fieldName);
     msg.add(CM.Frame.createStaticFrame(CM.END_DATA_STRUCTURE_FLAG));
@@ -281,7 +281,7 @@ function _encodeFieldDescriptor(msg: ClientMessage, field: SchemaField): void {
 function _decodeFieldDescriptor(iterator: ClientMessage.ForwardFrameIterator): SchemaField {
     iterator.next();
     const initialFrame = iterator.next();
-    const kind = FixedSizeTypesCodec.decodeInt(initialFrame.content, 0);
+    const kind = compactFieldKindFromWire(FixedSizeTypesCodec.decodeInt(initialFrame.content, 0));
     const fieldName = StringCodec.decode(iterator);
     iterator.next();
     return { fieldName, kind };

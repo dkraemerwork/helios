@@ -138,6 +138,7 @@ export class SerializationServiceImpl implements InternalSerializationService {
             ? null
             : toSerializerAdapter(config.globalSerializer);
         if (this.globalSerializer !== null) {
+            this.assertCustomSerializerIdAvailable(this.globalSerializer.getTypeId(), 'global');
             this.customSerializers.set(this.globalSerializer.getTypeId(), this.globalSerializer);
         }
 
@@ -240,6 +241,7 @@ export class SerializationServiceImpl implements InternalSerializationService {
     }
 
     registerCustomSerializer(serializer: import('@zenystx/helios-core/internal/serialization/impl/SerializationConfig').CustomSerializer): void {
+        this.assertCustomSerializerIdAvailable(serializer.id, 'custom');
         const adapter = toSerializerAdapter(serializer);
         this.customSerializers.set(serializer.id, adapter);
 
@@ -377,6 +379,19 @@ export class SerializationServiceImpl implements InternalSerializationService {
         }
 
         return null;
+    }
+
+    private assertCustomSerializerIdAvailable(typeId: number, serializerKind: 'custom' | 'global'): void {
+        if (typeId <= 0) {
+            throw new HazelcastSerializationError(
+                `${serializerKind} serializer typeId ${typeId} must be a positive user-defined id`,
+            );
+        }
+        if (this.customSerializers.has(typeId)) {
+            throw new HazelcastSerializationError(
+                `${serializerKind} serializer typeId ${typeId} conflicts with an already registered serializer`,
+            );
+        }
     }
 }
 
