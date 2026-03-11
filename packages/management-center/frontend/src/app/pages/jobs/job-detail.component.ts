@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService, type CursorPaginated, type JobSnapshot } from '../../core/services/api.service';
@@ -14,7 +14,16 @@ interface JobMetricEntry {
 interface JobVertexView {
   id: string;
   name: string;
-  status: string;
+  status: string | null;
+  parallelism: number | null;
+  processedItems: number | null;
+  emittedItems: number | null;
+}
+
+interface JobVertexMetricView {
+  id: string;
+  name: string | null;
+  status: string | null;
   parallelism: number | null;
   processedItems: number | null;
   emittedItems: number | null;
@@ -28,7 +37,7 @@ interface JobEdgeView {
 @Component({
   selector: 'mc-job-detail',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, DecimalPipe],
   template: `
     <div class="space-y-6 animate-fade-in">
       <div class="flex items-center justify-between gap-4">
@@ -71,11 +80,11 @@ interface JobEdgeView {
                 </div>
                 <div>
                   <div class="text-xs text-mc-text-muted">Started</div>
-                  <div class="mt-1 text-sm text-mc-text">{{ currentJob.executionStartTime ? (currentJob.executionStartTime | date:'medium') : '-' }}</div>
+                  <div class="mt-1 text-sm text-mc-text">{{ currentJob.executionStartTime !== null ? (currentJob.executionStartTime | date:'medium') : '-' }}</div>
                 </div>
                 <div>
                   <div class="text-xs text-mc-text-muted">Completed</div>
-                  <div class="mt-1 text-sm text-mc-text">{{ currentJob.completionTime ? (currentJob.completionTime | date:'medium') : '-' }}</div>
+                  <div class="mt-1 text-sm text-mc-text">{{ currentJob.completionTime !== null ? (currentJob.completionTime | date:'medium') : '-' }}</div>
                 </div>
                 <div>
                   <div class="text-xs text-mc-text-muted">Snapshot</div>
@@ -103,22 +112,22 @@ interface JobEdgeView {
                           <div class="mt-1 font-mono text-[11px] text-mc-text-dim">{{ vertex.id }}</div>
                         </div>
                         <span class="mc-badge" [class.mc-badge-emerald]="vertex.status === 'RUNNING'" [class.mc-badge-blue]="vertex.status === 'COMPLETED'" [class.mc-badge-red]="vertex.status === 'FAILED'" [class.mc-badge-amber]="vertex.status !== 'RUNNING' && vertex.status !== 'COMPLETED' && vertex.status !== 'FAILED'">
-                          {{ vertex.status }}
+                          {{ vertex.status ?? '-' }}
                         </span>
                       </div>
 
                       <div class="mt-3 grid grid-cols-3 gap-3 text-xs">
                         <div>
                           <div class="text-mc-text-muted">Parallelism</div>
-                          <div class="mt-1 text-mc-text">{{ vertex.parallelism ?? '-' }}</div>
+                          <div class="mt-1 text-mc-text">{{ vertex.parallelism !== null ? (vertex.parallelism | number) : '-' }}</div>
                         </div>
                         <div>
                           <div class="text-mc-text-muted">Processed</div>
-                          <div class="mt-1 text-mc-text">{{ vertex.processedItems ?? '-' }}</div>
+                          <div class="mt-1 text-mc-text">{{ vertex.processedItems !== null ? (vertex.processedItems | number) : '-' }}</div>
                         </div>
                         <div>
                           <div class="text-mc-text-muted">Emitted</div>
-                          <div class="mt-1 text-mc-text">{{ vertex.emittedItems ?? '-' }}</div>
+                          <div class="mt-1 text-mc-text">{{ vertex.emittedItems !== null ? (vertex.emittedItems | number) : '-' }}</div>
                         </div>
                       </div>
 
@@ -165,8 +174,8 @@ interface JobEdgeView {
                     <tr>
                       <td class="text-xs text-mc-text-dim">{{ entry.timestamp | date:'medium' }}</td>
                       <td class="text-xs text-mc-text">{{ entry.status }}</td>
-                      <td class="text-xs text-mc-text-dim">{{ entry.executionStartTime ? (entry.executionStartTime | date:'short') : '-' }}</td>
-                      <td class="text-xs text-mc-text-dim">{{ entry.completionTime ? (entry.completionTime | date:'short') : '-' }}</td>
+                      <td class="text-xs text-mc-text-dim">{{ entry.executionStartTime !== null ? (entry.executionStartTime | date:'short') : '-' }}</td>
+                      <td class="text-xs text-mc-text-dim">{{ entry.completionTime !== null ? (entry.completionTime | date:'short') : '-' }}</td>
                     </tr>
                   } @empty {
                     <tr>
@@ -345,12 +354,13 @@ export class JobDetailComponent implements OnInit {
   }
 
   private applyJobSnapshot(job: JobSnapshot): void {
+    const parsedMetrics = parseMetrics(job.metricsJson);
     this.job.set(job);
     this.jobName.set(job.jobName);
     this.supportsCancel.set(job.supportsCancel);
     this.supportsRestart.set(job.supportsRestart);
-    this.metricEntries.set(parseMetrics(job.metricsJson));
-    this.topologyVertices.set(parseVertices(job.verticesJson));
+    this.metricEntries.set(parsedMetrics.entries);
+    this.topologyVertices.set(parseVertices(job.verticesJson, parsedMetrics.vertexMetrics));
     this.topologyEdges.set(parseEdges(job.edgesJson));
   }
 
@@ -374,25 +384,60 @@ export class JobDetailComponent implements OnInit {
   }
 }
 
-function parseMetrics(json: string): JobMetricEntry[] {
+function parseMetrics(json: string): { entries: JobMetricEntry[]; vertexMetrics: JobVertexMetricView[] } {
   const raw = parseJsonRecord(json);
-  return Object.entries(raw).map(([key, value]) => ({ key, value: formatUnknown(value) }));
+  return {
+    entries: Object.entries(raw).map(([key, value]) => ({ key, value: formatUnknown(value) })),
+    vertexMetrics: parseVertexMetrics(raw['vertices']),
+  };
 }
 
-function parseVertices(json: string): JobVertexView[] {
+function parseVertices(json: string, vertexMetrics: JobVertexMetricView[]): JobVertexView[] {
   const parsed = parseJsonArray(json);
-  return parsed.map((entry, index) => {
+  const metricById = new Map<string, JobVertexMetricView>();
+  const consumedMetricIds = new Set<string>();
+
+  for (const metric of vertexMetrics) {
+    metricById.set(metric.id, metric);
+  }
+
+  const vertices = parsed.map((entry, index) => {
     const record = asRecord(entry);
-    const id = asString(record['id']) || asString(record['name']) || `vertex-${index}`;
+    const id = asNonEmptyString(record['id']) || asNonEmptyString(record['name']) || `vertex-${index}`;
+    const metric = metricById.get(id)
+      ?? metricById.get(asNonEmptyString(record['name']))
+      ?? null;
+
+    if (metric) {
+      consumedMetricIds.add(metric.id);
+    }
+
     return {
       id,
-      name: asString(record['name']) || id,
-      status: asString(record['status']) || 'UNKNOWN',
-      parallelism: asNumber(record['parallelism']),
-      processedItems: asNumber(record['processedItems'] ?? record['receivedCount']),
-      emittedItems: asNumber(record['emittedItems'] ?? record['emittedCount']),
+      name: asNonEmptyString(record['name']) || metric?.name || id,
+      status: metric?.status ?? (asNonEmptyString(record['status']) || null),
+      parallelism: metric?.parallelism ?? asNumber(record['parallelism']),
+      processedItems: metric?.processedItems ?? asNumber(record['processedItems'] ?? record['receivedCount']),
+      emittedItems: metric?.emittedItems ?? asNumber(record['emittedItems'] ?? record['emittedCount']),
     };
   });
+
+  for (const metric of vertexMetrics) {
+    if (consumedMetricIds.has(metric.id)) {
+      continue;
+    }
+
+    vertices.push({
+      id: metric.id,
+      name: metric.name || metric.id,
+      status: metric.status,
+      parallelism: metric.parallelism,
+      processedItems: metric.processedItems,
+      emittedItems: metric.emittedItems,
+    });
+  }
+
+  return vertices;
 }
 
 function parseEdges(json: string): JobEdgeView[] {
@@ -404,6 +449,23 @@ function parseEdges(json: string): JobEdgeView[] {
       target: asString(record['target']) || asString(record['to']) || asString(record['destName']) || '',
     };
   }).filter(edge => edge.source.length > 0 && edge.target.length > 0);
+}
+
+function parseVertexMetrics(value: unknown): JobVertexMetricView[] {
+  const entries = Object.entries(asRecord(value));
+  return entries.map(([key, entry]) => {
+    const record = asRecord(entry);
+    const id = asNonEmptyString(record['id']) || asNonEmptyString(record['name']) || key;
+
+    return {
+      id,
+      name: asNonEmptyString(record['name']) || null,
+      status: asNonEmptyString(record['status']) || null,
+      parallelism: asNumber(record['parallelism']),
+      processedItems: asNumber(record['itemsIn'] ?? record['processedItems'] ?? record['receivedCount']),
+      emittedItems: asNumber(record['itemsOut'] ?? record['emittedItems'] ?? record['emittedCount']),
+    };
+  });
 }
 
 function parseJsonArray(json: string): unknown[] {
@@ -434,6 +496,11 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function asNonEmptyString(value: unknown): string {
+  const normalized = asString(value).trim();
+  return normalized;
 }
 
 function asNumber(value: unknown): number | null {
