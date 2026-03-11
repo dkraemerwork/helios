@@ -5,13 +5,14 @@
  * port(s) for the official hazelcast-client npm package to connect to, and provides
  * clean shutdown semantics.
  *
- * Each cluster is isolated: it uses a unique cluster name to avoid cross-test
- * interference and binds the client protocol listener on an ephemeral port (0) so
- * there are never port conflicts between parallel test suites.
+ * Each cluster is isolated: it uses a unique cluster name plus dedicated random
+ * member/client port ranges so there are never port conflicts between parallel
+ * test suites, while still allowing deterministic member restarts.
  */
 import { Helios } from "@zenystx/helios-core/Helios";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";
+import { waitUntil } from "./waitUntil";
 
 // ── Cluster topology ──────────────────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ export interface MemberConnectionInfo {
   host: string;
   /** Client protocol TCP port that the official hazelcast-client connects to. */
   clientPort: number;
+  /** Member TCP port used for inter-member transport. */
+  memberPort: number;
 }
 
 export interface ClusterConnectionInfo {
@@ -44,9 +47,20 @@ export interface ClusterConnectionInfo {
 
 let clusterCounter = 0;
 
+interface MemberSlot {
+  readonly name: string;
+  readonly host: string;
+  readonly memberPort: number;
+  readonly clientPort: number;
+  instance: HeliosInstanceImpl | null;
+}
+
 export class HeliosTestCluster {
   private readonly _clusterName: string;
   private readonly _instances: HeliosInstanceImpl[] = [];
+  private readonly _memberBasePort: number;
+  private readonly _clientBasePort: number;
+  private _memberSlots: MemberSlot[] = [];
   private _connectionInfo: ClusterConnectionInfo | null = null;
   private _started = false;
 
@@ -60,6 +74,8 @@ export class HeliosTestCluster {
   constructor(clusterName?: string) {
     this._clusterName = clusterName ?? `interop-${++clusterCounter}-${Date.now()}`;
     this._multicastPort = 40000 + Math.floor(Math.random() * 10000);
+    this._memberBasePort = 17000 + Math.floor(Math.random() * 1000) * 3;
+    this._clientBasePort = 22000 + Math.floor(Math.random() * 1000) * 3;
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -85,12 +101,11 @@ export class HeliosTestCluster {
    * Safe to call multiple times.
    */
   async shutdown(): Promise<void> {
-    for (const inst of this._instances) {
-      if (inst.isRunning()) {
-        inst.shutdown();
-      }
-    }
+    await Promise.all(this._instances.map((inst) => this._shutdownInstance(inst)));
     this._instances.length = 0;
+    for (const slot of this._memberSlots) {
+      slot.instance = null;
+    }
     this._started = false;
     this._connectionInfo = null;
     // Allow OS to reclaim ports before the next test
@@ -112,6 +127,57 @@ export class HeliosTestCluster {
     return this._started;
   }
 
+  getMemberConnectionInfo(index: number): MemberConnectionInfo {
+    const slot = this._getMemberSlot(index);
+
+    return {
+      name: slot.name,
+      host: slot.host,
+      clientPort: slot.clientPort,
+      memberPort: slot.memberPort,
+    };
+  }
+
+  getRunningInstances(): HeliosInstanceImpl[] {
+    return this._memberSlots
+      .map((slot) => slot.instance)
+      .filter((instance): instance is HeliosInstanceImpl => instance !== null);
+  }
+
+  async stopMember(index: number): Promise<void> {
+    const slot = this._getMemberSlot(index);
+    if (slot.instance === null) {
+      throw new Error(`HeliosTestCluster: member ${index} is not running`);
+    }
+
+    const instance = slot.instance;
+    slot.instance = null;
+    this._removeInstance(instance);
+    await this._shutdownInstance(instance);
+  }
+
+  async restartMember(index: number): Promise<MemberConnectionInfo> {
+    const slot = this._getMemberSlot(index);
+    if (slot.instance !== null) {
+      throw new Error(`HeliosTestCluster: member ${index} is already running`);
+    }
+
+    const instance = await this._startMember(slot, this._memberSlots.length);
+    this._instances.push(instance);
+    slot.instance = instance;
+
+    return this.getMemberConnectionInfo(index);
+  }
+
+  async waitForRunningClusterSize(expectedSize: number, timeoutMs = 30_000): Promise<void> {
+    await waitUntil(() => {
+      const runningInstances = this.getRunningInstances();
+
+      return runningInstances.length === expectedSize
+        && runningInstances.every((instance) => instance.getCluster().getMembers().length === expectedSize);
+    }, timeoutMs);
+  }
+
   // ── Internal ────────────────────────────────────────────────────────────────
 
   private async _start(nodeCount: 1 | 3): Promise<ClusterConnectionInfo> {
@@ -119,30 +185,23 @@ export class HeliosTestCluster {
       throw new Error("HeliosTestCluster: already started");
     }
 
-    const basePort = 17000 + Math.floor(Math.random() * 1000) * 3;
+    this._memberSlots = this._createMemberSlots(nodeCount);
 
-    for (let i = 0; i < nodeCount; i++) {
-      const nodeName = `${this._clusterName}-node-${i}`;
-      const memberPort = basePort + i;
-      const cfg = this._buildConfig(nodeName, memberPort, nodeCount);
-      const inst = await Helios.newInstance(cfg);
-      this._instances.push(inst);
+    for (const slot of this._memberSlots) {
+      const instance = await this._startMember(slot, nodeCount);
+      slot.instance = instance;
+      this._instances.push(instance);
     }
 
-    // Wait for every client protocol server to finish binding its TCP port.
-    await Promise.all(
-      this._instances.map((inst) => inst.waitForClientProtocolReady()),
-    );
-
-    // For multi-node clusters, give multicast discovery time to form the cluster.
     if (nodeCount > 1) {
-      await sleep(600);
+      await this.waitForRunningClusterSize(nodeCount);
     }
 
-    const members: MemberConnectionInfo[] = this._instances.map((inst, i) => ({
-      name: `node-${i}`,
-      host: "127.0.0.1",
-      clientPort: inst.getClientProtocolPort(),
+    const members: MemberConnectionInfo[] = this._memberSlots.map((slot) => ({
+      name: slot.name,
+      host: slot.host,
+      clientPort: slot.clientPort,
+      memberPort: slot.memberPort,
     }));
 
     // Verify all client protocol servers started
@@ -151,7 +210,7 @@ export class HeliosTestCluster {
         await this.shutdown();
         throw new Error(
           `HeliosTestCluster: ClientProtocolServer did not start on node ${m.name}. ` +
-          "Ensure setClientProtocolPort(0) is set in config.",
+          "Ensure the cluster helper reserved a valid client protocol port.",
         );
       }
     }
@@ -168,14 +227,28 @@ export class HeliosTestCluster {
     return this._connectionInfo;
   }
 
-  private _buildConfig(nodeName: string, memberPort: number, nodeCount: number): HeliosConfig {
+  private async _startMember(slot: MemberSlot, nodeCount: number): Promise<HeliosInstanceImpl> {
+    const instance = await Helios.newInstance(this._buildConfig(slot.name, slot.memberPort, slot.clientPort, nodeCount));
+    await instance.waitForClientProtocolReady();
+
+    if (instance.getClientProtocolPort() !== slot.clientPort) {
+      await this._shutdownInstance(instance);
+      throw new Error(
+        `HeliosTestCluster: expected client port ${slot.clientPort} for ${slot.name}, `
+        + `got ${instance.getClientProtocolPort()}`,
+      );
+    }
+
+    return instance;
+  }
+
+  private _buildConfig(nodeName: string, memberPort: number, clientPort: number, nodeCount: number): HeliosConfig {
     const cfg = new HeliosConfig(nodeName);
     cfg.setClusterName(this._clusterName);
 
     const network = cfg.getNetworkConfig();
 
-    // Client protocol on ephemeral port (0 = OS-assigned)
-    network.setClientProtocolPort(0);
+    network.setClientProtocolPort(clientPort);
 
     // Bind the cluster transport on a deterministic port
     network.setPort(memberPort);
@@ -194,6 +267,39 @@ export class HeliosTestCluster {
     }
 
     return cfg;
+  }
+
+  private _createMemberSlots(nodeCount: 1 | 3): MemberSlot[] {
+    return Array.from({ length: nodeCount }, (_, index) => ({
+      name: `node-${index}`,
+      host: "127.0.0.1",
+      memberPort: this._memberBasePort + index,
+      clientPort: this._clientBasePort + index,
+      instance: null,
+    }));
+  }
+
+  private _getMemberSlot(index: number): MemberSlot {
+    const slot = this._memberSlots[index];
+    if (slot === undefined) {
+      throw new Error(`HeliosTestCluster: member ${index} does not exist`);
+    }
+    return slot;
+  }
+
+  private _removeInstance(instance: HeliosInstanceImpl): void {
+    const index = this._instances.indexOf(instance);
+    if (index >= 0) {
+      this._instances.splice(index, 1);
+    }
+  }
+
+  private async _shutdownInstance(instance: HeliosInstanceImpl): Promise<void> {
+    if (!instance.isRunning()) {
+      return;
+    }
+
+    await instance.shutdownAsync();
   }
 }
 

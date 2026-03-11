@@ -17,6 +17,7 @@
     "test:flakeid": "bun test --timeout 60000 suites/flakeid.test.ts",
     "test:pncounter": "bun test --timeout 60000 suites/pncounter.test.ts",
     "test:lifecycle": "bun test --timeout 60000 suites/lifecycle.test.ts",
+    "test:harness-baseline": "bun test --timeout 60000 suites/harness-baseline.test.ts",
     "typecheck": "bun run tsc --noEmit"
   },
   "devDependencies": {
