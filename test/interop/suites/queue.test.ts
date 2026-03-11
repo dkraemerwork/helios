@@ -7,6 +7,7 @@
 import { Client } from "hazelcast-client";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { HeliosTestCluster } from "../helpers/HeliosTestCluster";
+import { waitUntil } from "../helpers/waitUntil";
 
 describe("Official Client — IQueue", () => {
   let cluster: HeliosTestCluster;
@@ -103,3 +104,101 @@ describe("Official Client — IQueue", () => {
     expect(cap).toBeGreaterThan(0);
   });
 });
+
+describe("Official Client — IQueue: clustered recovery", () => {
+  let cluster: HeliosTestCluster;
+  let hzClient: Awaited<ReturnType<typeof Client.newHazelcastClient>>;
+
+  beforeEach(async () => {
+    cluster = new HeliosTestCluster();
+    const { clusterName, addresses } = await cluster.startThreeNode();
+    hzClient = await Client.newHazelcastClient({
+      clusterName,
+      network: {
+        clusterMembers: [addresses[0]!],
+        connectionTimeout: 10_000,
+      },
+      connectionStrategy: {
+        connectionRetry: {
+          clusterConnectTimeoutMillis: 15_000,
+        },
+      },
+    });
+    await waitForClientMembers(hzClient, 3);
+  });
+
+  afterEach(async () => {
+    try { await hzClient.shutdown(); } catch { /* ignore */ }
+    await cluster.shutdown();
+  });
+
+  it("routes retained queue operations to a remote owner in a three-member cluster", async () => {
+    const queueName = findQueueNameOwnedByMember(cluster, 1, "interop-queue-clustered-routing");
+    const queue = await hzClient.getQueue<string>(queueName);
+
+    await queue.offer("first");
+    await queue.offer("second");
+    await queue.offer("third");
+
+    expect(await queue.peek()).toBe("first");
+    expect(await queue.size()).toBe(3);
+    expect(await queue.poll()).toBe("first");
+    expect(await queue.poll()).toBe("second");
+    expect(await queue.poll()).toBe("third");
+    expect(await queue.isEmpty()).toBe(true);
+  }, 60_000);
+
+  it("preserves FIFO queue state through owner loss and member recovery", async () => {
+    const ownerIndex = 1;
+    const queueName = findQueueNameOwnedByMember(cluster, ownerIndex, "interop-queue-clustered-failover");
+    const queue = await hzClient.getQueue<string>(queueName);
+
+    await queue.offer("alpha");
+    await queue.offer("beta");
+    await queue.offer("gamma");
+    expect(await queue.peek()).toBe("alpha");
+
+    await cluster.stopMember(ownerIndex);
+    await cluster.waitForRunningClusterSize(2);
+    await waitForClientMembers(hzClient, 2);
+
+    expect(await queue.poll()).toBe("alpha");
+    expect(await queue.poll()).toBe("beta");
+    expect(await queue.poll()).toBe("gamma");
+    expect(await queue.isEmpty()).toBe(true);
+
+    await cluster.restartMember(ownerIndex);
+    await cluster.waitForRunningClusterSize(3);
+    await waitForClientMembers(hzClient, 3);
+
+    await queue.offer("after-recovery");
+    expect(await queue.poll()).toBe("after-recovery");
+  }, 60_000);
+});
+
+async function waitForClientMembers(
+  client: Awaited<ReturnType<typeof Client.newHazelcastClient>>,
+  expectedCount: number,
+): Promise<void> {
+  await waitUntil(() => client.getCluster().getMembers().length === expectedCount, 30_000);
+}
+
+function findQueueNameOwnedByMember(
+  cluster: HeliosTestCluster,
+  memberIndex: number,
+  prefix: string,
+): string {
+  const instances = cluster.getRunningInstances();
+  const routingInstance = instances[0]!;
+  const targetMemberUuid = instances[memberIndex]!.getCluster().getLocalMember().getUuid();
+
+  for (let attempt = 0; attempt < 10_000; attempt++) {
+    const queueName = `${prefix}-${attempt}`;
+    const partitionId = routingInstance.getPartitionIdForName(queueName);
+    if (routingInstance.getPartitionOwnerId(partitionId) === targetMemberUuid) {
+      return queueName;
+    }
+  }
+
+  throw new Error(`Unable to find a queue name owned by member index ${memberIndex}`);
+}

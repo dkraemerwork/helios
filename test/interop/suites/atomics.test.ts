@@ -88,6 +88,22 @@ describe("Official Client — AtomicLong (CP Subsystem)", () => {
     expect(Number(old)).toBe(50);
     expect(Number(await atomic.get())).toBe(60);
   });
+
+  it("reconnect preserves AtomicLong state while the single CP member stays up", async () => {
+    const name = "interop-atomic-long-reconnect";
+    const atomic = await hzClient.getCPSubsystem().getAtomicLong(name);
+    await atomic.set(73);
+
+    await hzClient.shutdown();
+    const { clusterName, addresses } = cluster.getConnectionInfo();
+    hzClient = await Client.newHazelcastClient({
+      clusterName,
+      network: { clusterMembers: addresses },
+    });
+
+    const reconnectedAtomic = await hzClient.getCPSubsystem().getAtomicLong(name);
+    expect(Number(await reconnectedAtomic.get())).toBe(73);
+  });
 });
 
 describe("Official Client — AtomicReference (CP Subsystem)", () => {
@@ -150,5 +166,21 @@ describe("Official Client — AtomicReference (CP Subsystem)", () => {
     await ref.set("something");
     await ref.clear();
     expect(await ref.get()).toBeNull();
+  });
+
+  it("reconnect preserves AtomicReference state while the single CP member stays up", async () => {
+    const name = "interop-atomic-ref-reconnect";
+    const ref = await hzClient.getCPSubsystem().getAtomicReference<string>(name);
+    await ref.set("survives-client-reconnect");
+
+    await hzClient.shutdown();
+    const { clusterName, addresses } = cluster.getConnectionInfo();
+    hzClient = await Client.newHazelcastClient({
+      clusterName,
+      network: { clusterMembers: addresses },
+    });
+
+    const reconnectedRef = await hzClient.getCPSubsystem().getAtomicReference<string>(name);
+    expect(await reconnectedRef.get()).toBe("survives-client-reconnect");
   });
 });

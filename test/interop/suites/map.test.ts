@@ -7,6 +7,7 @@
 import { Client } from "hazelcast-client";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { HeliosTestCluster } from "../helpers/HeliosTestCluster";
+import { waitUntil } from "../helpers/waitUntil";
 
 describe("Official Client — IMap", () => {
   let cluster: HeliosTestCluster;
@@ -218,6 +219,107 @@ describe("Official Client — IMap", () => {
   });
 });
 
+describe("Official Client — IMap: clustered recovery", () => {
+  let cluster: HeliosTestCluster;
+  let hzClient: Awaited<ReturnType<typeof Client.newHazelcastClient>>;
+
+  beforeEach(async () => {
+    cluster = new HeliosTestCluster();
+    const { clusterName, addresses } = await cluster.startThreeNode();
+    hzClient = await Client.newHazelcastClient({
+      clusterName,
+      network: {
+        clusterMembers: [addresses[0]!],
+        connectionTimeout: 10_000,
+      },
+      connectionStrategy: {
+        connectionRetry: {
+          clusterConnectTimeoutMillis: 15_000,
+        },
+      },
+    });
+    await waitForClientMembers(hzClient, 3);
+  });
+
+  afterEach(async () => {
+    try { await hzClient.shutdown(); } catch { /* ignore */ }
+    await cluster.shutdown();
+  });
+
+  it("routes retained CRUD across partitions owned by different members", async () => {
+    const map = await hzClient.getMap<string, string>("interop-map-clustered-routing");
+    const keyOnMember1 = findMapKeyOwnedByMember(cluster, 1, "imap-member-1");
+    const keyOnMember2 = findMapKeyOwnedByMember(cluster, 2, "imap-member-2");
+
+    await map.put(keyOnMember1, "value-on-member-1");
+    await map.put(keyOnMember2, "value-on-member-2");
+
+    expect(await map.get(keyOnMember1)).toBe("value-on-member-1");
+    expect(await map.get(keyOnMember2)).toBe("value-on-member-2");
+
+    const entries = new Map(await map.getAll([keyOnMember1, keyOnMember2]));
+    expect(entries.get(keyOnMember1)).toBe("value-on-member-1");
+    expect(entries.get(keyOnMember2)).toBe("value-on-member-2");
+    expect(await map.size()).toBe(2);
+  }, 60_000);
+
+  it("keeps retained map state available through owner loss and member recovery", async () => {
+    const map = await hzClient.getMap<string, string>("interop-map-clustered-failover");
+    const primaryOwnerIndex = 1;
+    const failoverKey = findMapKeyOwnedByMember(cluster, primaryOwnerIndex, "imap-failover");
+
+    await map.put(failoverKey, "before-failover");
+    expect(await map.get(failoverKey)).toBe("before-failover");
+    await sleep(250);
+
+    await cluster.stopMember(primaryOwnerIndex);
+    await cluster.waitForRunningClusterSize(2);
+    await waitForClientMembers(hzClient, 2);
+
+    expect(await map.containsKey(failoverKey)).toBe(true);
+    expect(await map.get(failoverKey)).toBe("before-failover");
+    expect(await map.remove(failoverKey)).toBe("before-failover");
+    expect(await map.get(failoverKey)).toBeNull();
+
+    await cluster.restartMember(primaryOwnerIndex);
+    await cluster.waitForRunningClusterSize(3);
+    await waitForClientMembers(hzClient, 3);
+
+    await map.put(failoverKey, "after-recovery");
+    expect(await map.get(failoverKey)).toBe("after-recovery");
+  }, 60_000);
+});
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForClientMembers(
+  client: Awaited<ReturnType<typeof Client.newHazelcastClient>>,
+  expectedCount: number,
+): Promise<void> {
+  await waitUntil(() => client.getCluster().getMembers().length === expectedCount, 30_000);
+}
+
+function findMapKeyOwnedByMember(
+  cluster: HeliosTestCluster,
+  memberIndex: number,
+  prefix: string,
+): string {
+  const instances = cluster.getRunningInstances();
+  const routingInstance = instances[0]!;
+  const targetMemberUuid = instances[memberIndex]!.getCluster().getLocalMember().getUuid();
+  const partitionService = routingInstance.getNodeEngine().getPartitionService();
+  const serializationService = routingInstance.getNodeEngine().getSerializationService();
+
+  for (let attempt = 0; attempt < 10_000; attempt++) {
+    const key = `${prefix}-${attempt}`;
+    const keyData = serializationService.toData(key);
+    const partitionId = partitionService.getPartitionId(keyData!);
+    if (routingInstance.getPartitionOwnerId(partitionId) === targetMemberUuid) {
+      return key;
+    }
+  }
+
+  throw new Error(`Unable to find a key owned by member index ${memberIndex}`);
 }
