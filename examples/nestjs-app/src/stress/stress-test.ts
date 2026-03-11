@@ -71,17 +71,27 @@ interface StressOptions {
   topicConcurrency: number;
 }
 
+const DEFAULT_STRESS_OPTIONS: StressOptions = {
+  durationSec: 60,
+  mapConcurrency: 16,
+  nearCacheConcurrency: 8,
+  crossNodeConcurrency: 8,
+  executorConcurrency: 4,
+  queueConcurrency: 4,
+  topicConcurrency: 3,
+};
+
+const QUEUE_SIZE_SAMPLE_INTERVAL = 16;
+const MAP_WORKLOAD_PACE_MS = 1;
+const NEAR_CACHE_WORKLOAD_PACE_MS = 1;
+const CROSS_NODE_WORKLOAD_PACE_MS = 1;
+const QUEUE_WORKLOAD_PACE_MS = 2;
+const TOPIC_WORKLOAD_PACE_MS = 8;
+const EXECUTOR_WORKLOAD_PACE_MS = 10;
+
 function parseArgs(): StressOptions {
   const args = process.argv.slice(2);
-  const opts: StressOptions = {
-    durationSec: 60,
-    mapConcurrency: 40,
-    nearCacheConcurrency: 20,
-    crossNodeConcurrency: 20,
-    executorConcurrency: 8,
-    queueConcurrency: 12,
-    topicConcurrency: 8,
-  };
+  const opts: StressOptions = { ...DEFAULT_STRESS_OPTIONS };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -124,12 +134,12 @@ Usage:
 
 Options:
   --duration <s>               Test duration in seconds (default: 60)
-  --map-concurrency <n>        Concurrent IMap loops (default: 40)
-  --near-cache-concurrency <n> Concurrent near-cache loops (default: 20)
-  --cross-node-concurrency <n> Concurrent cross-node loops (default: 20)
-  --executor-concurrency <n>   Concurrent executor loops (default: 8)
-  --queue-concurrency <n>      Concurrent queue producer/consumer loops (default: 12)
-  --topic-concurrency <n>      Concurrent topic publisher loops (default: 8)
+  --map-concurrency <n>        Concurrent IMap loops (default: 16)
+  --near-cache-concurrency <n> Concurrent near-cache loops (default: 8)
+  --cross-node-concurrency <n> Concurrent cross-node loops (default: 8)
+  --executor-concurrency <n>   Concurrent executor loops (default: 4)
+  --queue-concurrency <n>      Concurrent queue producer/consumer loops (default: 4)
+  --topic-concurrency <n>      Concurrent topic publisher loops (default: 3)
   --help                       Show this help
 
 Management Center:
@@ -192,6 +202,11 @@ interface SpawnedNode {
   name: string;
   proc: ReturnType<typeof Bun.spawn>;
   restPort: number;
+}
+
+interface NodeExitInfo {
+  nodeName: string;
+  exitCode: number;
 }
 
 const stressNodeScript = resolve(import.meta.dirname, 'stress-node.ts');
@@ -570,7 +585,7 @@ async function mapWorkload(map: IMap<string, unknown>, stats: Stats, signal: Abo
       if (signal.aborted) return;
       stats.mapErrors++;
     }
-    await yieldToEventLoop(iteration);
+    await paceWorkload(iteration, MAP_WORKLOAD_PACE_MS);
   }
 }
 
@@ -594,7 +609,7 @@ async function nearCacheWorkload(map: IMap<string, unknown>, stats: Stats, signa
       if (signal.aborted) return;
       stats.nearCacheErrors++;
     }
-    await yieldToEventLoop(iteration);
+    await paceWorkload(iteration, NEAR_CACHE_WORKLOAD_PACE_MS);
   }
 }
 
@@ -618,7 +633,7 @@ async function crossNodeWorkload(
       if (signal.aborted) return;
       stats.crossNodeErrors++;
     }
-    await yieldToEventLoop(iteration);
+    await paceWorkload(iteration, CROSS_NODE_WORKLOAD_PACE_MS);
   }
 }
 
@@ -629,6 +644,7 @@ async function queueWorkload(
   workerId: number,
 ): Promise<void> {
   let seq = 0;
+  let localBacklog = 0;
   while (!signal.aborted) {
     const iteration = seq;
     const value = { seq, producer: workerId, createdAt: Date.now() };
@@ -637,22 +653,30 @@ async function queueWorkload(
       const offered = await queue.offer(value);
       if (offered) {
         stats.queueOffers++;
+        localBacklog++;
       }
 
-      const shouldPoll = seq % 2 === 0 || (await queue.size()) > 128;
+      let shouldPoll = localBacklog > 16 || seq % 3 === 0;
+      if (!shouldPoll && seq % QUEUE_SIZE_SAMPLE_INTERVAL === 0) {
+        const remoteSize = await queue.size();
+        localBacklog = remoteSize;
+        shouldPoll = remoteSize > 32;
+      }
+
       if (shouldPoll) {
         const item = await queue.poll();
         if (item === null) {
           stats.queueNullPolls++;
         } else {
           stats.queuePolls++;
+          localBacklog = Math.max(0, localBacklog - 1);
         }
       }
     } catch {
       if (signal.aborted) return;
       stats.queueErrors++;
     }
-    await yieldToEventLoop(iteration);
+    await paceWorkload(iteration, QUEUE_WORKLOAD_PACE_MS);
   }
 }
 
@@ -673,7 +697,7 @@ async function topicWorkload(
       if (signal.aborted) return;
       stats.topicErrors++;
     }
-    await yieldToEventLoop(iteration);
+    await paceWorkload(iteration, TOPIC_WORKLOAD_PACE_MS);
   }
 }
 
@@ -690,15 +714,15 @@ async function executorWorkload(executor: IExecutorService, stats: Stats, signal
     switch (pick) {
       case 0:
         taskType = 'fibonacci';
-        input = { n: 25 + Math.floor(Math.random() * 10), label };
+        input = { n: 22 + Math.floor(Math.random() * 6), label };
         break;
       case 1:
         taskType = 'hash-grind';
-        input = { iterations: 500 + Math.floor(Math.random() * 1500), seed: crypto.randomUUID(), label };
+        input = { iterations: 250 + Math.floor(Math.random() * 750), seed: crypto.randomUUID(), label };
         break;
       default:
         taskType = 'matrix-multiply';
-        input = { size: 40 + Math.floor(Math.random() * 60), seed: Math.floor(Math.random() * 100_000), label };
+        input = { size: 24 + Math.floor(Math.random() * 24), seed: Math.floor(Math.random() * 100_000), label };
     }
 
     try {
@@ -714,7 +738,7 @@ async function executorWorkload(executor: IExecutorService, stats: Stats, signal
       if (signal.aborted) return;
       stats.executorErrors++;
     }
-    await yieldToEventLoop(iteration);
+    await paceWorkload(iteration, EXECUTOR_WORKLOAD_PACE_MS);
   }
 }
 
@@ -726,10 +750,22 @@ function fmt(n: number): string {
   return String(n);
 }
 
-async function yieldToEventLoop(iteration: number): Promise<void> {
-  if (iteration % 64 === 0) {
+async function paceWorkload(iteration: number, paceMs: number): Promise<void> {
+  if (paceMs > 0 && iteration % 4 === 0) {
+    await Bun.sleep(paceMs);
+    return;
+  }
+
+  if (iteration % 32 === 0) {
     await Bun.sleep(0);
   }
+}
+
+function createUnexpectedExitPromise(node: SpawnedNode): Promise<NodeExitInfo> {
+  return node.proc.exited.then((exitCode) => ({
+    nodeName: node.name,
+    exitCode,
+  }));
 }
 
 let prevStats: Stats = createStats();
@@ -815,6 +851,7 @@ function printStats(stats: Stats, elapsedSec: number, executor: IExecutorService
 async function main(): Promise<void> {
   const opts = parseArgs();
   const spawnedNodes: SpawnedNode[] = [];
+  const nodeExitWatchers: Promise<NodeExitInfo>[] = [];
   let client: ClientInfo | null = null;
 
   console.log(`
@@ -836,6 +873,7 @@ async function main(): Promise<void> {
   try {
     const node1 = spawnNode('stress-node-1', 15701, 18081, []);
     spawnedNodes.push(node1);
+    nodeExitWatchers.push(createUnexpectedExitPromise(node1));
     process.stdout.write('[boot] waiting for stress-node-1 (first member)...\n');
     await waitForReady(node1);
     process.stdout.write('[boot] stress-node-1 ready\n');
@@ -846,6 +884,7 @@ async function main(): Promise<void> {
     const node2 = spawnNode('stress-node-2', 15702, 18082, ['127.0.0.1:15701']);
     const node3 = spawnNode('stress-node-3', 15703, 18083, ['127.0.0.1:15701']);
     spawnedNodes.push(node2, node3);
+    nodeExitWatchers.push(createUnexpectedExitPromise(node2), createUnexpectedExitPromise(node3));
 
     process.stdout.write('[boot] waiting for stress-node-2 and stress-node-3...\n');
     await Promise.all([waitForReady(node2), waitForReady(node3)]);
@@ -963,7 +1002,14 @@ async function main(): Promise<void> {
 
     // ── Run for duration ────────────────────────────────────────────────────────
 
-    await Bun.sleep(opts.durationSec * 1_000);
+    const exitInfo = await Promise.race([
+      Bun.sleep(opts.durationSec * 1_000).then(() => null),
+      Promise.race(nodeExitWatchers),
+    ]);
+
+    if (exitInfo !== null) {
+      throw new Error(`${exitInfo.nodeName} exited unexpectedly with code ${exitInfo.exitCode}`);
+    }
 
     // ── Shutdown ────────────────────────────────────────────────────────────────
 

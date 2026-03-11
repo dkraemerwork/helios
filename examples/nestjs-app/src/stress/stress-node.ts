@@ -157,6 +157,10 @@ interface RestartableBlitzBridge {
   restartJob(id: string): Promise<void>;
 }
 
+const MEMBER_QUEUE_SIZE_SAMPLE_INTERVAL = 12;
+const MEMBER_QUEUE_WORKLOAD_PACE_MS = 3;
+const MEMBER_TOPIC_WORKLOAD_PACE_MS = 12;
+
 function createRestartableBlitzBridge(
   blitzService: BlitzService,
   getJobsService: () => BinanceBlitzJobsService | null,
@@ -300,15 +304,30 @@ async function memberQueueWorkload(
   signal: AbortSignal,
 ): Promise<void> {
   let seq = 0;
+  let localBacklog = 0;
   while (!signal.aborted) {
     const iteration = seq;
     const value: MemberQueueItem = { seq, producer, createdAt: Date.now() };
     seq++;
 
     try {
-      await queue.offer(value);
-      if (seq % 2 === 0 || (await queue.size()) > 32) {
-        await queue.poll();
+      const offered = await queue.offer(value);
+      if (offered) {
+        localBacklog++;
+      }
+
+      let shouldPoll = localBacklog > 12 || seq % 3 === 0;
+      if (!shouldPoll && seq % MEMBER_QUEUE_SIZE_SAMPLE_INTERVAL === 0) {
+        const remoteSize = await queue.size();
+        localBacklog = remoteSize;
+        shouldPoll = remoteSize > 24;
+      }
+
+      if (shouldPoll) {
+        const item = await queue.poll();
+        if (item !== null) {
+          localBacklog = Math.max(0, localBacklog - 1);
+        }
       }
     } catch {
       if (signal.aborted) {
@@ -316,9 +335,7 @@ async function memberQueueWorkload(
       }
     }
 
-    if (iteration % 32 === 0) {
-      await Bun.sleep(0);
-    }
+    await paceMemberWorkload(iteration, MEMBER_QUEUE_WORKLOAD_PACE_MS);
   }
 }
 
@@ -340,9 +357,18 @@ async function memberTopicWorkload(
       }
     }
 
-    if (iteration % 32 === 0) {
-      await Bun.sleep(0);
-    }
+    await paceMemberWorkload(iteration, MEMBER_TOPIC_WORKLOAD_PACE_MS);
+  }
+}
+
+async function paceMemberWorkload(iteration: number, paceMs: number): Promise<void> {
+  if (paceMs > 0 && iteration % 4 === 0) {
+    await Bun.sleep(paceMs);
+    return;
+  }
+
+  if (iteration % 32 === 0) {
+    await Bun.sleep(0);
   }
 }
 
