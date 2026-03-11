@@ -3,8 +3,8 @@
  *
  * OutboundHandler<Supplier<ClientMessage>, ByteBuffer>
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ClientMessageWriter } from '@zenystx/helios-core/client/impl/protocol/ClientMessageWriter';
+import { ClientMessage } from '../ClientMessage';
+import { ClientMessageWriter } from '../ClientMessageWriter';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HandlerStatus } from '@zenystx/helios-core/internal/networking/HandlerStatus';
 

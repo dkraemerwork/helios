@@ -1,6 +1,6 @@
-import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { BOOLEAN_SIZE_IN_BYTES, FixedSizeTypesCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec";
-import { StringCodec } from "@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec";
+import { ClientMessage } from "../ClientMessage";
+import { BOOLEAN_SIZE_IN_BYTES, FixedSizeTypesCodec } from "./builtin/FixedSizeTypesCodec";
+import { StringCodec } from "./builtin/StringCodec";
 
 export class TopicRemoveMessageListenerCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x0b0a10;

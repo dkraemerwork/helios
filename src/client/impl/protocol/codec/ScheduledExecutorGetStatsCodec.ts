@@ -3,7 +3,7 @@
  *
  * Hazelcast parity: ScheduledExecutorGetStatsFromPartitionCodec (0x1A0500)
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../ClientMessage';
 import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { StringCodec } from './builtin/StringCodec';
 

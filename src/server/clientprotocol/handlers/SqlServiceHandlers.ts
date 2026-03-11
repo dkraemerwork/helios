@@ -9,16 +9,16 @@
  *   Sql.MappingDdl (0x210400) — (optional) execute DDL for SQL mappings
  */
 
-import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
+import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
+import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { SqlServiceOperations, SqlExecuteResult, SqlFetchResult, SqlPage, SqlColumnMetadata, SqlError } from './ServiceOperations.js';
-import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
-import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
-import { ListIntegerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListIntegerCodec.js';
-import { ListMultiFrameCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
+import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
+import { ListIntegerCodec } from '../../../client/impl/protocol/codec/builtin/ListIntegerCodec.js';
+import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────

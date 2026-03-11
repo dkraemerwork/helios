@@ -3,7 +3,7 @@
  *
  * Stateful reader: accumulates header bytes across calls.
  */
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage, ClientMessageFrame } from './ClientMessage';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 
 export class ClientMessageReader {

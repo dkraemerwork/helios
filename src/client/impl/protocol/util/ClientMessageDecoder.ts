@@ -4,8 +4,8 @@
  * InboundHandler<ByteBuffer, Consumer<ClientMessage>>
  * Handles fragmentation reassembly using a Map<bigint, ClientMessage>.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ClientMessageReader } from '@zenystx/helios-core/client/impl/protocol/ClientMessageReader';
+import { ClientMessage } from '../ClientMessage';
+import { ClientMessageReader } from '../ClientMessageReader';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HandlerStatus } from '@zenystx/helios-core/internal/networking/HandlerStatus';
 

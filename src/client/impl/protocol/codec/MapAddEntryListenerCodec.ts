@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.MapAddEntryListenerCodec}.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../ClientMessage';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { CodecUtil } from './builtin/CodecUtil';
 import { DataCodec } from './builtin/DataCodec';

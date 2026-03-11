@@ -3,7 +3,7 @@
  *
  * Encodes/decodes a Map<string, string>.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../../ClientMessage';
 import { StringCodec } from './StringCodec';
 
 export class MapCodec {

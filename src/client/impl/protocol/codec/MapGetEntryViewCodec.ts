@@ -1,12 +1,12 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { ClientMessage } from '../ClientMessage.js';
+import { CodecUtil } from './builtin/CodecUtil.js';
+import { DataCodec } from './builtin/DataCodec.js';
 import {
     FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+} from './builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from './builtin/StringCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 import { SimpleEntryViewCodec } from './custom/SimpleEntryViewCodec.js';

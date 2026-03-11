@@ -22,14 +22,14 @@
  *   Cache.RemoveInvalidationListener (0x131100)
  */
 
-import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
+import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
+import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { CacheServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
-import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
+import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
+import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────

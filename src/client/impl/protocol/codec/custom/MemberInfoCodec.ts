@@ -12,7 +12,7 @@
  *   END_FRAME (addressMap list end)
  *   END_FRAME
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../../ClientMessage';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';

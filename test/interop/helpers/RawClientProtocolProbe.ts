@@ -1,6 +1,6 @@
-import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
-import type { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
+import { MapPutCodec } from "../../../src/client/impl/protocol/codec/MapPutCodec";
+import type { ClientMessage } from "../../../src/client/impl/protocol/ClientMessage";
+import { ClientMessageWriter } from "../../../src/client/impl/protocol/ClientMessageWriter";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 import { SerializationConfig } from "@zenystx/helios-core/internal/serialization/impl/SerializationConfig";
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";

@@ -1,12 +1,12 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { ClientMessage } from '../ClientMessage.js';
+import { DataCodec } from './builtin/DataCodec.js';
 import {
     FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+} from './builtin/FixedSizeTypesCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+import { StringCodec } from './builtin/StringCodec.js';
 
 const REQUEST_INCLUDE_VALUE_FIELD_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
 const REQUEST_LOCAL_ONLY_FIELD_OFFSET = REQUEST_INCLUDE_VALUE_FIELD_OFFSET + 1;

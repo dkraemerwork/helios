@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.EntryListCodec}.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../../ClientMessage';
 
 export class EntryListCodec {
     private constructor() {}

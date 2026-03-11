@@ -1,14 +1,14 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
+import { ClientMessage } from '../ClientMessage.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
-import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { CodecUtil } from './builtin/CodecUtil.js';
+import { DataCodec } from './builtin/DataCodec.js';
 import {
     BOOLEAN_SIZE_IN_BYTES,
     FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+} from './builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from './builtin/StringCodec.js';
 
 const REQUEST_MESSAGE_TYPE = 0x020e00;
 const RESPONSE_MESSAGE_TYPE = 0x020e01;

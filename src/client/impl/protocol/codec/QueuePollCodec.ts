@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.QueuePollCodec}.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../ClientMessage';
 import type { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
 import { DataCodec } from './builtin/DataCodec';
 import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';

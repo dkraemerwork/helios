@@ -34,14 +34,14 @@
  * Port of Hazelcast MapAddNearCacheInvalidationListenerTask and related codec.
  */
 
-import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
+import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import {
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
     FixedSizeTypesCodec,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+} from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 import type { ClientSessionRegistry } from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';

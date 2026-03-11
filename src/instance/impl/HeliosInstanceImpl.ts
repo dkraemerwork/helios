@@ -16,12 +16,12 @@ import { CacheUtil } from "@zenystx/helios-core/cache/CacheUtil";
 import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
 import { DistributedCardinalityEstimatorService } from "@zenystx/helios-core/cardinality/impl/DistributedCardinalityEstimatorService";
 import { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
-import { ListAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ListAddListenerCodec.js";
-import { MapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec";
-import { MultiMapAddEntryListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
-import { QueueAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/QueueAddListenerCodec.js";
-import { SetAddListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/SetAddListenerCodec.js";
-import { TopicAddMessageListenerCodec } from "@zenystx/helios-core/client/impl/protocol/codec/TopicAddMessageListenerCodec";
+import { ListAddListenerCodec } from "../../client/impl/protocol/codec/ListAddListenerCodec.js";
+import { MapAddEntryListenerCodec } from "../../client/impl/protocol/codec/MapAddEntryListenerCodec";
+import { MultiMapAddEntryListenerCodec } from "../../client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
+import { QueueAddListenerCodec } from "../../client/impl/protocol/codec/QueueAddListenerCodec.js";
+import { SetAddListenerCodec } from "../../client/impl/protocol/codec/SetAddListenerCodec.js";
+import { TopicAddMessageListenerCodec } from "../../client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { Address } from "@zenystx/helios-core/cluster/Address";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import type { Member } from "@zenystx/helios-core/cluster/Member";
@@ -215,12 +215,15 @@ type BlitzServiceLike = {
   getJobDescriptor?(id: string): {
     vertices?: Array<{ name: string; type: string }>;
     edges?: Array<{ from: string; to: string; edgeType: string }>;
+    parallelism?: number;
   } | null;
   getJobMetadata?(id: string): Promise<{
     lightJob: boolean;
     participatingMembers: string[];
     supportsCancel: boolean;
     supportsRestart: boolean;
+    executionStartTime: number | null;
+    executionCompletionTime: number | null;
   } | null>;
   cancelJob?(id: string): Promise<void>;
   restartJob?(id: string): Promise<void>;
@@ -5796,6 +5799,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
               ? getDescriptorFn.call(blitzService, job.id) as {
                   vertices?: Array<{ name: string; type: string }>;
                   edges?: Array<{ from: string; to: string; edgeType: string }>;
+                  parallelism?: number;
                 } | null
               : null;
             const metadata = typeof getMetadataFn === 'function'
@@ -5804,6 +5808,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
                   participatingMembers: string[];
                   supportsCancel: boolean;
                   supportsRestart: boolean;
+                  executionStartTime: number | null;
+                  executionCompletionTime: number | null;
                 } | null
               : null;
 
@@ -5812,6 +5818,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
               name: job.name,
               status: typeof job.getStatus === 'function' ? job.getStatus() : 'UNKNOWN',
               submittedAt: typeof job.getSubmissionTime === 'function' ? job.getSubmissionTime() : 0,
+              executionStartTime: metadata?.executionStartTime ?? null,
+              executionCompletionTime: metadata?.executionCompletionTime ?? null,
               lightJob: metadata?.lightJob ?? true,
               supportsCancel: metadata?.supportsCancel ?? true,
               supportsRestart: metadata?.supportsRestart ?? false,

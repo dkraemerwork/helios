@@ -3,7 +3,7 @@
  *
  * Wire format: BEGIN_FRAME + initial frame (4-byte LE type) + optional string (identifier) + END_FRAME
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../../ClientMessage';
 import { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
 import { CodecUtil } from '../builtin/CodecUtil';
 import { INT_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';

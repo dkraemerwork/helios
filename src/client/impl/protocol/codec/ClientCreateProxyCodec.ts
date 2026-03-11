@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.ClientCreateProxyCodec}.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../ClientMessage';
 import { INT_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { StringCodec } from './builtin/StringCodec';
 

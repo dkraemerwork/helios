@@ -7,11 +7,11 @@
  * Port of Hazelcast {@code ClientEngineImpl} — the server-side counterpart
  * of the remote client protocol stack.
  */
-import { AuthenticationStatus } from "@zenystx/helios-core/client/impl/protocol/AuthenticationStatus";
-import { ClientMessage } from "@zenystx/helios-core/client/impl/protocol/ClientMessage";
-import { ClientMessageReader } from "@zenystx/helios-core/client/impl/protocol/ClientMessageReader";
-import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import { MapPutCodec } from "@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec";
+import { AuthenticationStatus } from "../../client/impl/protocol/AuthenticationStatus";
+import { ClientMessage } from "../../client/impl/protocol/ClientMessage";
+import { ClientMessageReader } from "../../client/impl/protocol/ClientMessageReader";
+import { ClientAuthenticationCodec } from "../../client/impl/protocol/codec/ClientAuthenticationCodec";
+import { MapPutCodec } from "../../client/impl/protocol/codec/MapPutCodec";
 import { Address } from "@zenystx/helios-core/cluster/Address";
 import {
     Eventloop,

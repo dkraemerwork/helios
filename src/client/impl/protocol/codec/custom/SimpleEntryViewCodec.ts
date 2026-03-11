@@ -1,9 +1,9 @@
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { ClientMessage } from '../../ClientMessage.js';
+import { DataCodec } from '../builtin/DataCodec.js';
 import {
     FixedSizeTypesCodec,
     LONG_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+} from '../builtin/FixedSizeTypesCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 

@@ -4,12 +4,12 @@
  * Handles create-proxy, destroy-proxy, and get-distributed-objects requests
  * from remote clients.
  */
-import { ClientCreateProxyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientCreateProxyCodec";
-import { ClientDestroyProxyCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientDestroyProxyCodec";
+import { ClientCreateProxyCodec } from "../../../client/impl/protocol/codec/ClientCreateProxyCodec";
+import { ClientDestroyProxyCodec } from "../../../client/impl/protocol/codec/ClientDestroyProxyCodec";
 import {
     ClientGetDistributedObjectsCodec,
     type DistributedObjectInfo,
-} from "@zenystx/helios-core/client/impl/protocol/codec/ClientGetDistributedObjectsCodec";
+} from "../../../client/impl/protocol/codec/ClientGetDistributedObjectsCodec";
 import type { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol/ClientProtocolServer";
 
 /** Tracks distributed objects created via the client protocol. */

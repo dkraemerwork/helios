@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.builtin.EntryListIntegerUUIDCodec}.
  */
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage } from '../../ClientMessage';
 import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from './FixedSizeTypesCodec';
 
 const ENTRY_SIZE_IN_BYTES = INT_SIZE_IN_BYTES + UUID_SIZE_IN_BYTES; // 21

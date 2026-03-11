@@ -14,14 +14,14 @@
  * there is no surviving backup to promote.
  */
 
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
+import { ClientMessage, ClientMessageFrame } from '../../../client/impl/protocol/ClientMessage.js';
 import {
     FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
     BOOLEAN_SIZE_IN_BYTES,
-} from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+} from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
 // ── Message type constants ────────────────────────────────────────────────────
 

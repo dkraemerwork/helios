@@ -6,15 +6,15 @@
  *
  * Hazelcast parity: ScheduledExecutorSubmitToPartitionMessageTask, etc.
  */
-import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
-import { ScheduledExecutorSubmitToPartitionCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorSubmitToPartitionCodec';
-import { ScheduledExecutorSubmitToMemberCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorSubmitToMemberCodec';
-import { ScheduledExecutorCancelCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorCancelCodec';
-import { ScheduledExecutorDisposeCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorDisposeCodec';
-import { ScheduledExecutorGetAllScheduledFuturesCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorGetAllScheduledFuturesCodec';
-import { ScheduledExecutorGetStatsCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorGetStatsCodec';
-import { ScheduledExecutorGetStateCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorGetStateCodec';
-import { ScheduledExecutorShutdownCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ScheduledExecutorShutdownCodec';
+import type { ClientMessage } from '../../client/impl/protocol/ClientMessage';
+import { ScheduledExecutorSubmitToPartitionCodec } from '../../client/impl/protocol/codec/ScheduledExecutorSubmitToPartitionCodec';
+import { ScheduledExecutorSubmitToMemberCodec } from '../../client/impl/protocol/codec/ScheduledExecutorSubmitToMemberCodec';
+import { ScheduledExecutorCancelCodec } from '../../client/impl/protocol/codec/ScheduledExecutorCancelCodec';
+import { ScheduledExecutorDisposeCodec } from '../../client/impl/protocol/codec/ScheduledExecutorDisposeCodec';
+import { ScheduledExecutorGetAllScheduledFuturesCodec } from '../../client/impl/protocol/codec/ScheduledExecutorGetAllScheduledFuturesCodec';
+import { ScheduledExecutorGetStatsCodec } from '../../client/impl/protocol/codec/ScheduledExecutorGetStatsCodec';
+import { ScheduledExecutorGetStateCodec } from '../../client/impl/protocol/codec/ScheduledExecutorGetStateCodec';
+import { ScheduledExecutorShutdownCodec } from '../../client/impl/protocol/codec/ScheduledExecutorShutdownCodec';
 import type { ScheduledExecutorContainerService } from '@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorContainerService';
 import { ScheduledTaskHandler } from '@zenystx/helios-core/scheduledexecutor/ScheduledTaskHandler';
 import { ScheduledTaskState } from '@zenystx/helios-core/scheduledexecutor/impl/ScheduledTaskState';

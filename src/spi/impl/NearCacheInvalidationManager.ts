@@ -433,7 +433,7 @@ export class NearCacheInvalidationManager {
 
     private _sendPayload(session: ClientSession, payload: Buffer): boolean {
         try {
-            return session.pushEvent(payload as unknown as import('@zenystx/helios-core/client/impl/protocol/ClientMessage.js').ClientMessage);
+            return session.pushEvent(payload as unknown as import('../../client/impl/protocol/ClientMessage.js').ClientMessage);
         } catch (err) {
             this._logger?.warning(
                 `[NearCacheInvalidationManager] Failed to push event to session ${session.getSessionId()}`,

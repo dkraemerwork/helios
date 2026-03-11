@@ -20,13 +20,13 @@
  * CreateProxyTask, DestroyProxyTask, etc.).
  */
 
-import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { ClientCreateProxyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientCreateProxyCodec.js';
-import { ClientDestroyProxyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientDestroyProxyCodec.js';
-import { ClientGetDistributedObjectsCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientGetDistributedObjectsCodec.js';
-import { ListMultiFrameCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
-import { ListUUIDCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/ListUUIDCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
+import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
+import { ClientCreateProxyCodec } from '../../../client/impl/protocol/codec/ClientCreateProxyCodec.js';
+import { ClientDestroyProxyCodec } from '../../../client/impl/protocol/codec/ClientDestroyProxyCodec.js';
+import { ClientGetDistributedObjectsCodec } from '../../../client/impl/protocol/codec/ClientGetDistributedObjectsCodec.js';
+import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
+import { ListUUIDCodec } from '../../../client/impl/protocol/codec/builtin/ListUUIDCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
 import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
 import { compactFieldKindFromWire, compactFieldKindToWire, Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
@@ -166,8 +166,8 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
 
 // ── Inline response encoders ──────────────────────────────────────────────────
 
-import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
+import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
 /** Standard response initial frame: type(4) + correlationId(8) + backupAcks/partitionId(4) = 16. */
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16

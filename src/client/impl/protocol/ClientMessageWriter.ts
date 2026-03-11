@@ -1,7 +1,7 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.ClientMessageWriter}.
  */
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage, ClientMessageFrame } from './ClientMessage';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 
 const SIZE = 6; // ClientMessage.SIZE_OF_FRAME_LENGTH_AND_FLAGS

@@ -1,6 +1,6 @@
 import { HeliosTestCluster } from "./helpers/HeliosTestCluster";
-import { ClientAuthenticationCodec } from "@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec";
-import { ClientMessageWriter } from "@zenystx/helios-core/client/impl/protocol/ClientMessageWriter";
+import { ClientAuthenticationCodec } from "../../src/client/impl/protocol/codec/ClientAuthenticationCodec";
+import { ClientMessageWriter } from "../../src/client/impl/protocol/ClientMessageWriter";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
 
 const cluster = new HeliosTestCluster("connect-test");

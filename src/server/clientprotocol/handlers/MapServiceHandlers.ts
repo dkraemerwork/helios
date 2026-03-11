@@ -50,24 +50,24 @@
  * Port of Hazelcast Map message tasks.
  */
 
-import type { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { ClientMessage as CM } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { MapPutCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapPutCodec.js';
-import { MapGetCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapGetCodec.js';
-import { MapRemoveCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapRemoveCodec.js';
-import { MapSizeCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapSizeCodec.js';
-import { MapContainsKeyCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapContainsKeyCodec.js';
-import { MapClearCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapClearCodec.js';
-import { MapDeleteCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapDeleteCodec.js';
-import { MapSetCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapSetCodec.js';
-import { MapAddEntryListenerCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapAddEntryListenerCodec.js';
-import { MapGetEntryViewCodec } from '@zenystx/helios-core/client/impl/protocol/codec/MapGetEntryViewCodec.js';
+import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
+import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
+import { MapPutCodec } from '../../../client/impl/protocol/codec/MapPutCodec.js';
+import { MapGetCodec } from '../../../client/impl/protocol/codec/MapGetCodec.js';
+import { MapRemoveCodec } from '../../../client/impl/protocol/codec/MapRemoveCodec.js';
+import { MapSizeCodec } from '../../../client/impl/protocol/codec/MapSizeCodec.js';
+import { MapContainsKeyCodec } from '../../../client/impl/protocol/codec/MapContainsKeyCodec.js';
+import { MapClearCodec } from '../../../client/impl/protocol/codec/MapClearCodec.js';
+import { MapDeleteCodec } from '../../../client/impl/protocol/codec/MapDeleteCodec.js';
+import { MapSetCodec } from '../../../client/impl/protocol/codec/MapSetCodec.js';
+import { MapAddEntryListenerCodec } from '../../../client/impl/protocol/codec/MapAddEntryListenerCodec.js';
+import { MapGetEntryViewCodec } from '../../../client/impl/protocol/codec/MapGetEntryViewCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClusteredOperationDispatcher } from '@zenystx/helios-core/spi/impl/ClusteredOperationDispatcher.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, FixedSizeTypesCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/StringCodec.js';
-import { CodecUtil } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/CodecUtil.js';
-import { DataCodec } from '@zenystx/helios-core/client/impl/protocol/codec/builtin/DataCodec.js';
+import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, FixedSizeTypesCodec } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
+import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
 import type { MapServiceOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────

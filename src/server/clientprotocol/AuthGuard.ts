@@ -24,8 +24,8 @@
  * {@code ClientProtocolService.messageArrived} security checks.
  */
 
-import { ClientMessage } from '@zenystx/helios-core/client/impl/protocol/ClientMessage.js';
-import { ClientAuthenticationCodec } from '@zenystx/helios-core/client/impl/protocol/codec/ClientAuthenticationCodec.js';
+import { ClientMessage } from '../../client/impl/protocol/ClientMessage.js';
+import { ClientAuthenticationCodec } from '../../client/impl/protocol/codec/ClientAuthenticationCodec.js';
 import { ErrorCodec } from '@zenystx/helios-core/server/clientprotocol/ErrorCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import {

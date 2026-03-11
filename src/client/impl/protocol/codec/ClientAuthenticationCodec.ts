@@ -5,7 +5,7 @@
  * The request/response frame layouts match the auto-generated codecs from
  * https://github.com/hazelcast/hazelcast-client-protocol.
  */
-import { ClientMessage, ClientMessageFrame } from '@zenystx/helios-core/client/impl/protocol/ClientMessage';
+import { ClientMessage, ClientMessageFrame } from '../ClientMessage';
 import type { Address } from '@zenystx/helios-core/cluster/Address';
 import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { CodecUtil } from './builtin/CodecUtil';
