@@ -3,13 +3,13 @@
  *
  * Registers handlers for all Executor opcodes required by hazelcast-client@5.6.x:
  *
- *   ExecutorService.Shutdown          (0x0a0100)
- *   ExecutorService.IsShutdown        (0x0a0200)
- *   ExecutorService.IsTerminated      (0x0a0300)
- *   ExecutorService.CancelOnPartition (0x0a0400)
- *   ExecutorService.CancelOnMember    (0x0a0500)
- *   ExecutorService.SubmitToPartition (0x0a0600)
- *   ExecutorService.SubmitToMember    (0x0a0700)
+ *   ExecutorService.Shutdown          (0x080100)
+ *   ExecutorService.IsShutdown        (0x080200)
+ *   ExecutorService.IsTerminated      (0x080300)
+ *   ExecutorService.CancelOnPartition (0x080400)
+ *   ExecutorService.CancelOnMember    (0x080500)
+ *   ExecutorService.SubmitToPartition (0x080600)
+ *   ExecutorService.SubmitToMember    (0x080700)
  *
  * Also registers DurableExecutor handlers:
  *   DurableExecutor.Shutdown          (0x0f0100)
@@ -30,13 +30,13 @@ import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
-const EXEC_SHUTDOWN_REQUEST         = 0x0a0100; const EXEC_SHUTDOWN_RESPONSE         = 0x0a0101;
-const EXEC_IS_SHUTDOWN_REQUEST      = 0x0a0200; const EXEC_IS_SHUTDOWN_RESPONSE      = 0x0a0201;
-const EXEC_IS_TERMINATED_REQUEST    = 0x0a0300; const EXEC_IS_TERMINATED_RESPONSE    = 0x0a0301;
-const EXEC_CANCEL_ON_PART_REQUEST   = 0x0a0400; const EXEC_CANCEL_ON_PART_RESPONSE   = 0x0a0401;
-const EXEC_CANCEL_ON_MEMBER_REQUEST = 0x0a0500; const EXEC_CANCEL_ON_MEMBER_RESPONSE = 0x0a0501;
-const EXEC_SUBMIT_TO_PART_REQUEST   = 0x0a0600; const EXEC_SUBMIT_TO_PART_RESPONSE   = 0x0a0601;
-const EXEC_SUBMIT_TO_MEMBER_REQUEST = 0x0a0700; const EXEC_SUBMIT_TO_MEMBER_RESPONSE = 0x0a0701;
+const EXEC_SHUTDOWN_REQUEST         = 0x080100; const EXEC_SHUTDOWN_RESPONSE         = 0x080101;
+const EXEC_IS_SHUTDOWN_REQUEST      = 0x080200; const EXEC_IS_SHUTDOWN_RESPONSE      = 0x080201;
+const EXEC_IS_TERMINATED_REQUEST    = 0x080300; const EXEC_IS_TERMINATED_RESPONSE    = 0x080301;
+const EXEC_CANCEL_ON_PART_REQUEST   = 0x080400; const EXEC_CANCEL_ON_PART_RESPONSE   = 0x080401;
+const EXEC_CANCEL_ON_MEMBER_REQUEST = 0x080500; const EXEC_CANCEL_ON_MEMBER_RESPONSE = 0x080501;
+const EXEC_SUBMIT_TO_PART_REQUEST   = 0x080600; const EXEC_SUBMIT_TO_PART_RESPONSE   = 0x080601;
+const EXEC_SUBMIT_TO_MEMBER_REQUEST = 0x080700; const EXEC_SUBMIT_TO_MEMBER_RESPONSE = 0x080701;
 
 const DE_SHUTDOWN_REQUEST      = 0x0f0100; const DE_SHUTDOWN_RESPONSE      = 0x0f0101;
 const DE_IS_SHUTDOWN_REQUEST   = 0x0f0200; const DE_IS_SHUTDOWN_RESPONSE   = 0x0f0201;

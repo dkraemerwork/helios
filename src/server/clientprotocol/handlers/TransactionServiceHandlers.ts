@@ -3,47 +3,47 @@
  *
  * Registers handlers for all Transaction opcodes required by hazelcast-client@5.6.x:
  *
- *   Transaction.Create     (0x150100) — create a transaction
- *   Transaction.Commit     (0x150200) — commit a transaction
- *   Transaction.Rollback   (0x150300) — roll back a transaction
+ *   Transaction.Commit     (0x150100) — commit a transaction (service 0x15, method 1)
+ *   Transaction.Create     (0x150200) — create a transaction (service 0x15, method 2)
+ *   Transaction.Rollback   (0x150300) — roll back a transaction (service 0x15, method 3)
  *
- *   TransactionalMap.Put               (0x110100)
- *   TransactionalMap.Get               (0x110200)
- *   TransactionalMap.GetForUpdate      (0x110300)
- *   TransactionalMap.Size              (0x110400)
- *   TransactionalMap.ContainsKey       (0x110500)
- *   TransactionalMap.Put If Absent     (0x110600)
- *   TransactionalMap.Replace           (0x110700)
- *   TransactionalMap.ReplaceIfSame     (0x110800)
- *   TransactionalMap.Remove            (0x110900)
- *   TransactionalMap.Delete            (0x110a00)
- *   TransactionalMap.RemoveIfSame      (0x110b00)
- *   TransactionalMap.KeySet            (0x110c00)
- *   TransactionalMap.KeySetWithPredicate (0x110d00)
- *   TransactionalMap.Values            (0x110e00)
- *   TransactionalMap.ValuesWithPredicate (0x110f00)
- *   TransactionalMap.IsEmpty           (0x111000)
+ *   TransactionalMap.ContainsKey       (0x0e0100)  service 0x0e = 14
+ *   TransactionalMap.Get               (0x0e0200)
+ *   TransactionalMap.GetForUpdate      (0x0e0300)
+ *   TransactionalMap.Size              (0x0e0400)
+ *   TransactionalMap.IsEmpty           (0x0e0500)
+ *   TransactionalMap.Put               (0x0e0600)
+ *   TransactionalMap.PutIfAbsent       (0x0e0800)
+ *   TransactionalMap.Replace           (0x0e0900)
+ *   TransactionalMap.ReplaceIfSame     (0x0e0a00)
+ *   TransactionalMap.Remove            (0x0e0b00)
+ *   TransactionalMap.Delete            (0x0e0c00)
+ *   TransactionalMap.RemoveIfSame      (0x0e0d00)
+ *   TransactionalMap.KeySet            (0x0e0e00)
+ *   TransactionalMap.KeySetWithPredicate (0x0e0f00)
+ *   TransactionalMap.Values            (0x0e1000)
+ *   TransactionalMap.ValuesWithPredicate (0x0e1100)
  *
- *   TransactionalQueue.Offer           (0x120100)
+ *   TransactionalMultiMap.Put          (0x0f0100)  service 0x0f = 15
+ *   TransactionalMultiMap.Get          (0x0f0200)
+ *   TransactionalMultiMap.Remove       (0x0f0300)
+ *   TransactionalMultiMap.RemoveEntry  (0x0f0400)
+ *   TransactionalMultiMap.ValueCount   (0x0f0500)
+ *   TransactionalMultiMap.Size         (0x0f0600)
+ *
+ *   TransactionalSet.Add               (0x100100)  service 0x10 = 16
+ *   TransactionalSet.Remove            (0x100200)
+ *   TransactionalSet.Size              (0x100300)
+ *
+ *   TransactionalList.Add              (0x110100)  service 0x11 = 17
+ *   TransactionalList.Remove           (0x110200)
+ *   TransactionalList.Size             (0x110300)
+ *
+ *   TransactionalQueue.Offer           (0x120100)  service 0x12 = 18
  *   TransactionalQueue.Take            (0x120200)
  *   TransactionalQueue.Poll            (0x120300)
  *   TransactionalQueue.Peek            (0x120400)
  *   TransactionalQueue.Size            (0x120500)
- *
- *   TransactionalList.Add              (0x160100)
- *   TransactionalList.Remove           (0x160200)
- *   TransactionalList.Size             (0x160300)
- *
- *   TransactionalSet.Add               (0x170100)
- *   TransactionalSet.Remove            (0x170200)
- *   TransactionalSet.Size              (0x170300)
- *
- *   TransactionalMultiMap.Put          (0x100100)
- *   TransactionalMultiMap.Get          (0x100200)
- *   TransactionalMultiMap.Remove       (0x100300)
- *   TransactionalMultiMap.RemoveEntry  (0x100400)
- *   TransactionalMultiMap.ValueCount   (0x100500)
- *   TransactionalMultiMap.Size         (0x100600)
  */
 
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
@@ -59,47 +59,56 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
-const TX_CREATE_REQUEST   = 0x150100; const TX_CREATE_RESPONSE   = 0x150101;
-const TX_COMMIT_REQUEST   = 0x150200; const TX_COMMIT_RESPONSE   = 0x150201;
+// Transaction service ID = 21 (0x15): commit=1, create=2, rollback=3
+const TX_COMMIT_REQUEST   = 0x150100; const TX_COMMIT_RESPONSE   = 0x150101;
+const TX_CREATE_REQUEST   = 0x150200; const TX_CREATE_RESPONSE   = 0x150201;
 const TX_ROLLBACK_REQUEST = 0x150300; const TX_ROLLBACK_RESPONSE = 0x150301;
 
-const TXM_PUT_REQUEST        = 0x110100; const TXM_PUT_RESPONSE        = 0x110101;
-const TXM_GET_REQUEST        = 0x110200; const TXM_GET_RESPONSE        = 0x110201;
-const TXM_GET_FOR_UPDATE_REQUEST = 0x110300; const TXM_GET_FOR_UPDATE_RESPONSE = 0x110301;
-const TXM_SIZE_REQUEST       = 0x110400; const TXM_SIZE_RESPONSE       = 0x110401;
-const TXM_CONTAINS_KEY_REQUEST  = 0x110500; const TXM_CONTAINS_KEY_RESPONSE  = 0x110501;
-const TXM_PUT_IF_ABSENT_REQUEST = 0x110600; const TXM_PUT_IF_ABSENT_RESPONSE = 0x110601;
-const TXM_REPLACE_REQUEST    = 0x110700; const TXM_REPLACE_RESPONSE    = 0x110701;
-const TXM_REPLACE_IF_SAME_REQUEST = 0x110800; const TXM_REPLACE_IF_SAME_RESPONSE = 0x110801;
-const TXM_REMOVE_REQUEST     = 0x110900; const TXM_REMOVE_RESPONSE     = 0x110901;
-const TXM_DELETE_REQUEST     = 0x110a00; const TXM_DELETE_RESPONSE     = 0x110a01;
-const TXM_REMOVE_IF_SAME_REQUEST = 0x110b00; const TXM_REMOVE_IF_SAME_RESPONSE = 0x110b01;
-const TXM_KEY_SET_REQUEST    = 0x110c00; const TXM_KEY_SET_RESPONSE    = 0x110c01;
-const TXM_KEY_SET_PRED_REQUEST  = 0x110d00; const TXM_KEY_SET_PRED_RESPONSE  = 0x110d01;
-const TXM_VALUES_REQUEST     = 0x110e00; const TXM_VALUES_RESPONSE     = 0x110e01;
-const TXM_VALUES_PRED_REQUEST   = 0x110f00; const TXM_VALUES_PRED_RESPONSE   = 0x110f01;
-const TXM_IS_EMPTY_REQUEST   = 0x111000; const TXM_IS_EMPTY_RESPONSE   = 0x111001;
+// TransactionalMap service ID = 14 (0x0e): containsKey=1, get=2, getForUpdate=3, size=4,
+//   isEmpty=5, put=6, set=7, putIfAbsent=8, replace=9, replaceIfSame=10,
+//   remove=11, delete=12, removeIfSame=13, keySet=14, keySetWithPredicate=15,
+//   values=16, valuesWithPredicate=17
+const TXM_CONTAINS_KEY_REQUEST   = 0x0e0100; const TXM_CONTAINS_KEY_RESPONSE   = 0x0e0101;
+const TXM_GET_REQUEST            = 0x0e0200; const TXM_GET_RESPONSE            = 0x0e0201;
+const TXM_GET_FOR_UPDATE_REQUEST = 0x0e0300; const TXM_GET_FOR_UPDATE_RESPONSE = 0x0e0301;
+const TXM_SIZE_REQUEST           = 0x0e0400; const TXM_SIZE_RESPONSE           = 0x0e0401;
+const TXM_IS_EMPTY_REQUEST       = 0x0e0500; const TXM_IS_EMPTY_RESPONSE       = 0x0e0501;
+const TXM_PUT_REQUEST            = 0x0e0600; const TXM_PUT_RESPONSE            = 0x0e0601;
+const TXM_PUT_IF_ABSENT_REQUEST  = 0x0e0800; const TXM_PUT_IF_ABSENT_RESPONSE  = 0x0e0801;
+const TXM_REPLACE_REQUEST        = 0x0e0900; const TXM_REPLACE_RESPONSE        = 0x0e0901;
+const TXM_REPLACE_IF_SAME_REQUEST = 0x0e0a00; const TXM_REPLACE_IF_SAME_RESPONSE = 0x0e0a01;
+const TXM_REMOVE_REQUEST         = 0x0e0b00; const TXM_REMOVE_RESPONSE         = 0x0e0b01;
+const TXM_DELETE_REQUEST         = 0x0e0c00; const TXM_DELETE_RESPONSE         = 0x0e0c01;
+const TXM_REMOVE_IF_SAME_REQUEST = 0x0e0d00; const TXM_REMOVE_IF_SAME_RESPONSE = 0x0e0d01;
+const TXM_KEY_SET_REQUEST        = 0x0e0e00; const TXM_KEY_SET_RESPONSE        = 0x0e0e01;
+const TXM_KEY_SET_PRED_REQUEST   = 0x0e0f00; const TXM_KEY_SET_PRED_RESPONSE   = 0x0e0f01;
+const TXM_VALUES_REQUEST         = 0x0e1000; const TXM_VALUES_RESPONSE         = 0x0e1001;
+const TXM_VALUES_PRED_REQUEST    = 0x0e1100; const TXM_VALUES_PRED_RESPONSE    = 0x0e1101;
 
+// TransactionalMultiMap service ID = 15 (0x0f): put=1, get=2, remove=3, removeEntry=4, valueCount=5, size=6
+const TXMM_PUT_REQUEST          = 0x0f0100; const TXMM_PUT_RESPONSE          = 0x0f0101;
+const TXMM_GET_REQUEST          = 0x0f0200; const TXMM_GET_RESPONSE          = 0x0f0201;
+const TXMM_REMOVE_REQUEST       = 0x0f0300; const TXMM_REMOVE_RESPONSE       = 0x0f0301;
+const TXMM_REMOVE_ENTRY_REQUEST = 0x0f0400; const TXMM_REMOVE_ENTRY_RESPONSE = 0x0f0401;
+const TXMM_VALUE_COUNT_REQUEST  = 0x0f0500; const TXMM_VALUE_COUNT_RESPONSE  = 0x0f0501;
+const TXMM_SIZE_REQUEST         = 0x0f0600; const TXMM_SIZE_RESPONSE         = 0x0f0601;
+
+// TransactionalSet service ID = 16 (0x10): add=1, remove=2, size=3
+const TXS_ADD_REQUEST    = 0x100100; const TXS_ADD_RESPONSE    = 0x100101;
+const TXS_REMOVE_REQUEST = 0x100200; const TXS_REMOVE_RESPONSE = 0x100201;
+const TXS_SIZE_REQUEST   = 0x100300; const TXS_SIZE_RESPONSE   = 0x100301;
+
+// TransactionalList service ID = 17 (0x11): add=1, remove=2, size=3
+const TXL_ADD_REQUEST    = 0x110100; const TXL_ADD_RESPONSE    = 0x110101;
+const TXL_REMOVE_REQUEST = 0x110200; const TXL_REMOVE_RESPONSE = 0x110201;
+const TXL_SIZE_REQUEST   = 0x110300; const TXL_SIZE_RESPONSE   = 0x110301;
+
+// TransactionalQueue service ID = 18 (0x12): offer=1, take=2, poll=3, peek=4, size=5
 const TXQ_OFFER_REQUEST  = 0x120100; const TXQ_OFFER_RESPONSE  = 0x120101;
 const TXQ_TAKE_REQUEST   = 0x120200; const TXQ_TAKE_RESPONSE   = 0x120201;
 const TXQ_POLL_REQUEST   = 0x120300; const TXQ_POLL_RESPONSE   = 0x120301;
 const TXQ_PEEK_REQUEST   = 0x120400; const TXQ_PEEK_RESPONSE   = 0x120401;
 const TXQ_SIZE_REQUEST   = 0x120500; const TXQ_SIZE_RESPONSE   = 0x120501;
-
-const TXL_ADD_REQUEST    = 0x160100; const TXL_ADD_RESPONSE    = 0x160101;
-const TXL_REMOVE_REQUEST = 0x160200; const TXL_REMOVE_RESPONSE = 0x160201;
-const TXL_SIZE_REQUEST   = 0x160300; const TXL_SIZE_RESPONSE   = 0x160301;
-
-const TXS_ADD_REQUEST    = 0x170100; const TXS_ADD_RESPONSE    = 0x170101;
-const TXS_REMOVE_REQUEST = 0x170200; const TXS_REMOVE_RESPONSE = 0x170201;
-const TXS_SIZE_REQUEST   = 0x170300; const TXS_SIZE_RESPONSE   = 0x170301;
-
-const TXMM_PUT_REQUEST        = 0x100100; const TXMM_PUT_RESPONSE        = 0x100101;
-const TXMM_GET_REQUEST        = 0x100200; const TXMM_GET_RESPONSE        = 0x100201;
-const TXMM_REMOVE_REQUEST     = 0x100300; const TXMM_REMOVE_RESPONSE     = 0x100301;
-const TXMM_REMOVE_ENTRY_REQUEST = 0x100400; const TXMM_REMOVE_ENTRY_RESPONSE = 0x100401;
-const TXMM_VALUE_COUNT_REQUEST  = 0x100500; const TXMM_VALUE_COUNT_RESPONSE  = 0x100501;
-const TXMM_SIZE_REQUEST       = 0x100600; const TXMM_SIZE_RESPONSE       = 0x100601;
 
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 

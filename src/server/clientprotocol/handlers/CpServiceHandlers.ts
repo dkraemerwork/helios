@@ -15,12 +15,12 @@
  *   AtomicLong.AlterAndGet        (0x090900)
  *   AtomicLong.Set                (0x090a00)
  *
- * AtomicRef:
+ * AtomicRef (service ID=10, 0x0a):
+ *   AtomicRef.Apply               (0x0a0100) — handles apply/alter/alterAndGet/getAndAlter via returnValueType+alter
  *   AtomicRef.CompareAndSet       (0x0a0200)
  *   AtomicRef.Contains            (0x0a0300)
  *   AtomicRef.Get                 (0x0a0400)
  *   AtomicRef.Set                 (0x0a0500)
- *   AtomicRef extended handlers   (0x0a0600-0x0a0900, Helios-only)
  *   AtomicRef.IsNull              (0x0c0800)
  *   AtomicRef.Clear               (0x0c0900)
  *   AtomicRef.CompareAndSet alias (0x0c0a00, legacy test support)
@@ -90,15 +90,16 @@ const AL_GET_AND_SET_REQUEST     = 0x090700; const AL_GET_AND_SET_RESPONSE     =
 const AL_SET_REQUEST             = 0x090a00; const AL_SET_RESPONSE             = 0x090a01;
 
 // ── AtomicRef message type constants ──────────────────────────────────────────
+// AtomicRef service ID = 10 (0x0a). Official methods per protocol spec:
+//   apply=1, compareAndSet=2, contains=3, get=4, set=5
+// The apply method handles alter/getAndAlter/alterAndGet/apply via
+// the `returnValueType` (int) and `alter` (bool) fields in the request.
 
+const AR_APPLY_REQUEST           = 0x0a0100; const AR_APPLY_RESPONSE           = 0x0a0101;
 const AR_COMPARE_AND_SET_REQUEST = 0x0a0200; const AR_COMPARE_AND_SET_RESPONSE = 0x0a0201;
 const AR_CONTAINS_REQUEST        = 0x0a0300; const AR_CONTAINS_RESPONSE        = 0x0a0301;
 const AR_GET_REQUEST             = 0x0a0400; const AR_GET_RESPONSE             = 0x0a0401;
 const AR_SET_REQUEST             = 0x0a0500; const AR_SET_RESPONSE             = 0x0a0501;
-const AR_APPLY_REQUEST           = 0x0a0600; const AR_APPLY_RESPONSE           = 0x0a0601;
-const AR_ALTER_REQUEST           = 0x0a0700; const AR_ALTER_RESPONSE           = 0x0a0701;
-const AR_GET_AND_ALTER_REQUEST   = 0x0a0800; const AR_GET_AND_ALTER_RESPONSE   = 0x0a0801;
-const AR_ALTER_AND_GET_REQUEST   = 0x0a0900; const AR_ALTER_AND_GET_RESPONSE   = 0x0a0901;
 const AR_IS_NULL_REQUEST         = 0x0c0800; const AR_IS_NULL_RESPONSE         = 0x0c0801;
 const AR_CLEAR_REQUEST           = 0x0c0900; const AR_CLEAR_RESPONSE           = 0x0c0901;
 const AR_COMPARE_AND_SET_LEGACY_REQUEST = 0x0c0a00; const AR_COMPARE_AND_SET_LEGACY_RESPONSE = 0x0c0a01;
@@ -454,32 +455,28 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
     dispatcher.register(AR_COMPARE_AND_SET_REQUEST, async (msg, _s) => handleAtomicRefCompareAndSet(msg, AR_COMPARE_AND_SET_RESPONSE));
     dispatcher.register(AR_COMPARE_AND_SET_LEGACY_REQUEST, async (msg, _s) => handleAtomicRefCompareAndSet(msg, AR_COMPARE_AND_SET_LEGACY_RESPONSE));
 
-    dispatcher.register(AR_ALTER_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpObjectReference(iter).proxyName;
-        const fn = DataCodec.decode(iter);
-        await atomicRef.alter(name, fn);
-        return _empty(AR_ALTER_RESPONSE);
-    });
-
-    dispatcher.register(AR_ALTER_AND_GET_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpObjectReference(iter).proxyName;
-        const fn = DataCodec.decode(iter);
-        return _nullable(AR_ALTER_AND_GET_RESPONSE, await atomicRef.alterAndGet(name, fn));
-    });
-
-    dispatcher.register(AR_GET_AND_ALTER_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
-        const name = _decodeCpObjectReference(iter).proxyName;
-        const fn = DataCodec.decode(iter);
-        return _nullable(AR_GET_AND_ALTER_RESPONSE, await atomicRef.getAndAlter(name, fn));
-    });
-
+    // AtomicRef.Apply (0x0a0100) — unified handler for apply/alter/alterAndGet/getAndAlter.
+    // The request carries returnValueType (int) and alter (bool) after the function frame:
+    //   returnValueType: 0=no value, 1=old value, 2=new value
+    //   alter: true if the function result should be written back to the reference
     dispatcher.register(AR_APPLY_REQUEST, async (msg, _s) => {
-        const iter = msg.forwardFrameIterator(); iter.next();
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const returnValueType = initialFrame.content.readInt32LE(REQUEST_HEADER_SIZE);
+        const doAlter = initialFrame.content.readUInt8(REQUEST_HEADER_SIZE + INT_SIZE_IN_BYTES) !== 0;
         const name = _decodeCpObjectReference(iter).proxyName;
         const fn = DataCodec.decode(iter);
+
+        if (doAlter && returnValueType === 0) {
+            await atomicRef.alter(name, fn);
+            return _empty(AR_APPLY_RESPONSE);
+        }
+        if (doAlter && returnValueType === 2) {
+            return _nullable(AR_APPLY_RESPONSE, await atomicRef.alterAndGet(name, fn));
+        }
+        if (doAlter && returnValueType === 1) {
+            return _nullable(AR_APPLY_RESPONSE, await atomicRef.getAndAlter(name, fn));
+        }
         return _nullable(AR_APPLY_RESPONSE, await atomicRef.apply(name, fn));
     });
 

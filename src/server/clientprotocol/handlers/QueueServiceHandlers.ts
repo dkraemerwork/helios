@@ -7,22 +7,23 @@
  *   Queue.Poll               (0x030200)
  *   Queue.Size               (0x030300)
  *   Queue.Clear              (0x030400)
- *   Queue.Contains           (0x030500)
- *   Queue.ContainsAll        (0x030600)
- *   Queue.Peek               (0x030700)
- *   Queue.AddAll             (0x030800)
- *   Queue.CompareAndRemoveAll (0x030900)
- *   Queue.CompareAndRetainAll (0x030a00)
- *   Queue.ToArray            (0x030b00)
- *   Queue.DrainTo            (0x030c00)
- *   Queue.DrainToWithMaxSize (0x030d00)
- *   Queue.Iterator           (0x030e00)
- *   Queue.IsEmpty            (0x030f00)
- *   Queue.Take               (0x030600)
  *   Queue.Put                (0x030200)
- *   Queue.RemainingCapacity  (0x031300)
+ *   Queue.Size               (0x030300)
+ *   Queue.Remove             (0x030400)
+ *   Queue.Poll               (0x030500)
+ *   Queue.Take               (0x030600)
+ *   Queue.Peek               (0x030700)
+ *   Queue.Iterator           (0x030800) — also used as toArray
+ *   Queue.DrainTo            (0x030900)
+ *   Queue.DrainToWithMaxSize (0x030a00)
+ *   Queue.Contains           (0x030b00)
+ *   Queue.ContainsAll        (0x030c00)
+ *   Queue.CompareAndRemoveAll (0x030d00)
+ *   Queue.CompareAndRetainAll (0x030e00)
+ *   Queue.AddAll             (0x031000)
  *   Queue.AddListener        (0x031100)
  *   Queue.RemoveListener     (0x031200)
+ *   Queue.RemainingCapacity  (0x031300)
  *   Queue.IsEmpty            (0x031400)
  */
 
@@ -53,8 +54,6 @@ const QUEUE_COMPARE_RETAIN_ALL_REQUEST_TYPE  = 0x030e00;
 const QUEUE_COMPARE_RETAIN_ALL_RESPONSE_TYPE = 0x030e01;
 const QUEUE_ADD_ALL_REQUEST_TYPE           = 0x031000;
 const QUEUE_ADD_ALL_RESPONSE_TYPE          = 0x031001;
-const QUEUE_TO_ARRAY_REQUEST_TYPE          = 0x030e00;
-const QUEUE_TO_ARRAY_RESPONSE_TYPE         = 0x030e01;
 const QUEUE_DRAIN_TO_REQUEST_TYPE          = 0x030900;
 const QUEUE_DRAIN_TO_RESPONSE_TYPE         = 0x030901;
 const QUEUE_DRAIN_TO_MAX_REQUEST_TYPE      = 0x030a00;
@@ -172,15 +171,6 @@ export function registerQueueServiceHandlers(
         const values = _decodeDataList(iter);
         const result = await operations.retainAll(name, values);
         return _encodeBooleanResponse(QUEUE_COMPARE_RETAIN_ALL_RESPONSE_TYPE, result);
-    });
-
-    // Queue.ToArray (same as iterator)
-    dispatcher.register(QUEUE_TO_ARRAY_REQUEST_TYPE, async (msg, _session) => {
-        const iter = msg.forwardFrameIterator();
-        iter.next();
-        const name = StringCodec.decode(iter);
-        const items = await operations.iterator(name);
-        return _encodeDataListResponse(QUEUE_TO_ARRAY_RESPONSE_TYPE, items);
     });
 
     // Queue.DrainTo
