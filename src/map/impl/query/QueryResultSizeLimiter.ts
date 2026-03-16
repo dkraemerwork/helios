@@ -7,7 +7,7 @@
 import type { MapServiceContext } from '@zenystx/helios-core/map/impl/MapServiceContext';
 import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
 import { ClusterProperty } from '@zenystx/helios-core/spi/properties/ClusterProperty';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 export class QueryResultSizeLimiter {
     /**

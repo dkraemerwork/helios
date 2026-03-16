@@ -21,7 +21,7 @@
  */
 
 import { BackpressureRejectException, BackpressureWaitTimeoutException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Policy enum ───────────────────────────────────────────────────────────────
 

@@ -24,7 +24,7 @@
  */
 
 import { DEFAULT_INVOCATION_TIMEOUT_MS } from '@zenystx/helios-core/compatibility/CompatibilityTarget.js';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

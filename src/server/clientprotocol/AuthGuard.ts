@@ -34,7 +34,7 @@ import {
 } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 import type { ClientSessionRegistry } from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Audit event types ─────────────────────────────────────────────────────────
 

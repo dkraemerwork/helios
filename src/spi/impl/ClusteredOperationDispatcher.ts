@@ -29,7 +29,7 @@ import { WrongTargetException, TargetNotMemberException } from '@zenystx/helios-
 import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
 import { InvocationFuture as InvocationFutureImpl } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Operation types ───────────────────────────────────────────────────────────
 

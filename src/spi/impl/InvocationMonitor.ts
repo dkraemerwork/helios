@@ -22,7 +22,7 @@ import type { Address } from '@zenystx/helios-core/cluster/Address.js';
 import { MemberLeftException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
 import { DEFAULT_INVOCATION_TIMEOUT_MS } from '@zenystx/helios-core/compatibility/CompatibilityTarget.js';
 import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 /** Scan interval: check deadlines once per second. */
 const SCAN_INTERVAL_MS = 1_000;

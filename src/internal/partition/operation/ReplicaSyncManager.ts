@@ -27,7 +27,7 @@ import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/part
 import { PartitionReplicaSyncChunkAssembler } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse.js';
 import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse.js';
 import { DuplicateSyncChunkException, StaleReplicaSyncException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

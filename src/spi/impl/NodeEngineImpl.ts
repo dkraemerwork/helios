@@ -16,14 +16,19 @@ import type { OperationService } from '@zenystx/helios-core/spi/impl/operationse
 import { OperationServiceImpl } from '@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl';
 import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
-import type { ILogger } from '@zenystx/helios-core/test-support/ILogger';
-import { ConsoleLogger } from '@zenystx/helios-core/test-support/ILogger';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+import { LogLevel } from '@zenystx/helios-core/logging/Logger.js';
+import { LoggingService } from '@zenystx/helios-core/logging/LoggingService.js';
 
 export interface NodeEngineImplOptions {
     localAddress?: Address;
     migratingPartitions?: Set<number>;
     operationService?: OperationService;
     partitionService?: PartitionService;
+    /** Pre-constructed LoggingService. If omitted, a default INFO-level service is created. */
+    loggingService?: LoggingService;
+    /** Default log level when no LoggingService is provided. Defaults to INFO. */
+    logLevel?: LogLevel;
 }
 
 /** Minimal single-node partition service: 271 partitions, all local. */
@@ -60,7 +65,7 @@ export class NodeEngineImpl implements NodeEngine {
     private readonly _operationService: OperationService;
     private readonly _properties: HeliosProperties;
     private readonly _partitionService: PartitionService;
-    private readonly _loggers = new Map<string, ILogger>();
+    private readonly _loggingService: LoggingService;
     private readonly _localAddress: Address;
     private _running = true;
 
@@ -68,6 +73,8 @@ export class NodeEngineImpl implements NodeEngine {
         this._serializationService = serializationService;
         this._properties = new MapHeliosProperties();
         this._localAddress = options?.localAddress ?? new Address('127.0.0.1', 5701);
+        this._loggingService = options?.loggingService
+            ?? new LoggingService(options?.logLevel ?? LogLevel.INFO);
         this._partitionService = options?.partitionService ?? new SingleNodePartitionService(
             this._localAddress,
             options?.migratingPartitions,
@@ -102,12 +109,7 @@ export class NodeEngineImpl implements NodeEngine {
             throw new Error('nameOrClass must not be null');
         }
         const name = typeof nameOrClass === 'string' ? nameOrClass : nameOrClass.name;
-        let logger = this._loggers.get(name);
-        if (!logger) {
-            logger = new ConsoleLogger(name);
-            this._loggers.set(name, logger);
-        }
-        return logger;
+        return this._loggingService.getLogger(name);
     }
 
     isRunning(): boolean { return this._running; }

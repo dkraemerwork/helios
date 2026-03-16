@@ -1,50 +1,53 @@
 /**
- * Minimal port of {@code com.hazelcast.logging.ILogger}.
+ * Backwards-compatible test-support logger shim.
  *
- * Only the subset needed for test-support stubs. Block 3.1 will extend this
- * with the full logging interface.
+ * Production code should import from `@zenystx/helios-core/logging/Logger.js`.
+ * This file re-exports the production {@link ILogger} interface so that test
+ * code referencing `test-support/ILogger` continues to compile without change.
+ *
+ * {@link ConsoleLogger} is kept here as a convenience logger for unit tests
+ * that do not need level filtering.  It maps the extended ILogger interface to
+ * the simple console.* methods.
  */
-export interface ILogger {
-    finest(msg: string, err?: unknown): void;
-    fine(msg: string, err?: unknown): void;
-    info(msg: string, err?: unknown): void;
-    warning(msg: string, err?: unknown): void;
-    severe(msg: string, err?: unknown): void;
-    isFinestEnabled(): boolean;
-    isFineEnabled(): boolean;
-}
+
+export type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+export { LogLevel } from '@zenystx/helios-core/logging/Logger.js';
+
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+import { LogLevel } from '@zenystx/helios-core/logging/Logger.js';
 
 /**
  * Console-based ILogger implementation for tests.
+ *
+ * Logs all levels (no filtering).  Not suitable for production use.
  */
 export class ConsoleLogger implements ILogger {
     constructor(private readonly name: string) {}
 
-    finest(msg: string, err?: unknown): void {
-        if (err !== undefined) console.debug(`[FINEST][${this.name}] ${msg}`, err);
-        else console.debug(`[FINEST][${this.name}] ${msg}`);
+    severe(...args: unknown[]): void  { console.error(`[SEVERE ][${this.name}]`,  ...args); }
+    warning(...args: unknown[]): void { console.warn( `[WARNING][${this.name}]`,  ...args); }
+    info(...args: unknown[]): void    { console.info( `[INFO   ][${this.name}]`,  ...args); }
+    config(...args: unknown[]): void  { console.info( `[CONFIG ][${this.name}]`,  ...args); }
+    fine(...args: unknown[]): void    { console.debug(`[FINE   ][${this.name}]`,  ...args); }
+    finer(...args: unknown[]): void   { console.debug(`[FINER  ][${this.name}]`,  ...args); }
+    finest(...args: unknown[]): void  { console.debug(`[FINEST ][${this.name}]`,  ...args); }
+
+    log(level: LogLevel, ...args: unknown[]): void {
+        switch (level) {
+            case LogLevel.SEVERE:  this.severe(...args);  break;
+            case LogLevel.WARNING: this.warning(...args); break;
+            case LogLevel.INFO:    this.info(...args);    break;
+            case LogLevel.CONFIG:  this.config(...args);  break;
+            case LogLevel.FINE:    this.fine(...args);    break;
+            case LogLevel.FINER:   this.finer(...args);   break;
+            case LogLevel.FINEST:  this.finest(...args);  break;
+            default: break;
+        }
     }
 
-    fine(msg: string, err?: unknown): void {
-        if (err !== undefined) console.debug(`[FINE][${this.name}] ${msg}`, err);
-        else console.debug(`[FINE][${this.name}] ${msg}`);
-    }
-
-    info(msg: string, err?: unknown): void {
-        if (err !== undefined) console.info(`[INFO][${this.name}] ${msg}`, err);
-        else console.info(`[INFO][${this.name}] ${msg}`);
-    }
-
-    warning(msg: string, err?: unknown): void {
-        if (err !== undefined) console.warn(`[WARN][${this.name}] ${msg}`, err);
-        else console.warn(`[WARN][${this.name}] ${msg}`);
-    }
-
-    severe(msg: string, err?: unknown): void {
-        if (err !== undefined) console.error(`[SEVERE][${this.name}] ${msg}`, err);
-        else console.error(`[SEVERE][${this.name}] ${msg}`);
-    }
-
-    isFinestEnabled(): boolean { return false; }
-    isFineEnabled(): boolean { return false; }
+    isLoggable(_level: LogLevel): boolean { return true; }
+    isFineEnabled(): boolean   { return true; }
+    isFinestEnabled(): boolean { return true; }
+    getLevel(): LogLevel       { return LogLevel.ALL; }
+    setLevel(_level: LogLevel): void { /* no-op in test logger */ }
 }

@@ -189,5 +189,10 @@ export type { HllSnapshot } from "@zenystx/helios-core/cardinality/impl/Distribu
 export { HyperLogLogImpl } from "@zenystx/helios-core/cardinality/impl/HyperLogLogImpl";
 export type { HyperLogLog } from "@zenystx/helios-core/cardinality/HyperLogLog";
 
+// ── Logging ───────────────────────────────────────────────────────────────────
+export { LogLevel, type ILogger } from "@zenystx/helios-core/logging/Logger";
+export { HeliosLogger } from "@zenystx/helios-core/logging/HeliosLogger";
+export { LoggingService } from "@zenystx/helios-core/logging/LoggingService";
+
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";
