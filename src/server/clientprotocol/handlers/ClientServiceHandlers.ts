@@ -93,7 +93,7 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
     const { dispatcher, topologyPublisher, schemaService, localMemberUuid } = opts;
     const objectRegistry = opts.objectRegistry ?? new DistributedObjectRegistry();
 
-    // ── Ping (0x000d00) ───────────────────────────────────────────────────────
+    // ── Ping (0x000b00) ───────────────────────────────────────────────────────
     dispatcher.register(CLIENT_PING_REQUEST_TYPE, async (_msg, _session) => {
         return _encodePingResponse();
     });

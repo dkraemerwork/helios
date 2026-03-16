@@ -57,6 +57,21 @@ export interface MapServiceOperations {
     executeWithPredicate(name: string, entryProcessor: Data, predicate: Data): Promise<Array<[Data, Data]>>;
     executeOnKeys(name: string, keys: Data[], entryProcessor: Data): Promise<Array<[Data, Data]>>;
     setTtl(name: string, key: Data, ttl: bigint): Promise<boolean>;
+    isEmpty(name: string): Promise<boolean>;
+    tryRemove(name: string, key: Data, threadId: bigint, timeout: bigint): Promise<boolean>;
+    putWithMaxIdle(name: string, key: Data, value: Data, threadId: bigint, ttl: bigint, maxIdle: bigint): Promise<Data | null>;
+    loadAll(name: string, replaceExistingValues: boolean): Promise<void>;
+    loadGivenKeys(name: string, keys: Data[], replaceExistingValues: boolean): Promise<void>;
+    keySetWithPredicate(name: string, predicate: Data): Promise<Data[]>;
+    valuesWithPredicate(name: string, predicate: Data): Promise<Data[]>;
+    entriesWithPredicate(name: string, predicate: Data): Promise<Array<[Data, Data]>>;
+    addIndex(name: string, indexType: number, indexAttributes: string[]): Promise<void>;
+    removeAll(name: string, predicate: Data): Promise<void>;
+    aggregate(name: string, aggregator: Data): Promise<Data | null>;
+    aggregateWithPredicate(name: string, aggregator: Data, predicate: Data): Promise<Data | null>;
+    addEntryListenerToKey(name: string, key: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
+    addEntryListenerWithPredicate(name: string, predicate: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
+    addEntryListenerToKeyWithPredicate(name: string, key: Data, predicate: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────

@@ -179,6 +179,8 @@ import { TransactionalMultiMapProxy } from "@zenystx/helios-core/transaction/imp
 import { TransactionalQueueProxy } from "@zenystx/helios-core/transaction/impl/TransactionalQueueProxy";
 import { TransactionalSetProxy } from "@zenystx/helios-core/transaction/impl/TransactionalSetProxy";
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
+import { IndexConfig as HeliosIndexConfig } from "@zenystx/helios-core/config/IndexConfig";
+import { IndexType as HeliosIndexType } from "@zenystx/helios-core/query/impl/Index";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -314,6 +316,8 @@ interface MapClientListenerRegistration {
   correlationId: number;
   flags: number;
   session: ClientSession;
+  /** Optional filter: return false to suppress the event */
+  filter?: (key: Data | null, value: Data | null, oldValue: Data | null, eventType: number) => boolean;
 }
 
 interface QueueClientListenerRegistration {
@@ -2484,6 +2488,170 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
         return store.setTtl(key, Number(ttl));
       },
+      isEmpty: async (name) => {
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (store && store.size() > 0) return false;
+        }
+        return true;
+      },
+      tryRemove: async (name, key, _threadId, _timeout) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const previous = store.remove(key);
+        if (previous !== null) {
+          this._publishClientMapEvent(name, key, null, previous, 2);
+        }
+        return previous !== null;
+      },
+      putWithMaxIdle: async (name, key, value, _threadId, ttl, maxIdle) => {
+        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const previous = store.put(key, value, Number(ttl), Number(maxIdle));
+        this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
+        return previous;
+      },
+      loadAll: async (_name, _replaceExistingValues) => {
+        // No-op: no MapStore configured in this implementation
+      },
+      loadGivenKeys: async (_name, _keys, _replaceExistingValues) => {
+        // No-op: no MapStore configured in this implementation
+      },
+      keySetWithPredicate: async (name, predicateData) => {
+        const predicate = deserializePredicate(predicateData);
+        const keys: Data[] = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [key, value] of store.entries()) {
+            if (predicateMatches(predicate, key, value)) keys.push(key);
+          }
+        }
+        return keys;
+      },
+      valuesWithPredicate: async (name, predicateData) => {
+        const predicate = deserializePredicate(predicateData);
+        const values: Data[] = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [key, value] of store.entries()) {
+            if (predicateMatches(predicate, key, value)) values.push(value);
+          }
+        }
+        return values;
+      },
+      entriesWithPredicate: async (name, predicateData) => {
+        const predicate = deserializePredicate(predicateData);
+        const result: Array<[Data, Data]> = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [key, value] of store.entries()) {
+            if (predicateMatches(predicate, key, value)) result.push([key, value]);
+          }
+        }
+        return result;
+      },
+      addIndex: async (name, indexType, indexAttributes) => {
+        // Wire uses: SORTED=0, HASH=1, BITMAP=2
+        const typeMap: Record<number, HeliosIndexType> = {
+          0: HeliosIndexType.SORTED,
+          1: HeliosIndexType.HASH,
+          2: HeliosIndexType.BITMAP,
+        };
+        const resolvedType = typeMap[indexType] ?? HeliosIndexType.SORTED;
+        const cfg = new HeliosIndexConfig(resolvedType, indexAttributes.length > 0 ? indexAttributes : ['__key']);
+        this._getOrCreateProxy(name).addIndex(cfg);
+      },
+      removeAll: async (name, predicateData) => {
+        const predicate = deserializePredicate(predicateData);
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          const toRemove: Data[] = [];
+          for (const [key, value] of store.entries()) {
+            if (predicateMatches(predicate, key, value)) toRemove.push(key);
+          }
+          for (const key of toRemove) {
+            const previous = store.remove(key);
+            if (previous !== null) {
+              this._publishClientMapEvent(name, key, null, previous, 2);
+            }
+          }
+        }
+      },
+      aggregate: async (name, aggregatorData) => {
+        const aggregator = this._ss.toObject<import('@zenystx/helios-core/aggregation/Aggregator').Aggregator<unknown, unknown>>(aggregatorData);
+        if (aggregator === null || typeof aggregator.accumulate !== 'function') {
+          throw new Error('Aggregator payload is not a valid Aggregator');
+        }
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [kd, vd] of store.entries()) {
+            const k = this._ss.toObject(kd);
+            const v = this._ss.toObject(vd);
+            if (k === null || v === null) continue;
+            aggregator.accumulate({ getKey: () => k, getValue: () => v, getAttributeValue: (attr: string) => {
+              if (attr === '__key') return k;
+              return getEventAttributeValue(v, attr);
+            }});
+          }
+        }
+        aggregator.onAccumulationFinished();
+        aggregator.onCombinationFinished();
+        const result = aggregator.aggregate();
+        return serializeResult(result);
+      },
+      aggregateWithPredicate: async (name, aggregatorData, predicateData) => {
+        const aggregator = this._ss.toObject<import('@zenystx/helios-core/aggregation/Aggregator').Aggregator<unknown, unknown>>(aggregatorData);
+        if (aggregator === null || typeof aggregator.accumulate !== 'function') {
+          throw new Error('Aggregator payload is not a valid Aggregator');
+        }
+        const predicate = deserializePredicate(predicateData);
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [kd, vd] of store.entries()) {
+            if (!predicateMatches(predicate, kd, vd)) continue;
+            const k = this._ss.toObject(kd);
+            const v = this._ss.toObject(vd);
+            if (k === null || v === null) continue;
+            aggregator.accumulate({ getKey: () => k, getValue: () => v, getAttributeValue: (attr: string) => {
+              if (attr === '__key') return k;
+              return getEventAttributeValue(v, attr);
+            }});
+          }
+        }
+        aggregator.onAccumulationFinished();
+        aggregator.onCombinationFinished();
+        const result = aggregator.aggregate();
+        return serializeResult(result);
+      },
+      addEntryListenerToKey: async (name, key, _includeValue, listenerFlags, _localOnly, correlationId, session) => {
+        return this._registerClientMapListener(name, listenerFlags, correlationId, session,
+          (eventKey: Data | null) => eventKey !== null && eventKey.equals(key),
+        );
+      },
+      addEntryListenerWithPredicate: async (name, predicateData, _includeValue, listenerFlags, _localOnly, correlationId, session) => {
+        const predicate = deserializePredicate(predicateData);
+        return this._registerClientMapListener(name, listenerFlags, correlationId, session,
+          (eventKey: Data | null, eventValue: Data | null, eventOldValue: Data | null) => {
+            if (eventKey === null) return true;
+            const candidateValue = eventValue ?? eventOldValue;
+            return candidateValue !== null && predicateMatches(predicate, eventKey, candidateValue);
+          },
+        );
+      },
+      addEntryListenerToKeyWithPredicate: async (name, key, predicateData, _includeValue, listenerFlags, _localOnly, correlationId, session) => {
+        const predicate = deserializePredicate(predicateData);
+        return this._registerClientMapListener(name, listenerFlags, correlationId, session,
+          (eventKey: Data | null, eventValue: Data | null, eventOldValue: Data | null) => {
+            if (eventKey === null || !eventKey.equals(key)) return false;
+            const candidateValue = eventValue ?? eventOldValue;
+            return candidateValue !== null && predicateMatches(predicate, eventKey, candidateValue);
+          },
+        );
+      },
     };
 
     // ── Queue adapter ─────────────────────────────────────────────────────
@@ -4289,7 +4457,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
   }
 
-  private _registerClientMapListener(name: string, flags: number, correlationId: number, session: ClientSession): string {
+  private _registerClientMapListener(
+    name: string,
+    flags: number,
+    correlationId: number,
+    session: ClientSession,
+    filter?: (key: Data | null, value: Data | null, oldValue: Data | null, eventType: number) => boolean,
+  ): string {
     const registrationId = crypto.randomUUID();
     this._clientMapListenerRegistrations.set(registrationId, {
       mapName: name,
@@ -4297,6 +4471,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       correlationId,
       flags,
       session,
+      filter,
     });
     let registrations = this._clientSessionMapListeners.get(session.getSessionId());
     if (registrations === undefined) {
@@ -4338,6 +4513,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
         continue;
       }
       if (registration.flags !== 0 && (registration.flags & eventType) === 0) {
+        continue;
+      }
+      if (registration.filter !== undefined && !registration.filter(key, value, oldValue, eventType)) {
         continue;
       }
       const sessionId = [...this._clientSessionMapListeners.entries()]

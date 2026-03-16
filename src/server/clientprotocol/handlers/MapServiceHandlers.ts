@@ -3,46 +3,64 @@
  *
  * Registers handlers for all Map opcodes required by hazelcast-client@5.6.x:
  *
- *   Map.Put                 (0x010100)
- *   Map.Get                 (0x010200)
- *   Map.Remove              (0x010300)
- *   Map.Size                (0x012a00)
- *   Map.ContainsKey         (0x010600)
- *   Map.Clear               (0x012d00)
- *   Map.Delete              (0x010900)
- *   Map.Set                 (0x010f00)
- *   Map.AddEntryListener    (0x011900)
- *   Map.RemoveEntryListener (0x011a00)
- *   Map.Lock                (0x011200)
- *   Map.Unlock              (0x011300)
- *   Map.TryLock             (0x011400)
- *   Map.IsLocked            (0x011500)
- *   Map.ForceUnlock         (0x011600)
- *   Map.GetAll              (0x012300)
- *   Map.PutAll              (0x012c00)
- *   Map.GetEntryView        (0x011d00)
- *   Map.Evict               (0x011e00)
- *   Map.EvictAll            (0x011f00)
- *   Map.Flush               (0x010a00)
- *   Map.ContainsValue       (0x010700)
- *   Map.KeySet              (0x012200)
- *   Map.Values              (0x012400)
- *   Map.EntrySet            (0x012500)
- *   Map.TryPut              (0x010c00)
- *   Map.PutIfAbsent         (0x010e00)
- *   Map.Replace             (0x010400)
- *   Map.ReplaceIfSame       (0x010500)
- *   Map.RemoveIfSame        (0x010800)
- *   Map.RemoveInterceptor   (0x014800)
- *   Map.ExecuteOnKey        (0x012e00)
- *   Map.ExecuteOnAllKeys    (0x013000)
- *   Map.ExecuteWithPredicate (0x013100)
- *   Map.ExecuteOnKeys       (0x013200)
- *   Map.SetWithMaxIdle      (0x014700)
- *   Map.PutTransient        (0x010d00)
- *   Map.PutTransientWithMaxIdle (0x014500)
- *   Map.PutIfAbsentWithMaxIdle  (0x014600)
- *   Map.SetTtl              (0x014300)
+ *   Map.Put                              (0x010100)
+ *   Map.Get                              (0x010200)
+ *   Map.Remove                           (0x010300)
+ *   Map.Size                             (0x012a00)
+ *   Map.ContainsKey                      (0x010600)
+ *   Map.Clear                            (0x012d00)
+ *   Map.Delete                           (0x010900)
+ *   Map.Set                              (0x010f00)
+ *   Map.AddEntryListener                 (0x011900)
+ *   Map.RemoveEntryListener              (0x011a00)
+ *   Map.Lock                             (0x011200)
+ *   Map.Unlock                           (0x011300)
+ *   Map.TryLock                          (0x011400)
+ *   Map.IsLocked                         (0x011500)
+ *   Map.ForceUnlock                      (0x013300)
+ *   Map.GetAll                           (0x012300)
+ *   Map.PutAll                           (0x012c00)
+ *   Map.GetEntryView                     (0x011d00)
+ *   Map.Evict                            (0x011e00)
+ *   Map.EvictAll                         (0x011f00)
+ *   Map.Flush                            (0x010a00)
+ *   Map.ContainsValue                    (0x010700)
+ *   Map.KeySet                           (0x012200)
+ *   Map.Values                           (0x012400)
+ *   Map.EntrySet                         (0x012500)
+ *   Map.TryPut                           (0x010c00)
+ *   Map.PutIfAbsent                      (0x010e00)
+ *   Map.Replace                          (0x010400)
+ *   Map.ReplaceIfSame                    (0x010500)
+ *   Map.RemoveIfSame                     (0x010800)
+ *   Map.RemoveInterceptor                (0x014800)
+ *   Map.ExecuteOnKey                     (0x012e00)
+ *   Map.ExecuteOnAllKeys                 (0x013000)
+ *   Map.ExecuteWithPredicate             (0x013100)
+ *   Map.ExecuteOnKeys                    (0x013200)
+ *   Map.SetWithMaxIdle                   (0x014700)
+ *   Map.PutTransient                     (0x010d00)
+ *   Map.PutTransientWithMaxIdle          (0x014500)
+ *   Map.PutIfAbsentWithMaxIdle           (0x014600)
+ *   Map.SetTtl                           (0x014300)
+ *   Map.TryRemove                        (0x010b00)
+ *   Map.AddEntryListenerToKeyWithPred    (0x011600)
+ *   Map.AddEntryListenerWithPredicate    (0x011700)
+ *   Map.AddEntryListenerToKey            (0x011800)
+ *   Map.LoadAll                          (0x012000)
+ *   Map.LoadGivenKeys                    (0x012100)
+ *   Map.KeySetWithPredicate              (0x012600)
+ *   Map.ValuesWithPredicate              (0x012700)
+ *   Map.EntriesWithPredicate             (0x012800)
+ *   Map.AddIndex                         (0x012900)
+ *   Map.IsEmpty                          (0x012b00)
+ *   Map.KeySetWithPagingPredicate        (0x013400)
+ *   Map.ValuesWithPagingPredicate        (0x013500)
+ *   Map.EntriesWithPagingPredicate       (0x013600)
+ *   Map.Aggregate                        (0x013900)
+ *   Map.AggregateWithPredicate           (0x013a00)
+ *   Map.RemoveAll                        (0x013e00)
+ *   Map.PutWithMaxIdle                   (0x014400)
  *
  * Each handler: decode → dispatch → encode.
  * Handlers are thin — all business logic is in the service layer.
@@ -68,6 +86,8 @@ import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, UUID_SIZE
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
+import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
+import { ListIntegerCodec } from '../../../client/impl/protocol/codec/builtin/ListIntegerCodec.js';
 import type { MapServiceOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
@@ -134,6 +154,39 @@ const MAP_PUT_IF_ABSENT_MAX_IDLE_REQUEST_TYPE  = 0x014600;
 const MAP_PUT_IF_ABSENT_MAX_IDLE_RESPONSE_TYPE = 0x014601;
 const MAP_SET_TTL_REQUEST_TYPE    = 0x014300;
 const MAP_SET_TTL_RESPONSE_TYPE   = 0x014301;
+const MAP_TRY_REMOVE_REQUEST_TYPE = 0x010b00;
+const MAP_TRY_REMOVE_RESPONSE_TYPE = 0x010b01;
+const MAP_IS_EMPTY_REQUEST_TYPE   = 0x012b00;
+const MAP_IS_EMPTY_RESPONSE_TYPE  = 0x012b01;
+const MAP_PUT_WITH_MAX_IDLE_REQUEST_TYPE  = 0x014400;
+const MAP_PUT_WITH_MAX_IDLE_RESPONSE_TYPE = 0x014401;
+const MAP_LOAD_ALL_REQUEST_TYPE   = 0x012000;
+const MAP_LOAD_ALL_RESPONSE_TYPE  = 0x012001;
+const MAP_LOAD_GIVEN_KEYS_REQUEST_TYPE  = 0x012100;
+const MAP_LOAD_GIVEN_KEYS_RESPONSE_TYPE = 0x012101;
+const MAP_KEY_SET_WITH_PREDICATE_REQUEST_TYPE  = 0x012600;
+const MAP_KEY_SET_WITH_PREDICATE_RESPONSE_TYPE = 0x012601;
+const MAP_VALUES_WITH_PREDICATE_REQUEST_TYPE   = 0x012700;
+const MAP_VALUES_WITH_PREDICATE_RESPONSE_TYPE  = 0x012701;
+const MAP_ENTRIES_WITH_PREDICATE_REQUEST_TYPE  = 0x012800;
+const MAP_ENTRIES_WITH_PREDICATE_RESPONSE_TYPE = 0x012801;
+const MAP_ADD_INDEX_REQUEST_TYPE  = 0x012900;
+const MAP_ADD_INDEX_RESPONSE_TYPE = 0x012901;
+const MAP_KEY_SET_WITH_PAGING_PREDICATE_REQUEST_TYPE  = 0x013400;
+const MAP_KEY_SET_WITH_PAGING_PREDICATE_RESPONSE_TYPE = 0x013401;
+const MAP_VALUES_WITH_PAGING_PREDICATE_REQUEST_TYPE   = 0x013500;
+const MAP_VALUES_WITH_PAGING_PREDICATE_RESPONSE_TYPE  = 0x013501;
+const MAP_ENTRIES_WITH_PAGING_PREDICATE_REQUEST_TYPE  = 0x013600;
+const MAP_ENTRIES_WITH_PAGING_PREDICATE_RESPONSE_TYPE = 0x013601;
+const MAP_AGGREGATE_REQUEST_TYPE  = 0x013900;
+const MAP_AGGREGATE_RESPONSE_TYPE = 0x013901;
+const MAP_AGGREGATE_WITH_PREDICATE_REQUEST_TYPE  = 0x013a00;
+const MAP_AGGREGATE_WITH_PREDICATE_RESPONSE_TYPE = 0x013a01;
+const MAP_REMOVE_ALL_REQUEST_TYPE = 0x013e00;
+const MAP_REMOVE_ALL_RESPONSE_TYPE = 0x013e01;
+const MAP_ENTRY_LISTENER_TO_KEY_WITH_PREDICATE_REQUEST_TYPE = 0x011600;
+const MAP_ENTRY_LISTENER_WITH_PREDICATE_REQUEST_TYPE        = 0x011700;
+const MAP_ENTRY_LISTENER_TO_KEY_REQUEST_TYPE                = 0x011800;
 
 // Standard response header (messageType + correlationId + backupAcks) = 13 bytes
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES; // 13
@@ -572,6 +625,222 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         const result = await operations.setTtl(name, key, ttl);
         return _encodeBooleanResponse(MAP_SET_TTL_RESPONSE_TYPE, result);
     });
+
+    // Map.TryRemove (0x010b00)
+    dispatcher.register(MAP_TRY_REMOVE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const threadId = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES);
+        const timeout = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const result = await operations.tryRemove(name, key, threadId, timeout);
+        return _encodeBooleanResponse(MAP_TRY_REMOVE_RESPONSE_TYPE, result);
+    });
+
+    // Map.IsEmpty (0x012b00)
+    dispatcher.register(MAP_IS_EMPTY_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const result = await operations.isEmpty(name);
+        return _encodeBooleanResponse(MAP_IS_EMPTY_RESPONSE_TYPE, result);
+    });
+
+    // Map.PutWithMaxIdle (0x014400)
+    dispatcher.register(MAP_PUT_WITH_MAX_IDLE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const threadId = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES);
+        const ttl = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        const maxIdle = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const value = DataCodec.decode(iter);
+        const prev = await operations.putWithMaxIdle(name, key, value, threadId, ttl, maxIdle);
+        return _encodeNullableDataResponse(MAP_PUT_WITH_MAX_IDLE_RESPONSE_TYPE, prev);
+    });
+
+    // Map.LoadAll (0x012000)
+    dispatcher.register(MAP_LOAD_ALL_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const replaceExistingValues = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES) !== 0;
+        const name = StringCodec.decode(iter);
+        await operations.loadAll(name, replaceExistingValues);
+        return _encodeEmptyResponse(MAP_LOAD_ALL_RESPONSE_TYPE);
+    });
+
+    // Map.LoadGivenKeys (0x012100)
+    dispatcher.register(MAP_LOAD_GIVEN_KEYS_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const replaceExistingValues = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES) !== 0;
+        const name = StringCodec.decode(iter);
+        const keys = _decodeDataList(iter);
+        await operations.loadGivenKeys(name, keys, replaceExistingValues);
+        return _encodeEmptyResponse(MAP_LOAD_GIVEN_KEYS_RESPONSE_TYPE);
+    });
+
+    // Map.KeySetWithPredicate (0x012600)
+    dispatcher.register(MAP_KEY_SET_WITH_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const keys = await operations.keySetWithPredicate(name, predicate);
+        return _encodeDataListResponse(MAP_KEY_SET_WITH_PREDICATE_RESPONSE_TYPE, keys);
+    });
+
+    // Map.ValuesWithPredicate (0x012700)
+    dispatcher.register(MAP_VALUES_WITH_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const values = await operations.valuesWithPredicate(name, predicate);
+        return _encodeDataListResponse(MAP_VALUES_WITH_PREDICATE_RESPONSE_TYPE, values);
+    });
+
+    // Map.EntriesWithPredicate (0x012800)
+    dispatcher.register(MAP_ENTRIES_WITH_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const entries = await operations.entriesWithPredicate(name, predicate);
+        return _encodeEntryListResponse(MAP_ENTRIES_WITH_PREDICATE_RESPONSE_TYPE, entries);
+    });
+
+    // Map.AddIndex (0x012900)
+    // IndexConfig is encoded as structured wire frames (not Data serialization)
+    dispatcher.register(MAP_ADD_INDEX_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // consume initial frame
+        const name = StringCodec.decode(iter);
+        // Decode IndexConfigCodec: BEGIN_FRAME, initialFrame(type:int), nullable name, List<string>, nullable bitmapIndexOptions, END_FRAME
+        const indexType = _decodeIndexType(iter);
+        const indexAttributes = _decodeIndexAttributes(iter);
+        await operations.addIndex(name, indexType, indexAttributes);
+        return _encodeEmptyResponse(MAP_ADD_INDEX_RESPONSE_TYPE);
+    });
+
+    // Map.RemoveAll (0x013e00)
+    dispatcher.register(MAP_REMOVE_ALL_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        await operations.removeAll(name, predicate);
+        return _encodeEmptyResponse(MAP_REMOVE_ALL_RESPONSE_TYPE);
+    });
+
+    // Map.Aggregate (0x013900)
+    dispatcher.register(MAP_AGGREGATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const aggregator = DataCodec.decode(iter);
+        const result = await operations.aggregate(name, aggregator);
+        return _encodeNullableDataResponse(MAP_AGGREGATE_RESPONSE_TYPE, result);
+    });
+
+    // Map.AggregateWithPredicate (0x013a00)
+    dispatcher.register(MAP_AGGREGATE_WITH_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const aggregator = DataCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const result = await operations.aggregateWithPredicate(name, aggregator, predicate);
+        return _encodeNullableDataResponse(MAP_AGGREGATE_WITH_PREDICATE_RESPONSE_TYPE, result);
+    });
+
+    // Map.AddEntryListenerToKeyWithPredicate (0x011600)
+    // Wire: initial frame: includeValue(bool), listenerFlags(int), localOnly(bool); name, key, predicate
+    dispatcher.register(MAP_ENTRY_LISTENER_TO_KEY_WITH_PREDICATE_REQUEST_TYPE, async (msg, session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const includeValue = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES) !== 0;
+        const listenerFlags = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES);
+        const localOnly = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const registrationId = await operations.addEntryListenerToKeyWithPredicate(
+            name, key, predicate, includeValue, listenerFlags, localOnly, msg.getCorrelationId(), session,
+        );
+        return _encodeListenerRegistrationResponse(0x011601, registrationId);
+    });
+
+    // Map.AddEntryListenerWithPredicate (0x011700)
+    // Wire: initial frame: includeValue(bool), listenerFlags(int), localOnly(bool); name, predicate
+    dispatcher.register(MAP_ENTRY_LISTENER_WITH_PREDICATE_REQUEST_TYPE, async (msg, session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const includeValue = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES) !== 0;
+        const listenerFlags = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES);
+        const localOnly = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
+        const name = StringCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const registrationId = await operations.addEntryListenerWithPredicate(
+            name, predicate, includeValue, listenerFlags, localOnly, msg.getCorrelationId(), session,
+        );
+        return _encodeListenerRegistrationResponse(0x011701, registrationId);
+    });
+
+    // Map.AddEntryListenerToKey (0x011800)
+    // Wire: initial frame: includeValue(bool), listenerFlags(int), localOnly(bool); name, key
+    dispatcher.register(MAP_ENTRY_LISTENER_TO_KEY_REQUEST_TYPE, async (msg, session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const includeValue = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES) !== 0;
+        const listenerFlags = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES);
+        const localOnly = initialFrame.content.readUInt8(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES + INT_SIZE_IN_BYTES) !== 0;
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const registrationId = await operations.addEntryListenerToKey(
+            name, key, includeValue, listenerFlags, localOnly, msg.getCorrelationId(), session,
+        );
+        return _encodeListenerRegistrationResponse(0x011801, registrationId);
+    });
+
+    // Map.KeySetWithPagingPredicate (0x013400)
+    // Decodes PagingPredicateHolder, extracts inner predicate (if any), returns keys + empty anchor list
+    dispatcher.register(MAP_KEY_SET_WITH_PAGING_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // initial frame
+        const name = StringCodec.decode(iter);
+        const predicateData = _decodePagingPredicateInnerPredicate(iter);
+        const keys = predicateData !== null
+            ? await operations.keySetWithPredicate(name, predicateData)
+            : await operations.keySet(name);
+        return _encodePagingPredicateKeySetResponse(MAP_KEY_SET_WITH_PAGING_PREDICATE_RESPONSE_TYPE, keys);
+    });
+
+    // Map.ValuesWithPagingPredicate (0x013500)
+    dispatcher.register(MAP_VALUES_WITH_PAGING_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // initial frame
+        const name = StringCodec.decode(iter);
+        const predicateData = _decodePagingPredicateInnerPredicate(iter);
+        const values = predicateData !== null
+            ? await operations.valuesWithPredicate(name, predicateData)
+            : await operations.values(name);
+        return _encodePagingPredicateDataListResponse(MAP_VALUES_WITH_PAGING_PREDICATE_RESPONSE_TYPE, values);
+    });
+
+    // Map.EntriesWithPagingPredicate (0x013600)
+    dispatcher.register(MAP_ENTRIES_WITH_PAGING_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // initial frame
+        const name = StringCodec.decode(iter);
+        const predicateData = _decodePagingPredicateInnerPredicate(iter);
+        const entries = predicateData !== null
+            ? await operations.entriesWithPredicate(name, predicateData)
+            : await operations.entrySet(name);
+        return _encodePagingPredicateEntriesResponse(MAP_ENTRIES_WITH_PAGING_PREDICATE_RESPONSE_TYPE, entries);
+    });
 }
 
 // ── Response helpers ──────────────────────────────────────────────────────────
@@ -691,4 +960,168 @@ function _decodeEntryList(iter: CM.ForwardFrameIterator): Array<[Data, Data]> {
         entries.push([key, value]);
     }
     return entries;
+}
+
+/**
+ * Decodes an IndexConfigCodec from the iterator.
+ * Wire layout (inside BEGIN/END structure frames):
+ *   BEGIN_FRAME
+ *   initialFrame: type (int at offset 0)
+ *   nullable string (name) — skipped
+ *   ListMultiFrame<string> (attributes)
+ *   nullable BitmapIndexOptions — skipped
+ *   END_FRAME
+ *
+ * Returns the integer index type (0=SORTED, 1=HASH, 2=BITMAP).
+ */
+function _decodeIndexType(iter: CM.ForwardFrameIterator): number {
+    // consume BEGIN_FRAME
+    iter.next();
+    // read initial frame — type is at offset 0 within frame content
+    const initialFrame = iter.next();
+    return initialFrame.content.readInt32LE(0);
+}
+
+/**
+ * Reads the attribute list from an IndexConfig after _decodeIndexType has consumed
+ * the BEGIN_FRAME and initial frame. Skips nullable name, reads string list, then
+ * fast-forwards to the END_FRAME.
+ */
+function _decodeIndexAttributes(iter: CM.ForwardFrameIterator): string[] {
+    // nullable name — skip
+    CodecUtil.decodeNullable(iter, StringCodec.decode);
+    // ListMultiFrame<string> attributes
+    const attributes = ListMultiFrameCodec.decode(iter, StringCodec.decode);
+    // fast-forward to END_FRAME (skipping nullable BitmapIndexOptions)
+    CodecUtil.fastForwardToEndFrame(iter);
+    return attributes;
+}
+
+/**
+ * Decodes a PagingPredicateHolder from the wire and returns the inner predicateData
+ * (as a Data object) or null if none was set. Consumes all frames up to and including
+ * the END_FRAME of the PagingPredicateHolder.
+ *
+ * Wire layout of PagingPredicateHolder:
+ *   BEGIN_FRAME
+ *   initialFrame: pageSize(int), page(int), iterationTypeId(byte)
+ *   AnchorDataListHolder (BEGIN_FRAME, ListIntegerCodec, EntryListCodec, END_FRAME)
+ *   nullable predicateData  ← we want this
+ *   nullable comparatorData (skipped)
+ *   nullable partitionKeyData (skipped)
+ *   END_FRAME
+ */
+function _decodePagingPredicateInnerPredicate(iter: CM.ForwardFrameIterator): Data | null {
+    // BEGIN_FRAME of PagingPredicateHolder
+    iter.next();
+    // initial frame (pageSize, page, iterationTypeId) — we don't need these values
+    iter.next();
+    // AnchorDataListHolder: BEGIN_FRAME, ListIntegerCodec (one frame), EntryListCodec (BEGIN+entries+END), END_FRAME
+    _skipAnchorDataListHolder(iter);
+    // nullable predicateData
+    const predicateData = CodecUtil.decodeNullable(iter, DataCodec.decode);
+    // fast-forward to END_FRAME (skips comparatorData + partitionKeyData)
+    CodecUtil.fastForwardToEndFrame(iter);
+    return predicateData;
+}
+
+/** Skips an AnchorDataListHolder structure. */
+function _skipAnchorDataListHolder(iter: CM.ForwardFrameIterator): void {
+    // BEGIN_FRAME
+    iter.next();
+    // ListIntegerCodec: one raw frame of ints
+    ListIntegerCodec.decode(iter);
+    // EntryListCodec: BEGIN_FRAME + pairs of Data + END_FRAME
+    _decodeEntryList(iter);
+    // END_FRAME
+    CodecUtil.fastForwardToEndFrame(iter);
+}
+
+/**
+ * Encodes a paging predicate response for KeySet queries.
+ * Response wire format:
+ *   initial frame (empty header)
+ *   ListMultiFrame<Data> keys
+ *   AnchorDataListHolder (empty — no anchors for single-node)
+ */
+function _encodePagingPredicateKeySetResponse(responseType: number, keys: Data[]): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(responseType >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    // encode keys as ListMultiFrame<Data>
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    for (const key of keys) {
+        DataCodec.encode(msg, key);
+    }
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    // encode empty AnchorDataListHolder
+    _encodeEmptyAnchorDataListHolder(msg);
+    msg.setFinal();
+    return msg;
+}
+
+/**
+ * Encodes a paging predicate response for Values queries.
+ */
+function _encodePagingPredicateDataListResponse(responseType: number, values: Data[]): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(responseType >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    // encode values as ListMultiFrame<Data>
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    for (const val of values) {
+        DataCodec.encode(msg, val);
+    }
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    // encode empty AnchorDataListHolder
+    _encodeEmptyAnchorDataListHolder(msg);
+    msg.setFinal();
+    return msg;
+}
+
+/**
+ * Encodes a paging predicate response for Entries queries.
+ */
+function _encodePagingPredicateEntriesResponse(responseType: number, entries: Array<[Data, Data]>): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(responseType >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    // encode entries as EntryList<Data, Data>
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    for (const [k, v] of entries) {
+        DataCodec.encode(msg, k);
+        DataCodec.encode(msg, v);
+    }
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    // encode empty AnchorDataListHolder
+    _encodeEmptyAnchorDataListHolder(msg);
+    msg.setFinal();
+    return msg;
+}
+
+/**
+ * Encodes an empty AnchorDataListHolder.
+ * Wire layout:
+ *   BEGIN_FRAME
+ *   ListIntegerCodec (empty — zero ints, zero-byte frame)
+ *   EntryListCodec (BEGIN_FRAME + END_FRAME — empty list)
+ *   END_FRAME
+ */
+function _encodeEmptyAnchorDataListHolder(msg: ClientMessage): void {
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    // empty ListIntegerCodec: a frame with zero bytes
+    msg.add(new CM.Frame(Buffer.alloc(0)));
+    // empty EntryListCodec: BEGIN + END
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
 }
