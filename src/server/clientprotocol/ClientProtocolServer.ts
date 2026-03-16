@@ -11,6 +11,10 @@ import { AuthenticationStatus } from "../../client/impl/protocol/AuthenticationS
 import { ClientMessage } from "../../client/impl/protocol/ClientMessage";
 import { ClientMessageReader } from "../../client/impl/protocol/ClientMessageReader";
 import { ClientAuthenticationCodec } from "../../client/impl/protocol/codec/ClientAuthenticationCodec";
+import { ByteArrayCodec } from "../../client/impl/protocol/codec/builtin/ByteArrayCodec";
+import { FixedSizeTypesCodec, BYTE_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from "../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec";
+import { ListMultiFrameCodec } from "../../client/impl/protocol/codec/builtin/ListMultiFrameCodec";
+import { StringCodec } from "../../client/impl/protocol/codec/builtin/StringCodec";
 import { MapPutCodec } from "../../client/impl/protocol/codec/MapPutCodec";
 import { Address } from "@zenystx/helios-core/cluster/Address";
 import {
@@ -52,6 +56,18 @@ export interface ClientProtocolServerOptions {
     /** Optional audit listener for authentication events. */
     auditListener?: AuthAuditListener;
 }
+
+// ClientAuthenticationCustom: hex 0x000200 = 512
+const CLIENT_AUTH_CUSTOM_REQUEST_TYPE  = 0x000200;
+
+// Custom auth request initial frame layout (matches ClientAuthenticationCustomCodec):
+//   [0..3]   messageType
+//   [4..11]  correlationId
+//   [12..15] partitionId
+//   [16..32] uuid (17 bytes: isNull + msb + lsb)
+//   [33]     serializationVersion (byte)
+const CUSTOM_AUTH_UUID_OFFSET                 = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES; // 16
+const CUSTOM_AUTH_SERIALIZATION_VERSION_OFFSET = CUSTOM_AUTH_UUID_OFFSET + UUID_SIZE_IN_BYTES;               // 33
 
 let sessionCounter = 0;
 
@@ -366,6 +382,7 @@ export class ClientProtocolServer {
     // ── built-in handlers ───────────────────────────────────────────────────
 
     private _registerAuthHandler(): void {
+        // ── Standard authentication (0x000100) ───────────────────────────────
         this._dispatcher.allowBeforeAuthentication(
             ClientAuthenticationCodec.REQUEST_MESSAGE_TYPE,
         );
@@ -393,6 +410,58 @@ export class ClientProtocolServer {
                 }
 
                 // Authenticate
+                const clientUuid = req.uuid ?? crypto.randomUUID();
+                session.authenticate(
+                    clientUuid,
+                    req.clientName,
+                    req.clientHazelcastVersion,
+                );
+                this._registry.register(session);
+                this._authGuard.auditAuthSuccess(session);
+
+                const memberAddress = new Address(this._host, this.getPort());
+
+                return ClientAuthenticationCodec.encodeResponse(
+                    AuthenticationStatus.AUTHENTICATED.getId(),
+                    memberAddress,
+                    this._memberUuid,
+                    this._serializationVersion,
+                    "5.5.0",
+                    this._partitionCount,
+                    this._clusterId,
+                    false,
+                );
+            },
+        );
+
+        // ── Custom authentication (0x000200) ─────────────────────────────────
+        // Same response shape as standard auth.  Helios does not inspect the
+        // custom credentials byte-array — it accepts all connections.
+        this._dispatcher.allowBeforeAuthentication(CLIENT_AUTH_CUSTOM_REQUEST_TYPE);
+        this._dispatcher.register(
+            CLIENT_AUTH_CUSTOM_REQUEST_TYPE,
+            async (msg, session) => {
+                if (session.isAuthenticated()) {
+                    return this._encodeAuthenticationNotAllowedResponse();
+                }
+
+                const req = _decodeCustomAuthRequest(msg);
+
+                // Only the cluster name is validated — custom credentials are
+                // accepted unconditionally (Helios doesn't enforce auth).
+                const credCheck = this._authGuard.validateCredentials({
+                    clusterName: req.clusterName,
+                    username: null,
+                    password: null,
+                });
+                if (!credCheck.ok) {
+                    this._authGuard.auditAuthFailure(
+                        session.getSessionId(),
+                        credCheck.auditKind,
+                    );
+                    return this._encodeAuthenticationFailureResponse();
+                }
+
                 const clientUuid = req.uuid ?? crypto.randomUUID();
                 session.authenticate(
                     clientUuid,
@@ -494,4 +563,47 @@ export class ClientProtocolServer {
             },
         );
     }
+}
+
+// ── ClientAuthenticationCustom request decoder ────────────────────────────────
+//
+// Wire layout of the initial frame:
+//   [0..3]   messageType
+//   [4..11]  correlationId
+//   [12..15] partitionId
+//   [16..32] uuid  (17 bytes: isNull(1) + msb(8) + lsb(8))
+//   [33]     serializationVersion (byte)
+//
+// Subsequent frames:
+//   clusterName           (StringCodec)
+//   credentials           (ByteArrayCodec  — raw bytes, not inspected)
+//   clientType            (StringCodec)
+//   clientHazelcastVersion(StringCodec)
+//   clientName            (StringCodec)
+//   labels                (ListMultiFrame<String>)
+
+function _decodeCustomAuthRequest(msg: ClientMessage): {
+    clusterName: string;
+    uuid: string | null;
+    serializationVersion: number;
+    clientType: string;
+    clientHazelcastVersion: string;
+    clientName: string;
+    labels: string[];
+} {
+    const iter = msg.forwardFrameIterator();
+    const initialFrame = iter.next();
+
+    const uuid = FixedSizeTypesCodec.decodeUUID(initialFrame.content, CUSTOM_AUTH_UUID_OFFSET);
+    const serializationVersion = initialFrame.content.readUInt8(CUSTOM_AUTH_SERIALIZATION_VERSION_OFFSET);
+
+    const clusterName = StringCodec.decode(iter);
+    // credentials byte-array — consumed but not validated
+    ByteArrayCodec.decode(iter);
+    const clientType = StringCodec.decode(iter);
+    const clientHazelcastVersion = StringCodec.decode(iter);
+    const clientName = StringCodec.decode(iter);
+    const labels = ListMultiFrameCodec.decode(iter, (i) => StringCodec.decode(i));
+
+    return { clusterName, uuid, serializationVersion, clientType, clientHazelcastVersion, clientName, labels };
 }

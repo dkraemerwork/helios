@@ -4,14 +4,20 @@
  * Registers handlers for all client-management opcodes required by
  * hazelcast-client@5.6.x:
  *
- *   Client.Ping                    (0x000b00) — heartbeat
- *   Client.CreateProxy             (0x000400) — create distributed object proxy
- *   Client.DestroyProxy            (0x000500) — destroy distributed object proxy
- *   Client.GetDistributedObjects   (0x000800) — list all distributed objects
- *   Client.AddClusterViewListener  (0x000900) — subscribe to topology events
- *   Client.AddPartitionLostListener(0x001600) — subscribe to partition-lost events
- *   Client.Statistics              (0x000c00) — client stats (periodic, no response)
- *   Client.TriggerPartitionAssignment (0x001300) — request partition assignment
+ *   Client.Ping                           (0x000b00) — heartbeat
+ *   Client.CreateProxy                    (0x000400) — create distributed object proxy
+ *   Client.DestroyProxy                   (0x000500) — destroy distributed object proxy
+ *   Client.GetDistributedObjects          (0x000800) — list all distributed objects
+ *   Client.AddDistributedObjectListener   (0x000900) — subscribe to proxy create/destroy events
+ *   Client.RemoveDistributedObjectListener(0x000a00) — unsubscribe from proxy events
+ *   Client.AddClusterViewListener         (0x000300) — subscribe to topology events
+ *   Client.AddPartitionLostListener       (0x001600) — subscribe to partition-lost events
+ *   Client.Statistics                     (0x000c00) — client stats (periodic, no response)
+ *   Client.CreateProxies                  (0x000e00) — batch proxy creation
+ *   Client.SendSchema                     (0x001300) — register compact schema
+ *   Client.FetchSchema                    (0x001400) — fetch compact schema by id
+ *   Client.SendAllSchemas                 (0x001500) — batch schema registration
+ *   Client.LocalBackupListener            (0x000f00) — register backup listener
  *
  * Each handler: decode → dispatch (or inline logic) → encode response.
  * Handlers are thin — no business logic lives here.
@@ -24,6 +30,7 @@ import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.
 import { ClientCreateProxyCodec } from '../../../client/impl/protocol/codec/ClientCreateProxyCodec.js';
 import { ClientDestroyProxyCodec } from '../../../client/impl/protocol/codec/ClientDestroyProxyCodec.js';
 import { ClientGetDistributedObjectsCodec } from '../../../client/impl/protocol/codec/ClientGetDistributedObjectsCodec.js';
+import { EntryListCodec } from '../../../client/impl/protocol/codec/builtin/EntryListCodec.js';
 import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
 import { ListUUIDCodec } from '../../../client/impl/protocol/codec/builtin/ListUUIDCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
@@ -36,16 +43,24 @@ import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
 
 // ── Message type constants not covered by existing codecs ─────────────────────
 
-const CLIENT_PING_REQUEST_TYPE           = 0x000b00;
-const CLIENT_PING_RESPONSE_TYPE          = 0x000b01;
-const CLIENT_STATISTICS_REQUEST_TYPE     = 0x000c00;
-const CLIENT_STATISTICS_RESPONSE_TYPE    = 0x000c01;
-const CLIENT_SEND_SCHEMA_REQUEST_TYPE    = 0x001300;
-const CLIENT_SEND_SCHEMA_RESPONSE_TYPE   = 0x001301;
-const CLIENT_FETCH_SCHEMA_REQUEST_TYPE   = 0x001400;
-const CLIENT_FETCH_SCHEMA_RESPONSE_TYPE  = 0x001401;
-const CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE  = 0x000f00;
-const CLIENT_LOCAL_BACKUP_LISTENER_RESPONSE_TYPE = 0x000f01;
+const CLIENT_PING_REQUEST_TYPE                            = 0x000b00;
+const CLIENT_PING_RESPONSE_TYPE                           = 0x000b01;
+const CLIENT_STATISTICS_REQUEST_TYPE                      = 0x000c00;
+const CLIENT_STATISTICS_RESPONSE_TYPE                     = 0x000c01;
+const CLIENT_SEND_SCHEMA_REQUEST_TYPE                     = 0x001300;
+const CLIENT_SEND_SCHEMA_RESPONSE_TYPE                    = 0x001301;
+const CLIENT_FETCH_SCHEMA_REQUEST_TYPE                    = 0x001400;
+const CLIENT_FETCH_SCHEMA_RESPONSE_TYPE                   = 0x001401;
+const CLIENT_SEND_ALL_SCHEMAS_REQUEST_TYPE                = 0x001500;
+const CLIENT_SEND_ALL_SCHEMAS_RESPONSE_TYPE               = 0x001501;
+const CLIENT_ADD_DISTRIBUTED_OBJECT_LISTENER_REQUEST_TYPE = 0x000900;
+const CLIENT_ADD_DISTRIBUTED_OBJECT_LISTENER_EVENT_TYPE   = 0x000902;
+const CLIENT_REMOVE_DISTRIBUTED_OBJECT_LISTENER_REQUEST_TYPE = 0x000a00;
+const CLIENT_REMOVE_DISTRIBUTED_OBJECT_LISTENER_RESPONSE_TYPE = 0x000a01;
+const CLIENT_CREATE_PROXIES_REQUEST_TYPE                  = 0x000e00;
+const CLIENT_CREATE_PROXIES_RESPONSE_TYPE                 = 0x000e01;
+const CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE           = 0x000f00;
+const CLIENT_LOCAL_BACKUP_LISTENER_RESPONSE_TYPE          = 0x000f01;
 
 // ── Distributed object registry ───────────────────────────────────────────────
 
@@ -54,12 +69,23 @@ export interface DistributedObjectRecord {
     serviceName: string;
 }
 
+export type DistributedObjectEventType = 'CREATED' | 'DESTROYED';
+
+export interface DistributedObjectListenerEntry {
+    readonly registrationId: string;
+    readonly correlationId: number;
+    readonly session: import('@zenystx/helios-core/server/clientprotocol/ClientSession.js').ClientSession;
+}
+
 /**
  * Simple in-memory registry of created proxies.
- * Production code would persist this to the distributed store.
+ * Also manages distributed-object listeners so that interested clients
+ * receive events whenever a proxy is created or destroyed.
+ * Production code would persist objects to the distributed store.
  */
 export class DistributedObjectRegistry {
     private readonly _objects = new Map<string, DistributedObjectRecord>();
+    private readonly _listeners = new Map<string, DistributedObjectListenerEntry>();
 
     register(name: string, serviceName: string): void {
         this._objects.set(`${serviceName}:${name}`, { name, serviceName });
@@ -71,6 +97,18 @@ export class DistributedObjectRegistry {
 
     getAll(): DistributedObjectRecord[] {
         return Array.from(this._objects.values());
+    }
+
+    addListener(entry: DistributedObjectListenerEntry): void {
+        this._listeners.set(entry.registrationId, entry);
+    }
+
+    removeListener(registrationId: string): boolean {
+        return this._listeners.delete(registrationId);
+    }
+
+    getListeners(): DistributedObjectListenerEntry[] {
+        return Array.from(this._listeners.values());
     }
 }
 
@@ -102,6 +140,7 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
     dispatcher.register(ClientCreateProxyCodec.REQUEST_MESSAGE_TYPE, async (msg, _session) => {
         const { name, serviceName } = ClientCreateProxyCodec.decodeRequest(msg);
         objectRegistry.register(name, serviceName);
+        _fireDistributedObjectEvent(objectRegistry, name, serviceName, 'CREATED', localMemberUuid ?? null);
         return ClientCreateProxyCodec.encodeResponse();
     });
 
@@ -109,6 +148,7 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
     dispatcher.register(ClientDestroyProxyCodec.REQUEST_MESSAGE_TYPE, async (msg, _session) => {
         const { name, serviceName } = ClientDestroyProxyCodec.decodeRequest(msg);
         objectRegistry.unregister(name, serviceName);
+        _fireDistributedObjectEvent(objectRegistry, name, serviceName, 'DESTROYED', localMemberUuid ?? null);
         return ClientDestroyProxyCodec.encodeResponse();
     });
 
@@ -118,7 +158,26 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
         return ClientGetDistributedObjectsCodec.encodeResponse(objects);
     });
 
-    // ── AddClusterViewListener (0x000900) ─────────────────────────────────────
+    // ── AddDistributedObjectListener (0x000900) ───────────────────────────────
+    // Client subscribes to proxy creation/destruction events.
+    // We store the registration and return a UUID that can later be used to
+    // unsubscribe via RemoveDistributedObjectListener.
+    dispatcher.register(CLIENT_ADD_DISTRIBUTED_OBJECT_LISTENER_REQUEST_TYPE, async (msg, session) => {
+        const registrationId = crypto.randomUUID();
+        const correlationId = msg.getCorrelationId();
+        objectRegistry.addListener({ registrationId, correlationId, session });
+        return _encodeAddDistributedObjectListenerResponse(registrationId);
+    });
+
+    // ── RemoveDistributedObjectListener (0x000a00) ────────────────────────────
+    // Client unsubscribes from proxy events by the UUID returned above.
+    dispatcher.register(CLIENT_REMOVE_DISTRIBUTED_OBJECT_LISTENER_REQUEST_TYPE, async (msg, _session) => {
+        const registrationId = _decodeRemoveDistributedObjectListenerRequest(msg);
+        const removed = objectRegistry.removeListener(registrationId);
+        return _encodeRemoveDistributedObjectListenerResponse(removed);
+    });
+
+    // ── AddClusterViewListener (0x000300) ─────────────────────────────────────
     // Note: The response (ack + initial topology push) is sent by TopologyPublisher
     // directly via session.sendMessage.  We return null here to signal that the
     // response has already been dispatched.
@@ -128,7 +187,7 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
         return null; // TopologyPublisher already sent the response
     });
 
-    // ── AddPartitionLostListener (0x000b00) ───────────────────────────────────
+    // ── AddPartitionLostListener (0x001600) ───────────────────────────────────
     dispatcher.register(ClientAddPartitionLostListenerCodec.REQUEST_MESSAGE_TYPE, async (msg, session) => {
         const { localOnly } = ClientAddPartitionLostListenerCodec.decodeRequest(msg);
         const correlationId = msg.getCorrelationId();
@@ -142,6 +201,17 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
         return _encodeStatisticsResponse();
     });
 
+    // ── CreateProxies (0x000e00) — batch proxy creation ───────────────────────
+    // Decodes a list of (name, serviceName) pairs and registers each proxy.
+    dispatcher.register(CLIENT_CREATE_PROXIES_REQUEST_TYPE, async (msg, _session) => {
+        const proxies = _decodeCreateProxiesRequest(msg);
+        for (const [name, serviceName] of proxies) {
+            objectRegistry.register(name, serviceName);
+            _fireDistributedObjectEvent(objectRegistry, name, serviceName, 'CREATED', localMemberUuid ?? null);
+        }
+        return _encodeCreateProxiesResponse();
+    });
+
     if (schemaService) {
         dispatcher.register(CLIENT_SEND_SCHEMA_REQUEST_TYPE, async (msg, _session) => {
             schemaService.registerSchema(_decodeSchemaRequest(msg));
@@ -151,6 +221,16 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
         dispatcher.register(CLIENT_FETCH_SCHEMA_REQUEST_TYPE, async (msg, _session) => {
             const schemaId = _decodeFetchSchemaRequest(msg);
             return _encodeFetchSchemaResponse(schemaService.getSchema(schemaId) ?? null);
+        });
+
+        // ── SendAllSchemas (0x001500) — batch schema registration ─────────────
+        // Client sends all its compact schemas at once (e.g. on reconnect).
+        dispatcher.register(CLIENT_SEND_ALL_SCHEMAS_REQUEST_TYPE, async (msg, _session) => {
+            const schemas = _decodeAllSchemasRequest(msg);
+            for (const schema of schemas) {
+                schemaService.registerSchema(schema);
+            }
+            return _encodeSendAllSchemasResponse();
         });
     }
 
@@ -167,7 +247,7 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
 // ── Inline response encoders ──────────────────────────────────────────────────
 
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { FixedSizeTypesCodec, BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
 /** Standard response initial frame: type(4) + correlationId(8) + backupAcks/partitionId(4) = 16. */
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
@@ -285,4 +365,182 @@ function _decodeFieldDescriptor(iterator: ClientMessage.ForwardFrameIterator): S
     const fieldName = StringCodec.decode(iterator);
     iterator.next();
     return { fieldName, kind };
+}
+
+// ── AddDistributedObjectListener response encoder ─────────────────────────────
+//
+// Response initial frame layout (0x000901):
+//   [0..3]   type = 0x000901
+//   [4..11]  correlationId (set by caller)
+//   [12]     backupAcks (byte, 0)
+//   [13..29] response UUID  (17 bytes: isNull(1) + msb(8) + lsb(8))
+//
+// Total: 30 bytes.
+
+const ADD_DOL_RESPONSE_UUID_OFFSET = RESPONSE_HEADER_SIZE + BYTE_SIZE_IN_BYTES; // 17
+const ADD_DOL_RESPONSE_SIZE        = ADD_DOL_RESPONSE_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 34
+
+function _encodeAddDistributedObjectListenerResponse(registrationId: string): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(ADD_DOL_RESPONSE_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(0x000901 >>> 0, 0);
+    FixedSizeTypesCodec.encodeUUID(buf, ADD_DOL_RESPONSE_UUID_OFFSET, registrationId);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    msg.setFinal();
+    return msg;
+}
+
+// ── AddDistributedObjectListener event encoder ────────────────────────────────
+//
+// Event frame layout (0x000902):
+//   [0..3]   type = 0x000902
+//   [4..11]  correlationId (filled from listener registration correlation id)
+//   [12..15] partitionId (int32)
+//   [16..32] source UUID  (17 bytes)
+//
+// Then variable frames:
+//   name        (StringCodec)
+//   serviceName (StringCodec)
+//   eventType   (StringCodec)  — "CREATED" or "DESTROYED"
+
+const DOL_EVENT_SOURCE_UUID_OFFSET = RESPONSE_HEADER_SIZE; // 16
+
+function _encodeDistributedObjectEvent(
+    name: string,
+    serviceName: string,
+    eventType: DistributedObjectEventType,
+    sourceUuid: string | null,
+    correlationId: number,
+): ClientMessage {
+    const initialFrameSize = DOL_EVENT_SOURCE_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 33
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(initialFrameSize);
+    buf.fill(0);
+    buf.writeUInt32LE(CLIENT_ADD_DISTRIBUTED_OBJECT_LISTENER_EVENT_TYPE >>> 0, 0);
+    FixedSizeTypesCodec.encodeUUID(buf, DOL_EVENT_SOURCE_UUID_OFFSET, sourceUuid);
+    const EVENT_FLAGS = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG | CM.IS_EVENT_FLAG;
+    msg.add(new CM.Frame(buf, EVENT_FLAGS));
+    msg.setCorrelationId(correlationId);
+    StringCodec.encode(msg, name);
+    StringCodec.encode(msg, serviceName);
+    StringCodec.encode(msg, eventType);
+    msg.setFinal();
+    return msg;
+}
+
+/**
+ * Fire a distributed-object event to all registered listeners.
+ * Called whenever a proxy is created or destroyed.
+ */
+function _fireDistributedObjectEvent(
+    registry: DistributedObjectRegistry,
+    name: string,
+    serviceName: string,
+    eventType: DistributedObjectEventType,
+    sourceUuid: string | null,
+): void {
+    for (const listener of registry.getListeners()) {
+        const event = _encodeDistributedObjectEvent(
+            name,
+            serviceName,
+            eventType,
+            sourceUuid,
+            listener.correlationId,
+        );
+        listener.session.sendMessage(event);
+    }
+}
+
+// ── RemoveDistributedObjectListener request decoder / response encoder ─────────
+//
+// Request initial frame layout:
+//   [0..3]   type = 0x000a00
+//   [4..11]  correlationId
+//   [12..15] partitionId
+//   [16..32] registrationId UUID (17 bytes)
+
+const REMOVE_DOL_REQUEST_UUID_OFFSET = RESPONSE_HEADER_SIZE; // 16
+
+function _decodeRemoveDistributedObjectListenerRequest(msg: ClientMessage): string {
+    const frame = msg.getStartFrame();
+    return FixedSizeTypesCodec.decodeUUID(frame.content, REMOVE_DOL_REQUEST_UUID_OFFSET) ?? '';
+}
+
+// Response initial frame layout (0x000a01):
+//   [0..3]   type = 0x000a01
+//   [4..11]  correlationId
+//   [12]     backupAcks (byte)
+//   [13]     response bool (1 byte)
+
+const REMOVE_DOL_RESPONSE_BOOL_OFFSET = RESPONSE_HEADER_SIZE + BYTE_SIZE_IN_BYTES; // 17
+const REMOVE_DOL_RESPONSE_SIZE        = REMOVE_DOL_RESPONSE_BOOL_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 18
+
+function _encodeRemoveDistributedObjectListenerResponse(removed: boolean): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(REMOVE_DOL_RESPONSE_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(CLIENT_REMOVE_DISTRIBUTED_OBJECT_LISTENER_RESPONSE_TYPE >>> 0, 0);
+    FixedSizeTypesCodec.encodeBoolean(buf, REMOVE_DOL_RESPONSE_BOOL_OFFSET, removed);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    msg.setFinal();
+    return msg;
+}
+
+// ── CreateProxies request decoder / response encoder ─────────────────────────
+//
+// Request: initial frame (standard header) + EntryList<String, String>
+// The entry list encodes (name, serviceName) pairs.
+
+function _decodeCreateProxiesRequest(msg: ClientMessage): Array<[string, string]> {
+    const iter = msg.forwardFrameIterator();
+    iter.next(); // consume initial frame
+    return EntryListCodec.decode(
+        iter,
+        (i) => StringCodec.decode(i),
+        (i) => StringCodec.decode(i),
+    );
+}
+
+function _encodeCreateProxiesResponse(): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(CLIENT_CREATE_PROXIES_RESPONSE_TYPE >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    msg.setFinal();
+    return msg;
+}
+
+// ── SendAllSchemas request decoder / response encoder ────────────────────────
+//
+// Request: initial frame (standard header) + ListMultiFrame<Schema>
+// Each schema is encoded identically to the single-schema SendSchema handler.
+
+function _decodeAllSchemasRequest(msg: ClientMessage): Schema[] {
+    const iterator = msg.forwardFrameIterator();
+    iterator.next(); // consume initial frame
+    return ListMultiFrameCodec.decode(iterator, _decodeSchemaFromIterator);
+}
+
+function _decodeSchemaFromIterator(iterator: ClientMessage.ForwardFrameIterator): Schema {
+    iterator.next(); // consume BEGIN_DATA_STRUCTURE frame
+    const typeName = StringCodec.decode(iterator);
+    const fields = ListMultiFrameCodec.decode(iterator, _decodeFieldDescriptor);
+    iterator.next(); // consume END_DATA_STRUCTURE frame
+    return new Schema(typeName, fields);
+}
+
+function _encodeSendAllSchemasResponse(): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(CLIENT_SEND_ALL_SCHEMAS_RESPONSE_TYPE >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    msg.setFinal();
+    return msg;
 }
