@@ -17,7 +17,7 @@ import type { EventFilter, EventRegistration, EventService, Invalidator, LoggerL
 import { NonStopInvalidator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/NonStopInvalidator';
 import type { RepairingHandler } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingHandler';
 import { RepairingTask } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/RepairingTask';
-import type { TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import type { ScheduledTask, TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 import { MemberMapInvalidationMetaDataFetcher } from '@zenystx/helios-core/map/impl/nearcache/invalidation/MemberMapInvalidationMetaDataFetcher';
@@ -47,6 +47,10 @@ export interface MapNearCacheNodeEngine {
     getEventService(): EventService;
     getLocalMemberUuid(): string;
     getTaskScheduler(): TaskScheduler;
+    getLifecycleService(): {
+        addLifecycleListener(fn: (event: { state: string }) => void): string;
+        removeLifecycleListener(id: string): void;
+    };
 }
 
 /** Filters event registrations to only pass invalidation-related listeners. */
@@ -87,19 +91,29 @@ export class MapNearCacheManager extends DefaultNearCacheManager {
 
         if (batchEnabled && batchSize > 1) {
             const batchFrequency = properties.getInteger({ name: BATCH_FREQUENCY_KEY, defaultValue: '10' });
+            const scheduler = this._nodeEngine.getTaskScheduler();
+            // Track scheduled tasks by executor name so we can cancel on shutdownExecutor.
+            const scheduledTasks = new Map<string, ScheduledTask>();
+            const lifecycleService = this._nodeEngine.getLifecycleService();
             const batchNodeEngine: BatchInvalidatorNodeEngine = {
                 getLogger: (cls) => this._nodeEngine.getLogger(cls),
                 getPartitionService: () => this._nodeEngine.getPartitionService(),
                 getEventService: () => this._nodeEngine.getEventService(),
                 getExecutionService: () => ({
-                    scheduleWithRepetition: (_name: string, _task: () => void, _i: number, _p: number) => {},
-                    shutdownExecutor: (_name: string) => {},
+                    scheduleWithRepetition: (name: string, task: () => void, initialDelay: number, period: number) => {
+                        const handle = scheduler.scheduleWithRepetition(task, initialDelay, period);
+                        scheduledTasks.set(name, handle);
+                    },
+                    shutdownExecutor: (name: string) => {
+                        const handle = scheduledTasks.get(name);
+                        if (handle !== undefined) {
+                            handle.cancel();
+                            scheduledTasks.delete(name);
+                        }
+                    },
                 }),
                 getHeliosInstance: () => ({
-                    getLifecycleService: () => ({
-                        addLifecycleListener: (_fn: (event: { state: string }) => void) => 'noop-id',
-                        removeLifecycleListener: (_id: string) => {},
-                    }),
+                    getLifecycleService: () => lifecycleService,
                 }),
             };
             return new BatchInvalidator(MAP_SERVICE_NAME, batchSize, batchFrequency, INVALIDATION_ACCEPTOR, batchNodeEngine);

@@ -86,7 +86,8 @@ import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/C
 import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
-import { MigrationManager } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
+import { BunTaskScheduler } from "@zenystx/helios-core/internal/nearcache/impl/TaskScheduler";
+import { MigrationManager, type MigrationNamespaceData } from "@zenystx/helios-core/internal/partition/impl/MigrationManager";
 import { MigrationQueue } from "@zenystx/helios-core/internal/partition/impl/MigrationQueue";
 import { PartitionReplicaManager } from "@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager";
 import { PartitionBackupReplicaAntiEntropyOp } from "@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp";
@@ -612,6 +613,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
     timeoutHandle: ReturnType<typeof setTimeout> | null;
     target: string;
   }>();
+  /** Pending migration data transfer acknowledgements keyed by migrationId. */
+  private readonly _pendingMigrationAcks = new Map<string, {
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timeoutHandle: ReturnType<typeof setTimeout>;
+  }>();
   private readonly _dedupedTxnBackupMessages = new RecentStringSet(8_192);
   private readonly _dedupedQueueTxnOps = new RecentStringSet(8_192);
   private readonly _dedupedListTxnOps = new RecentStringSet(8_192);
@@ -659,8 +666,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // MapContainerService — must be registered before any map proxy creation
     this._mapService = new MapContainerService();
 
-    // Near-cache manager — shares the same serialization service as the node engine
-    this._nearCacheManager = new DefaultNearCacheManager(this._ss);
+    // Near-cache manager — shares the same serialization service as the node engine.
+    // BunTaskScheduler is required so that TTL/max-idle expiration tasks actually fire.
+    this._nearCacheManager = new DefaultNearCacheManager(this._ss, new BunTaskScheduler());
 
     // Near-cache invalidation manager — pushes invalidation events to subscribed clients
     this._nearCacheInvalidationManager = new NearCacheInvalidationManager();
@@ -849,6 +857,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
       internalPartitionService.getPartitionStateManager(),
       new MigrationQueue(),
     );
+
+    // Wire the real partition data transfer transport into the MigrationManager.
+    this._migrationManager.setMigrationTransport(this._buildMigrationTransport());
+
     internalPartitionService.setAntiEntropyDispatcher((targetUuid, op) => {
       this._dispatchAntiEntropy(targetUuid, op);
     });
