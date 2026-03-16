@@ -31,6 +31,16 @@ import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 
 type MembershipListener = () => void;
 type MemberRemovedListener = (memberId: string) => void;
+
+/**
+ * Fired on the source member just before its owned partition data is committed
+ * (cleared). The listener should push partition data to the destination member
+ * before returning. The migration commit (data clear) runs after all listeners.
+ */
+type PartitionDemotionListener = (event: {
+  partitionId: number;
+  destinationUuid: string | null;
+}) => void | Promise<void>;
 interface BlitzCoordinatorListener {
   onAuthorityChanged?(state: {
     masterMemberId: string | null;
@@ -168,6 +178,7 @@ export class HeliosClusterCoordinator {
   private readonly _membershipListeners: MembershipListener[] = [];
   private readonly _memberRemovedListeners: MemberRemovedListener[] = [];
   private readonly _blitzCoordinatorListeners: BlitzCoordinatorListener[] = [];
+  private readonly _partitionDemotionListeners: PartitionDemotionListener[] = [];
   private readonly _joinRequestedPeers = new Set<string>();
   private readonly _connectedPeers = new Set<string>();
   private readonly _blitzCoordinator = new HeliosBlitzCoordinator();
@@ -346,6 +357,15 @@ export class HeliosClusterCoordinator {
 
   onBlitzCoordinatorEvent(listener: BlitzCoordinatorListener): void {
     this._blitzCoordinatorListeners.push(listener);
+  }
+
+  /**
+   * Register a listener that fires on the source member just before its partition
+   * data is cleared (committed away). The listener should push the data to the
+   * destination member before returning. The migration commit runs after all listeners.
+   */
+  onPartitionDemotion(listener: PartitionDemotionListener): void {
+    this._partitionDemotionListeners.push(listener);
   }
 
   handlePeerConnected(peerId: string): void {
@@ -703,9 +723,19 @@ export class HeliosClusterCoordinator {
     state: PartitionRuntimeState,
     previousState?: PartitionRuntimeState,
   ): void {
+    // Kick off the async lifecycle but do not await — callers are synchronous.
+    // The partition state update happens synchronously first; data transfer and
+    // commit (data clear) happen asynchronously after.
+    void this._applyRuntimeStateAsync(state, previousState);
+  }
+
+  private async _applyRuntimeStateAsync(
+    state: PartitionRuntimeState,
+    previousState?: PartitionRuntimeState,
+  ): Promise<void> {
     const localUuid = this._localMember.getUuid();
     const promotions: Array<{ partitionId: number; sourceUuid: string; targetUuid: string }> = [];
-    const demotions: PartitionMigrationEvent[] = [];
+    const demotions: Array<{ event: PartitionMigrationEvent; destinationUuid: string | null }> = [];
     const baselineState = previousState ?? this._toRuntimeState(this._partitionService);
 
     for (let partitionId = 0; partitionId < this._partitionService.getPartitionCount(); partitionId++) {
@@ -724,7 +754,7 @@ export class HeliosClusterCoordinator {
         for (const [, service] of this._partitionService.getMigrationAwareServices()) {
           service.beforeMigration(event);
         }
-        demotions.push(event);
+        demotions.push({ event, destinationUuid: nextOwnerUuid });
       }
 
       if (nextOwnerUuid === localUuid) {
@@ -747,7 +777,17 @@ export class HeliosClusterCoordinator {
       );
     }
 
-    for (const event of demotions) {
+    // Fire demotion listeners BEFORE clearing data on the source member.
+    // Each listener is responsible for pushing partition data to the destination.
+    for (const { event, destinationUuid } of demotions) {
+      const partitionId = event.partitionId;
+      for (const listener of this._partitionDemotionListeners) {
+        await listener({ partitionId, destinationUuid });
+      }
+    }
+
+    // Now commit (clear source data) after all data has been transferred.
+    for (const { event } of demotions) {
       for (const [, service] of this._partitionService.getMigrationAwareServices()) {
         service.commitMigration(event);
       }

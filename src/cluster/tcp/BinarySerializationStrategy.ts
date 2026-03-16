@@ -8,6 +8,8 @@ import type {
     ListResponseMsg,
     ListStateSyncMsg,
     MembersUpdateMsg,
+    MigrationAckMsg,
+    MigrationDataMsg,
     MultiMapEventMsg,
     MultiMapResponseMsg,
     MultiMapStateSyncMsg,
@@ -114,6 +116,8 @@ const MESSAGE_TYPE_TO_ID = {
     RINGBUFFER_RESPONSE: 62,
     RINGBUFFER_BACKUP: 63,
     RINGBUFFER_BACKUP_ACK: 64,
+    MIGRATION_DATA: 65,
+    MIGRATION_ACK: 66,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -478,6 +482,14 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.txnId);
                 out.writeBoolean(message.applied);
                 return;
+            case 'MIGRATION_DATA':
+                writeMigrationData(out, message);
+                return;
+            case 'MIGRATION_ACK':
+                out.writeString(message.migrationId);
+                out.writeBoolean(message.success);
+                out.writeString(message.error ?? null);
+                return;
         }
     }
 
@@ -770,7 +782,16 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     txnId: readRequiredString(inp),
                     applied: inp.readBoolean(),
                 };
+            case 'MIGRATION_DATA':
+                return readMigrationData(inp);
+            case 'MIGRATION_ACK': {
+                const migrationId = readRequiredString(inp);
+                const success = inp.readBoolean();
+                const error = inp.readString() ?? undefined;
+                return { type: 'MIGRATION_ACK', migrationId, success, ...(error !== undefined ? { error } : {}) };
+            }
         }
+        throw new Error(`Unknown message type ID: ${messageTypeId}`);
     }
 
     private _buildFlags(message: ClusterMessage): number {
@@ -1886,4 +1907,42 @@ function readReplicatedMapStateSync(inp: ByteArrayObjectDataInput): ReplicatedMa
         entries[i] = [readEncodedData(inp), readEncodedData(inp)];
     }
     return { type: 'REPLICATED_MAP_STATE_SYNC', requestId, sourceNodeId, mapName, version, entries };
+}
+
+// ── Migration data helpers ─────────────────────────────────────────────
+
+function writeMigrationData(out: ByteArrayObjectDataOutput, message: MigrationDataMsg): void {
+    out.writeString(message.migrationId);
+    out.writeInt(message.partitionId);
+    out.writeString(message.senderNodeId);
+    out.writeInt(message.namespaces.length);
+    for (const ns of message.namespaces) {
+        out.writeString(ns.namespace);
+        out.writeInt(ns.entries.length);
+        for (const entry of ns.entries) {
+            out.writeByteArray(entry.key);
+            out.writeByteArray(entry.value);
+        }
+    }
+}
+
+function readMigrationData(inp: ByteArrayObjectDataInput): MigrationDataMsg {
+    const migrationId = readRequiredString(inp);
+    const partitionId = inp.readInt();
+    const senderNodeId = readRequiredString(inp);
+    const namespaceCount = inp.readInt();
+    const namespaces: MigrationDataMsg['namespaces'][number][] = new Array(namespaceCount);
+    for (let i = 0; i < namespaceCount; i++) {
+        const namespace = readRequiredString(inp);
+        const entryCount = inp.readInt();
+        const entries = new Array<MigrationDataMsg['namespaces'][number]['entries'][number]>(entryCount);
+        for (let j = 0; j < entryCount; j++) {
+            entries[j] = {
+                key: inp.readByteArray() ?? Buffer.alloc(0),
+                value: inp.readByteArray() ?? Buffer.alloc(0),
+            };
+        }
+        namespaces[i] = { namespace, entries };
+    }
+    return { type: 'MIGRATION_DATA', migrationId, partitionId, senderNodeId, namespaces };
 }

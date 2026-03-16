@@ -30,6 +30,7 @@ import { LocalCluster } from "@zenystx/helios-core/cluster/impl/LocalCluster";
 import { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
 import { MulticastService } from "@zenystx/helios-core/cluster/multicast/MulticastService";
 import { decodeData, encodeData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
+import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import type { IList } from "@zenystx/helios-core/collection/IList";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
@@ -641,6 +642,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Migration manager — non-null when clustering is enabled. */
   private _migrationManager: MigrationManager | null = null;
 
+  /** Migration transport callbacks — non-null when clustering is enabled. */
+  private _migrationTransport: import('@zenystx/helios-core/internal/partition/impl/MigrationManager').MigrationTransport | null = null;
+
   /** Operation service impl — reference kept for metrics access. */
   private _operationServiceImpl: OperationServiceImpl | null = null;
 
@@ -859,7 +863,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
     );
 
     // Wire the real partition data transfer transport into the MigrationManager.
-    this._migrationManager.setMigrationTransport(this._buildMigrationTransport());
+    this._migrationTransport = this._buildMigrationTransport();
+    this._migrationManager.setMigrationTransport(this._migrationTransport);
+
+    // Register the partition demotion listener so that partition data is pushed to
+    // the destination member BEFORE the source clears its local copy.
+    this._clusterCoordinator.onPartitionDemotion(async ({ partitionId, destinationUuid }) => {
+      if (destinationUuid === null || this._migrationTransport === null) {
+        return;
+      }
+      const namespaces = this._migrationTransport.exportPartitionData(partitionId);
+      if (namespaces.length === 0 || namespaces.every((ns) => ns.entries.length === 0)) {
+        return;
+      }
+      const migrationId = `mig-${partitionId}-${crypto.randomUUID()}`;
+      await this._migrationTransport.sendMigrationData(destinationUuid, migrationId, partitionId, namespaces);
+    });
 
     internalPartitionService.setAntiEntropyDispatcher((targetUuid, op) => {
       this._dispatchAntiEntropy(targetUuid, op);
@@ -1096,6 +1115,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
           }
           pending.resolve(message.applied);
         }
+        return;
+      }
+
+      if (message.type === 'MIGRATION_DATA') {
+        this._handleMigrationData(message);
+        return;
+      }
+
+      if (message.type === 'MIGRATION_ACK') {
+        this._handleMigrationAck(message);
         return;
       }
 
@@ -1425,6 +1454,154 @@ export class HeliosInstanceImpl implements HeliosInstance {
       primaryVersions: op.primaryVersions.map((value) => value.toString()),
       namespaceVersions,
     });
+  }
+
+  /**
+   * Builds the MigrationTransport callbacks wired into MigrationManager for
+   * real partition data transfer between cluster members during rebalance.
+   */
+  private _buildMigrationTransport(): import('@zenystx/helios-core/internal/partition/impl/MigrationManager').MigrationTransport {
+    return {
+      getLocalMemberId: () => this._clusterCoordinator!.getLocalMemberId(),
+
+      exportPartitionData: (partitionId: number): MigrationNamespaceData[] => {
+        const namespaces = this._mapService.getPartitionNamespaces(partitionId);
+        return namespaces.map((namespace) => {
+          const store = this._mapService.getRecordStore(namespace, partitionId);
+          const entries: MigrationNamespaceData['entries'] = [];
+          if (store !== null) {
+            for (const [key, value] of store.entries()) {
+              const keyBytes = key.toByteArray();
+              const valueBytes = value.toByteArray();
+              if (keyBytes !== null && valueBytes !== null) {
+                entries.push({ key: keyBytes, value: valueBytes });
+              }
+            }
+          }
+          return { namespace, entries };
+        });
+      },
+
+      sendMigrationData: (
+        destinationMemberId: string,
+        migrationId: string,
+        partitionId: number,
+        namespaces: MigrationNamespaceData[],
+      ): Promise<void> => {
+        return new Promise<void>((resolve, reject) => {
+          const timeoutHandle = setTimeout(() => {
+            this._pendingMigrationAcks.delete(migrationId);
+            reject(new Error(
+              `Migration data transfer timed out (migrationId=${migrationId}, partition=${partitionId})`,
+            ));
+          }, 30_000);
+
+          this._pendingMigrationAcks.set(migrationId, { resolve, reject, timeoutHandle });
+
+          const sent = this._transport!.send(destinationMemberId, {
+            type: 'MIGRATION_DATA',
+            migrationId,
+            partitionId,
+            senderNodeId: this._clusterCoordinator!.getLocalMemberId(),
+            namespaces: namespaces.map((ns) => ({
+              namespace: ns.namespace,
+              entries: ns.entries.map((e) => ({ key: e.key, value: e.value })),
+            })),
+          });
+
+          if (!sent) {
+            clearTimeout(timeoutHandle);
+            this._pendingMigrationAcks.delete(migrationId);
+            reject(new Error(
+              `Failed to send migration data to ${destinationMemberId} (migrationId=${migrationId})`,
+            ));
+          }
+        });
+      },
+
+      importPartitionData: (partitionId: number, namespaces: MigrationNamespaceData[]): void => {
+        for (const ns of namespaces) {
+          const store = this._mapService.getOrCreateRecordStore(ns.namespace, partitionId);
+          store.clear();
+          for (const entry of ns.entries) {
+            store.put(
+              new HeapData(Buffer.from(entry.key)),
+              new HeapData(Buffer.from(entry.value)),
+              -1,
+              -1,
+            );
+          }
+        }
+      },
+
+      clearPartitionData: (partitionId: number): void => {
+        for (const namespace of this._mapService.getPartitionNamespaces(partitionId)) {
+          const store = this._mapService.getRecordStore(namespace, partitionId);
+          if (store !== null) {
+            store.clear();
+          }
+        }
+      },
+    };
+  }
+
+  /**
+   * Handles an incoming MIGRATION_DATA message from the source member.
+   * Imports the partition data and sends back a MIGRATION_ACK.
+   */
+  private _handleMigrationData(
+    message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'MIGRATION_DATA' }>,
+  ): void {
+    let success = true;
+    let error: string | undefined;
+
+    try {
+      if (this._migrationTransport !== null) {
+        const namespaces: MigrationNamespaceData[] = message.namespaces.map((ns) => ({
+          namespace: ns.namespace,
+          entries: ns.entries.map((e) => ({ key: Buffer.from(e.key), value: Buffer.from(e.value) })),
+        }));
+        this._migrationTransport.importPartitionData(message.partitionId, namespaces);
+      }
+    } catch (err) {
+      success = false;
+      error = err instanceof Error ? err.message : String(err);
+    }
+
+    // Route the ack directly to the sender using the senderNodeId carried in the message.
+    // This avoids the race condition where getOwnerId() may return the new owner (this
+    // member) instead of the source member after the partition table has been updated.
+    if (this._transport !== null) {
+      this._transport.send(message.senderNodeId, {
+        type: 'MIGRATION_ACK',
+        migrationId: message.migrationId,
+        success,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Handles an incoming MIGRATION_ACK message from the destination member.
+   * Resolves or rejects the pending migration transfer promise.
+   */
+  private _handleMigrationAck(
+    message: Extract<import('@zenystx/helios-core/cluster/tcp/ClusterMessage').ClusterMessage, { type: 'MIGRATION_ACK' }>,
+  ): void {
+    const pending = this._pendingMigrationAcks.get(message.migrationId);
+    if (pending === undefined) {
+      return;
+    }
+    clearTimeout(pending.timeoutHandle);
+    this._pendingMigrationAcks.delete(message.migrationId);
+
+    if (message.success) {
+      pending.resolve();
+    } else {
+      pending.reject(new Error(
+        `Migration import failed on destination (migrationId=${message.migrationId}): ${message.error ?? 'unknown error'}`,
+      ));
+    }
   }
 
   private _buildTransactionBackupTransport(): import('@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl').TransactionBackupTransport | null {

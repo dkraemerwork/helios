@@ -641,6 +641,51 @@ export interface TransactionBackupReplicationAckMsg {
   readonly applied: boolean;
 }
 
+// ── Partition migration messages ──────────────────────────────────────
+
+/** Wire entry: a single serialized key-value pair for partition migration. */
+export interface WireMigrationEntry {
+  readonly key: Buffer;
+  readonly value: Buffer;
+}
+
+/** Wire namespace: all entries for one map within a migrating partition. */
+export interface WireMigrationNamespace {
+  readonly namespace: string;
+  readonly entries: readonly WireMigrationEntry[];
+}
+
+/**
+ * Sent by the source member to the destination member during partition migration.
+ * Carries the full partition data payload for all services (map record stores, etc.)
+ * that have data for the given partition.
+ */
+export interface MigrationDataMsg {
+  readonly type: "MIGRATION_DATA";
+  /** Unique ID for this migration transfer, used to correlate the ack. */
+  readonly migrationId: string;
+  /** The partition whose data is being transferred. */
+  readonly partitionId: number;
+  /** Node ID of the sender — used to route the MIGRATION_ACK back to the correct source. */
+  readonly senderNodeId: string;
+  /** All service namespace states for the partition. */
+  readonly namespaces: readonly WireMigrationNamespace[];
+}
+
+/**
+ * Sent by the destination member back to the source member after the partition
+ * data has been successfully imported.
+ */
+export interface MigrationAckMsg {
+  readonly type: "MIGRATION_ACK";
+  /** Matches the migrationId from the corresponding MigrationDataMsg. */
+  readonly migrationId: string;
+  /** true when import succeeded; false on error. */
+  readonly success: boolean;
+  /** Human-readable error reason when success is false. */
+  readonly error?: string;
+}
+
 export type ClusterMessage =
   | HelloMsg
   | MapPutMsg
@@ -705,4 +750,6 @@ export type ClusterMessage =
   | BlitzTopologyResponseMsg
   | BlitzTopologyAnnounceMsg
   | TransactionBackupReplicationMsg
-  | TransactionBackupReplicationAckMsg;
+  | TransactionBackupReplicationAckMsg
+  | MigrationDataMsg
+  | MigrationAckMsg;

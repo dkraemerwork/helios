@@ -3,7 +3,7 @@
  *
  * Block 16.B3a: triggerControlTask, ControlTask, RedoPartitioningTask,
  * MigrationPlanner invocation, pauseMigration/resumeMigration.
- * Block 16.B3b: remote execution (MigrationRequestOperation, commit, finalize).
+ * Block 16.B3b: real partition data transfer between members via cluster transport.
  */
 import type { Member } from '@zenystx/helios-core/cluster/Member';
 import { MigrationCommitOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationCommitOperation';
@@ -13,7 +13,7 @@ import { MigrationRequestOperation } from '@zenystx/helios-core/internal/partiti
 import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer';
 import type { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
-import { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import { MigrationInfo, MigrationStatus } from '@zenystx/helios-core/internal/partition/MigrationInfo';
 import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
 
@@ -32,6 +32,58 @@ export interface MigrationStats {
 }
 
 /**
+ * Wire representation of a single key-value entry during partition migration.
+ * Uses raw Buffer to avoid depending on the ClusterMessage types from this layer.
+ */
+export interface MigrationEntry {
+    key: Buffer;
+    value: Buffer;
+}
+
+/** Wire representation of one service namespace's data for a migrating partition. */
+export interface MigrationNamespaceData {
+    namespace: string;
+    entries: MigrationEntry[];
+}
+
+/**
+ * Callbacks wired by HeliosInstanceImpl to perform real data transfer during migration.
+ *
+ * exportPartitionData:  called on the source member to serialize all partition data.
+ * sendToDestination:    called to transmit the data to the destination member UUID.
+ * importPartitionData:  called on the destination member to deserialize and install data.
+ */
+export interface MigrationTransport {
+    /** Returns the local member UUID. */
+    getLocalMemberId(): string;
+    /**
+     * Serializes all partition data for the given partition ID.
+     * Returns namespaces with their key-value entries.
+     */
+    exportPartitionData(partitionId: number): MigrationNamespaceData[];
+    /**
+     * Sends the migration payload to the specified destination member.
+     * Returns a Promise that resolves when the destination acknowledges the import.
+     */
+    sendMigrationData(
+        destinationMemberId: string,
+        migrationId: string,
+        partitionId: number,
+        namespaces: MigrationNamespaceData[],
+    ): Promise<void>;
+    /**
+     * Installs migration data on this member (destination side).
+     * Clears and repopulates the partition's record stores from the wire payload.
+     */
+    importPartitionData(partitionId: number, namespaces: MigrationNamespaceData[]): void;
+    /**
+     * Clears partition data from the source member after a successful MOVE migration.
+     * Only invoked when the source is the local member.
+     */
+    clearPartitionData(partitionId: number): void;
+}
+
+/**
  * Manages migration lifecycle — planning and remote execution.
  */
 export class MigrationManager {
@@ -41,6 +93,7 @@ export class MigrationManager {
     private readonly _maxParallelMigrations: number;
     private _paused: boolean;
     private _completedMigrations = 0;
+    private _transport: MigrationTransport | null = null;
 
     constructor(stateManager: PartitionStateManager, migrationQueue: MigrationQueue, options?: MigrationManagerOptions) {
         this._stateManager = stateManager;
@@ -48,6 +101,11 @@ export class MigrationManager {
         this._planner = new MigrationPlanner();
         this._maxParallelMigrations = options?.maxParallelMigrations ?? 10;
         this._paused = false;
+    }
+
+    /** Wire the transport callbacks required for real partition data transfer. */
+    setMigrationTransport(transport: MigrationTransport): void {
+        this._transport = transport;
     }
 
     getMaxParallelMigrations(): number {
@@ -111,20 +169,26 @@ export class MigrationManager {
             allMigrations.push(...partitionMigrations);
         }
 
-        // Enqueue migration tasks
+        // Enqueue migration tasks — each task captures the migration info and
+        // executes real data transfer when processQueue() is called.
         for (const migration of allMigrations) {
+            const transport = this._transport;
             this._migrationQueue.add({
                 run(): void {
-                    // In B.3a, tasks are local stubs — remote execution is in B.3b
-                    migration.setStatus(2 /* SUCCESS */);
+                    // Synchronous stub: mark SUCCESS immediately.
+                    // Real async transfer is driven by processQueueAsync().
+                    migration.setStatus(MigrationStatus.SUCCESS);
                 },
-            });
+                // Carry the migration info so processQueueAsync() can drive real transfer.
+                migration,
+                transport,
+            } as AsyncMigrationTask);
         }
 
         return allMigrations;
     }
 
-    /** Drains and runs all queued migration tasks. */
+    /** Drains and runs all queued migration tasks synchronously (legacy / no-transport path). */
     processQueue(): void {
         let task = this._migrationQueue.poll();
         while (task !== null) {
@@ -133,6 +197,80 @@ export class MigrationManager {
             this._completedMigrations++;
             task = this._migrationQueue.poll();
         }
+    }
+
+    /**
+     * Drains and executes all queued migration tasks with real data transfer.
+     *
+     * For each migration:
+     * - If this member is the source and the destination is a different member:
+     *   export the partition data and send it to the destination, then clear local data.
+     * - If this member is the destination (new primary owner):
+     *   data is pushed by the source; no local action needed during processQueueAsync.
+     * - If migration is purely local (same member): mark SUCCESS directly.
+     *
+     * Each task is executed sequentially to respect partition ordering and avoid
+     * concurrent state corruption on a single-threaded Bun runtime.
+     */
+    async processQueueAsync(): Promise<void> {
+        let task = this._migrationQueue.poll() as AsyncMigrationTask | null;
+        while (task !== null) {
+            await this._executeAsyncTask(task);
+            this._migrationQueue.afterTaskCompletion(task);
+            this._completedMigrations++;
+            task = this._migrationQueue.poll() as AsyncMigrationTask | null;
+        }
+    }
+
+    private async _executeAsyncTask(task: AsyncMigrationTask): Promise<void> {
+        const { migration, transport } = task;
+
+        if (transport === null || migration === undefined) {
+            // No transport wired or no migration info — legacy path.
+            task.run();
+            return;
+        }
+
+        const localMemberId = transport.getLocalMemberId();
+        const source = migration.getSource();
+        const destination = migration.getDestination();
+        const partitionId = migration.getPartitionId();
+
+        // Determine if this is a MOVE (source loses ownership) or COPY (backup added).
+        const isMove = migration.getSourceNewReplicaIndex() === -1;
+
+        const sourceUuid = source?.uuid() ?? null;
+        const destinationUuid = destination?.uuid() ?? null;
+
+        // Case 1: This member is the source and needs to push data to another member.
+        if (sourceUuid === localMemberId && destinationUuid !== null && destinationUuid !== localMemberId) {
+            const namespaces = transport.exportPartitionData(partitionId);
+            const migrationId = `mig-${partitionId}-${crypto.randomUUID()}`;
+
+            try {
+                await transport.sendMigrationData(destinationUuid, migrationId, partitionId, namespaces);
+                if (isMove) {
+                    transport.clearPartitionData(partitionId);
+                }
+                migration.setStatus(MigrationStatus.SUCCESS);
+            } catch {
+                migration.setStatus(MigrationStatus.FAILED);
+            }
+            return;
+        }
+
+        // Case 2: This member is the destination — source member pushes data proactively.
+        // The data will arrive via MIGRATION_DATA message and be imported at that point.
+        // We mark SUCCESS here since the source drives the transfer and will clear itself.
+        if (destinationUuid === localMemberId && sourceUuid !== null && sourceUuid !== localMemberId) {
+            // Destination side: data will be pushed by the source member.
+            // Mark SUCCESS so the partition table update proceeds.
+            migration.setStatus(MigrationStatus.SUCCESS);
+            return;
+        }
+
+        // Case 3: Local-only migration (source === destination, or no remote peers involved).
+        migration.setStatus(MigrationStatus.SUCCESS);
     }
 
     pauseMigration(): void {
@@ -190,4 +328,14 @@ export class MigrationManager {
         }
         return true;
     }
+}
+
+/**
+ * Internal task shape carrying the migration info and transport reference
+ * so processQueueAsync() can perform real data transfer.
+ */
+interface AsyncMigrationTask {
+    run(): void;
+    migration: MigrationInfo;
+    transport: MigrationTransport | null;
 }
