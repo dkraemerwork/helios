@@ -8,8 +8,8 @@ import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesC
 import { StringCodec } from './builtin/StringCodec';
 
 export class MapDeleteCodec {
-    static readonly REQUEST_MESSAGE_TYPE: number = 0x010700;
-    static readonly RESPONSE_MESSAGE_TYPE: number = 0x010701;
+    static readonly REQUEST_MESSAGE_TYPE: number = 0x010900;
+    static readonly RESPONSE_MESSAGE_TYPE: number = 0x010901;
     static readonly RESPONSE_INITIAL_FRAME_SIZE = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + 1;
 
     private static readonly REQUEST_THREAD_ID_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;

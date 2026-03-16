@@ -4,26 +4,23 @@
  * Wires the server-side NearCacheInvalidationManager into the client-protocol
  * dispatcher, handling:
  *
- *   Map.AddNearCacheInvalidationListener  (0x013c00)
+ *   Map.AddNearCacheInvalidationListener  (0x013f00)
  *       Client subscribes to invalidation events for a given map.
  *       Server responds with a registration UUID (ACK).
  *
- *   Map.RemoveNearCacheInvalidationListener (0x013d00)
- *       Client deregisters its invalidation listener.
- *
- *   Map.FetchNearCacheInvalidationMetadata (0x013e00)
+ *   Map.FetchNearCacheInvalidationMetadata (0x013d00)
  *       Client requests current partition UUIDs + sequences for anti-entropy.
  *       Server responds with per-partition metadata for each requested map.
  *
  * Event wire format pushed to clients:
  *
- *   Single invalidation event (0x013c01):
+ *   Single invalidation event (0x013f02):
  *     [initial frame: INT msgType + LONG correlationId + INT partitionId]
  *     [key bytes frame — serialized Data]
  *     [metadata frame: INT partitionId + LONG sequence + UUID partitionUuid]
  *     [sourceUuid string frame]
  *
- *   Clear invalidation event (0x013c02):
+ *   Clear invalidation event (0x013f04):
  *     [initial frame: INT msgType + LONG correlationId]
  *     [list of (partitionId, partitionUuid, sequence) triples]
  *     [sourceUuid string frame]
@@ -59,25 +56,20 @@ import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
 // ── Opcodes ───────────────────────────────────────────────────────────────────
 
 /** Client → Server: subscribe to near-cache invalidation events for a map. */
-const MAP_ADD_NEAR_CACHE_INVALIDATION_LISTENER_REQUEST_TYPE  = 0x013c00;
+const MAP_ADD_NEAR_CACHE_INVALIDATION_LISTENER_REQUEST_TYPE  = 0x013f00;
 /** Server → Client: ACK response carrying the registration UUID. */
-const MAP_ADD_NEAR_CACHE_INVALIDATION_LISTENER_RESPONSE_TYPE = 0x013c01;
+const MAP_ADD_NEAR_CACHE_INVALIDATION_LISTENER_RESPONSE_TYPE = 0x013f01;
 /** Server → Client: pushed single-key invalidation event. */
-const MAP_NEAR_CACHE_SINGLE_INVALIDATION_EVENT_TYPE = 0x013c02;
+const MAP_NEAR_CACHE_SINGLE_INVALIDATION_EVENT_TYPE = 0x013f02;
 /** Server → Client: pushed batch/clear invalidation event. */
-const MAP_NEAR_CACHE_BATCH_INVALIDATION_EVENT_TYPE  = 0x013c03;
+const MAP_NEAR_CACHE_BATCH_INVALIDATION_EVENT_TYPE  = 0x013f03;
 /** Server → Client: pushed clear-all invalidation event. */
-const MAP_NEAR_CACHE_CLEAR_INVALIDATION_EVENT_TYPE  = 0x013c04;
-
-/** Client → Server: remove a near-cache invalidation listener. */
-const MAP_REMOVE_NEAR_CACHE_INVALIDATION_LISTENER_REQUEST_TYPE  = 0x013d00;
-/** Server → Client: remove ACK (boolean result). */
-const MAP_REMOVE_NEAR_CACHE_INVALIDATION_LISTENER_RESPONSE_TYPE = 0x013d01;
+const MAP_NEAR_CACHE_CLEAR_INVALIDATION_EVENT_TYPE  = 0x013f04;
 
 /** Client → Server: fetch current partition metadata for anti-entropy. */
-const MAP_FETCH_NEAR_CACHE_INVALIDATION_METADATA_REQUEST_TYPE  = 0x013e00;
+const MAP_FETCH_NEAR_CACHE_INVALIDATION_METADATA_REQUEST_TYPE  = 0x013d00;
 /** Server → Client: metadata response. */
-const MAP_FETCH_NEAR_CACHE_INVALIDATION_METADATA_RESPONSE_TYPE = 0x013e01;
+const MAP_FETCH_NEAR_CACHE_INVALIDATION_METADATA_RESPONSE_TYPE = 0x013d01;
 
 // Standard response/event header size: INT messageType (4) + LONG correlationId (8)
 const INITIAL_FRAME_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES;
@@ -130,30 +122,6 @@ export function registerNearCacheInvalidationHandlers(
             return _encodeStringResponse(
                 MAP_ADD_NEAR_CACHE_INVALIDATION_LISTENER_RESPONSE_TYPE,
                 registrationUuid,
-                msg.getCorrelationId(),
-            );
-        },
-    );
-
-    // ── Map.RemoveNearCacheInvalidationListener ───────────────────────────────
-
-    dispatcher.register(
-        MAP_REMOVE_NEAR_CACHE_INVALIDATION_LISTENER_REQUEST_TYPE,
-        async (msg: CM, session: ClientSession): Promise<CM> => {
-            const { mapName, registrationUuid } = _decodeRemoveListenerRequest(msg);
-            invalidationManager.unsubscribe(session.getSessionId(), mapName);
-
-            if (logger?.isFineEnabled()) {
-                logger.fine(
-                    `[NearCacheInvalidationHandler] Session ${session.getSessionId()} ` +
-                    `unsubscribed from near-cache invalidation for map "${mapName}" ` +
-                    `registrationUuid=${registrationUuid}`,
-                );
-            }
-
-            return _encodeBooleanResponse(
-                MAP_REMOVE_NEAR_CACHE_INVALIDATION_LISTENER_RESPONSE_TYPE,
-                true,
                 msg.getCorrelationId(),
             );
         },
@@ -327,15 +295,6 @@ function _decodeMapName(msg: CM): string {
     return StringCodec.decode(iter);
 }
 
-/** Decode the map name and registration UUID from a remove-listener request. */
-function _decodeRemoveListenerRequest(msg: CM): { mapName: string; registrationUuid: string } {
-    const iter = msg.forwardFrameIterator();
-    iter.next(); // skip initial frame
-    const mapName = StringCodec.decode(iter);
-    const registrationUuid = StringCodec.decode(iter);
-    return { mapName, registrationUuid };
-}
-
 /** Decode a list of map names from a fetch-metadata request. */
 function _decodeStringList(msg: CM): string[] {
     const iter = msg.forwardFrameIterator();
@@ -366,20 +325,6 @@ function _encodeStringResponse(responseType: number, value: string, correlationI
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     StringCodec.encode(msg, value);
-    msg.setFinal();
-    return msg;
-}
-
-/** Encode a boolean response. */
-function _encodeBooleanResponse(responseType: number, value: boolean, correlationId: number): CM {
-    const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(INITIAL_FRAME_SIZE + 1);
-    buf.fill(0);
-    buf.writeUInt32LE(responseType >>> 0, 0);
-    buf.writeInt32LE(correlationId, INT_SIZE_IN_BYTES);
-    buf.writeUInt8(value ? 1 : 0, INITIAL_FRAME_SIZE);
-    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
-    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();
     return msg;
 }

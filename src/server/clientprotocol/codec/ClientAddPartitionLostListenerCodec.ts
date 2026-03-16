@@ -3,9 +3,9 @@
  *
  * Port of {@code com.hazelcast.client.impl.protocol.codec.ClientAddPartitionLostListenerCodec}.
  *
- * Message type: 0x000B00 (request), 0x000B01 (response)
+ * Message type: 0x001600 (request), 0x001601 (response)
  * Events:
- *   0x000B02 — PARTITION_LOST event
+ *   0x001602 — PARTITION_LOST event
  *
  * Clients subscribe to partition-lost notifications so they can take
  * corrective action (e.g. evict near-cache, reconnect, alert operators).
@@ -25,9 +25,9 @@ import {
 
 // ── Message type constants ────────────────────────────────────────────────────
 
-const REQUEST_MESSAGE_TYPE = 0x000b00;
-const RESPONSE_MESSAGE_TYPE = 0x000b01;
-const EVENT_PARTITION_LOST_MESSAGE_TYPE = 0x000b02;
+const REQUEST_MESSAGE_TYPE = 0x001600;
+const RESPONSE_MESSAGE_TYPE = 0x001601;
+const EVENT_PARTITION_LOST_MESSAGE_TYPE = 0x001602;
 
 // ── Frame sizes ───────────────────────────────────────────────────────────────
 

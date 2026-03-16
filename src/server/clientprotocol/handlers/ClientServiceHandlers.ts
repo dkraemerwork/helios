@@ -4,12 +4,12 @@
  * Registers handlers for all client-management opcodes required by
  * hazelcast-client@5.6.x:
  *
- *   Client.Ping                    (0x000d00) — heartbeat
+ *   Client.Ping                    (0x000b00) — heartbeat
  *   Client.CreateProxy             (0x000400) — create distributed object proxy
  *   Client.DestroyProxy            (0x000500) — destroy distributed object proxy
  *   Client.GetDistributedObjects   (0x000800) — list all distributed objects
  *   Client.AddClusterViewListener  (0x000900) — subscribe to topology events
- *   Client.AddPartitionLostListener(0x000b00) — subscribe to partition-lost events
+ *   Client.AddPartitionLostListener(0x001600) — subscribe to partition-lost events
  *   Client.Statistics              (0x000c00) — client stats (periodic, no response)
  *   Client.TriggerPartitionAssignment (0x001300) — request partition assignment
  *
@@ -36,8 +36,8 @@ import type { ILogger } from '@zenystx/helios-core/test-support/ILogger.js';
 
 // ── Message type constants not covered by existing codecs ─────────────────────
 
-const CLIENT_PING_REQUEST_TYPE           = 0x000d00;
-const CLIENT_PING_RESPONSE_TYPE          = 0x000d01;
+const CLIENT_PING_REQUEST_TYPE           = 0x000b00;
+const CLIENT_PING_RESPONSE_TYPE          = 0x000b01;
 const CLIENT_STATISTICS_REQUEST_TYPE     = 0x000c00;
 const CLIENT_STATISTICS_RESPONSE_TYPE    = 0x000c01;
 const CLIENT_SEND_SCHEMA_REQUEST_TYPE    = 0x001300;
