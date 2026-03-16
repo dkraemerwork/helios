@@ -57,6 +57,7 @@ import type {
     CpGroupOperations,
     CpSessionOperations,
     CountDownLatchOperations,
+    FencedLockOperations,
     SemaphoreOperations,
 } from './ServiceOperations.js';
 import {
@@ -119,6 +120,14 @@ const SEM_DRAIN_REQUEST              = 0x0c0400; const SEM_DRAIN_RESPONSE       
 const SEM_CHANGE_REQUEST             = 0x0c0500; const SEM_CHANGE_RESPONSE             = 0x0c0501;
 const SEM_AVAILABLE_PERMITS_REQUEST  = 0x0c0600; const SEM_AVAILABLE_PERMITS_RESPONSE  = 0x0c0601;
 const SEM_GET_TYPE_REQUEST           = 0x0c0700; const SEM_GET_TYPE_RESPONSE           = 0x0c0701;
+
+// ── FencedLock message type constants ─────────────────────────────────────────
+// FencedLock service ID = 7 (0x07). Opcodes: lock=1, tryLock=2, unlock=3, getLockOwnership=4.
+
+const FL_LOCK_REQUEST                = 0x070100; const FL_LOCK_RESPONSE                = 0x070101;
+const FL_TRY_LOCK_REQUEST            = 0x070200; const FL_TRY_LOCK_RESPONSE            = 0x070201;
+const FL_UNLOCK_REQUEST              = 0x070300; const FL_UNLOCK_RESPONSE              = 0x070301;
+const FL_GET_LOCK_OWNERSHIP_REQUEST  = 0x070400; const FL_GET_LOCK_OWNERSHIP_RESPONSE  = 0x070401;
 
 const CP_SESSION_CREATE_REQUEST      = 0x1f0100; const CP_SESSION_CREATE_RESPONSE      = 0x1f0101;
 const CP_SESSION_CLOSE_REQUEST       = 0x1f0200; const CP_SESSION_CLOSE_RESPONSE       = 0x1f0201;
@@ -253,10 +262,11 @@ export interface CpServiceHandlersOptions {
     atomicRef: AtomicRefOperations;
     countDownLatch: CountDownLatchOperations;
     semaphore: SemaphoreOperations;
+    fencedLock: FencedLockOperations;
 }
 
 export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void {
-    const { dispatcher, cpGroup, cpSession, atomicLong, atomicRef, countDownLatch, semaphore } = opts;
+    const { dispatcher, cpGroup, cpSession, atomicLong, atomicRef, countDownLatch, semaphore, fencedLock } = opts;
 
     const handleAtomicRefGet = async (msg: ClientMessage, responseType: number) => {
         const iter = msg.forwardFrameIterator(); iter.next();
@@ -574,6 +584,71 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
         const name = _decodeCpObjectReference(iter).proxyName;
         return _bool(SEM_GET_TYPE_RESPONSE, await semaphore.isJdkCompatible(name));
     });
+
+    // ── FencedLock ────────────────────────────────────────────────────────────
+    //
+    // Initial frame layout (after TYPE+CORR_ID at offsets 0-11):
+    //   PARTITION_ID(4)     @ 12  (REQUEST_HEADER_SIZE = 16)
+    //   SESSION_ID(8)       @ 16
+    //   THREAD_ID(8)        @ 24
+    //   INVOCATION_UID(17)  @ 32
+    //   [TIMEOUT_MS(8)      @ 49  — TryLock only]
+    //
+    // Variable frames: RaftGroupId struct (BEGIN + initial-frame + name + END),
+    //                  then lock name string.
+
+    const FL_SESSION_ID_OFFSET     = REQUEST_HEADER_SIZE;
+    const FL_THREAD_ID_OFFSET      = FL_SESSION_ID_OFFSET    + LONG_SIZE_IN_BYTES;
+    const FL_INVOCATION_UID_OFFSET = FL_THREAD_ID_OFFSET     + LONG_SIZE_IN_BYTES;
+    const FL_TIMEOUT_MS_OFFSET     = FL_INVOCATION_UID_OFFSET + UUID_SIZE_IN_BYTES;
+
+    dispatcher.register(FL_LOCK_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        const f = iter.next();
+        const sessionId     = f.content.readBigInt64LE(FL_SESSION_ID_OFFSET);
+        const threadId      = f.content.readBigInt64LE(FL_THREAD_ID_OFFSET);
+        const invocationUid = FixedSizeTypesCodec.decodeUUID(f.content, FL_INVOCATION_UID_OFFSET) ?? '';
+        const groupName     = _decodeRaftGroupName(iter);
+        const lockName      = StringCodec.decode(iter);
+        const fence         = await fencedLock.lock(groupName, lockName, sessionId, threadId, invocationUid);
+        return _long(FL_LOCK_RESPONSE, fence);
+    });
+
+    dispatcher.register(FL_TRY_LOCK_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        const f = iter.next();
+        const sessionId     = f.content.readBigInt64LE(FL_SESSION_ID_OFFSET);
+        const threadId      = f.content.readBigInt64LE(FL_THREAD_ID_OFFSET);
+        const invocationUid = FixedSizeTypesCodec.decodeUUID(f.content, FL_INVOCATION_UID_OFFSET) ?? '';
+        const timeoutMs     = f.content.length > FL_TIMEOUT_MS_OFFSET
+            ? f.content.readBigInt64LE(FL_TIMEOUT_MS_OFFSET)
+            : 0n;
+        const groupName     = _decodeRaftGroupName(iter);
+        const lockName      = StringCodec.decode(iter);
+        const fence         = await fencedLock.tryLock(groupName, lockName, sessionId, threadId, invocationUid, timeoutMs);
+        return _long(FL_TRY_LOCK_RESPONSE, fence);
+    });
+
+    dispatcher.register(FL_UNLOCK_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        const f = iter.next();
+        const sessionId     = f.content.readBigInt64LE(FL_SESSION_ID_OFFSET);
+        const threadId      = f.content.readBigInt64LE(FL_THREAD_ID_OFFSET);
+        const invocationUid = FixedSizeTypesCodec.decodeUUID(f.content, FL_INVOCATION_UID_OFFSET) ?? '';
+        const groupName     = _decodeRaftGroupName(iter);
+        const lockName      = StringCodec.decode(iter);
+        const result        = await fencedLock.unlock(groupName, lockName, sessionId, threadId, invocationUid);
+        return _bool(FL_UNLOCK_RESPONSE, result);
+    });
+
+    dispatcher.register(FL_GET_LOCK_OWNERSHIP_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // initial frame — no extra fields for GetLockOwnership
+        const groupName = _decodeRaftGroupName(iter);
+        const lockName  = StringCodec.decode(iter);
+        const ownership = await fencedLock.getLockOwnership(groupName, lockName);
+        return _lockOwnership(FL_GET_LOCK_OWNERSHIP_RESPONSE, ownership);
+    });
 }
 
 // ── Response helpers ──────────────────────────────────────────────────────────
@@ -585,3 +660,31 @@ function _long(t: number, v: bigint): ClientMessage { const msg = CM.createForEn
 function _cpSessionCreateResponse(t: number, sessionId: bigint, ttlMillis: bigint, heartbeatMillis: bigint): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + (LONG_SIZE_IN_BYTES * 3)); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeBigInt64LE(sessionId, RESPONSE_HEADER_SIZE); b.writeBigInt64LE(ttlMillis, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES); b.writeBigInt64LE(heartbeatMillis, RESPONSE_HEADER_SIZE + (LONG_SIZE_IN_BYTES * 2)); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
 function _nullable(t: number, data: Data | null): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); if (data === null) { msg.add(CM.NULL_FRAME); } else { DataCodec.encode(msg, data); } msg.setFinal(); return msg; }
 function _raftGroupId(t: number, groupId: { name: string; seed: bigint; id: bigint }): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.add(CM.BEGIN_FRAME); const initial = Buffer.allocUnsafe(LONG_SIZE_IN_BYTES * 2); initial.writeBigInt64LE(groupId.seed, 0); initial.writeBigInt64LE(groupId.id, LONG_SIZE_IN_BYTES); msg.add(new CM.Frame(initial)); StringCodec.encode(msg, groupId.name); msg.add(CM.END_FRAME); msg.setFinal(); return msg; }
+
+/**
+ * Encode FencedLock.GetLockOwnership response.
+ *
+ * Response layout (from FencedLockGetLockOwnershipCodec):
+ *   FENCE(8)      @ RESPONSE_HEADER_SIZE
+ *   LOCK_COUNT(4) @ RESPONSE_HEADER_SIZE + 8
+ *   SESSION_ID(8) @ RESPONSE_HEADER_SIZE + 12
+ *   THREAD_ID(8)  @ RESPONSE_HEADER_SIZE + 20
+ */
+function _lockOwnership(
+    t: number,
+    ownership: { fence: bigint; lockCount: number; sessionId: bigint; threadId: bigint },
+): ClientMessage {
+    const PAYLOAD_SIZE = LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES; // 8+4+8+8 = 28
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + PAYLOAD_SIZE);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    b.writeBigInt64LE(ownership.fence,     RESPONSE_HEADER_SIZE);
+    b.writeInt32LE(ownership.lockCount | 0, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES);
+    b.writeBigInt64LE(ownership.sessionId, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+    b.writeBigInt64LE(ownership.threadId,  RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
+    msg.setFinal();
+    return msg;
+}

@@ -86,6 +86,7 @@ export interface QueueServiceOperations {
     contains(name: string, value: Data): Promise<boolean>;
     containsAll(name: string, values: Data[]): Promise<boolean>;
     addAll(name: string, values: Data[]): Promise<boolean>;
+    remove(name: string, value: Data): Promise<boolean>;
     removeAll(name: string, values: Data[]): Promise<boolean>;
     retainAll(name: string, values: Data[]): Promise<boolean>;
     drain(name: string, maxElements: number): Promise<Data[]>;
@@ -391,6 +392,15 @@ export interface CpSessionOperations {
     closeSession(groupName: string, sessionId: bigint): Promise<boolean>;
     heartbeatSession(groupName: string, sessionId: bigint): Promise<void>;
     generateThreadId(groupName: string): Promise<bigint>;
+}
+
+// ── FencedLock ────────────────────────────────────────────────────────────────
+
+export interface FencedLockOperations {
+    lock(groupName: string, lockName: string, sessionId: bigint, threadId: bigint, invocationUid: string): Promise<bigint>;
+    tryLock(groupName: string, lockName: string, sessionId: bigint, threadId: bigint, invocationUid: string, timeoutMs: bigint): Promise<bigint>;
+    unlock(groupName: string, lockName: string, sessionId: bigint, threadId: bigint, invocationUid: string): Promise<boolean>;
+    getLockOwnership(groupName: string, lockName: string): Promise<{ fence: bigint; lockCount: number; sessionId: bigint; threadId: bigint }>;
 }
 
 // ── FlakeIdGenerator ──────────────────────────────────────────────────────────

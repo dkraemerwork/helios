@@ -33,6 +33,7 @@ import { QueuePollCodec } from '../../../client/impl/protocol/codec/QueuePollCod
 import { QueueSizeCodec } from '../../../client/impl/protocol/codec/QueueSizeCodec.js';
 import { QueueClearCodec } from '../../../client/impl/protocol/codec/QueueClearCodec.js';
 import { QueuePeekCodec } from '../../../client/impl/protocol/codec/QueuePeekCodec.js';
+import { QueueRemoveCodec } from '../../../client/impl/protocol/codec/QueueRemoveCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { QueueServiceOperations } from './ServiceOperations.js';
 import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
@@ -114,6 +115,13 @@ export function registerQueueServiceHandlers(
         const req = QueuePeekCodec.decodeRequest(msg);
         const value = await operations.peek(req.name);
         return QueuePeekCodec.encodeResponse(value);
+    });
+
+    // Queue.Remove (0x030400) — remove first occurrence of value
+    dispatcher.register(QueueRemoveCodec.REQUEST_MESSAGE_TYPE, async (msg, _session) => {
+        const req = QueueRemoveCodec.decodeRequest(msg);
+        const result = await operations.remove(req.name, req.value);
+        return QueueRemoveCodec.encodeResponse(result);
     });
 
     // Queue.Contains

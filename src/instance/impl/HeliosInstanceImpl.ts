@@ -52,6 +52,7 @@ import { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongServic
 import { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
 import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
 import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
+import { FencedLockService } from "@zenystx/helios-core/cp/impl/FencedLockService";
 import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
 import { PNCounterService } from "@zenystx/helios-core/crdt/impl/PNCounterService";
 import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
@@ -496,6 +497,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _atomicReferenceService: AtomicReferenceService | null = null;
   private _countDownLatchService: CountDownLatchService | null = null;
   private _semaphoreService: SemaphoreService | null = null;
+  private _fencedLockService: FencedLockService | null = null;
   private _pnCounterService: PNCounterService | null = null;
   private _flakeIdGeneratorService: FlakeIdGeneratorService | null = null;
   private _cardinalityEstimatorService: DistributedCardinalityEstimatorService | null = null;
@@ -2688,6 +2690,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._ensureQueueService();
         return this._distributedQueueService!.containsAll(name, values);
       },
+      remove: async (name, value) => {
+        this._ensureQueueService();
+        return this._distributedQueueService!.remove(name, value);
+      },
       addAll: async (name, values) => {
         this._ensureQueueService();
         return this._distributedQueueService!.addAll(name, values);
@@ -3390,6 +3396,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
       generateThreadId: async (_groupName) => this._getOrCreateCpSubsystemService().createThreadId(),
     };
 
+    const fencedLockOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FencedLockOperations = {
+      lock: async (groupName, lockName, sessionId, threadId, invocationUid) =>
+        this._getOrCreateFencedLockService().lock(groupName, lockName, sessionId, threadId, invocationUid),
+      tryLock: async (groupName, lockName, sessionId, threadId, invocationUid, timeoutMs) =>
+        this._getOrCreateFencedLockService().tryLock(groupName, lockName, sessionId, threadId, invocationUid, timeoutMs),
+      unlock: async (groupName, lockName, sessionId, threadId, invocationUid) =>
+        this._getOrCreateFencedLockService().unlock(groupName, lockName, sessionId, threadId, invocationUid),
+      getLockOwnership: (groupName, lockName) =>
+        Promise.resolve(this._getOrCreateFencedLockService().getLockOwnership(groupName, lockName)),
+    };
+
     const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
       newIdBatch: async (name, batchSize) => this._getOrCreateFlakeIdGeneratorService().newBatch(name, batchSize),
     };
@@ -3459,6 +3476,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       atomicRef: trackClientProtocolOperations(atomicRefOps),
       countDownLatch: trackClientProtocolOperations(countDownLatchOps),
       semaphore: trackClientProtocolOperations(semaphoreOps),
+      fencedLock: trackClientProtocolOperations(fencedLockOps),
       flakeIdGenerator: trackClientProtocolOperations(flakeIdOps),
       pnCounter: trackClientProtocolOperations(pnCounterOps),
       cardinalityEstimator: trackClientProtocolOperations(cardinalityOps),
@@ -3646,6 +3664,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._nodeEngine.registerService(SemaphoreService.SERVICE_NAME, this._semaphoreService);
     }
     return this._semaphoreService;
+  }
+
+  private _getOrCreateFencedLockService(): FencedLockService {
+    if (this._fencedLockService === null) {
+      this._fencedLockService = new FencedLockService(this._getOrCreateCpSubsystemService());
+      this._nodeEngine.registerService(FencedLockService.SERVICE_NAME, this._fencedLockService);
+    }
+    return this._fencedLockService;
   }
 
   private _toOptionalTimeoutMs(timeoutMs: bigint): number | undefined {
@@ -5247,6 +5273,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._atomicReferenceService = null;
     this._countDownLatchService = null;
     this._semaphoreService = null;
+    this._fencedLockService = null;
     this._pnCounterService = null;
     this._flakeIdGeneratorService = null;
     this._cardinalityEstimatorService = null;

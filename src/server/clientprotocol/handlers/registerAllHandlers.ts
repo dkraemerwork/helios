@@ -55,6 +55,7 @@ import type {
     AtomicRefOperations,
     CountDownLatchOperations,
     SemaphoreOperations,
+    FencedLockOperations,
     FlakeIdGeneratorOperations,
     PnCounterOperations,
     CardinalityEstimatorOperations,
@@ -92,6 +93,7 @@ export interface RegisterAllHandlersOptions {
     atomicRef: AtomicRefOperations;
     countDownLatch: CountDownLatchOperations;
     semaphore: SemaphoreOperations;
+    fencedLock: FencedLockOperations;
 
     // Misc
     flakeIdGenerator: FlakeIdGeneratorOperations;
@@ -153,6 +155,7 @@ export function registerAllHandlers(opts: RegisterAllHandlersOptions): void {
         atomicRef: opts.atomicRef,
         countDownLatch: opts.countDownLatch,
         semaphore: opts.semaphore,
+        fencedLock: opts.fencedLock,
     });
 
     registerFlakeIdServiceHandlers({
