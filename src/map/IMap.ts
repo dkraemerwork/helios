@@ -8,6 +8,8 @@ import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 import type { MapPartitionLostEvent } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
+import type { Projection } from '@zenystx/helios-core/projection/Projection';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 
 export interface IMap<K, V> {
@@ -93,6 +95,13 @@ export interface IMap<K, V> {
     aggregate<R>(aggregator: Aggregator<[K, V], R>): R;
     /** Executes the aggregator on entries matching the predicate. */
     aggregate<R>(aggregator: Aggregator<[K, V], R>, predicate: Predicate<K, V>): R;
+
+    // ── Projection ───────────────────────────────────────────────────────────
+
+    /** Applies the projection to all entries and returns the results. */
+    project<O>(projection: Projection<QueryableEntry<K, V>, O>): O[];
+    /** Applies the projection to entries matching the predicate and returns the results. */
+    project<O>(projection: Projection<QueryableEntry<K, V>, O>, predicate: Predicate<K, V>): O[];
 
     // ── Entry listeners ──────────────────────────────────────────────────────
 

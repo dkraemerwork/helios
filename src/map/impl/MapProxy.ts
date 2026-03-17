@@ -25,6 +25,7 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
@@ -448,6 +449,23 @@ export class MapProxy<K, V> implements IMap<K, V> {
         aggregator.onAccumulationFinished();
         aggregator.onCombinationFinished();
         return aggregator.aggregate();
+    }
+
+    // ── Projection ────────────────────────────────────────────────────────
+
+    project<O>(projection: Projection<QueryableEntry<K, V>, O>): O[];
+    project<O>(projection: Projection<QueryableEntry<K, V>, O>, predicate: Predicate<K, V>): O[];
+    project<O>(projection: Projection<QueryableEntry<K, V>, O>, predicate?: Predicate<K, V>): O[] {
+        const result: O[] = [];
+        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+            const k = this._toObject<K>(kd);
+            const v = this._toObject<V>(vd);
+            if (k === null || v === null) continue;
+            const entry = this._makeEntry(k, v);
+            if (predicate !== undefined && !predicate.apply(entry)) continue;
+            result.push(projection.transform(entry));
+        }
+        return result;
     }
 
     // ── Entry listeners ───────────────────────────────────────────────────
