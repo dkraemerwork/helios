@@ -51,6 +51,7 @@ export interface MapServiceOperations {
     forceUnlock(name: string, key: Data, referenceId: bigint): Promise<void>;
     addEntryListener(name: string, flags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
     removeEntryListener(registrationId: string, session: ClientSession): Promise<boolean>;
+    addInterceptor(name: string, interceptor: unknown): Promise<string>;
     removeInterceptor(name: string, id: string): Promise<boolean>;
     executeOnKey(name: string, key: Data, entryProcessor: Data, threadId: bigint): Promise<Data | null>;
     executeOnAllKeys(name: string, entryProcessor: Data): Promise<Array<[Data, Data]>>;
@@ -69,6 +70,8 @@ export interface MapServiceOperations {
     removeAll(name: string, predicate: Data): Promise<void>;
     aggregate(name: string, aggregator: Data): Promise<Data | null>;
     aggregateWithPredicate(name: string, aggregator: Data, predicate: Data): Promise<Data | null>;
+    project(name: string, projection: Data): Promise<Array<Data | null>>;
+    projectWithPredicate(name: string, projection: Data, predicate: Data): Promise<Array<Data | null>>;
     addEntryListenerToKey(name: string, key: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
     addEntryListenerWithPredicate(name: string, predicate: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
     addEntryListenerToKeyWithPredicate(name: string, key: Data, predicate: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
@@ -433,4 +436,17 @@ export interface PnCounterOperations {
 export interface CardinalityEstimatorOperations {
     add(name: string, item: Data): Promise<void>;
     estimate(name: string): Promise<bigint>;
+}
+
+// ── CPMap ─────────────────────────────────────────────────────────────────────
+
+export interface CPMapOperations {
+    get(name: string, key: Data): Promise<Data | null>;
+    put(name: string, key: Data, value: Data): Promise<Data | null>;
+    set(name: string, key: Data, value: Data): Promise<void>;
+    remove(name: string, key: Data): Promise<Data | null>;
+    delete(name: string, key: Data): Promise<void>;
+    putIfAbsent(name: string, key: Data, value: Data): Promise<Data | null>;
+    compareAndSet(name: string, key: Data, expectedValue: Data, newValue: Data): Promise<boolean>;
+    destroy(name: string): Promise<void>;
 }

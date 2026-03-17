@@ -59,6 +59,8 @@
  *   Map.EntriesWithPagingPredicate       (0x013600)
  *   Map.Aggregate                        (0x013900)
  *   Map.AggregateWithPredicate           (0x013a00)
+ *   Map.Project                          (0x013b00)
+ *   Map.ProjectWithPredicate             (0x013c00)
  *   Map.RemoveAll                        (0x013e00)
  *   Map.PutWithMaxIdle                   (0x014400)
  *
@@ -134,6 +136,8 @@ const MAP_REPLACE_IF_SAME_REQUEST_TYPE  = 0x010500;
 const MAP_REPLACE_IF_SAME_RESPONSE_TYPE = 0x010501;
 const MAP_REMOVE_IF_SAME_REQUEST_TYPE   = 0x010800;
 const MAP_REMOVE_IF_SAME_RESPONSE_TYPE  = 0x010801;
+const MAP_ADD_INTERCEPTOR_REQUEST_TYPE     = 0x014900;
+const MAP_ADD_INTERCEPTOR_RESPONSE_TYPE    = 0x014901;
 const MAP_REMOVE_INTERCEPTOR_REQUEST_TYPE  = 0x014800;
 const MAP_REMOVE_INTERCEPTOR_RESPONSE_TYPE = 0x014801;
 const MAP_EXECUTE_ON_KEY_REQUEST_TYPE      = 0x012e00;
@@ -184,6 +188,10 @@ const MAP_AGGREGATE_WITH_PREDICATE_REQUEST_TYPE  = 0x013a00;
 const MAP_AGGREGATE_WITH_PREDICATE_RESPONSE_TYPE = 0x013a01;
 const MAP_REMOVE_ALL_REQUEST_TYPE = 0x013e00;
 const MAP_REMOVE_ALL_RESPONSE_TYPE = 0x013e01;
+const MAP_PROJECT_REQUEST_TYPE = 0x013b00;
+const MAP_PROJECT_RESPONSE_TYPE = 0x013b01;
+const MAP_PROJECT_WITH_PREDICATE_REQUEST_TYPE = 0x013c00;
+const MAP_PROJECT_WITH_PREDICATE_RESPONSE_TYPE = 0x013c01;
 const MAP_ENTRY_LISTENER_TO_KEY_WITH_PREDICATE_REQUEST_TYPE = 0x011600;
 const MAP_ENTRY_LISTENER_WITH_PREDICATE_REQUEST_TYPE        = 0x011700;
 const MAP_ENTRY_LISTENER_TO_KEY_REQUEST_TYPE                = 0x011800;
@@ -508,6 +516,16 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         return _encodeBooleanResponse(MAP_REMOVE_IF_SAME_RESPONSE_TYPE, result);
     });
 
+    // Map.AddInterceptor (0x014900)
+    dispatcher.register(MAP_ADD_INTERCEPTOR_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const interceptorData = DataCodec.decode(iter);
+        const id = await operations.addInterceptor(name, interceptorData);
+        return _encodeStringResponse(MAP_ADD_INTERCEPTOR_RESPONSE_TYPE, id);
+    });
+
     // Map.RemoveInterceptor
     dispatcher.register(MAP_REMOVE_INTERCEPTOR_REQUEST_TYPE, async (msg, _session) => {
         const iter = msg.forwardFrameIterator();
@@ -756,6 +774,27 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         return _encodeNullableDataResponse(MAP_AGGREGATE_WITH_PREDICATE_RESPONSE_TYPE, result);
     });
 
+    // Map.Project (0x013b00)
+    dispatcher.register(MAP_PROJECT_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const projection = DataCodec.decode(iter);
+        const items = await operations.project(name, projection);
+        return _encodeNullableDataListResponse(MAP_PROJECT_RESPONSE_TYPE, items);
+    });
+
+    // Map.ProjectWithPredicate (0x013c00)
+    dispatcher.register(MAP_PROJECT_WITH_PREDICATE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const projection = DataCodec.decode(iter);
+        const predicate = DataCodec.decode(iter);
+        const items = await operations.projectWithPredicate(name, projection, predicate);
+        return _encodeNullableDataListResponse(MAP_PROJECT_WITH_PREDICATE_RESPONSE_TYPE, items);
+    });
+
     // Map.AddEntryListenerToKeyWithPredicate (0x011600)
     // Wire: initial frame: includeValue(bool), listenerFlags(int), localOnly(bool); name, key, predicate
     dispatcher.register(MAP_ENTRY_LISTENER_TO_KEY_WITH_PREDICATE_REQUEST_TYPE, async (msg, session) => {
@@ -858,6 +897,18 @@ function _encodeEmptyResponse(responseType: number): ClientMessage {
     return msg;
 }
 
+function _encodeStringResponse(responseType: number, value: string): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(responseType >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    StringCodec.encode(msg, value);
+    msg.setFinal();
+    return msg;
+}
+
 function _encodeBooleanResponse(responseType: number, value: boolean): ClientMessage {
     const msg = CM.createForEncode();
     const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + BOOLEAN_SIZE_IN_BYTES);
@@ -882,6 +933,30 @@ function _encodeNullableDataResponse(responseType: number, data: Data | null): C
     } else {
         DataCodec.encode(msg, data);
     }
+    msg.setFinal();
+    return msg;
+}
+
+/**
+ * Encodes a response containing a List<nullable Data> — ListMultiFrameCodec.encodeContainsNullable pattern.
+ * Used by Map.Project and Map.ProjectWithPredicate responses.
+ */
+function _encodeNullableDataListResponse(responseType: number, items: Array<Data | null>): ClientMessage {
+    const msg = CM.createForEncode();
+    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    buf.fill(0);
+    buf.writeUInt32LE(responseType >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    for (const item of items) {
+        if (item === null) {
+            msg.add(CM.NULL_FRAME);
+        } else {
+            DataCodec.encode(msg, item);
+        }
+    }
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
     msg.setFinal();
     return msg;
 }
