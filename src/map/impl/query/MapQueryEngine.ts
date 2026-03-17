@@ -14,6 +14,8 @@ import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapConta
 import { QueryResult } from '@zenystx/helios-core/map/impl/query/QueryResult';
 import { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
 import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
+import { MultiPartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl';
+import { PartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
@@ -36,6 +38,11 @@ export interface PagingPredicate extends Predicate {
 
 export function isPagingPredicate(p: Predicate): p is PagingPredicate {
     return 'pageSize' in p && typeof (p as PagingPredicate).pageSize === 'number';
+}
+
+/** Type guard: checks if a predicate is a partition predicate (single or multi). */
+export function isPartitionPredicate(p: Predicate): p is PartitionPredicateImpl | MultiPartitionPredicateImpl {
+    return p instanceof PartitionPredicateImpl || p instanceof MultiPartitionPredicateImpl;
 }
 
 /** Aggregation types supported by the engine. */
@@ -96,9 +103,11 @@ export interface QueryEngine {
  */
 export class MapQueryEngineImpl implements QueryEngine {
     private readonly _containerService: MapContainerService;
+    private readonly _nodeEngine: NodeEngine | null;
 
-    constructor(containerService: MapContainerService) {
+    constructor(containerService: MapContainerService, nodeEngine?: NodeEngine | null) {
         this._containerService = containerService;
+        this._nodeEngine = nodeEngine ?? null;
     }
 
     executeOnLocalPartitions(
@@ -108,9 +117,20 @@ export class MapQueryEngineImpl implements QueryEngine {
     ): QueryResult {
         const result = new QueryResult(iterationType, Number.MAX_SAFE_INTEGER, false, null);
 
-        for (const [key, value] of this._containerService.getAllEntries(mapName)) {
+        let targetPredicate = predicate;
+        let entries: IterableIterator<readonly [Data, Data]>;
+
+        if (isPartitionPredicate(predicate)) {
+            targetPredicate = predicate.getTarget();
+            const partitionIds = this._resolvePartitionIds(predicate.getPartitionKeys());
+            entries = this._containerService.getEntriesForPartitions(mapName, partitionIds);
+        } else {
+            entries = this._containerService.getAllEntries(mapName);
+        }
+
+        for (const [key, value] of entries) {
             const entry = this._toQueryableEntry(key, value);
-            if (predicate.apply(entry)) {
+            if (targetPredicate.apply(entry)) {
                 result.addRow(this._toRow(entry, iterationType));
             }
         }
@@ -171,9 +191,20 @@ export class MapQueryEngineImpl implements QueryEngine {
         let max: number | null = null;
         const distinctValues = new Set<unknown>();
 
-        for (const [key, valueData] of this._containerService.getAllEntries(mapName)) {
+        let targetPredicate = predicate;
+        let entries: IterableIterator<readonly [Data, Data]>;
+
+        if (isPartitionPredicate(predicate)) {
+            targetPredicate = predicate.getTarget();
+            const partitionIds = this._resolvePartitionIds(predicate.getPartitionKeys());
+            entries = this._containerService.getEntriesForPartitions(mapName, partitionIds);
+        } else {
+            entries = this._containerService.getAllEntries(mapName);
+        }
+
+        for (const [key, valueData] of entries) {
             const entry = this._toQueryableEntry(key, valueData);
-            if (!predicate.apply(entry)) continue;
+            if (!targetPredicate.apply(entry)) continue;
 
             count++;
 
@@ -208,6 +239,20 @@ export class MapQueryEngineImpl implements QueryEngine {
             max,
             distinctValues,
         };
+    }
+
+    private _resolvePartitionIds(partitionKeys: unknown[]): Set<number> {
+        const partitionIds = new Set<number>();
+        if (this._nodeEngine === null) {
+            return partitionIds;
+        }
+        for (const key of partitionKeys) {
+            const keyData = this._nodeEngine.toData(key);
+            if (keyData !== null) {
+                partitionIds.add(this._nodeEngine.getPartitionService().getPartitionId(keyData));
+            }
+        }
+        return partitionIds;
     }
 
     private _toQueryableEntry(key: Data, value: Data): QueryableEntry<Data, Data> {

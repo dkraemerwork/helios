@@ -7,9 +7,11 @@ import { GreaterLessPredicate } from './impl/predicates/GreaterLessPredicate';
 import { ILikePredicate } from './impl/predicates/ILikePredicate';
 import { InPredicate } from './impl/predicates/InPredicate';
 import { LikePredicate } from './impl/predicates/LikePredicate';
+import { MultiPartitionPredicateImpl } from './impl/predicates/MultiPartitionPredicateImpl';
 import { NotEqualPredicate } from './impl/predicates/NotEqualPredicate';
 import { NotPredicate } from './impl/predicates/NotPredicate';
 import { OrPredicate } from './impl/predicates/OrPredicate';
+import { PartitionPredicateImpl } from './impl/predicates/PartitionPredicateImpl';
 import { RegexPredicate } from './impl/predicates/RegexPredicate';
 import { TruePredicate } from './impl/predicates/TruePredicate';
 
@@ -82,5 +84,19 @@ export class Predicates {
 
   static not<K = unknown, V = unknown>(predicate: Predicate<K, V>): Predicate<K, V> {
     return new NotPredicate<K, V>(predicate);
+  }
+
+  static partitionPredicate<K = unknown, V = unknown>(
+    partitionKey: K,
+    predicate: Predicate<K, V>,
+  ): Predicate<K, V> {
+    return new PartitionPredicateImpl<K, V>(partitionKey, predicate);
+  }
+
+  static multiPartitionPredicate<K = unknown, V = unknown>(
+    partitionKeys: Iterable<K>,
+    predicate: Predicate<K, V>,
+  ): Predicate<K, V> {
+    return new MultiPartitionPredicateImpl<K, V>(partitionKeys, predicate);
   }
 }

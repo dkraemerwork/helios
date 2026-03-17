@@ -52,6 +52,7 @@ import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
 import { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongService";
 import { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
 import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
+import { CPMapService } from "@zenystx/helios-core/cp/impl/CPMapService";
 import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
 import { FencedLockService } from "@zenystx/helios-core/cp/impl/FencedLockService";
 import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
@@ -104,6 +105,7 @@ import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerS
 import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import { NearCachedIMapWrapper } from "@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper";
+import { MapInterceptorSupport } from "@zenystx/helios-core/map/impl/MapInterceptorSupport";
 import { MapEntryProcessorEngine } from "@zenystx/helios-core/map/impl/query/MapEntryProcessorEngine";
 import { globalMetrics } from "@zenystx/helios-core/monitor/HazelcastMetrics";
 import { HealthMonitor } from "@zenystx/helios-core/monitor/HealthMonitor";
@@ -169,6 +171,8 @@ import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats
 import type { Message } from "@zenystx/helios-core/topic/Message";
 import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
 import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
+import { ProjectionDataSerializerHook } from "@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook";
+import { PredicateDataSerializerHook } from "@zenystx/helios-core/query/impl/predicates/PredicateDataSerializerHook";
 import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
@@ -452,6 +456,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _config: HeliosConfig;
   private _nodeEngine!: NodeEngineImpl;
   private readonly _mapService: MapContainerService;
+  private readonly _mapInterceptorSupport = new MapInterceptorSupport();
   private readonly _lifecycleService: HeliosLifecycleService;
   private _cluster: Cluster;
   private _clusterCoordinator: HeliosClusterCoordinator | null = null;
@@ -506,6 +511,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _countDownLatchService: CountDownLatchService | null = null;
   private _semaphoreService: SemaphoreService | null = null;
   private _fencedLockService: FencedLockService | null = null;
+  private _cpMapService: CPMapService | null = null;
   private _pnCounterService: PNCounterService | null = null;
   private _flakeIdGeneratorService: FlakeIdGeneratorService | null = null;
   private _cardinalityEstimatorService: DistributedCardinalityEstimatorService | null = null;
@@ -671,6 +677,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Production SerializationServiceImpl — single shared instance for NodeEngine + NearCacheManager.
     const serializationConfig = this._config.getSerializationConfig();
+
+    // Register built-in subsystem DataSerializerHooks so the serialization
+    // service can deserialize Projection (and future subsystem) payloads.
+    serializationConfig.dataSerializerHooks.push(new ProjectionDataSerializerHook());
+    serializationConfig.dataSerializerHooks.push(new PredicateDataSerializerHook());
+
     this._ss = new HazelcastSerializationService(serializationConfig);
 
     // MapContainerService — must be registered before any map proxy creation
@@ -2436,21 +2448,29 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const mapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').MapServiceOperations = {
       put: async (name, key, value, _threadId, ttl) => {
         const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
-        const previous = store.put(key, value, Number(ttl), -1);
-        this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
-        return previous;
+        const previous = store.get(key);
+        const interceptedValue = this._mapInterceptorSupport.interceptPut(name, previous, value) as typeof value;
+        const storedPrevious = store.put(key, interceptedValue, Number(ttl), -1);
+        this._publishClientMapEvent(name, key, interceptedValue, storedPrevious, storedPrevious === null ? 1 : 4);
+        this._mapInterceptorSupport.interceptAfterPut(name, interceptedValue);
+        return storedPrevious;
       },
       get: async (name, key, _threadId) => {
         const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
-        return store.get(key);
+        const raw = store.get(key);
+        const result = this._mapInterceptorSupport.interceptGet(name, raw) as typeof raw;
+        this._mapInterceptorSupport.interceptAfterGet(name, result);
+        return result;
       },
       remove: async (name, key, _threadId) => {
         const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
         const previous = store.remove(key);
+        const intercepted = this._mapInterceptorSupport.interceptRemove(name, previous) as typeof previous;
         if (previous !== null) {
-          this._publishClientMapEvent(name, key, null, previous, 2);
+          this._publishClientMapEvent(name, key, null, intercepted, 2);
         }
-        return previous;
+        this._mapInterceptorSupport.interceptAfterRemove(name, intercepted);
+        return intercepted;
       },
       size: async (name) => {
         let total = 0;
@@ -2640,7 +2660,15 @@ export class HeliosInstanceImpl implements HeliosInstance {
       removeEntryListener: async (registrationId, session) => {
         return this._removeClientMapListener(session.getSessionId(), registrationId);
       },
-      removeInterceptor: async (_name, _id) => false,
+      addInterceptor: async (name, interceptorData) => {
+        const interceptor = this._ss.toObject(interceptorData as import('@zenystx/helios-core/internal/serialization/Data').Data) as import('@zenystx/helios-core/map/MapInterceptor').MapInterceptor;
+        const id = this._mapInterceptorSupport.generateInterceptorId(interceptor);
+        this._mapInterceptorSupport.addInterceptor(name, id, interceptor);
+        return id;
+      },
+      removeInterceptor: async (name, id) => {
+        return this._mapInterceptorSupport.removeInterceptor(name, id);
+      },
       executeOnKey: async (name, key, entryProcessor, _threadId) => {
         const before = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key)).get(key);
         const result = entryProcessorEngine.executeOnKey(name, key, deserializeEntryProcessor(entryProcessor));
@@ -2823,6 +2851,56 @@ export class HeliosInstanceImpl implements HeliosInstance {
         aggregator.onCombinationFinished();
         const result = aggregator.aggregate();
         return serializeResult(result);
+      },
+      project: async (name, projectionData) => {
+        const projection = this._ss.toObject<import('@zenystx/helios-core/projection/Projection').Projection<unknown, unknown>>(projectionData);
+        if (projection === null || typeof projection.transform !== 'function') {
+          throw new Error('Projection payload is not a valid Projection');
+        }
+        const items: Array<Data | null> = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [kd, vd] of store.entries()) {
+            const entry = {
+              getKey: () => this._ss.toObject(kd),
+              getValue: () => this._ss.toObject(vd),
+              getAttributeValue: (attr: string) => {
+                if (attr === '__key') return this._ss.toObject(kd);
+                return getEventAttributeValue(this._ss.toObject(vd), attr);
+              },
+            };
+            const transformed = projection.transform(entry);
+            items.push(transformed === null || transformed === undefined ? null : serializeResult(transformed));
+          }
+        }
+        return items;
+      },
+      projectWithPredicate: async (name, projectionData, predicateData) => {
+        const projection = this._ss.toObject<import('@zenystx/helios-core/projection/Projection').Projection<unknown, unknown>>(projectionData);
+        if (projection === null || typeof projection.transform !== 'function') {
+          throw new Error('Projection payload is not a valid Projection');
+        }
+        const predicate = deserializePredicate(predicateData);
+        const items: Array<Data | null> = [];
+        for (let i = 0; i < partitionCount; i++) {
+          const store = this._mapService.getRecordStore(name, i);
+          if (!store) continue;
+          for (const [kd, vd] of store.entries()) {
+            if (!predicateMatches(predicate, kd, vd)) continue;
+            const entry = {
+              getKey: () => this._ss.toObject(kd),
+              getValue: () => this._ss.toObject(vd),
+              getAttributeValue: (attr: string) => {
+                if (attr === '__key') return this._ss.toObject(kd);
+                return getEventAttributeValue(this._ss.toObject(vd), attr);
+              },
+            };
+            const transformed = projection.transform(entry);
+            items.push(transformed === null || transformed === undefined ? null : serializeResult(transformed));
+          }
+        }
+        return items;
       },
       addEntryListenerToKey: async (name, key, _includeValue, listenerFlags, _localOnly, correlationId, session) => {
         return this._registerClientMapListener(name, listenerFlags, correlationId, session,
@@ -3608,6 +3686,18 @@ export class HeliosInstanceImpl implements HeliosInstance {
         Promise.resolve(this._getOrCreateFencedLockService().getLockOwnership(groupName, lockName)),
     };
 
+    const cpMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CPMapOperations = {
+      get: async (name, key) => this._toClientData(await this._getOrCreateCpMapService().get(name, this._ss.toObject(key))),
+      put: async (name, key, value) => this._toClientData(await this._getOrCreateCpMapService().put(name, this._ss.toObject(key), this._ss.toObject(value))),
+      set: async (name, key, value) => this._getOrCreateCpMapService().set(name, this._ss.toObject(key), this._ss.toObject(value)),
+      remove: async (name, key) => this._toClientData(await this._getOrCreateCpMapService().remove(name, this._ss.toObject(key))),
+      delete: async (name, key) => this._getOrCreateCpMapService().delete(name, this._ss.toObject(key)),
+      putIfAbsent: async (name, key, value) => this._toClientData(await this._getOrCreateCpMapService().putIfAbsent(name, this._ss.toObject(key), this._ss.toObject(value))),
+      compareAndSet: async (name, key, expectedValue, newValue) =>
+        this._getOrCreateCpMapService().compareAndSet(name, this._ss.toObject(key), this._ss.toObject(expectedValue), this._ss.toObject(newValue)),
+      destroy: async (name) => this._getOrCreateCpMapService().destroy(name),
+    };
+
     const flakeIdOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').FlakeIdGeneratorOperations = {
       newIdBatch: async (name, batchSize) => this._getOrCreateFlakeIdGeneratorService().newBatch(name, batchSize),
     };
@@ -3678,6 +3768,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       countDownLatch: trackClientProtocolOperations(countDownLatchOps),
       semaphore: trackClientProtocolOperations(semaphoreOps),
       fencedLock: trackClientProtocolOperations(fencedLockOps),
+      cpMap: trackClientProtocolOperations(cpMapOps),
       flakeIdGenerator: trackClientProtocolOperations(flakeIdOps),
       pnCounter: trackClientProtocolOperations(pnCounterOps),
       cardinalityEstimator: trackClientProtocolOperations(cardinalityOps),
@@ -3882,6 +3973,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     return this._fencedLockService;
   }
 
+  private _getOrCreateCpMapService(): CPMapService {
+    if (this._cpMapService === null) {
+      this._cpMapService = new CPMapService(this._getOrCreateCpSubsystemService());
+      this._nodeEngine.registerService(CPMapService.SERVICE_NAME, this._cpMapService);
+    }
+    return this._cpMapService;
+  }
+
   private _toOptionalTimeoutMs(timeoutMs: bigint): number | undefined {
     if (timeoutMs < 0n || timeoutMs > BigInt(Number.MAX_SAFE_INTEGER)) {
       return undefined;
@@ -3987,6 +4086,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return;
       case 'hz:raft:semaphoreService':
         this._getOrCreateSemaphoreService().destroy(scopedObjectName);
+        return;
+      case 'hz:raft:cpMapService':
+        this._getOrCreateCpMapService().destroy(scopedObjectName);
         return;
       default:
         this._getOrCreateCpSubsystemService().destroyGroup(effectiveGroupName);
@@ -5554,6 +5656,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._countDownLatchService = null;
     this._semaphoreService = null;
     this._fencedLockService = null;
+    this._cpMapService = null;
     this._pnCounterService = null;
     this._flakeIdGeneratorService = null;
     this._cardinalityEstimatorService = null;

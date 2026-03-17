@@ -52,6 +52,7 @@ export type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/L
 export type { EntryListener } from "@zenystx/helios-core/map/EntryListener";
 export type { EntryProcessor } from "@zenystx/helios-core/map/EntryProcessor";
 export type { IMap } from "@zenystx/helios-core/map/IMap";
+export type { MapInterceptor } from "@zenystx/helios-core/map/MapInterceptor";
 export { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
 export { NetworkedMapProxy } from "@zenystx/helios-core/map/impl/NetworkedMapProxy";
 export { MapKeyStream } from "@zenystx/helios-core/map/MapKeyStream";
@@ -128,6 +129,12 @@ export type { NearCacheStats } from "@zenystx/helios-core/nearcache/NearCacheSta
 
 // ── Query / Predicates ───────────────────────────────────────────────────────
 export { Predicates } from "@zenystx/helios-core/query/Predicates";
+export { PartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl";
+export { MultiPartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl";
+
+// ── Projection ───────────────────────────────────────────────────────────────
+export type { Projection } from "@zenystx/helios-core/projection/Projection";
+export { Projections } from "@zenystx/helios-core/projection/Projections";
 
 // ── REST API ─────────────────────────────────────────────────────────────────
 export { HeliosRestServer } from "@zenystx/helios-core/rest/HeliosRestServer";
@@ -174,6 +181,8 @@ export { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongServic
 export { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
 export { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
 export { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
+export type { CPMap } from "@zenystx/helios-core/cp/CPMap";
+export { CPMapService } from "@zenystx/helios-core/cp/impl/CPMapService";
 
 // ── CRDT ──────────────────────────────────────────────────────────────────────
 export { PNCounterService } from "@zenystx/helios-core/crdt/impl/PNCounterService";

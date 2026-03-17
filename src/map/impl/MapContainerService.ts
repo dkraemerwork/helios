@@ -221,6 +221,18 @@ export class MapContainerService implements MigrationAwareService {
         }
     }
 
+    *getEntriesForPartitions(
+        mapName: string,
+        partitionIds: Set<number>,
+    ): IterableIterator<readonly [Data, Data]> {
+        for (const partitionId of partitionIds) {
+            const store = this.getRecordStore(mapName, partitionId);
+            if (store !== null) {
+                yield* store.entries();
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // MapDataStore lifecycle
     // ═══════════════════════════════════════════════════════════════════
