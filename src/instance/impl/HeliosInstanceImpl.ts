@@ -192,6 +192,7 @@ import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 import { IndexConfig as HeliosIndexConfig } from "@zenystx/helios-core/config/IndexConfig";
 import { IndexType as HeliosIndexType } from "@zenystx/helios-core/query/impl/Index";
 import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
+import { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -675,6 +676,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** System event log — ring buffer of cluster lifecycle events. */
   private readonly _systemEventLog = new SystemEventLog();
 
+  /** Persistence service — non-null when persistence is enabled in config. */
+  private _persistenceService: PersistenceService | null = null;
+
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
     this._name = this._config.getName();
@@ -794,6 +798,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Start client protocol server if configured
     this._startClientProtocolServer();
+
+    // Initialize persistence service if enabled
+    this._initPersistenceService();
   }
 
   // ── config validation ────────────────────────────────────────────────
@@ -5767,6 +5774,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._slowOperationDetector = null;
     this._storeLatencyTracker = null;
     this._restServer.stop();
+    // Shutdown persistence service (fire-and-forget; close and fsync WAL)
+    if (this._persistenceService !== null) {
+      void this._persistenceService.shutdown();
+      this._persistenceService = null;
+    }
   }
 
   // ── REST server access ────────────────────────────────────────────────────
@@ -5774,6 +5786,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Returns the built-in REST server (always non-null; check isStarted() to see if running). */
   getRestServer(): HeliosRestServer {
     return this._restServer;
+  }
+
+  // ── Persistence access ────────────────────────────────────────────────────
+
+  /** Returns the persistence service, or null if persistence is not enabled. */
+  getPersistenceService(): PersistenceService | null {
+    return this._persistenceService;
   }
 
   // ── ClusterReadState (for ClusterReadHandler) ─────────────────────────────
@@ -6372,6 +6391,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getMonitorStateProvider(): MonitorStateProvider | null {
     if (this._metricsRegistry === null) return null;
     return this._createMonitorStateProvider();
+  }
+
+  private _initPersistenceService(): void {
+    const persistenceConfig = this._config.getPersistenceConfig();
+    if (!persistenceConfig.isEnabled()) return;
+    this._persistenceService = new PersistenceService(persistenceConfig);
+    // Start is async; fire and forget — recovery is user-initiated via getPersistenceService().recover()
+    void this._persistenceService.start();
   }
 
   private _initMonitor(): void {

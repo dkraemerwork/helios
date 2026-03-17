@@ -11,6 +11,7 @@ import { DEFAULT_CLUSTER_NAME } from "@zenystx/helios-core/config/HazelcastDefau
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig.js";
 import { MonitorConfig } from "@zenystx/helios-core/config/MonitorConfig.js";
 import { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig.js";
+import { PersistenceConfig } from "@zenystx/helios-core/config/PersistenceConfig.js";
 import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig.js";
 import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig.js";
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig.js";
@@ -35,6 +36,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
   private readonly _monitorConfig = new MonitorConfig();
   private readonly _backpressureConfig = new BackpressureConfig();
+  private _persistenceConfig = new PersistenceConfig();
   private readonly _serializationConfig = new HazelcastSerializationConfig();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
   private _configOrigin: string | null = null;
@@ -99,6 +101,19 @@ export class HeliosConfig implements InstanceConfig {
 
   getSerializationConfig(): HazelcastSerializationConfig {
     return this._serializationConfig;
+  }
+
+  /**
+   * Returns the persistence configuration for WAL-based Hot Restart.
+   * Persistence is opt-in: call `getPersistenceConfig().setEnabled(true)` to activate.
+   */
+  getPersistenceConfig(): PersistenceConfig {
+    return this._persistenceConfig;
+  }
+
+  setPersistenceConfig(config: PersistenceConfig): this {
+    this._persistenceConfig = config;
+    return this;
   }
 
   /**
