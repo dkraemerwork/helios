@@ -54,6 +54,7 @@ import type {
     AtomicLongOperations,
     AtomicRefOperations,
     CountDownLatchOperations,
+    CPMapOperations,
     SemaphoreOperations,
     FencedLockOperations,
     FlakeIdGeneratorOperations,
@@ -94,6 +95,7 @@ export interface RegisterAllHandlersOptions {
     countDownLatch: CountDownLatchOperations;
     semaphore: SemaphoreOperations;
     fencedLock: FencedLockOperations;
+    cpMap: CPMapOperations;
 
     // Misc
     flakeIdGenerator: FlakeIdGeneratorOperations;
@@ -156,6 +158,7 @@ export function registerAllHandlers(opts: RegisterAllHandlersOptions): void {
         countDownLatch: opts.countDownLatch,
         semaphore: opts.semaphore,
         fencedLock: opts.fencedLock,
+        cpMap: opts.cpMap,
     });
 
     registerFlakeIdServiceHandlers({

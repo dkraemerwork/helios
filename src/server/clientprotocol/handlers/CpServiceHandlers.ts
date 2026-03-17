@@ -57,6 +57,7 @@ import type {
     CpGroupOperations,
     CpSessionOperations,
     CountDownLatchOperations,
+    CPMapOperations,
     FencedLockOperations,
     SemaphoreOperations,
 } from './ServiceOperations.js';
@@ -137,6 +138,18 @@ const CP_SESSION_THREAD_ID_REQUEST   = 0x1f0400; const CP_SESSION_THREAD_ID_RESP
 
 const CP_GROUP_CREATE_REQUEST      = 0x1e0100; const CP_GROUP_CREATE_RESPONSE      = 0x1e0101;
 const CP_GROUP_DESTROY_REQUEST     = 0x1e0200; const CP_GROUP_DESTROY_RESPONSE     = 0x1e0201;
+
+// ── CPMap message type constants ──────────────────────────────────────────────
+// CPMap service ID = 0x25. Opcodes per Hazelcast protocol F7:
+//   get=1, put=2, set=3, remove=4, delete=5, compareAndSet=6, putIfAbsent=7
+
+const CPMAP_GET_REQUEST             = 0x250100; const CPMAP_GET_RESPONSE             = 0x250101;
+const CPMAP_PUT_REQUEST             = 0x250200; const CPMAP_PUT_RESPONSE             = 0x250201;
+const CPMAP_SET_REQUEST             = 0x250300; const CPMAP_SET_RESPONSE             = 0x250301;
+const CPMAP_REMOVE_REQUEST          = 0x250400; const CPMAP_REMOVE_RESPONSE          = 0x250401;
+const CPMAP_DELETE_REQUEST          = 0x250500; const CPMAP_DELETE_RESPONSE          = 0x250501;
+const CPMAP_COMPARE_AND_SET_REQUEST = 0x250600; const CPMAP_COMPARE_AND_SET_RESPONSE = 0x250601;
+const CPMAP_PUT_IF_ABSENT_REQUEST   = 0x250700; const CPMAP_PUT_IF_ABSENT_RESPONSE   = 0x250701;
 
 const REQUEST_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
@@ -264,10 +277,11 @@ export interface CpServiceHandlersOptions {
     countDownLatch: CountDownLatchOperations;
     semaphore: SemaphoreOperations;
     fencedLock: FencedLockOperations;
+    cpMap: CPMapOperations;
 }
 
 export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void {
-    const { dispatcher, cpGroup, cpSession, atomicLong, atomicRef, countDownLatch, semaphore, fencedLock } = opts;
+    const { dispatcher, cpGroup, cpSession, atomicLong, atomicRef, countDownLatch, semaphore, fencedLock, cpMap } = opts;
 
     const handleAtomicRefGet = async (msg: ClientMessage, responseType: number) => {
         const iter = msg.forwardFrameIterator(); iter.next();
@@ -645,6 +659,75 @@ export function registerCpServiceHandlers(opts: CpServiceHandlersOptions): void 
         const lockName  = StringCodec.decode(iter);
         const ownership = await fencedLock.getLockOwnership(groupName, lockName);
         return _lockOwnership(FL_GET_LOCK_OWNERSHIP_RESPONSE, ownership);
+    });
+
+    // ── CPMap ─────────────────────────────────────────────────────────────────
+    //
+    // CPMap request layout (after TYPE+CORR_ID at offsets 0-7):
+    //   No fixed fields in initial frame (after the standard header)
+    //   Variable frames: map name (string), key (Data), [value (Data)], [expectedValue (Data)], [newValue (Data)]
+
+    dispatcher.register(CPMAP_GET_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        return _nullable(CPMAP_GET_RESPONSE, await cpMap.get(name, key));
+    });
+
+    dispatcher.register(CPMAP_PUT_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const value = DataCodec.decode(iter);
+        return _nullable(CPMAP_PUT_RESPONSE, await cpMap.put(name, key, value));
+    });
+
+    dispatcher.register(CPMAP_SET_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const value = DataCodec.decode(iter);
+        await cpMap.set(name, key, value);
+        return _empty(CPMAP_SET_RESPONSE);
+    });
+
+    dispatcher.register(CPMAP_REMOVE_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        return _nullable(CPMAP_REMOVE_RESPONSE, await cpMap.remove(name, key));
+    });
+
+    dispatcher.register(CPMAP_DELETE_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        await cpMap.delete(name, key);
+        return _empty(CPMAP_DELETE_RESPONSE);
+    });
+
+    dispatcher.register(CPMAP_COMPARE_AND_SET_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const expectedValue = DataCodec.decode(iter);
+        const newValue = DataCodec.decode(iter);
+        return _bool(CPMAP_COMPARE_AND_SET_RESPONSE, await cpMap.compareAndSet(name, key, expectedValue, newValue));
+    });
+
+    dispatcher.register(CPMAP_PUT_IF_ABSENT_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next();
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const value = DataCodec.decode(iter);
+        return _nullable(CPMAP_PUT_IF_ABSENT_RESPONSE, await cpMap.putIfAbsent(name, key, value));
     });
 }
 
