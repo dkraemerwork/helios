@@ -6,8 +6,10 @@
  */
 import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
+import type { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
 import type { MapPartitionLostEvent } from '@zenystx/helios-core/internal/partition/impl/InternalPartitionServiceImpl';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
+import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
 import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
@@ -144,6 +146,16 @@ export interface IMap<K, V> {
 
     /** Returns true if the key is currently locked. */
     isLocked(key: K): boolean;
+
+    // ── QueryCache ───────────────────────────────────────────────────────────
+
+    /**
+     * Returns a continuously maintained, locally-indexed view of this map's
+     * entries matching the given config's predicate.
+     *
+     * Port of {@code com.hazelcast.map.IMap#getQueryCache}.
+     */
+    getQueryCache(name: string, config?: QueryCacheConfig): Promise<QueryCache<K, V>>;
 
     // ── Async variants ───────────────────────────────────────────────────────
 

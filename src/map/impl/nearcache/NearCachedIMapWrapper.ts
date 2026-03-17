@@ -11,11 +11,15 @@
  */
 import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
+import type { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
 import type { NearCache } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { CACHED_AS_NULL, NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_RESERVED } from '@zenystx/helios-core/internal/nearcache/NearCacheRecord';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
+import type { Projection } from '@zenystx/helios-core/projection/Projection';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 
 export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
@@ -149,6 +153,16 @@ export class NearCachedIMapWrapper<K, V> implements IMap<K, V> {
         return predicate
             ? this._delegate.aggregate(aggregator, predicate)
             : this._delegate.aggregate(aggregator);
+    }
+
+    project<O>(projection: Projection<QueryableEntry<K, V>, O>, predicate?: Predicate<K, V>): O[] {
+        return predicate
+            ? this._delegate.project(projection, predicate)
+            : this._delegate.project(projection);
+    }
+
+    getQueryCache(name: string, config?: QueryCacheConfig): Promise<QueryCache<K, V>> {
+        return this._delegate.getQueryCache(name, config);
     }
 
     addEntryListener(listener: EntryListener<K, V>, includeValue?: boolean): string {

@@ -21,12 +21,15 @@ import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 import type { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
+import { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
+import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
 import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
+import { QueryCacheManager } from '@zenystx/helios-core/map/impl/querycache/QueryCacheManager';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
 import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
@@ -82,6 +85,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Index registry for this map — supports indexed query execution. */
     private readonly _indexRegistry = new IndexRegistryImpl();
 
+    /** QueryCache manager — manages continuous query caches for this map. */
+    private readonly _queryCacheManager: QueryCacheManager;
+
     constructor(
         name: string,
         store: RecordStore,
@@ -108,6 +114,15 @@ export class MapProxy<K, V> implements IMap<K, V> {
                 this._indexRegistry.addIndex(idxCfg);
             }
         }
+
+        // QueryCache manager — shares nodeEngine's serialization bridge and containerService
+        this._queryCacheManager = new QueryCacheManager(
+            {
+                toData: (obj) => this._nodeEngine.toData(obj),
+                toObject: <T>(data: Data) => this._nodeEngine.toObject<T>(data) as T,
+            },
+            this._containerService,
+        );
     }
 
     /** Lazily initialize MapDataStore on first store-touching call (singleflight). */
@@ -191,6 +206,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         // MapStore write now happens inside PutOperation on the partition owner
         // Index maintenance
         this._updateIndex(key, value, oldValue);
+        this._queryCacheManager.onMapEvent(this._name, 'put', kd, oldData ?? null, vd);
         if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
@@ -206,9 +222,11 @@ export class MapProxy<K, V> implements IMap<K, V> {
         const partitionId = this._partitionIdForKeyData(kd);
         // Read old value for index removal before overwrite
         const oldValue = await this._readCurrentValueByData(kd, partitionId);
+        const oldData = oldValue !== null ? this._toData(oldValue) : null;
         await this._invokeOnPartition<void>(new SetOperation(this._name, kd, vd, -1, -1), partitionId);
         // MapStore write now happens inside SetOperation on the partition owner
         this._updateIndex(key, value, oldValue);
+        this._queryCacheManager.onMapEvent(this._name, 'put', kd, oldData, vd);
         if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
@@ -242,6 +260,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         if (oldValue !== null) {
             this._removeFromIndex(key, oldValue);
         }
+        this._queryCacheManager.onMapEvent(this._name, 'remove', kd, oldData, null);
         this._fireRemoved(key, oldValue);
         return oldValue;
     }
@@ -252,12 +271,14 @@ export class MapProxy<K, V> implements IMap<K, V> {
         const partitionId = this._partitionIdForKeyData(kd);
         // Read old value for index removal before delete
         const oldValue = await this._readCurrentValueByData(kd, partitionId);
+        const oldData = oldValue !== null ? this._toData(oldValue) : null;
         const removed = await this._invokeOnPartition<boolean>(new DeleteOperation(this._name, kd), partitionId);
         // MapStore delete now happens inside DeleteOperation on the partition owner
         if (removed && oldValue !== null) {
             this._removeFromIndex(key, oldValue);
         }
         if (removed) {
+            this._queryCacheManager.onMapEvent(this._name, 'remove', kd, oldData, null);
             this._fireRemoved(key, null);
         }
     }
@@ -530,6 +551,21 @@ export class MapProxy<K, V> implements IMap<K, V> {
 
     isLocked(key: K): boolean {
         return this._locks.has(this._lockKey(key));
+    }
+
+    // ── QueryCache ────────────────────────────────────────────────────────
+
+    async getQueryCache(name: string, config?: QueryCacheConfig): Promise<QueryCache<K, V>> {
+        const effectiveConfig = config ?? this._buildDefaultQueryCacheConfig(name);
+        return this._queryCacheManager.getOrCreate<K, V>(this._name, name, effectiveConfig);
+    }
+
+    private _buildDefaultQueryCacheConfig(name: string): QueryCacheConfig {
+        const cfg = new QueryCacheConfig();
+        cfg.setName(name);
+        // Accept all entries by default when no predicate is given
+        cfg.setPredicate({ apply: () => true });
+        return cfg;
     }
 
     // ── Async variants ────────────────────────────────────────────────────
