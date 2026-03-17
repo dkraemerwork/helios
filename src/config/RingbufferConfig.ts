@@ -1,4 +1,5 @@
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat';
+import type { RingbufferStoreConfig } from '@zenystx/helios-core/config/RingbufferStoreConfig.js';
 
 /**
  * Port of {@code com.hazelcast.config.RingbufferConfig}.
@@ -18,6 +19,7 @@ export class RingbufferConfig {
     private _asyncBackupCount: number;
     private _timeToLiveSeconds: number;
     private _inMemoryFormat: InMemoryFormat;
+    private _ringbufferStoreConfig: RingbufferStoreConfig | null = null;
 
     constructor(name: string) {
         this._name = name;
@@ -59,6 +61,12 @@ export class RingbufferConfig {
     getInMemoryFormat(): InMemoryFormat { return this._inMemoryFormat; }
     setInMemoryFormat(inMemoryFormat: InMemoryFormat): this {
         this._inMemoryFormat = inMemoryFormat;
+        return this;
+    }
+
+    getRingbufferStoreConfig(): RingbufferStoreConfig | null { return this._ringbufferStoreConfig; }
+    setRingbufferStoreConfig(config: RingbufferStoreConfig): this {
+        this._ringbufferStoreConfig = config;
         return this;
     }
 

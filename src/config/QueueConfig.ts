@@ -2,6 +2,7 @@ import {
   DEFAULT_QUEUE_BACKUP_COUNT,
   DEFAULT_QUEUE_MAX_SIZE,
 } from '@zenystx/helios-core/config/HazelcastDefaults.js';
+import type { QueueStoreConfig } from '@zenystx/helios-core/config/QueueStoreConfig.js';
 
 export class QueueConfig {
   static readonly DEFAULT_MAX_SIZE = DEFAULT_QUEUE_MAX_SIZE;
@@ -15,6 +16,7 @@ export class QueueConfig {
   private _asyncBackupCount = QueueConfig.DEFAULT_ASYNC_BACKUP_COUNT;
   private _emptyQueueTtlSeconds = QueueConfig.DEFAULT_EMPTY_QUEUE_TTL_SECONDS;
   private _statisticsEnabled = true;
+  private _queueStoreConfig: QueueStoreConfig | null = null;
 
   constructor(name: string) {
     this._name = name;
@@ -88,6 +90,15 @@ export class QueueConfig {
 
   setStatisticsEnabled(statisticsEnabled: boolean): this {
     this._statisticsEnabled = statisticsEnabled;
+    return this;
+  }
+
+  getQueueStoreConfig(): QueueStoreConfig | null {
+    return this._queueStoreConfig;
+  }
+
+  setQueueStoreConfig(config: QueueStoreConfig): this {
+    this._queueStoreConfig = config;
     return this;
   }
 }

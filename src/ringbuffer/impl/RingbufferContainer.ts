@@ -6,6 +6,7 @@ import type { ObjectNamespace } from '@zenystx/helios-core/internal/services/Obj
 import { ArrayRingbuffer } from '@zenystx/helios-core/ringbuffer/impl/ArrayRingbuffer';
 import { ReadResultSetImpl } from '@zenystx/helios-core/ringbuffer/impl/ReadResultSetImpl';
 import { RingbufferExpirationPolicy } from '@zenystx/helios-core/ringbuffer/impl/RingbufferExpirationPolicy';
+import type { RingbufferStoreWrapper } from '@zenystx/helios-core/ringbuffer/impl/RingbufferStoreWrapper';
 import { RingbufferWaitNotifyKey } from '@zenystx/helios-core/ringbuffer/impl/RingbufferWaitNotifyKey';
 import { StaleSequenceException } from '@zenystx/helios-core/ringbuffer/StaleSequenceException';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
@@ -26,6 +27,7 @@ export class RingbufferContainer<T = unknown, E = unknown> {
     private _config: RingbufferConfig;
     private serializationService: SerializationService;
     private readonly ringbuffer: ArrayRingbuffer<E>;
+    private _storeWrapper: RingbufferStoreWrapper<unknown> | null = null;
 
     constructor(
         namespace: ObjectNamespace,
@@ -51,6 +53,14 @@ export class RingbufferContainer<T = unknown, E = unknown> {
     getRingbuffer(): ArrayRingbuffer<E> { return this.ringbuffer; }
     getRingEmptyWaitNotifyKey(): RingbufferWaitNotifyKey { return this.emptyRingWaitNotifyKey; }
     getObjectNamespace(): ObjectNamespace { return this.objectNamespace; }
+
+    setStoreWrapper(store: RingbufferStoreWrapper<unknown>): void {
+        this._storeWrapper = store;
+    }
+
+    getStoreWrapper(): RingbufferStoreWrapper<unknown> | null {
+        return this._storeWrapper;
+    }
 
     tailSequence(): number { return this.ringbuffer.tailSequence(); }
     headSequence(): number { return this.ringbuffer.headSequence(); }
@@ -213,6 +223,40 @@ export class RingbufferContainer<T = unknown, E = unknown> {
         }
     }
 
+    /**
+     * Load initial data from the store.
+     * Finds the largest stored sequence and populates the ringbuffer.
+     */
+    async loadFromStore(): Promise<void> {
+        if (this._storeWrapper === null) return;
+
+        const largestSeq = await this._storeWrapper.getLargestSequence();
+        if (largestSeq < 0n) return;
+
+        const capacity = BigInt(this.ringbuffer.getCapacity());
+        const headSeq = largestSeq >= capacity ? largestSeq - capacity + 1n : 0n;
+
+        const sequences = new Set<bigint>();
+        for (let seq = headSeq; seq <= largestSeq; seq++) {
+            sequences.add(seq);
+        }
+
+        const loaded = await this._storeWrapper.loadAll(sequences);
+        if (loaded.size === 0) return;
+
+        // Set sequence pointers
+        this.ringbuffer.setHeadSequence(Number(headSeq));
+        this.ringbuffer.setTailSequence(Number(largestSeq));
+
+        for (const [seq, value] of loaded) {
+            const seqNum = Number(seq);
+            this.ringbuffer.set(seqNum, this.convertToRingbufferFormat(value as T) as unknown as E);
+            if (this._expirationPolicy !== null) {
+                this._expirationPolicy.setExpirationAt(seqNum);
+            }
+        }
+    }
+
     // ── private helpers ──────────────────────────────────────────────────
 
     private addInternal(item: T): number {
@@ -220,6 +264,10 @@ export class RingbufferContainer<T = unknown, E = unknown> {
         const tailSequence = this.ringbuffer.add(rbItem);
         if (this._expirationPolicy !== null) {
             this._expirationPolicy.setExpirationAt(tailSequence);
+        }
+        if (this._storeWrapper !== null) {
+            // Store the original item (before format conversion) as the user value
+            void this._storeWrapper.store(BigInt(tailSequence), item as unknown);
         }
         return tailSequence;
     }

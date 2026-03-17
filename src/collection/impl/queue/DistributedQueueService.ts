@@ -12,6 +12,7 @@ import {
 } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import { ItemEvent } from "@zenystx/helios-core/collection/ItemEvent";
+import { QueueStoreWrapper } from "@zenystx/helios-core/collection/impl/queue/QueueStoreWrapper";
 import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 import {
   LocalQueueStatsImpl,
@@ -109,6 +110,7 @@ export class DistributedQueueService {
     string,
     PendingRemoteRequest
   >();
+  private readonly _storeWrappers = new Map<string, QueueStoreWrapper<unknown>>();
 
   constructor(
     private readonly _instanceName: string,
@@ -273,6 +275,38 @@ export class DistributedQueueService {
       otherOperationCount: stats.otherOperationCount,
       eventOperationCount: stats.eventOperationCount,
     });
+  }
+
+  /**
+   * Register a QueueStoreWrapper for the given queue name.
+   * Call this before any operations when a QueueStoreConfig is present.
+   */
+  registerStore(name: string, store: QueueStoreWrapper<unknown>): void {
+    this._storeWrappers.set(name, store);
+  }
+
+  /**
+   * Load initial items from the store into the queue runtime.
+   * Should be called after registerStore, before serving operations.
+   */
+  async loadFromStore(name: string): Promise<void> {
+    const store = this._storeWrappers.get(name);
+    if (store === undefined) return;
+
+    const loaded = await store.loadAll();
+    if (loaded.size === 0) return;
+
+    const runtime = this._getOrCreateRuntime(name);
+    const entries = Array.from(loaded.entries()).sort(([a], [b]) => a - b);
+    for (const [itemId, value] of entries) {
+      const data = this._serializationService.toData(value);
+      if (data === null) continue;
+      runtime.state.items.push({ itemId, enqueuedAt: Date.now(), data });
+      if (itemId >= runtime.state.nextItemId) {
+        runtime.state.nextItemId = itemId + 1;
+      }
+    }
+    runtime.state.version++;
   }
 
   destroy(name: string): void {
@@ -779,12 +813,19 @@ export class DistributedQueueService {
     runtime.state.version++;
     this._broadcastEvent(name, "REMOVED", entry.data);
     this._scheduleDestroyIfNeeded(name, runtime);
+
+    const store = this._storeWrappers.get(name);
+    if (store !== undefined) {
+      void store.delete(entry.itemId);
+    }
+
     return entry.data;
   }
 
   private _appendItem(name: string, runtime: QueueRuntime, data: Data): void {
+    const itemId = runtime.state.nextItemId++;
     runtime.state.items.push({
-      itemId: runtime.state.nextItemId++,
+      itemId,
       enqueuedAt: Date.now(),
       data,
     });
@@ -792,6 +833,12 @@ export class DistributedQueueService {
     runtime.state.ownerNodeId = this._instanceName;
     this._getStats(name).offerOperationCount++;
     this._broadcastEvent(name, "ADDED", data);
+
+    const store = this._storeWrappers.get(name);
+    if (store !== undefined) {
+      const value = this._serializationService.toObject(data);
+      void store.store(itemId, value);
+    }
   }
 
   private _containsValue(
@@ -824,6 +871,12 @@ export class DistributedQueueService {
         this._scheduleDestroyIfNeeded(name, runtime);
         void this._replicateState(name, runtime);
         this._drainWaiters(name, runtime);
+
+        const store = this._storeWrappers.get(name);
+        if (store !== undefined) {
+          void store.delete(removed.itemId);
+        }
+
         return true;
       }
     }
@@ -848,6 +901,12 @@ export class DistributedQueueService {
       this._scheduleDestroyIfNeeded(name, runtime);
       void this._replicateState(name, runtime);
       this._drainWaiters(name, runtime);
+
+      const store = this._storeWrappers.get(name);
+      if (store !== undefined) {
+        const keys = new Set(drained.map((entry) => entry.itemId));
+        void store.deleteAll(keys);
+      }
     }
     return drained.map((entry) => entry.data);
   }
@@ -881,6 +940,7 @@ export class DistributedQueueService {
     dataList: Data[],
   ): boolean {
     let changed = false;
+    const removedIds: number[] = [];
     for (let index = runtime.state.items.length - 1; index >= 0; index--) {
       if (
         dataList.some((candidate) =>
@@ -889,6 +949,7 @@ export class DistributedQueueService {
       ) {
         const [removed] = runtime.state.items.splice(index, 1);
         this._broadcastEvent(name, "REMOVED", removed.data);
+        removedIds.push(removed.itemId);
         changed = true;
       }
     }
@@ -898,6 +959,11 @@ export class DistributedQueueService {
       this._scheduleDestroyIfNeeded(name, runtime);
       void this._replicateState(name, runtime);
       this._drainWaiters(name, runtime);
+
+      const store = this._storeWrappers.get(name);
+      if (store !== undefined && removedIds.length > 0) {
+        void store.deleteAll(new Set(removedIds));
+      }
     }
     return changed;
   }
@@ -908,6 +974,7 @@ export class DistributedQueueService {
     dataList: Data[],
   ): boolean {
     let changed = false;
+    const removedIds: number[] = [];
     for (let index = runtime.state.items.length - 1; index >= 0; index--) {
       const keep = dataList.some((candidate) =>
         runtime.state.items[index].data.equals(candidate),
@@ -915,6 +982,7 @@ export class DistributedQueueService {
       if (!keep) {
         const [removed] = runtime.state.items.splice(index, 1);
         this._broadcastEvent(name, "REMOVED", removed.data);
+        removedIds.push(removed.itemId);
         changed = true;
       }
     }
@@ -924,6 +992,11 @@ export class DistributedQueueService {
       this._scheduleDestroyIfNeeded(name, runtime);
       void this._replicateState(name, runtime);
       this._drainWaiters(name, runtime);
+
+      const store = this._storeWrappers.get(name);
+      if (store !== undefined && removedIds.length > 0) {
+        void store.deleteAll(new Set(removedIds));
+      }
     }
     return changed;
   }
@@ -941,6 +1014,12 @@ export class DistributedQueueService {
     this._scheduleDestroyIfNeeded(name, runtime);
     void this._replicateState(name, runtime);
     this._drainWaiters(name, runtime);
+
+    const store = this._storeWrappers.get(name);
+    if (store !== undefined && removed.length > 0) {
+      const keys = new Set(removed.map((entry) => entry.itemId));
+      void store.deleteAll(keys);
+    }
   }
 
   private _drainWaiters(name: string, runtime: QueueRuntime): void {
