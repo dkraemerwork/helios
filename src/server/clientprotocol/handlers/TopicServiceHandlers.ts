@@ -15,7 +15,7 @@ import { TopicPublishCodec } from '../../../client/impl/protocol/codec/TopicPubl
 import { TopicAddMessageListenerCodec } from '../../../client/impl/protocol/codec/TopicAddMessageListenerCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { TopicServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
@@ -27,7 +27,8 @@ const TOPIC_REMOVE_LISTENER_RESPONSE_TYPE = 0x0b0b01;
 const TOPIC_PUBLISH_ALL_REQUEST_TYPE      = 0x040200;
 const TOPIC_PUBLISH_ALL_RESPONSE_TYPE     = 0x040201;
 
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
+/** Response initial frame header: type(4) + correlationId(8) + backupAcks(1) = 13 */
+const RESP_H = CM.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES; // 13
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ export function registerTopicServiceHandlers(
 
 function _encodeEmptyResponse(responseType: number): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
@@ -84,10 +85,10 @@ function _encodeEmptyResponse(responseType: number): ClientMessage {
 
 function _encodeBooleanResponse(responseType: number, value: boolean): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + BOOLEAN_SIZE_IN_BYTES);
+    const buf = Buffer.allocUnsafe(RESP_H + BOOLEAN_SIZE_IN_BYTES);
     buf.fill(0);
     buf.writeUInt32LE(responseType >>> 0, 0);
-    buf.writeUInt8(value ? 1 : 0, RESPONSE_HEADER_SIZE);
+    buf.writeUInt8(value ? 1 : 0, RESP_H);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
     msg.add(new CM.Frame(buf, UNFRAGMENTED_MESSAGE));
     msg.setFinal();

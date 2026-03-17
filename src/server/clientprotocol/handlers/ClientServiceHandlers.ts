@@ -249,12 +249,14 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import { FixedSizeTypesCodec, BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
-/** Standard response initial frame: type(4) + correlationId(8) + backupAcks/partitionId(4) = 16. */
-const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
+/** Request initial frame header: type(4) + correlationId(8) + partitionId(4) = 16 */
+const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16
+/** Response initial frame header: type(4) + correlationId(8) + backupAcks(1) = 13 */
+const RESP_H = CM.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES; // 13
 
 function _encodePingResponse(): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_PING_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
@@ -265,7 +267,7 @@ function _encodePingResponse(): ClientMessage {
 
 function _encodeStatisticsResponse(): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_STATISTICS_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
@@ -276,7 +278,7 @@ function _encodeStatisticsResponse(): ClientMessage {
 
 function _encodeSendSchemaResponse(localMemberUuid: string | null): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_SEND_SCHEMA_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
@@ -288,7 +290,7 @@ function _encodeSendSchemaResponse(localMemberUuid: string | null): ClientMessag
 
 function _encodeFetchSchemaResponse(schema: Schema | null): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_FETCH_SCHEMA_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
@@ -329,7 +331,7 @@ function _encodeLocalBackupListenerResponse(): ClientMessage {
 }
 
 function _decodeFetchSchemaRequest(msg: ClientMessage): bigint {
-    return FixedSizeTypesCodec.decodeLong(msg.getStartFrame().content, RESPONSE_HEADER_SIZE);
+    return FixedSizeTypesCodec.decodeLong(msg.getStartFrame().content, RH);
 }
 
 function _decodeSchemaRequest(msg: ClientMessage): Schema {
@@ -370,15 +372,15 @@ function _decodeFieldDescriptor(iterator: ClientMessage.ForwardFrameIterator): S
 // ── AddDistributedObjectListener response encoder ─────────────────────────────
 //
 // Response initial frame layout (0x000901):
-//   [0..3]   type = 0x000901
-//   [4..11]  correlationId (set by caller)
-//   [12]     backupAcks (byte, 0)
-//   [13..29] response UUID  (17 bytes: isNull(1) + msb(8) + lsb(8))
+//   [0..3]    type = 0x000901
+//   [4..11]   correlationId (set by caller)
+//   [12]      backupAcks (byte, 0)
+//   [13..29]  response UUID  (17 bytes: isNull(1) + msb(8) + lsb(8))
 //
-// Total: 30 bytes.
+// Total: 30 bytes.  (RESP_H = 13, UUID starts at offset 13)
 
-const ADD_DOL_RESPONSE_UUID_OFFSET = RESPONSE_HEADER_SIZE + BYTE_SIZE_IN_BYTES; // 17
-const ADD_DOL_RESPONSE_SIZE        = ADD_DOL_RESPONSE_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 34
+const ADD_DOL_RESPONSE_UUID_OFFSET = RESP_H; // 13 (type(4) + correlationId(8) + backupAcks(1))
+const ADD_DOL_RESPONSE_SIZE        = ADD_DOL_RESPONSE_UUID_OFFSET + UUID_SIZE_IN_BYTES; // 30
 
 function _encodeAddDistributedObjectListenerResponse(registrationId: string): ClientMessage {
     const msg = CM.createForEncode();
@@ -405,7 +407,7 @@ function _encodeAddDistributedObjectListenerResponse(registrationId: string): Cl
 //   serviceName (StringCodec)
 //   eventType   (StringCodec)  — "CREATED" or "DESTROYED"
 
-const DOL_EVENT_SOURCE_UUID_OFFSET = RESPONSE_HEADER_SIZE; // 16
+const DOL_EVENT_SOURCE_UUID_OFFSET = RH; // 16 (events use request-style header with partitionId)
 
 function _encodeDistributedObjectEvent(
     name: string,
@@ -461,7 +463,7 @@ function _fireDistributedObjectEvent(
 //   [12..15] partitionId
 //   [16..32] registrationId UUID (17 bytes)
 
-const REMOVE_DOL_REQUEST_UUID_OFFSET = RESPONSE_HEADER_SIZE; // 16
+const REMOVE_DOL_REQUEST_UUID_OFFSET = RH; // 16 (request header: type + correlationId + partitionId)
 
 function _decodeRemoveDistributedObjectListenerRequest(msg: ClientMessage): string {
     const frame = msg.getStartFrame();
@@ -469,13 +471,14 @@ function _decodeRemoveDistributedObjectListenerRequest(msg: ClientMessage): stri
 }
 
 // Response initial frame layout (0x000a01):
-//   [0..3]   type = 0x000a01
-//   [4..11]  correlationId
-//   [12]     backupAcks (byte)
-//   [13]     response bool (1 byte)
+//   [0..3]    type = 0x000a01
+//   [4..11]   correlationId
+//   [12]      backupAcks (byte)
+//   [13]      response bool (1 byte)
+// Total: 14 bytes.  (RESP_H = 13, bool at offset 13)
 
-const REMOVE_DOL_RESPONSE_BOOL_OFFSET = RESPONSE_HEADER_SIZE + BYTE_SIZE_IN_BYTES; // 17
-const REMOVE_DOL_RESPONSE_SIZE        = REMOVE_DOL_RESPONSE_BOOL_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 18
+const REMOVE_DOL_RESPONSE_BOOL_OFFSET = RESP_H; // 13 (type(4) + correlationId(8) + backupAcks(1))
+const REMOVE_DOL_RESPONSE_SIZE        = REMOVE_DOL_RESPONSE_BOOL_OFFSET + BOOLEAN_SIZE_IN_BYTES; // 14
 
 function _encodeRemoveDistributedObjectListenerResponse(removed: boolean): ClientMessage {
     const msg = CM.createForEncode();
@@ -506,7 +509,7 @@ function _decodeCreateProxiesRequest(msg: ClientMessage): Array<[string, string]
 
 function _encodeCreateProxiesResponse(): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_CREATE_PROXIES_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
@@ -536,7 +539,7 @@ function _decodeSchemaFromIterator(iterator: ClientMessage.ForwardFrameIterator)
 
 function _encodeSendAllSchemasResponse(): ClientMessage {
     const msg = CM.createForEncode();
-    const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE);
+    const buf = Buffer.allocUnsafe(RESP_H);
     buf.fill(0);
     buf.writeUInt32LE(CLIENT_SEND_ALL_SCHEMAS_RESPONSE_TYPE >>> 0, 0);
     const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
