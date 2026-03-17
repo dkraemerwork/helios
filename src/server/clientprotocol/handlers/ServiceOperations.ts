@@ -330,6 +330,17 @@ export interface ExecutorServiceOperations {
     cancelOnMember(uuid: string, memberUuid: string, interrupt: boolean): Promise<boolean>;
     submitToPartition(name: string, uuid: string, callable: Data, partitionId: number): Promise<void>;
     submitToMember(name: string, uuid: string, callable: Data, memberUuid: string): Promise<void>;
+    /**
+     * Durable executor: submit a task and return a monotonic sequence ID that
+     * can be used later to retrieve the serialised result.
+     * Sequence is a 32-bit integer per the Hazelcast wire protocol (DurableExecutor.yaml).
+     * Implementations store the result (or error) keyed by the returned sequence.
+     */
+    durableSubmitToPartition(name: string, callable: Data, partitionId: number): Promise<{ sequence: number }>;
+    /** Retrieve a stored durable-executor result by sequence. Resolves when ready; rejects on task error. */
+    durableRetrieveResult(name: string, sequence: number): Promise<Data | null>;
+    /** Remove a stored durable-executor result without returning it. */
+    durableDisposeResult(name: string, sequence: number): Promise<void>;
 }
 
 // ── CP Subsystem ──────────────────────────────────────────────────────────────
