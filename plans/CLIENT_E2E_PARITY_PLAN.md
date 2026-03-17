@@ -1,3 +1,5 @@
+> **Status: historical archive** — parity plan for the removed proprietary HeliosClient; retained for reference only.
+
 ## Helios Client End-to-End Parity Plan
 
 Goal: deliver a production-grade Bun/TypeScript remote client that a separate application can use to connect to a Helios cluster over the binary client protocol, with honest Hazelcast OSS parity intent and no placeholder public APIs, no hidden member-side dependencies, no orphan codecs, and no test-only transport path.

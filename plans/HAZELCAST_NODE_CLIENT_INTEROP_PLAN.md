@@ -1,3 +1,5 @@
+> **Status: historical archive** — superseded by the official `hazelcast-client` interop boundary approach.
+
 ## Helios Full Hazelcast Implementation Plan
 
 Goal: make Helios a fully Hazelcast-compatible OSS cluster so the official Node.js

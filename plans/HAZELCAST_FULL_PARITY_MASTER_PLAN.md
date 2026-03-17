@@ -1,3 +1,5 @@
+> **Status: historical archive** — superseded by post-parity-plan state documented in `docs/baseline/FEATURE_INVENTORY.md`.
+
 # Helios Full Hazelcast Parity Master Plan
 
 ## Purpose

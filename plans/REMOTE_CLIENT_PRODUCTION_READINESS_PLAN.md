@@ -1,3 +1,5 @@
+> **Status: historical archive** — superseded; Helios no longer ships a proprietary remote client.
+
 ## Helios Remote Client Production Readiness Plan
 
 Goal: make the Helios remote client stack truly end-to-end production ready for multi-node clusters for the supported remote-client feature subset, with honest Hazelcast parity claims only where feature, semantics, correctness, and operational behavior are actually present.

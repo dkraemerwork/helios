@@ -1,3 +1,5 @@
+> **Status: historical archive** — execution backlog for the removed proprietary HeliosClient; retained for reference only.
+
 ## Helios Client Execution Backlog
 
 This backlog operationalizes `plans/CLIENT_E2E_PARITY_PLAN.md` into concrete phases, target files, and exit criteria.
