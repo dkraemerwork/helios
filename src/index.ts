@@ -61,6 +61,8 @@ export type { MapLoaderLifecycleSupport } from "@zenystx/helios-core/map/MapLoad
 export type { MapStore } from "@zenystx/helios-core/map/MapStore";
 export type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory";
 export { QueryResultSizeExceededException } from "@zenystx/helios-core/map/QueryResultSizeExceededException";
+export type { QueryCache, QueryCacheEntryListener } from "@zenystx/helios-core/map/QueryCache";
+export { QueryCacheConfig } from "@zenystx/helios-core/config/QueryCacheConfig";
 
 // ── Collections ───────────────────────────────────────────────────────────────
 export type { ICollection } from "@zenystx/helios-core/collection/ICollection";
@@ -215,6 +217,26 @@ export { EventJournal } from "@zenystx/helios-core/internal/journal/EventJournal
 export { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
 export { EventJournalEventType } from "@zenystx/helios-core/internal/journal/EventJournalEvent";
 export type { EventJournalEvent } from "@zenystx/helios-core/internal/journal/EventJournalEvent";
+
+// ── Split-Brain Merge ─────────────────────────────────────────────────────────
+export type { SplitBrainMergePolicy } from "@zenystx/helios-core/spi/merge/SplitBrainMergePolicy";
+export type { SplitBrainMergeData } from "@zenystx/helios-core/spi/merge/MergingValue";
+export { MergePolicyProvider } from "@zenystx/helios-core/spi/merge/MergePolicyProvider";
+export { PassThroughMergePolicy } from "@zenystx/helios-core/spi/merge/PassThroughMergePolicy";
+export { PutIfAbsentMergePolicy } from "@zenystx/helios-core/spi/merge/PutIfAbsentMergePolicy";
+export { HigherHitsMergePolicy } from "@zenystx/helios-core/spi/merge/HigherHitsMergePolicy";
+export { LatestUpdateMergePolicy } from "@zenystx/helios-core/spi/merge/LatestUpdateMergePolicy";
+export { LatestAccessMergePolicy } from "@zenystx/helios-core/spi/merge/LatestAccessMergePolicy";
+export { ExpirationTimeMergePolicy } from "@zenystx/helios-core/spi/merge/ExpirationTimeMergePolicy";
+export { DiscardMergePolicy } from "@zenystx/helios-core/spi/merge/DiscardMergePolicy";
+export { HyperLogLogMergePolicy } from "@zenystx/helios-core/spi/merge/HyperLogLogMergePolicy";
+export { SplitBrainMergeHandler } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler";
+
+// ── Persistence (Hot Restart / WAL) ──────────────────────────────────────────
+export { PersistenceConfig } from "@zenystx/helios-core/config/PersistenceConfig";
+export type { ClusterDataRecoveryPolicy } from "@zenystx/helios-core/config/PersistenceConfig";
+export { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
+export type { PersistenceRecoveryResult, PersistenceBackupResult, MapStoreAdapter } from "@zenystx/helios-core/persistence/PersistenceService";
 
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";

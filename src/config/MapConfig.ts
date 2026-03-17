@@ -15,6 +15,7 @@ import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat.js';
 import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig.js';
 import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy.js';
 import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig.js';
+import { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig.js';
 
 export class MapConfig {
     static readonly MIN_BACKUP_COUNT = 0;
@@ -45,7 +46,9 @@ export class MapConfig {
     private _perEntryStatsEnabled: boolean = MapConfig.DEFAULT_ENTRY_STATS_ENABLED;
     private _readBackupData: boolean = false;
     private _splitBrainProtectionName: string | null = null;
+    private _mergePolicyName = 'PutIfAbsentMergePolicy';
     private _indexConfigs: IndexConfig[] = [];
+    private _queryCacheConfigs: QueryCacheConfig[] = [];
 
     constructor(name?: string) {
         // Initialize eviction config with map defaults
@@ -197,6 +200,15 @@ export class MapConfig {
         return this;
     }
 
+    getMergePolicyName(): string {
+        return this._mergePolicyName;
+    }
+
+    setMergePolicyName(name: string): this {
+        this._mergePolicyName = name;
+        return this;
+    }
+
     getIndexConfigs(): IndexConfig[] {
         return [...this._indexConfigs];
     }
@@ -208,6 +220,15 @@ export class MapConfig {
 
     addIndexConfig(indexConfig: IndexConfig): this {
         this._indexConfigs.push(indexConfig);
+        return this;
+    }
+
+    getQueryCacheConfigs(): QueryCacheConfig[] {
+        return [...this._queryCacheConfigs];
+    }
+
+    addQueryCacheConfig(config: QueryCacheConfig): this {
+        this._queryCacheConfigs.push(config);
         return this;
     }
 
