@@ -596,8 +596,13 @@ export class DistributedCacheService {
     if (this._transport === null || this._coordinator === null) return;
 
     const partitionId = this._getPartitionId(name);
-    const backupCount = this._config.getQueueConfig(name).getBackupCount();
-    const totalCount = this._config.getQueueConfig(name).getTotalBackupCount();
+    // Use cache-specific backup counts. HeliosConfig has no dedicated CacheConfig
+    // type yet, so we fall back to a default sync-backup count of 1 (matching the
+    // Hazelcast ICache default) when no explicit configuration is present.
+    const cacheConfig = this._config.getMapConfig(name);
+    const backupCount = cacheConfig?.getBackupCount() ?? 1;
+    const asyncBackupCount = cacheConfig?.getAsyncBackupCount() ?? 0;
+    const totalCount = backupCount + asyncBackupCount;
     const syncIds = this._coordinator.getBackupIds(partitionId, backupCount);
     const asyncIds = this._coordinator
       .getBackupIds(partitionId, totalCount)

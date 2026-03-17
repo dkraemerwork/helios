@@ -149,13 +149,30 @@ export class DistributedRingbufferService {
     return r.data !== undefined ? decodeData(r.data) : null;
   }
 
+  /**
+   * Reads up to {@link maxCount} items starting at {@link startSequence}, blocking
+   * until at least {@link minCount} items are available.
+   *
+   * The {@link filter} parameter mirrors the Hazelcast wire protocol field but is
+   * not evaluated server-side: the Node.js client always sends {@code null} here
+   * (predicate filtering happens on the client after deserialisation). When a
+   * non-null filter is received it is acknowledged via a log warning and all
+   * matching items are returned without filtering (passthrough behaviour).
+   */
   async readMany(
     name: string,
     startSequence: number,
     minCount: number,
     maxCount: number,
-    _filter: Data | null = null,
+    filter: Data | null = null,
   ): Promise<Data[]> {
+    if (filter !== null) {
+      console.warn(
+        `[DistributedRingbufferService] readMany('${name}'): server-side filter received ` +
+        `but server-side evaluation is not supported — all items are returned (passthrough). ` +
+        `The Node.js client normally sends null; apply predicate filtering on the client.`,
+      );
+    }
     // If local owner: wait until minCount items available
     const ownerId = this._resolveOwnerId(name);
     if (ownerId === this._instanceName || this._transport === null) {
