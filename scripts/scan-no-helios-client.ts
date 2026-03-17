@@ -9,6 +9,7 @@ const SCAN_TARGETS = [
     'test',
     'examples',
     'docs/baseline',
+    'plans',
 ];
 
 const TEXT_EXTENSIONS = new Set(['.ts', '.js', '.md', '.json', '.yml', '.yaml']);
@@ -22,13 +23,19 @@ const BANNED_PATTERNS = [
     { label: './client/config', regex: /\.\/client\/config(?=(["'`\s]|$))/ },
 ];
 
+const ARCHIVE_MARKER = /\b(historical|archive)\b/i;
+
 const shouldSkipPath = (path: string): boolean => {
     return path.includes('/node_modules/')
         || path.startsWith('node_modules/')
         || path.includes('/dist/')
         || path.startsWith('dist/')
-        || path.startsWith('plans/')
         || path.startsWith('docs/plans/');
+};
+
+/** Files under `plans/` that are marked historical or archival are exempt from the banned-token scan. */
+const isArchiveFile = (path: string, content: string): boolean => {
+    return path.startsWith('plans/') && ARCHIVE_MARKER.test(content);
 };
 
 const shouldScanFile = (path: string): boolean => {
@@ -70,6 +77,9 @@ for (const target of SCAN_TARGETS) {
     for (const file of files) {
         const absolutePath = join(ROOT, file);
         const content = await readFile(absolutePath, 'utf8');
+        if (isArchiveFile(file, content)) {
+            continue;
+        }
         const lines = content.split(/\r?\n/);
         for (let index = 0; index < lines.length; index += 1) {
             const line = lines[index] ?? '';

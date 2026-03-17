@@ -195,7 +195,7 @@ curl http://localhost:8081/hazelcast/rest/cluster
 | **MultiMap**       | One key, many values — add/get/remove per value                                                                 |
 | **ReplicatedMap**  | Fully replicated map on every node — vector clock conflict resolution                                           |
 | **Ringbuffer**     | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies                          |
-| **Cache (JCache)** | CacheRecordStore, eviction policies, deferred values                                                            |
+| **Distributed Cache**  | CacheRecordStore, eviction policies, deferred values                                                        |
 
 ### Querying & Aggregations
 
@@ -525,14 +525,13 @@ All four implement the same `MapStore` interface — swap backends without chang
 
 ### Deferred to v2
 
-| Item                    | Reason                                                            |
-| ----------------------- | ----------------------------------------------------------------- |
-| **SQL Engine**          | Requires porting Apache Calcite (~500k lines of Java)             |
-| **CP Subsystem (Raft)** | Strong consistency via Raft consensus — significant protocol work |
+| Item                              | Reason                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **CP Subsystem (distributed Raft)** | Distributed Raft consensus backbone — CP atomics are implemented (single-node), only multi-node Raft is deferred |
 
 ### Not Porting
 
-OSGi, WAN replication, CRDT, vector search, durable executor, flake ID generator, data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise).
+OSGi, WAN replication, vector search, durable executor, data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise).
 
 ---
 

@@ -1,5 +1,7 @@
 # Helios Feature Inventory — hazelcast-client@5.6.x Compatibility
 
+> **Updated: 2026-03-17 — reflects post-parity-plan state**
+
 **Target:** `hazelcast-client@5.6.0` / Hazelcast OSS `5.5.0`  
 **Protocol:** Client Protocol 2.8  
 **Audit date:** 2026-03-08  
@@ -340,9 +342,9 @@ Server-side: `src/cache/impl/CacheRecordStore.ts`, `src/cache/HazelcastCacheMana
 
 | Method | Description | Status |
 |---|---|---|
-| `newId()` | Generate globally unique ID | MISSING |
-| Auto-batching | Client-side ID batching | MISSING |
-| Client codec | 0x1E0100 | MISSING |
+| `newId()` | Generate globally unique ID | DONE |
+| Auto-batching | Client-side ID batching | DONE |
+| Client codec | 0x1E0100 | DONE |
 
 ---
 
@@ -350,17 +352,17 @@ Server-side: `src/cache/impl/CacheRecordStore.ts`, `src/cache/HazelcastCacheMana
 
 | Method | Description | Status |
 |---|---|---|
-| `get()` | Get current count | MISSING |
-| `getAndAdd(delta)` | Atomic add, return old | MISSING |
-| `getAndSubtract(delta)` | Atomic subtract, return old | MISSING |
-| `addAndGet(delta)` | Atomic add, return new | MISSING |
-| `subtractAndGet(delta)` | Atomic subtract, return new | MISSING |
-| `getAndIncrement()` | Increment, return old | MISSING |
-| `getAndDecrement()` | Decrement, return old | MISSING |
-| `incrementAndGet()` | Increment, return new | MISSING |
-| `decrementAndGet()` | Decrement, return new | MISSING |
-| `reset()` | Reset counter state | MISSING |
-| Client codec | 0x200x00 series | MISSING |
+| `get()` | Get current count | DONE |
+| `getAndAdd(delta)` | Atomic add, return old | DONE |
+| `getAndSubtract(delta)` | Atomic subtract, return old | DONE |
+| `addAndGet(delta)` | Atomic add, return new | DONE |
+| `subtractAndGet(delta)` | Atomic subtract, return new | DONE |
+| `getAndIncrement()` | Increment, return old | DONE |
+| `getAndDecrement()` | Decrement, return old | DONE |
+| `incrementAndGet()` | Increment, return new | DONE |
+| `decrementAndGet()` | Decrement, return new | DONE |
+| `reset()` | Reset counter state | DONE |
+| Client codec | 0x200x00 series | DONE |
 
 ---
 
@@ -437,12 +439,12 @@ Protocol handlers: `src/server/clientprotocol/ScheduledExecutorMessageHandlers.t
 
 | Method | Description | Status |
 |---|---|---|
-| `sql.execute(sql, params)` | Execute SQL query | MISSING |
-| `sql.execute(SqlStatement)` | Execute with statement object | MISSING |
-| SqlResult iteration | Iterate over rows | MISSING |
-| SqlColumnMetadata | Column type information | MISSING |
-| Portable/Compact mapping | JSON/Portable map mapping | MISSING |
-| Client codecs | 0x210x00 series | MISSING |
+| `sql.execute(sql, params)` | Execute SQL query | DONE (subset SQL) |
+| `sql.execute(SqlStatement)` | Execute with statement object | DONE (subset SQL) |
+| SqlResult iteration | Iterate over rows | DONE |
+| SqlColumnMetadata | Column type information | DONE |
+| Portable/Compact mapping | JSON/Portable map mapping | DONE |
+| Client codecs | 0x210x00 series | DONE |
 
 ---
 
@@ -472,15 +474,15 @@ Server-side: `src/transaction/impl/TransactionImpl.ts`, `src/transaction/Transac
 
 | Service | Description | Status |
 |---|---|---|
-| `cpSubsystem.getAtomicLong(name)` | Distributed AtomicLong | MISSING |
-| `cpSubsystem.getAtomicReference(name)` | Distributed AtomicReference | MISSING |
-| `cpSubsystem.getCountDownLatch(name)` | Distributed CountDownLatch | MISSING |
-| `cpSubsystem.getSemaphore(name)` | Distributed Semaphore | MISSING |
-| `cpSubsystem.getLock(name)` | Distributed FencedLock | MISSING |
+| `cpSubsystem.getAtomicLong(name)` | Distributed AtomicLong | DONE |
+| `cpSubsystem.getAtomicReference(name)` | Distributed AtomicReference | DONE |
+| `cpSubsystem.getCountDownLatch(name)` | Distributed CountDownLatch | DONE |
+| `cpSubsystem.getSemaphore(name)` | Distributed Semaphore | DONE |
+| `cpSubsystem.getLock(name)` | Distributed FencedLock | DONE |
 | `cpSubsystem.getCPMap(name)` | CP Map (linearizable) | MISSING |
-| Raft consensus | CP subsystem Raft backbone | MISSING |
-| CP session management | CP session keep-alive | MISSING |
-| Client codecs | 0x270x00+ series | MISSING |
+| Raft consensus | CP subsystem Raft backbone (multi-node) | MISSING |
+| CP session management | CP session keep-alive | DONE |
+| Client codecs | 0x270x00+ series | DONE |
 
 ---
 
@@ -610,8 +612,8 @@ Source: `src/internal/serialization/`
 | Java primitive types | int, long, boolean, double, etc. | DONE |
 | String serialization | UTF-8 string encoding | DONE |
 | `IdentifiedDataSerializable` | Fast Java-compatible serialization | PARTIAL |
-| `Portable` | Schema-aware cross-language serialization | MISSING |
-| `Compact` | Schema-less compact format (HZ 5.x) | MISSING |
+| `Portable` | Schema-aware cross-language serialization | DONE |
+| `Compact` | Schema-less compact format (HZ 5.x) | DONE |
 | JSON serialization | `HazelcastJsonValue` wrapper | PARTIAL |
 | Custom serializers | Pluggable serializer registry | PARTIAL |
 | Global serializer | Catch-all serializer | MISSING |
