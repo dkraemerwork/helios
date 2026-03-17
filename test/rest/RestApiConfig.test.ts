@@ -6,17 +6,18 @@ import { describe, expect, it } from 'bun:test';
 // ─── RestEndpointGroup ────────────────────────────────────────────────────────
 
 describe('RestEndpointGroup', () => {
-    it('has exactly 5 groups', () => {
+    it('has exactly 6 groups', () => {
         const values = Object.values(RestEndpointGroup);
-        expect(values.length).toBe(5);
+        expect(values.length).toBe(6);
     });
 
-    it('contains HEALTH_CHECK, CLUSTER_READ, CLUSTER_WRITE, DATA, MONITOR', () => {
+    it('contains HEALTH_CHECK, CLUSTER_READ, CLUSTER_WRITE, DATA, MONITOR, ADMIN', () => {
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.HEALTH_CHECK);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.CLUSTER_READ);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.CLUSTER_WRITE);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.DATA);
         expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.MONITOR);
+        expect(Object.values(RestEndpointGroup)).toContain(RestEndpointGroup.ADMIN);
     });
 });
 
@@ -82,7 +83,7 @@ describe('RestApiConfig — fluent API', () => {
         expect(cfg.isGroupEnabled(RestEndpointGroup.CLUSTER_READ)).toBe(true);
     });
 
-    it('enableAllGroups enables all 4 groups', () => {
+    it('enableAllGroups enables all 6 groups', () => {
         const cfg = new RestApiConfig();
         cfg.disableAllGroups().enableAllGroups();
         for (const g of Object.values(RestEndpointGroup)) {

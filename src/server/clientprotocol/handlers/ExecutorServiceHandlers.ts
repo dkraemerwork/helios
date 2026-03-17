@@ -27,7 +27,7 @@ import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ExecutorServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
 
@@ -49,7 +49,10 @@ const DE_RETRIEVE_REQUEST            = 0x180400; const DE_RETRIEVE_RESPONSE     
 const DE_DISPOSE_REQUEST             = 0x180500; const DE_DISPOSE_RESPONSE             = 0x180501;
 const DE_RETRIEVE_DISPOSE_REQUEST    = 0x180600; const DE_RETRIEVE_DISPOSE_RESPONSE    = 0x180601;
 
+/** Request initial frame header: type(4) + correlationId(8) + partitionId(4) = 16 */
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+/** Response initial frame header: type(4) + correlationId(8) + backupAcks(1) = 13 */
+const RESP_H = CM.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES;
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -181,7 +184,49 @@ export function registerExecutorServiceHandlers(
 
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
-function _empty(t: number): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
-function _bool(t: number, v: boolean): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH + BOOLEAN_SIZE_IN_BYTES); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeUInt8(v ? 1 : 0, RH); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
-function _int(t: number, v: number): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH + INT_SIZE_IN_BYTES); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeInt32LE(v, RH); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
-function _nullable(t: number, data: Data | null): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); if (data === null) { msg.add(CM.NULL_FRAME); } else { DataCodec.encode(msg, data); } msg.setFinal(); return msg; }
+function _empty(t: number): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.setFinal();
+    return msg;
+}
+
+function _bool(t: number, v: boolean): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H + BOOLEAN_SIZE_IN_BYTES);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    b.writeUInt8(v ? 1 : 0, RESP_H);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.setFinal();
+    return msg;
+}
+
+function _int(t: number, v: number): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H + INT_SIZE_IN_BYTES);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    b.writeInt32LE(v, RESP_H);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.setFinal();
+    return msg;
+}
+
+function _nullable(t: number, data: Data | null): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    if (data === null) {
+        msg.add(CM.NULL_FRAME);
+    } else {
+        DataCodec.encode(msg, data);
+    }
+    msg.setFinal();
+    return msg;
+}

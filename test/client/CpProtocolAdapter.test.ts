@@ -26,17 +26,21 @@ const AL_SET_REQUEST = 0x090a00;
 
 const CP_GROUP_CREATE_REQUEST = 0x1e0100;
 const CP_GROUP_DESTROY_REQUEST = 0x1e0200;
+const AR_APPLY_UNIFIED_REQUEST = 0x0a0100;
 const AR_COMPARE_AND_SET_REQUEST = 0x0a0200;
 const AR_CONTAINS_REQUEST = 0x0a0300;
 const AR_GET_REQUEST = 0x0a0400;
 const AR_SET_REQUEST = 0x0a0500;
-const AR_APPLY_REQUEST = 0x0a0600;
-const AR_ALTER_REQUEST = 0x0a0700;
-const AR_GET_AND_ALTER_REQUEST = 0x0a0800;
-const AR_ALTER_AND_GET_REQUEST = 0x0a0900;
 const AR_IS_NULL_REQUEST = 0x0c0800;
 const AR_CLEAR_REQUEST = 0x0c0900;
 const AR_COMPARE_AND_SET_LEGACY_REQUEST = 0x0c0a00;
+
+// AR apply/alter variants use unified opcode 0x0a0100 with returnValueType+alter fields
+// returnValueType: 0=no value, 1=old value, 2=new value; alter: whether to write back result
+const AR_APPLY_RETURN_VALUE_TYPE = 2;   // return the function result
+const AR_ALTER_RETURN_VALUE_TYPE = 0;   // no return value (void alter)
+const AR_ALTER_AND_GET_RETURN_VALUE_TYPE = 2; // return new value
+const AR_GET_AND_ALTER_RETURN_VALUE_TYPE = 1; // return old value
 
 const CDL_TRY_SET_COUNT_REQUEST = 0x0b0100;
 const CDL_AWAIT_REQUEST = 0x0b0200;
@@ -189,8 +193,10 @@ function buildAtomicRefCompareAndSetLegacyRequest(correlationId: number, name: s
     return msg;
 }
 
-function buildAtomicRefFunctionRequest(messageType: number, correlationId: number, name: string, functionData: Data): ClientMessage {
-    const { msg } = createRequest(messageType, correlationId);
+function buildAtomicRefFunctionRequest(returnValueType: number, doAlter: boolean, correlationId: number, name: string, functionData: Data): ClientMessage {
+    const { msg, frame } = createRequest(AR_APPLY_UNIFIED_REQUEST, correlationId, INT_SIZE_IN_BYTES + 1);
+    frame.writeInt32LE(returnValueType, INITIAL_FRAME_SIZE);
+    frame.writeUInt8(doAlter ? 1 : 0, INITIAL_FRAME_SIZE + INT_SIZE_IN_BYTES);
     encodeRaftGroupId(msg, 'default');
     StringCodec.encode(msg, name);
     DataCodec.encode(msg, functionData);
@@ -355,10 +361,10 @@ describe('cp protocol adapter', () => {
             expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildCpNameRequest(AR_GET_REQUEST, 2, name), session))!, ss)).toEqual({ version: 1 });
             expect(decodeBooleanResponse((await dispatcher.dispatch(buildAtomicRefContainsRequest(3, name, first), session))!)).toBe(true);
             expect(decodeBooleanResponse((await dispatcher.dispatch(buildAtomicRefCompareAndSetRequest(4, name, first, second), session))!)).toBe(true);
-            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_APPLY_REQUEST, 5, name, identityFn), session))!, ss)).toEqual({ version: 2 });
-            await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_ALTER_REQUEST, 6, name, setFn), session);
-            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_ALTER_AND_GET_REQUEST, 7, name, identityFn), session))!, ss)).toEqual({ version: 3 });
-            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_GET_AND_ALTER_REQUEST, 8, name, clearFn), session))!, ss)).toEqual({ version: 3 });
+            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_APPLY_RETURN_VALUE_TYPE, false, 5, name, identityFn), session))!, ss)).toEqual({ version: 2 });
+            await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_ALTER_RETURN_VALUE_TYPE, true, 6, name, setFn), session);
+            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_ALTER_AND_GET_RETURN_VALUE_TYPE, true, 7, name, identityFn), session))!, ss)).toEqual({ version: 3 });
+            expect(decodeNullableDataResponse<{ version: number }>((await dispatcher.dispatch(buildAtomicRefFunctionRequest(AR_GET_AND_ALTER_RETURN_VALUE_TYPE, true, 8, name, clearFn), session))!, ss)).toEqual({ version: 3 });
             expect(decodeBooleanResponse((await dispatcher.dispatch(buildCpNameRequest(AR_IS_NULL_REQUEST, 9, name), session))!)).toBe(true);
             await dispatcher.dispatch(buildAtomicRefSetRequest(10, name, second), session);
             await dispatcher.dispatch(buildCpNameRequest(AR_CLEAR_REQUEST, 11, name), session);

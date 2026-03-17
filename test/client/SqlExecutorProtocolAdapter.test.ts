@@ -21,12 +21,12 @@ const SQL_EXECUTE_REQUEST_TYPE = 0x210400;
 const SQL_FETCH_REQUEST_TYPE = 0x210500;
 const SQL_CLOSE_REQUEST_TYPE = 0x210300;
 
-const EXEC_SHUTDOWN_REQUEST_TYPE = 0x0a0100;
-const EXEC_IS_SHUTDOWN_REQUEST_TYPE = 0x0a0200;
-const EXEC_CANCEL_ON_PARTITION_REQUEST_TYPE = 0x0a0400;
-const EXEC_CANCEL_ON_MEMBER_REQUEST_TYPE = 0x0a0500;
-const EXEC_SUBMIT_TO_PARTITION_REQUEST_TYPE = 0x0a0600;
-const EXEC_SUBMIT_TO_MEMBER_REQUEST_TYPE = 0x0a0700;
+const EXEC_SHUTDOWN_REQUEST_TYPE = 0x080100;
+const EXEC_IS_SHUTDOWN_REQUEST_TYPE = 0x080200;
+const EXEC_CANCEL_ON_PARTITION_REQUEST_TYPE = 0x080400;
+const EXEC_CANCEL_ON_MEMBER_REQUEST_TYPE = 0x080500;
+const EXEC_SUBMIT_TO_PARTITION_REQUEST_TYPE = 0x080600;
+const EXEC_SUBMIT_TO_MEMBER_REQUEST_TYPE = 0x080700;
 
 const INITIAL_FRAME_SIZE = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;
 const RESPONSE_VALUE_OFFSET = ClientMessage.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES;
@@ -481,7 +481,7 @@ describe('sql and executor protocol adapters', () => {
             buildExecutorSubmitToPartitionRequest(10, 'partition-task', partitionTask, 0, 'protocol-exec'),
             session,
         );
-        await Bun.sleep(25);
+        await Bun.sleep(50);
         expect(started).toContain('partition');
         expect(decodeBooleanResponse((await dispatcher.dispatch(
             buildExecutorCancelOnPartitionRequest(11, 'partition-task', 0),
@@ -498,7 +498,7 @@ describe('sql and executor protocol adapters', () => {
             buildExecutorSubmitToMemberRequest(13, 'member-task', memberTask, memberUuid, 'protocol-exec'),
             session,
         );
-        await Bun.sleep(25);
+        await Bun.sleep(50);
         expect(started).toContain('member');
         expect(decodeBooleanResponse((await dispatcher.dispatch(
             buildExecutorCancelOnMemberRequest(14, 'member-task', memberUuid),

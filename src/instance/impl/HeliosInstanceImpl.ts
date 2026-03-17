@@ -4343,12 +4343,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
       return false;
     }
 
-    const operation = new CancellationOperation(route.name, uuid);
-    const cancelled = await this._nodeEngine.getOperationService().invokeOnPartition<boolean>(
-      'helios:executor',
-      operation,
-      partitionId,
-    ).get();
+    const containerKey = `helios:executor:container:${route.name}`;
+    const container = this._nodeEngine.getServiceOrNull<import('@zenystx/helios-core/executor/impl/ExecutorContainerService').ExecutorContainerService>(containerKey);
+    const cancelled = container !== null ? container.cancelTask(uuid) : false;
     if (cancelled) {
       this._clientExecutorTasks.delete(uuid);
     }
@@ -4365,17 +4362,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
       return false;
     }
 
-    const member = this._findClusterMemberByUuid(memberUuid);
-    if (member === null) {
-      return false;
-    }
-
-    const operation = new CancellationOperation(route.name, uuid);
-    const cancelled = await this._nodeEngine.getOperationService().invokeOnTarget<boolean>(
-      'helios:executor',
-      operation,
-      member.getAddress(),
-    ).get();
+    const containerKey = `helios:executor:container:${route.name}`;
+    const container = this._nodeEngine.getServiceOrNull<import('@zenystx/helios-core/executor/impl/ExecutorContainerService').ExecutorContainerService>(containerKey);
+    const cancelled = container !== null ? container.cancelTask(uuid) : false;
     if (cancelled) {
       this._clientExecutorTasks.delete(uuid);
     }

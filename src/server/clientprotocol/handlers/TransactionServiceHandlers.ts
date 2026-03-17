@@ -3,8 +3,8 @@
  *
  * Registers handlers for all Transaction opcodes required by hazelcast-client@5.6.x:
  *
- *   Transaction.Commit     (0x150100) — commit a transaction (service 0x15, method 1)
- *   Transaction.Create     (0x150200) — create a transaction (service 0x15, method 2)
+ *   Transaction.Create     (0x150100) — create a transaction (service 0x15, method 1)
+ *   Transaction.Commit     (0x150200) — commit a transaction (service 0x15, method 2)
  *   Transaction.Rollback   (0x150300) — roll back a transaction (service 0x15, method 3)
  *
  *   TransactionalMap.ContainsKey       (0x0e0100)  service 0x0e = 14
@@ -50,7 +50,7 @@ import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { TransactionServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
 import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
@@ -59,9 +59,9 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
-// Transaction service ID = 21 (0x15): commit=1, create=2, rollback=3
-const TX_COMMIT_REQUEST   = 0x150100; const TX_COMMIT_RESPONSE   = 0x150101;
-const TX_CREATE_REQUEST   = 0x150200; const TX_CREATE_RESPONSE   = 0x150201;
+// Transaction service ID = 21 (0x15): create=1, commit=2, rollback=3
+const TX_CREATE_REQUEST   = 0x150100; const TX_CREATE_RESPONSE   = 0x150101;
+const TX_COMMIT_REQUEST   = 0x150200; const TX_COMMIT_RESPONSE   = 0x150201;
 const TX_ROLLBACK_REQUEST = 0x150300; const TX_ROLLBACK_RESPONSE = 0x150301;
 
 // TransactionalMap service ID = 14 (0x0e): containsKey=1, get=2, getForUpdate=3, size=4,
@@ -110,7 +110,10 @@ const TXQ_POLL_REQUEST   = 0x120300; const TXQ_POLL_RESPONSE   = 0x120301;
 const TXQ_PEEK_REQUEST   = 0x120400; const TXQ_PEEK_RESPONSE   = 0x120401;
 const TXQ_SIZE_REQUEST   = 0x120500; const TXQ_SIZE_RESPONSE   = 0x120501;
 
+/** Request initial frame header: type(4) + correlationId(8) + partitionId(4) = 16 */
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+/** Response initial frame header: type(4) + correlationId(8) + backupAcks(1) = 13 */
+const RESP_H = CM.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES;
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -511,9 +514,73 @@ export function registerTransactionServiceHandlers(
 
 // ── Response helpers ──────────────────────────────────────────────────────────
 
-function _empty(t: number): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
-function _bool(t: number, v: boolean): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH + BOOLEAN_SIZE_IN_BYTES); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeUInt8(v ? 1 : 0, RH); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
-function _int(t: number, v: number): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH + INT_SIZE_IN_BYTES); b.fill(0); b.writeUInt32LE(t >>> 0, 0); b.writeInt32LE(v | 0, RH); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.setFinal(); return msg; }
-function _string(t: number, v: string): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); StringCodec.encode(msg, v); msg.setFinal(); return msg; }
-function _nullable(t: number, data: Data | null): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); if (data === null) { msg.add(CM.NULL_FRAME); } else { DataCodec.encode(msg, data); } msg.setFinal(); return msg; }
-function _dataList(t: number, items: Data[]): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG)); for (const item of items) DataCodec.encode(msg, item); msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG)); msg.setFinal(); return msg; }
+function _empty(t: number): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.setFinal();
+    return msg;
+}
+
+function _bool(t: number, v: boolean): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H + BOOLEAN_SIZE_IN_BYTES);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    b.writeUInt8(v ? 1 : 0, RESP_H);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.setFinal();
+    return msg;
+}
+
+function _int(t: number, v: number): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H + INT_SIZE_IN_BYTES);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    b.writeInt32LE(v | 0, RESP_H);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.setFinal();
+    return msg;
+}
+
+function _string(t: number, v: string): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    StringCodec.encode(msg, v);
+    msg.setFinal();
+    return msg;
+}
+
+function _nullable(t: number, data: Data | null): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    if (data === null) {
+        msg.add(CM.NULL_FRAME);
+    } else {
+        DataCodec.encode(msg, data);
+    }
+    msg.setFinal();
+    return msg;
+}
+
+function _dataList(t: number, items: Data[]): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RESP_H);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    msg.add(new CM.Frame(b, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    for (const item of items) DataCodec.encode(msg, item);
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    msg.setFinal();
+    return msg;
+}
