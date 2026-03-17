@@ -72,6 +72,9 @@ export type { IQueue } from "@zenystx/helios-core/collection/IQueue";
 export type { ISet } from "@zenystx/helios-core/collection/ISet";
 export type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 export type { LocalQueueStats } from "@zenystx/helios-core/collection/LocalQueueStats";
+export type { QueueStore } from "@zenystx/helios-core/collection/QueueStore";
+export type { QueueStoreFactory } from "@zenystx/helios-core/collection/QueueStoreFactory";
+export { QueueStoreConfig } from "@zenystx/helios-core/config/QueueStoreConfig";
 
 // ── Topic ─────────────────────────────────────────────────────────────────────
 export { ReliableTopicConfig, TopicOverloadPolicy } from "@zenystx/helios-core/config/ReliableTopicConfig";
@@ -95,6 +98,9 @@ export { ReadResultSetImpl } from "@zenystx/helios-core/ringbuffer/impl/ReadResu
 export type { Ringbuffer } from "@zenystx/helios-core/ringbuffer/impl/Ringbuffer";
 export { OverflowPolicy } from "@zenystx/helios-core/ringbuffer/OverflowPolicy";
 export { StaleSequenceException } from "@zenystx/helios-core/ringbuffer/StaleSequenceException";
+export type { RingbufferStore } from "@zenystx/helios-core/ringbuffer/RingbufferStore";
+export type { RingbufferStoreFactory } from "@zenystx/helios-core/ringbuffer/RingbufferStoreFactory";
+export { RingbufferStoreConfig } from "@zenystx/helios-core/config/RingbufferStoreConfig";
 
 // ── Cache / JCache ────────────────────────────────────────────────────────────
 export { CACHE_MANAGER_PREFIX } from "@zenystx/helios-core/cache/HazelcastCacheManager";
@@ -202,6 +208,13 @@ export type { HyperLogLog } from "@zenystx/helios-core/cardinality/HyperLogLog";
 export { LogLevel, type ILogger } from "@zenystx/helios-core/logging/Logger";
 export { HeliosLogger } from "@zenystx/helios-core/logging/HeliosLogger";
 export { LoggingService } from "@zenystx/helios-core/logging/LoggingService";
+
+// ── Event Journal ─────────────────────────────────────────────────────────────
+export { EventJournalConfig } from "@zenystx/helios-core/config/EventJournalConfig";
+export { EventJournal } from "@zenystx/helios-core/internal/journal/EventJournal";
+export { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
+export { EventJournalEventType } from "@zenystx/helios-core/internal/journal/EventJournalEvent";
+export type { EventJournalEvent } from "@zenystx/helios-core/internal/journal/EventJournalEvent";
 
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";

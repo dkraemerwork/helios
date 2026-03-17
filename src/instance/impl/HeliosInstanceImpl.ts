@@ -42,6 +42,7 @@ import { DistributedListService } from "@zenystx/helios-core/collection/impl/lis
 import { ListProxyImpl } from "@zenystx/helios-core/collection/impl/list/ListProxyImpl";
 import { DistributedQueueService } from "@zenystx/helios-core/collection/impl/queue/DistributedQueueService";
 import { QueueProxyImpl } from "@zenystx/helios-core/collection/impl/queue/QueueProxyImpl";
+import { QueueStoreWrapper } from "@zenystx/helios-core/collection/impl/queue/QueueStoreWrapper";
 import { DistributedSetService } from "@zenystx/helios-core/collection/impl/set/DistributedSetService";
 import { SetProxyImpl } from "@zenystx/helios-core/collection/impl/set/SetProxyImpl";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
@@ -141,6 +142,7 @@ import type { MonitorJobSnapshot, MonitorJobsProvider } from "@zenystx/helios-co
 import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
 import { DistributedRingbufferService } from "@zenystx/helios-core/ringbuffer/impl/DistributedRingbufferService";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
+import { RingbufferStoreWrapper } from "@zenystx/helios-core/ringbuffer/impl/RingbufferStoreWrapper";
 import type { IScheduledExecutorService } from "@zenystx/helios-core/scheduledexecutor/IScheduledExecutorService";
 import { ScheduledExecutorContainerService as ScheduledContainerService } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorContainerService";
 import { ScheduledExecutorServiceProxy } from "@zenystx/helios-core/scheduledexecutor/impl/ScheduledExecutorServiceProxy";
@@ -189,6 +191,7 @@ import { TransactionalSetProxy } from "@zenystx/helios-core/transaction/impl/Tra
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
 import { IndexConfig as HeliosIndexConfig } from "@zenystx/helios-core/config/IndexConfig";
 import { IndexType as HeliosIndexType } from "@zenystx/helios-core/query/impl/Index";
+import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -456,6 +459,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _config: HeliosConfig;
   private _nodeEngine!: NodeEngineImpl;
   private readonly _mapService: MapContainerService;
+  private readonly _mapEventJournal = new MapEventJournal();
   private readonly _mapInterceptorSupport = new MapInterceptorSupport();
   private readonly _lifecycleService: HeliosLifecycleService;
   private _cluster: Cluster;
@@ -2447,12 +2451,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // ── Map adapter ───────────────────────────────────────────────────────
     const mapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').MapServiceOperations = {
       put: async (name, key, value, _threadId, ttl) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.get(key);
         const interceptedValue = this._mapInterceptorSupport.interceptPut(name, previous, value) as typeof value;
         const storedPrevious = store.put(key, interceptedValue, Number(ttl), -1);
         this._publishClientMapEvent(name, key, interceptedValue, storedPrevious, storedPrevious === null ? 1 : 4);
         this._mapInterceptorSupport.interceptAfterPut(name, interceptedValue);
+        this._mapEventJournal.writeAddEvent(name, partitionId, key, storedPrevious, interceptedValue);
         return storedPrevious;
       },
       get: async (name, key, _threadId) => {
@@ -2463,11 +2469,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return result;
       },
       remove: async (name, key, _threadId) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.remove(key);
         const intercepted = this._mapInterceptorSupport.interceptRemove(name, previous) as typeof previous;
         if (previous !== null) {
           this._publishClientMapEvent(name, key, null, intercepted, 2);
+          this._mapEventJournal.writeRemoveEvent(name, partitionId, key, intercepted);
         }
         this._mapInterceptorSupport.interceptAfterRemove(name, intercepted);
         return intercepted;
@@ -2511,9 +2519,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
         }
       },
       set: async (name, key, value, _threadId, ttl) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.put(key, value, Number(ttl), -1);
         this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
+        this._mapEventJournal.writeAddEvent(name, partitionId, key, previous, value);
       },
       getAll: async (name, keys) => {
         const result: Array<[import('@zenystx/helios-core/internal/serialization/Data').Data, import('@zenystx/helios-core/internal/serialization/Data').Data]> = [];
@@ -2570,11 +2580,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return store.getEntryView(key);
       },
       evict: async (name, key, _threadId) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.get(key);
         const evicted = store.evict(key);
         if (evicted) {
           this._publishClientMapEvent(name, key, null, previous, 8);
+          this._mapEventJournal.writeEvictEvent(name, partitionId, key, previous);
         }
         return evicted;
       },
@@ -2926,6 +2938,14 @@ export class HeliosInstanceImpl implements HeliosInstance {
             return candidateValue !== null && predicateMatches(predicate, eventKey, candidateValue);
           },
         );
+      },
+      eventJournalSubscribe: async (name, partitionId) => {
+        const oldest = this._mapEventJournal.getHeadSequence(name, partitionId);
+        const newest = this._mapEventJournal.getTailSequence(name, partitionId);
+        return { oldest, newest };
+      },
+      eventJournalRead: async (name, partitionId, startSequence, minCount, maxCount) => {
+        return this._mapEventJournal.readMany(name, partitionId, startSequence, minCount, maxCount);
       },
     };
 
@@ -3379,14 +3399,17 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       add: async (name, overflowPolicy, value) => {
         this._ensureRingbufferService();
+        this._wireRingbufferStore(name);
         return BigInt(await this._distributedRingbufferService!.add(name, value, overflowPolicy));
       },
       addAll: async (name, values, overflowPolicy) => {
         this._ensureRingbufferService();
+        this._wireRingbufferStore(name);
         return BigInt(await this._distributedRingbufferService!.addAll(name, values, overflowPolicy));
       },
       readOne: async (name, sequence) => {
         this._ensureRingbufferService();
+        this._wireRingbufferStore(name);
         return this._distributedRingbufferService!.readOne(name, Number(sequence));
       },
       readMany: async (name, startSequence, minCount, maxCount, filter) => {
@@ -4658,6 +4681,60 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._clusterCoordinator,
       );
     }
+  }
+
+  private readonly _wiredQueueStores = new Set<string>();
+
+  private _wireQueueStore(name: string): void {
+    if (this._wiredQueueStores.has(name)) return;
+    this._wiredQueueStores.add(name);
+
+    const queueConfig = this._config.getQueueConfig(name);
+    const storeConfig = queueConfig.getQueueStoreConfig();
+    if (storeConfig === null || !storeConfig.isEnabled()) return;
+
+    const rawStore = storeConfig.getStoreImplementation() ?? (() => {
+      const factory = storeConfig.getFactoryImplementation();
+      if (factory !== null) {
+        return factory.newQueueStore(name, storeConfig.getProperties());
+      }
+      return null;
+    })();
+
+    if (rawStore === null) return;
+
+    const wrapper = new QueueStoreWrapper(rawStore as any);
+    this._distributedQueueService!.registerStore(name, wrapper as any);
+    void this._distributedQueueService!.loadFromStore(name);
+  }
+
+  private readonly _wiredRingbufferStores = new Set<string>();
+
+  private _wireRingbufferStore(name: string): void {
+    if (this._wiredRingbufferStores.has(name)) return;
+    this._wiredRingbufferStores.add(name);
+
+    const rbConfig = this._config.getRingbufferConfig(name);
+    const storeConfig = rbConfig.getRingbufferStoreConfig();
+    if (storeConfig === null || !storeConfig.isEnabled()) return;
+
+    const rawStore = storeConfig.getStoreImplementation() ?? (() => {
+      const factory = storeConfig.getFactoryImplementation();
+      if (factory !== null) {
+        return factory.newRingbufferStore(name, storeConfig.getProperties());
+      }
+      return null;
+    })();
+
+    if (rawStore === null) return;
+
+    const rbService = this._ringbufferService;
+    const partitionId = rbService.getRingbufferPartitionId(name);
+    const ns = RingbufferService.getRingbufferNamespace(name);
+    const container = rbService.getOrCreateContainer(partitionId, ns, rbConfig);
+    const wrapper = new RingbufferStoreWrapper(rawStore as any);
+    container.setStoreWrapper(wrapper as any);
+    void container.loadFromStore();
   }
 
   private _ensureTopicService(): void {
@@ -5943,6 +6020,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (msCfg.isEnabled()) {
         this._mapService.registerMapStoreConfig(mapName, msCfg);
       }
+      const ejCfg = mapConfig.getEventJournalConfig();
+      if (ejCfg.isEnabled()) {
+        this._mapEventJournal.registerConfig(mapName, ejCfg);
+      }
     }
   }
 
@@ -5994,6 +6075,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   getQueue<E>(name: string): IQueue<E> {
     let queue = this._queues.get(name);
     if (!queue) {
+      if (this._distributedQueueService !== null) {
+        this._wireQueueStore(name);
+      }
       queue =
         this._distributedQueueService === null
           ? new QueueImpl<unknown>(0, undefined, name)

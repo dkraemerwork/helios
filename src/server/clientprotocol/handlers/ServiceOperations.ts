@@ -16,6 +16,7 @@
 
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import type { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
+import type { EventJournalEvent } from '@zenystx/helios-core/internal/journal/EventJournalEvent.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 
 // ── Map ───────────────────────────────────────────────────────────────────────
@@ -75,6 +76,8 @@ export interface MapServiceOperations {
     addEntryListenerToKey(name: string, key: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
     addEntryListenerWithPredicate(name: string, predicate: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
     addEntryListenerToKeyWithPredicate(name: string, key: Data, predicate: Data, includeValue: boolean, listenerFlags: number, localOnly: boolean, correlationId: number, session: ClientSession): Promise<string>;
+    eventJournalSubscribe(name: string, partitionId: number): Promise<{ oldest: bigint; newest: bigint }>;
+    eventJournalRead(name: string, partitionId: number, startSequence: bigint, minCount: number, maxCount: number): Promise<EventJournalEvent[]>;
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────

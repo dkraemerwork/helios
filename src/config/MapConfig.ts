@@ -1,5 +1,6 @@
 import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig.js';
 import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy.js';
+import { EventJournalConfig } from '@zenystx/helios-core/config/EventJournalConfig.js';
 import {
     DEFAULT_MAP_ASYNC_BACKUP_COUNT,
     DEFAULT_MAP_BACKUP_COUNT,
@@ -39,6 +40,7 @@ export class MapConfig {
     private _evictionConfig: EvictionConfig;
     private _mapStoreConfig: MapStoreConfig = new MapStoreConfig();
     private _nearCacheConfig: NearCacheConfig | null = null;
+    private _eventJournalConfig: EventJournalConfig = new EventJournalConfig();
     private _statisticsEnabled: boolean = MapConfig.DEFAULT_STATISTICS_ENABLED;
     private _perEntryStatsEnabled: boolean = MapConfig.DEFAULT_ENTRY_STATS_ENABLED;
     private _readBackupData: boolean = false;
@@ -147,6 +149,15 @@ export class MapConfig {
 
     setNearCacheConfig(nearCacheConfig: NearCacheConfig): this {
         this._nearCacheConfig = nearCacheConfig;
+        return this;
+    }
+
+    getEventJournalConfig(): EventJournalConfig {
+        return this._eventJournalConfig;
+    }
+
+    setEventJournalConfig(config: EventJournalConfig): this {
+        this._eventJournalConfig = config;
         return this;
     }
 

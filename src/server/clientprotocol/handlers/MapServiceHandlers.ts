@@ -196,6 +196,12 @@ const MAP_ENTRY_LISTENER_TO_KEY_WITH_PREDICATE_REQUEST_TYPE = 0x011600;
 const MAP_ENTRY_LISTENER_WITH_PREDICATE_REQUEST_TYPE        = 0x011700;
 const MAP_ENTRY_LISTENER_TO_KEY_REQUEST_TYPE                = 0x011800;
 
+// Event Journal opcodes
+const MAP_EVENT_JOURNAL_SUBSCRIBE_REQUEST_TYPE  = 0x014100;
+const MAP_EVENT_JOURNAL_SUBSCRIBE_RESPONSE_TYPE = 0x014101;
+const MAP_EVENT_JOURNAL_READ_REQUEST_TYPE       = 0x014200;
+const MAP_EVENT_JOURNAL_READ_RESPONSE_TYPE      = 0x014201;
+
 // Standard response header (messageType + correlationId + backupAcks) = 13 bytes
 const RESPONSE_HEADER_SIZE = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES; // 13
 
@@ -879,6 +885,55 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
             ? await operations.entriesWithPredicate(name, predicateData)
             : await operations.entrySet(name);
         return _encodePagingPredicateEntriesResponse(MAP_ENTRIES_WITH_PAGING_PREDICATE_RESPONSE_TYPE, entries);
+    });
+
+    // Map.EventJournalSubscribe (0x014100)
+    // Request: name (string), partitionId (int)
+    // Response: oldestSequence (long), newestSequence (long)
+    dispatcher.register(MAP_EVENT_JOURNAL_SUBSCRIBE_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const partitionId = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES);
+        const name = StringCodec.decode(iter);
+        const { oldest, newest } = await operations.eventJournalSubscribe(name, partitionId);
+        const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        buf.fill(0);
+        buf.writeUInt32LE(MAP_EVENT_JOURNAL_SUBSCRIBE_RESPONSE_TYPE >>> 0, 0);
+        buf.writeBigInt64LE(oldest, RESPONSE_HEADER_SIZE);
+        buf.writeBigInt64LE(newest, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES);
+        const response = CM.createForEncode();
+        response.add(new CM.Frame(buf, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+        response.setFinal();
+        return response;
+    });
+
+    // Map.EventJournalRead (0x014200)
+    // Request: startSequence (long), minCount (int), maxCount (int), partitionId (int), name (string), predicate (Data nullable)
+    // Response: readCount (int), items (list of Data)
+    dispatcher.register(MAP_EVENT_JOURNAL_READ_REQUEST_TYPE, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const startSequence = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES);
+        const minCount = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        const maxCount = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+        const partitionId = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET);
+        const name = StringCodec.decode(iter);
+        const events = await operations.eventJournalRead(name, partitionId, startSequence, minCount, maxCount);
+        // Encode response: readCount (int in initial frame) + items (list of Data, each event key serialized)
+        const headerBuf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES);
+        headerBuf.fill(0);
+        headerBuf.writeUInt32LE(MAP_EVENT_JOURNAL_READ_RESPONSE_TYPE >>> 0, 0);
+        headerBuf.writeInt32LE(events.length, RESPONSE_HEADER_SIZE);
+        const response = CM.createForEncode();
+        response.add(new CM.Frame(headerBuf, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+        // Encode items as list of Data (we encode the key for each event)
+        response.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+        for (const event of events) {
+            DataCodec.encode(response, event.key);
+        }
+        response.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+        response.setFinal();
+        return response;
     });
 }
 
