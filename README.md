@@ -2,9 +2,9 @@
 
 **Helios** is a distributed in-memory data platform written in TypeScript for [Bun](https://bun.sh). It brings Hazelcast-style distributed data structures, clustering, and stream processing to the JavaScript ecosystem — no JVM required.
 
-- **Comprehensive automated test suite** — 1680 core tests, 316 NestJS tests, 435 Blitz tests
+- **5400+ automated tests** — 32,000+ assertions across core, NestJS, and Blitz
 - **Production serialization** — full binary wire format compatible with Hazelcast clients
-- **Multi-node TCP clustering** — partition replication, anti-entropy repair, vector clock conflict resolution
+- **Multi-node TCP clustering** — partition replication, anti-entropy repair, split-brain merge, vector clock conflict resolution
 - **300+ client protocol opcodes** — direct interop with `hazelcast-client@5.6.0`
 - **Embedded NATS** — stream processing without a separate NATS server
 
@@ -142,15 +142,165 @@ const client = await Client.newHazelcastClient({
 | Structure              | Description                                                                                                     |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
 | **IMap**               | Distributed key-value map — CRUD, putIfAbsent, getAll/putAll, entry processors, predicate queries, aggregations |
-| **IQueue**             | Distributed FIFO queue with blocking offer/poll                                                                 |
+| **IQueue**             | Distributed FIFO queue with blocking offer/poll and optional QueueStore persistence                             |
 | **ISet**               | Distributed set — add, remove, contains, iteration                                                              |
 | **IList**              | Distributed list with index-based access                                                                        |
 | **ITopic**             | Classic pub/sub messaging with async message listeners                                                          |
 | **ReliableTopic**      | Ringbuffer-backed pub/sub with owner-routed publish acks, overload policies, and bounded retention              |
 | **MultiMap**           | One key, many values — add/get/remove per value                                                                 |
 | **ReplicatedMap**      | Fully replicated map on every node — vector clock conflict resolution                                           |
-| **Ringbuffer**         | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies                          |
+| **Ringbuffer**         | Fixed-capacity circular buffer — add, readOne, readMany, TTL expiry, overflow policies, optional RingbufferStore |
 | **Distributed Cache**  | JSR-107-style cache with eviction policies and deferred values                                                  |
+
+### IMap Advanced Features
+
+| Feature                | Description                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| **MapInterceptor**     | Synchronous CRUD interception — intercept/modify values before put, get, and remove         |
+| **Event Journal**      | Per-partition CDC-style event log — subscribe and replay put/remove/evict events             |
+| **QueryCache**         | Continuous query — local materialized view kept in sync via map entry events                 |
+| **Projection**         | Extract and transform fields from map entries without transferring full values               |
+| **PartitionPredicate** | Scope queries to specific partitions for targeted, efficient reads                           |
+
+#### MapInterceptor
+
+Intercept and modify values synchronously during map operations:
+
+```typescript
+import { MapInterceptor } from "@zenystx/helios-core";
+
+const interceptor: MapInterceptor = {
+  interceptPut(oldValue, newValue) {
+    return transform(newValue); // modified value gets stored
+  },
+  interceptGet(value) { return value; },
+  interceptRemove(removedValue) { return removedValue; },
+  afterPut(value) {},
+  afterGet(value) {},
+  afterRemove(value) {},
+};
+```
+
+#### Event Journal
+
+Subscribe to a CDC-style event stream on any map:
+
+```typescript
+const map = hz.getMap<string, number>("orders");
+
+// Events are recorded automatically on put/set/remove/evict
+await map.put("order-1", 100);
+await map.remove("order-1");
+
+// Replay from a sequence number
+const events = journal.readMany(mapName, startSequence, 100);
+```
+
+#### QueryCache (Continuous Query)
+
+Maintain a local materialized view that stays in sync with the map:
+
+```typescript
+const map = hz.getMap<string, Employee>("employees");
+const cache = map.getQueryCache("senior-engineers", {
+  predicate: Predicates.and(
+    Predicates.equal("dept", "Engineering"),
+    Predicates.greaterThan("yearsExp", 5),
+  ),
+  includeValue: true,
+});
+
+// Cache is populated and updated automatically via events
+console.log(cache.size());
+console.log(cache.get("alice"));
+```
+
+#### Projection
+
+Extract specific fields without transferring full entries:
+
+```typescript
+import { Projections } from "@zenystx/helios-core";
+
+const map = hz.getMap<string, Employee>("employees");
+
+// Single attribute extraction
+const names = map.project(Projections.singleAttribute("name"));
+
+// Multi-attribute extraction
+const nameAndDept = map.project(Projections.multiAttribute("name", "dept"));
+
+// With predicate filter
+const seniorNames = map.project(
+  Projections.singleAttribute("name"),
+  Predicates.greaterThan("age", 30),
+);
+```
+
+#### PartitionPredicate
+
+Scope queries to specific partitions for efficient reads:
+
+```typescript
+import { Predicates } from "@zenystx/helios-core";
+
+// Query only the partition that owns key "alice"
+const results = map.values(
+  Predicates.partitionPredicate("alice", Predicates.greaterThan("score", 50)),
+);
+
+// Query multiple specific partitions
+const multi = map.values(
+  Predicates.multiPartitionPredicate(
+    ["alice", "bob"],
+    Predicates.equal("active", true),
+  ),
+);
+```
+
+### Persistence
+
+| Feature                | Description                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| **Hot Restart**        | WAL-based disk persistence — survives process restarts with automatic recovery   |
+| **QueueStore**         | Write-through persistence SPI for IQueue — store/load/delete on every operation  |
+| **RingbufferStore**    | Write-through persistence SPI for Ringbuffer — store/load with sequence tracking |
+
+#### Hot Restart (Disk Persistence)
+
+Enable WAL-based persistence for map data that survives process restarts:
+
+```typescript
+import { Helios, HeliosConfig, PersistenceConfig } from "@zenystx/helios-core";
+
+const cfg = new HeliosConfig();
+const persistence = new PersistenceConfig();
+persistence.setEnabled(true);
+persistence.setBaseDir("/var/helios/data");
+cfg.setPersistenceConfig(persistence);
+
+const hz = Helios.newInstance(cfg);
+// All map mutations are now written to a WAL on disk
+// On restart, data is automatically recovered from the WAL + checkpoints
+```
+
+#### QueueStore
+
+Persist queue items to an external store:
+
+```typescript
+import { QueueStore } from "@zenystx/helios-core";
+
+const myQueueStore: QueueStore<string> = {
+  store(key, value) { /* persist item */ },
+  storeAll(map) { /* batch persist */ },
+  load(key) { return /* loaded item */; },
+  loadAll(keys) { return /* loaded items */; },
+  loadAllKeys() { return /* all stored keys */; },
+  delete(key) { /* remove item */ },
+  deleteAll(keys) { /* batch remove */ },
+};
+```
 
 ### Compute
 
@@ -162,7 +312,7 @@ const client = await Client.newHazelcastClient({
 
 ### CP Subsystem
 
-Single-node CP data structures with session management. Multi-node Raft consensus is deferred to v2.
+Single-node CP data structures with session management and linearizable guarantees via Raft.
 
 | Service              | Description                                                                  |
 | -------------------- | ---------------------------------------------------------------------------- |
@@ -171,6 +321,7 @@ Single-node CP data structures with session management. Multi-node Raft consensu
 | **FencedLock**       | Reentrant distributed lock with fencing tokens, FIFO waiter queuing          |
 | **Semaphore**        | Distributed counting semaphore — acquire, release, drain, session-aware      |
 | **CountDownLatch**   | Distributed latch — trySetCount, countDown, await with timeout               |
+| **CPMap**            | Linearizable key-value store — put, get, remove, compareAndSet via Raft      |
 
 ### SQL
 
@@ -206,7 +357,7 @@ const top = map.values(
 const aNames = map.values(Predicates.like("name", "A%"));
 ```
 
-Supported predicates: `equal`, `notEqual`, `greaterThan`, `greaterEqual`, `lessThan`, `lessEqual`, `between`, `like`, `ilike`, `regex`, `in`, `and`, `or`, `not`.
+Supported predicates: `equal`, `notEqual`, `greaterThan`, `greaterEqual`, `lessThan`, `lessEqual`, `between`, `like`, `ilike`, `regex`, `in`, `and`, `or`, `not`, `partitionPredicate`, `multiPartitionPredicate`.
 
 Aggregations: `count`, `sum`, `avg`, `min`, `max`, `distinct` — all with BigDecimal / BigInteger / Double / Integer / Long variants.
 
@@ -264,15 +415,17 @@ cfg.getSerializationConfig().addCustomSerializer(MySerializer);
 
 ### Clustering
 
-| Feature                     | Description                                                      |
-| --------------------------- | ---------------------------------------------------------------- |
-| **TCP Peer-to-Peer**        | Nodes discover and connect via configured member addresses       |
-| **Multicast Discovery**     | UDP multicast auto-discovery for LAN deployments                 |
-| **Partition Replication**   | Data split across 271 partitions; backups replicated to peers    |
-| **Partition Migration**     | Live data migration when members join or leave                   |
-| **Anti-Entropy Repair**     | Background reconciliation detects and heals partition divergence |
-| **Vector Clock Resolution** | ReplicatedMap conflict resolution on concurrent writes           |
-| **Cluster Events**          | Member join/leave lifecycle events                               |
+| Feature                       | Description                                                           |
+| ----------------------------- | --------------------------------------------------------------------- |
+| **TCP Peer-to-Peer**          | Nodes discover and connect via configured member addresses            |
+| **Multicast Discovery**       | UDP multicast auto-discovery for LAN deployments                      |
+| **Partition Replication**     | Data split across 271 partitions; backups replicated to peers         |
+| **Partition Migration**       | Live data migration when members join or leave                        |
+| **Anti-Entropy Repair**       | Background reconciliation detects and heals partition divergence      |
+| **Split-Brain Detection**     | Quorum-based detection with automatic merge healing                   |
+| **Split-Brain Merge Policies**| 8 policies — PassThrough, PutIfAbsent, HigherHits, LatestUpdate, LatestAccess, ExpirationTime, Discard, HyperLogLog |
+| **Vector Clock Resolution**   | ReplicatedMap conflict resolution on concurrent writes                |
+| **Cluster Events**            | Member join/leave lifecycle events                                    |
 
 ### REST API
 
@@ -307,7 +460,7 @@ server.start();
 | **Diagnostics**       | SlowOperationDetector, StoreLatencyTracker, SystemEventLog                           |
 | **Production Logger** | Level-filtered logger with timestamps — replaces test-support ConsoleLogger           |
 | **Security**          | Password/token credentials, permission collection with wildcard matching             |
-| **Config Model**      | Typed config — MapConfig, NearCacheConfig, NetworkConfig, JoinConfig, EvictionConfig |
+| **Config Model**      | Typed config — MapConfig, NearCacheConfig, NetworkConfig, JoinConfig, EvictionConfig, PersistenceConfig |
 
 ---
 
@@ -467,15 +620,16 @@ All five implement the same `MapStore` interface — swap backends without chang
 git clone <repo-url>
 cd helios
 bun install
-bun test              # run the full test suite
+bun test              # run the full test suite (~5400 tests)
+bun run build         # compile to dist/
 bun run tsc --noEmit  # type-check only
 ```
 
 ### Per-package tests
 
 ```bash
-bun test packages/nestjs/   # 316 tests
-bun test packages/blitz/    # 435 tests
+bun test packages/nestjs/   # NestJS integration tests
+bun test packages/blitz/    # Blitz stream processing tests
 ```
 
 ---
@@ -485,21 +639,28 @@ bun test packages/blitz/    # 435 tests
 ```
 helios/
 ├── src/                    # @zenystx/helios-core source
-│   ├── internal/           # Serialization, NIO, partitioning, near-cache internals
+│   ├── internal/           # Serialization, NIO, partitioning, near-cache, event journal
 │   ├── cluster/            # TCP clustering, multicast discovery, member management
-│   ├── map/ collection/ topic/ # Distributed data structure implementations (IMap, IQueue, IList, ISet)
+│   ├── map/                # IMap — CRUD, interceptors, query cache, projections
+│   ├── collection/         # IQueue, IList, ISet with optional QueueStore persistence
+│   ├── topic/              # ITopic, ReliableTopic
+│   ├── ringbuffer/         # Ringbuffer with optional RingbufferStore persistence
 │   ├── executor/           # Distributed executor service (IExecutorService)
 │   ├── scheduledexecutor/  # Scheduled executor with crash recovery
-│   ├── cp/                 # CP Subsystem — AtomicLong, FencedLock, Semaphore, etc.
+│   ├── cp/                 # CP Subsystem — AtomicLong, FencedLock, Semaphore, CPMap
+│   ├── spi/merge/          # Split-brain merge policies (8 implementations)
+│   ├── persistence/        # Hot Restart — WAL, checkpoints, recovery
+│   ├── projection/         # Projection SPI — identity, single/multi-attribute
+│   ├── query/              # Predicate engine — includes PartitionPredicate
 │   ├── sql/                # SQL engine for IMap queries
 │   ├── rest/               # Built-in REST API server
 │   ├── logging/            # Production logger with level filtering
 │   ├── diagnostics/        # SlowOperationDetector, latency tracking, event log
 │   └── instance/           # HeliosInstance lifecycle
-├── test/                   # Core tests (1680 tests)
+├── test/                   # Core tests
 ├── packages/
-│   ├── nestjs/             # @zenystx/helios-nestjs — NestJS integration (316 tests)
-│   ├── blitz/              # @zenystx/helios-blitz — stream processing (435 tests)
+│   ├── nestjs/             # @zenystx/helios-nestjs — NestJS integration
+│   ├── blitz/              # @zenystx/helios-blitz — stream processing
 │   ├── management-center/  # @zenystx/helios-management-center — cluster monitoring
 │   ├── s3/                 # @zenystx/helios-s3 — S3 MapStore
 │   ├── mongodb/            # @zenystx/helios-mongodb — MongoDB MapStore
@@ -509,7 +670,6 @@ helios/
 ├── examples/
 │   └── nestjs-app/         # NestJS demo application
 ├── scripts/                # Build tooling, Java test converter
-├── plans/                  # Implementation plans and architecture docs
 └── helios-server.ts        # Standalone server entry point
 ```
 
@@ -526,17 +686,19 @@ helios/
 
 ---
 
-## Roadmap
+## Hazelcast Feature Parity
 
-### Deferred to v2
+Helios targets full feature parity with Hazelcast Java (open-source edition). The following are intentionally out of scope:
 
-| Item                              | Reason                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **CP Subsystem (distributed Raft)** | CP atomics are fully implemented (single-node Raft); only multi-node Raft consensus is deferred |
-
-### Not Porting
-
-OSGi, WAN replication, vector search, data connections, audit log, Hot Restart (enterprise), HD Memory (enterprise).
+| Item                    | Reason                                                           |
+| ----------------------- | ---------------------------------------------------------------- |
+| **Blitz (Jet)**         | Replaced by `@zenystx/helios-blitz` with NATS JetStream backend |
+| **JCache (JSR-107)**    | Java-specific API — Helios provides its own Cache API            |
+| **Dynamic Config**      | Deferred — config is set at startup                              |
+| **Vector Search**       | Deferred                                                         |
+| **Multi-node Raft**     | CP atomics are fully implemented; multi-node Raft consensus is deferred to v2 |
+| **OSGi**                | Java-specific module system                                      |
+| **WAN Replication**     | Enterprise feature                                               |
 
 ---
 
