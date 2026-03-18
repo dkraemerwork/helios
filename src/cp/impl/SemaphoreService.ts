@@ -115,7 +115,7 @@ export class SemaphoreService {
   // ── Release ──────────────────────────────────────────────────────────────
 
   /**
-   * Release `permits` permits.
+   * Release `permits` permits atomically via SEM_RELEASE Raft command.
    * @param sessionId If provided, decrements that session's tracked permit count.
    */
   async release(
@@ -125,27 +125,16 @@ export class SemaphoreService {
     invocationUuid?: string,
   ): Promise<void> {
     if (permits <= 0) throw new Error('Permits must be positive');
-    const state = await this._readState(name);
-    if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
-      return;
-    }
-    if (sessionId !== null) {
-      const held = state.sessionPermits[sessionId] ?? 0;
-      if (held < permits) {
-        throw new Error(
-          `Session ${sessionId} does not hold enough permits: held=${held}, releasing=${permits}`,
-        );
-      }
-      state.sessionPermits[sessionId] = held - permits;
-      if (state.sessionPermits[sessionId] === 0) {
-        delete state.sessionPermits[sessionId];
-      }
-    }
-    state.available += permits;
-    if (invocationUuid !== undefined) {
-      state.invocationResults[invocationUuid] = true;
-    }
-    await this._writeState(name, state);
+    await this._cp.executeRaftCommand(name, {
+      type: 'SEM_RELEASE',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: {
+        permits,
+        sessionId: sessionId !== null ? sessionId : undefined,
+        invocationUuid,
+      },
+    });
     this._drainWaitQueue(name);
   }
 
@@ -156,62 +145,57 @@ export class SemaphoreService {
   }
 
   /**
-   * Drain all available permits, returning the number drained.
+   * Drain all available permits atomically via SEM_DRAIN Raft command,
+   * returning the number drained.
    */
   async drain(name: string, sessionId: string | null = null, invocationUuid?: string): Promise<number> {
-    const state = await this._readState(name);
-    if (invocationUuid !== undefined) {
-      const previous = state.invocationResults[invocationUuid];
-      if (typeof previous === 'number') {
-        return previous;
-      }
-    }
-    const drained = state.available;
-    state.available = 0;
-    if (sessionId !== null && drained > 0) {
-      state.sessionPermits[sessionId] = (state.sessionPermits[sessionId] ?? 0) + drained;
-    }
-    if (invocationUuid !== undefined) {
-      state.invocationResults[invocationUuid] = drained;
-    }
-    await this._writeState(name, state);
-    return drained;
+    const result = await this._cp.executeRaftCommand(name, {
+      type: 'SEM_DRAIN',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: {
+        sessionId: sessionId !== null ? sessionId : undefined,
+        invocationUuid,
+      },
+    });
+    return result as number;
   }
 
   /**
-   * Reduce available permits by `reduction`.
+   * Reduce available permits by `reduction` atomically via SEM_CHANGE Raft command.
    * If available < reduction, available is set to 0 (permits do not go negative).
    */
   async reducePermits(name: string, reduction: number): Promise<void> {
     if (reduction < 0) throw new Error('Reduction must be >= 0');
-    const state = await this._readState(name);
-    state.available = Math.max(0, state.available - reduction);
-    await this._writeState(name, state);
+    await this._cp.executeRaftCommand(name, {
+      type: 'SEM_CHANGE',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: { permits: -reduction },
+    });
   }
 
   /**
-   * Increase available permits by `increase`.
+   * Increase available permits by `increase` atomically via SEM_CHANGE Raft command.
    */
   async increasePermits(name: string, increase: number): Promise<void> {
     if (increase < 0) throw new Error('Increase must be >= 0');
-    const state = await this._readState(name);
-    state.available += increase;
-    await this._writeState(name, state);
+    await this._cp.executeRaftCommand(name, {
+      type: 'SEM_CHANGE',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: { permits: increase },
+    });
     this._drainWaitQueue(name);
   }
 
   async change(name: string, permits: number, invocationUuid?: string): Promise<void> {
-    const state = await this._readState(name);
-    if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
-      return;
-    }
-    state.available = permits >= 0
-      ? state.available + permits
-      : Math.max(0, state.available + permits);
-    if (invocationUuid !== undefined) {
-      state.invocationResults[invocationUuid] = true;
-    }
-    await this._writeState(name, state);
+    await this._cp.executeRaftCommand(name, {
+      type: 'SEM_CHANGE',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: { permits, invocationUuid },
+    });
     if (permits > 0) {
       this._drainWaitQueue(name);
     }
@@ -221,12 +205,15 @@ export class SemaphoreService {
    * Release all permits held by the given session (called on session expiry).
    */
   async releaseSessionPermits(name: string, sessionId: string): Promise<void> {
-    const state = await this._readState(name);
-    const held = state.sessionPermits[sessionId];
-    if (held === undefined || held === 0) return;
-    delete state.sessionPermits[sessionId];
-    state.available += held;
-    await this._writeState(name, state);
+    await this._cp.executeRaftCommand(name, {
+      type: 'SEM_RELEASE',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: {
+        permits: 0,
+        sessionId,
+      },
+    });
     this._drainWaitQueue(name);
   }
 
@@ -254,17 +241,8 @@ export class SemaphoreService {
     return deserializeState(raw);
   }
 
-  private async _writeState(name: string, state: SemaphoreState): Promise<void> {
-    await this._cp.executeRaftCommand(name, {
-      type: 'SEM_SET',
-      groupId: CP_GROUP_DEFAULT,
-      key: stateKey(name),
-      payload: state,
-    });
-  }
-
   /**
-   * Attempt to acquire permits, with optional timeout.
+   * Attempt to acquire permits atomically via SEM_ACQUIRE, with optional timeout.
    * @param timeoutMs undefined = block forever, 0 = non-blocking, >0 = timed wait.
    * Returns true if acquired, false if timeout.
    */
@@ -275,21 +253,18 @@ export class SemaphoreService {
     timeoutMs: number | undefined,
     invocationUuid?: string,
   ): Promise<boolean> {
-    const state = await this._readState(name);
-    if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
-      return true;
-    }
-    if (state.available >= permits) {
-      state.available -= permits;
-      if (sessionId !== null) {
-        state.sessionPermits[sessionId] = (state.sessionPermits[sessionId] ?? 0) + permits;
-      }
-      if (invocationUuid !== undefined) {
-        state.invocationResults[invocationUuid] = true;
-      }
-      await this._writeState(name, state);
-      return true;
-    }
+    const acquired = await this._cp.executeRaftCommand(name, {
+      type: 'SEM_ACQUIRE',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: {
+        permits,
+        sessionId: sessionId !== null ? sessionId : undefined,
+        invocationUuid,
+      },
+    });
+
+    if (acquired === true) return true;
 
     // Non-blocking: return false immediately
     if (timeoutMs === 0) return false;
@@ -338,19 +313,19 @@ export class SemaphoreService {
       let changed = true;
       while (changed) {
         changed = false;
-        const state = await this._readState(name);
         for (let i = 0; i < queue.length; ) {
           const waiter = queue[i]!;
-          if (state.available >= waiter.permits) {
-            state.available -= waiter.permits;
-            if (waiter.sessionId !== null) {
-              state.sessionPermits[waiter.sessionId] =
-                (state.sessionPermits[waiter.sessionId] ?? 0) + waiter.permits;
-            }
-            if (waiter.invocationUuid !== undefined) {
-              state.invocationResults[waiter.invocationUuid] = true;
-            }
-            await this._writeState(name, state);
+          const acquired = await this._cp.executeRaftCommand(name, {
+            type: 'SEM_ACQUIRE',
+            groupId: CP_GROUP_DEFAULT,
+            key: stateKey(name),
+            payload: {
+              permits: waiter.permits,
+              sessionId: waiter.sessionId !== null ? waiter.sessionId : undefined,
+              invocationUuid: waiter.invocationUuid,
+            },
+          });
+          if (acquired === true) {
             if (waiter.timeoutHandle !== null) clearTimeout(waiter.timeoutHandle);
             queue.splice(i, 1);
             waiter.resolve();

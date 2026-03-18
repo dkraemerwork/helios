@@ -74,25 +74,20 @@ export class CountDownLatchService {
   }
 
   /**
-   * Decrement the count of the latch. If count reaches zero, all waiting threads
-   * are released.
+   * Decrement the count of the latch atomically via CDL_COUNT_DOWN Raft command.
+   * If count reaches zero, all waiting threads are released.
    */
   async countDown(name: string, expectedRound?: number, invocationUuid?: string): Promise<void> {
-    const current = await this._readState(name);
-    if (current.count <= 0) return;
-    if (expectedRound !== undefined && current.round !== expectedRound) return;
-    if (invocationUuid !== undefined && current.invocationUuids.includes(invocationUuid)) return;
-
-    const nextState: CountDownLatchState = {
-      count: current.count - 1,
-      round: current.round,
-      invocationUuids: invocationUuid !== undefined
-        ? [...current.invocationUuids, invocationUuid]
-        : current.invocationUuids,
-    };
-
-    await this._writeState(name, nextState);
-    if (nextState.count === 0) {
+    const groupId = this._cp.resolveGroupId(name);
+    const objectName = this._cp.resolveObjectName(name);
+    const result = await this._cp.executeRaftCommand(name, {
+      type: 'CDL_COUNT_DOWN',
+      groupId,
+      key: `cdl:${objectName}`,
+      payload: { expectedRound, invocationUuid },
+    });
+    const newCount = result as number;
+    if (newCount === 0) {
       this._releaseWaiters(name);
     }
   }

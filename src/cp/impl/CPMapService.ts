@@ -106,12 +106,10 @@ export class CPMapService {
   }
 
   async destroy(mapName: string): Promise<void> {
-    const groupId = this._cp.resolveGroupId(mapName);
-    const objectName = this._cp.resolveObjectName(mapName);
     await this._cp.executeRaftCommand(mapName, {
       type: 'CPMAP_DESTROY',
-      groupId,
-      key: `cpmap:${objectName}`,
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(mapName),
       payload: null,
     });
   }

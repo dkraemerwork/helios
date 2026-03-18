@@ -169,6 +169,9 @@ export class CpStateMachine implements RaftStateMachine {
       case 'ATOMIC_LONG_CAS':
         return this._atomicLongCas(command.key, command.payload as { expect: string; update: string });
 
+      case 'ATOMIC_LONG_DESTROY':
+        return this._genericDestroy(command.key);
+
       // ── AtomicReference ──────────────────────────────────────────────────
       case 'ATOMIC_REF_GET':
         return this._atomicRefGet(command.key);
@@ -178,6 +181,9 @@ export class CpStateMachine implements RaftStateMachine {
 
       case 'ATOMIC_REF_CAS':
         return this._atomicRefCas(command.key, command.payload as { expect: string; update: string });
+
+      case 'ATOMIC_REF_DESTROY':
+        return this._genericDestroy(command.key);
 
       // ── CPMap ────────────────────────────────────────────────────────────
       case 'CPMAP_PUT':
@@ -699,6 +705,16 @@ export class CpStateMachine implements RaftStateMachine {
    * Returns true if there was state to remove.
    */
   private _flockDestroy(key: string): boolean {
+    const existed = this._state.has(key);
+    this._state.delete(key);
+    return existed;
+  }
+
+  /**
+   * Generic destroy: delete any keyed state.
+   * Returns true if the key existed.
+   */
+  private _genericDestroy(key: string): boolean {
     const existed = this._state.has(key);
     this._state.delete(key);
     return existed;

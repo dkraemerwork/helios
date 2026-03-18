@@ -139,10 +139,10 @@ export class AtomicLongService {
 
   destroy(name: string): void {
     void this._cp.executeRaftCommand(name, {
-      type: 'ATOMIC_LONG_SET',
+      type: 'ATOMIC_LONG_DESTROY',
       groupId: CP_GROUP_DEFAULT,
       key: stateKey(name),
-      payload: { newValue: '0' },
+      payload: null,
     });
   }
 }

@@ -130,6 +130,11 @@ export class AtomicReferenceService {
   }
 
   destroy(name: string): void {
-    void this.set(name, null);
+    void this._cp.executeRaftCommand(name, {
+      type: 'ATOMIC_REF_DESTROY',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: null,
+    });
   }
 }
