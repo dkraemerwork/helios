@@ -92,6 +92,7 @@ export class CpSubsystemService {
     if (this._multiNodeEnabled && transport && cpMembers && cpConfig) {
       this._messageRouter = new RaftMessageRouter();
       this._transportAdapter = new RaftTransportAdapter(transport);
+      this._messageRouter.setSender(this._transportAdapter);
       this._groupManager = new CpGroupManager(
         { uuid: _localMemberId, address: { host: '127.0.0.1', port: 0 } },
         cpMembers,

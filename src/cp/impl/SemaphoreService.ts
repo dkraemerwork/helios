@@ -363,20 +363,26 @@ export class SemaphoreService {
     })();
   }
 
-  private async _releaseAllSessionPermits(sessionId: string): Promise<void> {
-    for (const groupName of this._cp.listGroups()) {
-      const group = this._cp.getGroup(groupName);
-      if (group === null) {
-        continue;
-      }
-
-      for (const key of group.stateMachine.keys()) {
-        if (!key.startsWith(KEY_PREFIX)) {
-          continue;
+  private _releaseAllSessionPermits(sessionId: string): void {
+    // The CpStateMachine._sessionClose handler already releases all semaphore
+    // permits held by this session in the replicated state machine (both
+    // single-node and multi-node modes). Here we only need to drain any
+    // in-memory waiters that were queued under this session so that pending
+    // acquire promises are rejected cleanly rather than hanging forever.
+    for (const [name, queue] of this._waitQueues) {
+      const remaining: typeof queue = [];
+      for (const waiter of queue) {
+        if (waiter.sessionId === sessionId) {
+          if (waiter.timeoutHandle !== null) clearTimeout(waiter.timeoutHandle);
+          waiter.reject(new Error(`CP session ${sessionId} closed`));
+        } else {
+          remaining.push(waiter);
         }
-
-        const name = key.slice(KEY_PREFIX.length);
-        await this.releaseSessionPermits(name, sessionId);
+      }
+      if (remaining.length === 0) {
+        this._waitQueues.delete(name);
+      } else {
+        this._waitQueues.set(name, remaining);
       }
     }
   }
