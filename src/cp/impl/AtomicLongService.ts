@@ -102,26 +102,37 @@ export class AtomicLongService {
   }
 
   async alter(name: string, fn: (value: bigint) => bigint): Promise<void> {
-    const current = await this.get(name);
-    const newValue = fn(current);
-    await this.set(name, newValue);
+    while (true) {
+      const current = await this.get(name);
+      const newValue = fn(current);
+      const success = await this.compareAndSet(name, current, newValue);
+      if (success) return;
+      // CAS failed — another writer committed first; retry with a fresh read.
+    }
   }
 
   async alterAndGet(name: string, fn: (value: bigint) => bigint): Promise<bigint> {
-    const current = await this.get(name);
-    const newValue = fn(current);
-    await this.set(name, newValue);
-    return newValue;
+    while (true) {
+      const current = await this.get(name);
+      const newValue = fn(current);
+      const success = await this.compareAndSet(name, current, newValue);
+      if (success) return newValue;
+      // CAS failed — another writer committed first; retry with a fresh read.
+    }
   }
 
   async getAndAlter(name: string, fn: (value: bigint) => bigint): Promise<bigint> {
-    const current = await this.get(name);
-    const newValue = fn(current);
-    await this.set(name, newValue);
-    return current;
+    while (true) {
+      const current = await this.get(name);
+      const newValue = fn(current);
+      const success = await this.compareAndSet(name, current, newValue);
+      if (success) return current;
+      // CAS failed — another writer committed first; retry with a fresh read.
+    }
   }
 
   async apply<R>(name: string, fn: (value: bigint) => R): Promise<R> {
+    // apply() is read-only — reads the current value and maps it; no mutation, no CAS needed.
     const current = await this.get(name);
     return fn(current);
   }

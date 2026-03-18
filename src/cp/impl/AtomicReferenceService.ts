@@ -93,26 +93,38 @@ export class AtomicReferenceService {
   }
 
   async alter<T>(name: string, fn: (value: T | null) => T | null): Promise<void> {
-    const current = await this.get<T>(name);
-    const newValue = fn(current);
-    await this.set(name, newValue);
+    while (true) {
+      const current = await this.get<T>(name);
+      const newValue = fn(current);
+      // compareAndSet serialises null as '__NULL__' sentinel, so null values are handled correctly.
+      const success = await this.compareAndSet(name, current, newValue);
+      if (success) return;
+      // CAS failed — another writer committed first; retry with a fresh read.
+    }
   }
 
   async alterAndGet<T>(name: string, fn: (value: T | null) => T | null): Promise<T | null> {
-    const current = await this.get<T>(name);
-    const newValue = fn(current);
-    await this.set(name, newValue);
-    return newValue;
+    while (true) {
+      const current = await this.get<T>(name);
+      const newValue = fn(current);
+      const success = await this.compareAndSet(name, current, newValue);
+      if (success) return newValue;
+      // CAS failed — another writer committed first; retry with a fresh read.
+    }
   }
 
   async getAndAlter<T>(name: string, fn: (value: T | null) => T | null): Promise<T | null> {
-    const current = await this.get<T>(name);
-    const newValue = fn(current);
-    await this.set(name, newValue);
-    return current;
+    while (true) {
+      const current = await this.get<T>(name);
+      const newValue = fn(current);
+      const success = await this.compareAndSet(name, current, newValue);
+      if (success) return current;
+      // CAS failed — another writer committed first; retry with a fresh read.
+    }
   }
 
   async apply<T, R>(name: string, fn: (value: T | null) => R): Promise<R> {
+    // apply() is read-only — reads the current value and maps it; no mutation, no CAS needed.
     const current = await this.get<T>(name);
     return fn(current);
   }

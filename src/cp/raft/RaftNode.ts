@@ -809,6 +809,17 @@ export class RaftNode {
     // We can't directly call propose() here because we may not want the
     // NOP to flow through the public API (no-op is internal). We append
     // it directly.
+    //
+    // Race-condition analysis: although appendEntries() is declared async,
+    // InMemoryRaftStateStore pushes to _log synchronously — the async
+    // signature is only a contractual requirement of RaftStateStore. The
+    // array mutation completes before the returned Promise is even
+    // constructed, so lastLogIndex() already reflects nopIndex by the time
+    // the next line executes.  A concurrent propose() call in the same
+    // microtask tick will therefore read nopIndex + 1 as its nextIndex and
+    // will not collide with the NOP entry.  Durable (disk-backed) store
+    // implementations must uphold the same invariant: the entry must be
+    // visible via lastLogIndex() before the Promise resolves.
     const nopIndex = this._store.lastLogIndex() + 1;
     const nopEntry: RaftLogEntry = {
       term: this._currentTerm,

@@ -55,6 +55,15 @@ export class SingleNodeRaftGroup {
 
   /**
    * Propose a command. In single-node mode this immediately appends and commits.
+   *
+   * Backward-compat note: this method is only called via the legacy
+   * CpSubsystemService.executeCommand() path. The primary execution path
+   * for all CP data structures goes through CpSubsystemService._executeSingleNode(),
+   * which bypasses this method and applies the command directly to the
+   * CpStateMachine. The return value here (stateMachine.get(command.key))
+   * reflects the post-apply state only if setState() has been called back
+   * by _executeSingleNode(); callers of this backward-compat path must not
+   * rely on the returned value.
    */
   async propose(command: CpCommand): Promise<unknown> {
     if (!this.isLeader()) {
@@ -70,6 +79,7 @@ export class SingleNodeRaftGroup {
     this._commitIndex = entry.index;
     this._apply(entry);
 
+    // Return value is unreliable for external callers — see note above.
     return this._stateMachine.get(command.key);
   }
 

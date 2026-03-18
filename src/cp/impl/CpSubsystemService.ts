@@ -425,7 +425,4 @@ export class CpSubsystemService {
     return result;
   }
 
-  private _singleNodeRead(groupId: string, key: string): unknown {
-    return this._singleNodeStateMachine.getState().get(key) ?? this.readState(groupId, key);
-  }
 }
