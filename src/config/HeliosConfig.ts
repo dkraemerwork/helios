@@ -21,6 +21,7 @@ import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig.js
 import { HazelcastSerializationConfig } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService.js';
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry.js";
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory.js";
+import { CPSubsystemConfig } from '@zenystx/helios-core/config/CPSubsystemConfig.js';
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;
@@ -40,6 +41,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _serializationConfig = new HazelcastSerializationConfig();
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
   private _configOrigin: string | null = null;
+  private _cpSubsystemConfig = new CPSubsystemConfig();
 
   constructor(name?: string) {
     this._name = name ?? "helios";
@@ -113,6 +115,18 @@ export class HeliosConfig implements InstanceConfig {
 
   setPersistenceConfig(config: PersistenceConfig): this {
     this._persistenceConfig = config;
+    return this;
+  }
+
+  /**
+   * Returns the CP Subsystem configuration.
+   * CP Subsystem provides linearizable distributed data structures
+   * using the Raft consensus algorithm.
+   */
+  getCpSubsystemConfig(): CPSubsystemConfig { return this._cpSubsystemConfig; }
+
+  setCpSubsystemConfig(config: CPSubsystemConfig): this {
+    this._cpSubsystemConfig = config;
     return this;
   }
 
