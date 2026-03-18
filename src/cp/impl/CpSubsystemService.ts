@@ -90,11 +90,15 @@ export class CpSubsystemService {
     this._multiNodeEnabled = cpConfig?.isEnabled() ?? false;
 
     if (this._multiNodeEnabled && transport && cpMembers && cpConfig) {
+      // Find our own address from the CP members list instead of hardcoding
+      const localMember = cpMembers.find(m => m.uuid === _localMemberId);
+      const localAddress = localMember?.address ?? { host: '127.0.0.1', port: 0 };
+
       this._messageRouter = new RaftMessageRouter();
       this._transportAdapter = new RaftTransportAdapter(transport);
       this._messageRouter.setSender(this._transportAdapter);
       this._groupManager = new CpGroupManager(
-        { uuid: _localMemberId, address: { host: '127.0.0.1', port: 0 } },
+        { uuid: _localMemberId, address: localAddress },
         cpMembers,
         cpConfig,
         this._transportAdapter,
@@ -292,16 +296,28 @@ export class CpSubsystemService {
 
   // ── Session management ───────────────────────────────────────────────────────
 
-  createSession(memberId: string): CpSession {
-    const sessionId = String(this._nextSessionId++);
+  async createSession(memberId: string): Promise<CpSession> {
     const now = Date.now();
-    const session: CpSession = {
-      sessionId,
-      memberId,
-      createdAt: now,
-      ttlMs: CpSubsystemService.SESSION_TTL_MS,
-      lastHeartbeatAt: now,
-    };
+    if (this._multiNodeEnabled) {
+      const sessionId = await this.executeRaftCommand('__sessions', {
+        type: 'SESSION_CREATE',
+        groupId: 'METADATA',
+        key: '',
+        payload: { memberId, ttlMs: CpSubsystemService.SESSION_TTL_MS, createdAt: now },
+      }) as string;
+      const session: CpSession = {
+        sessionId,
+        memberId,
+        createdAt: now,
+        ttlMs: CpSubsystemService.SESSION_TTL_MS,
+        lastHeartbeatAt: now,
+      };
+      this._sessions.set(sessionId, session); // local cache for quick lookups
+      return session;
+    }
+    // single-node: existing behavior
+    const sessionId = String(this._nextSessionId++);
+    const session: CpSession = { sessionId, memberId, createdAt: now, ttlMs: CpSubsystemService.SESSION_TTL_MS, lastHeartbeatAt: now };
     this._sessions.set(sessionId, session);
     return session;
   }
@@ -324,18 +340,42 @@ export class CpSubsystemService {
     this._sessionCloseListeners.push(listener);
   }
 
-  heartbeatSession(sessionId: string): boolean {
+  async heartbeatSession(sessionId: string): Promise<boolean> {
+    const now = Date.now();
+    if (this._multiNodeEnabled) {
+      const result = await this.executeRaftCommand('__sessions', {
+        type: 'SESSION_HEARTBEAT',
+        groupId: 'METADATA',
+        key: '',
+        payload: { sessionId, timestamp: now },
+      }) as boolean;
+      // Update local cache
+      const session = this._sessions.get(sessionId);
+      if (session) session.lastHeartbeatAt = now;
+      return result;
+    }
+    // single-node: existing behavior
     const session = this._sessions.get(sessionId);
     if (session === undefined) return false;
-    session.lastHeartbeatAt = Date.now();
+    session.lastHeartbeatAt = now;
     return true;
   }
 
-  closeSession(sessionId: string): boolean {
-    const closed = this._sessions.delete(sessionId);
-    if (closed) {
-      this._notifySessionClosed(sessionId);
+  async closeSession(sessionId: string): Promise<boolean> {
+    if (this._multiNodeEnabled) {
+      const result = await this.executeRaftCommand('__sessions', {
+        type: 'SESSION_CLOSE',
+        groupId: 'METADATA',
+        key: '',
+        payload: { sessionId },
+      }) as boolean;
+      this._sessions.delete(sessionId);
+      if (result) this._notifySessionClosed(sessionId);
+      return result;
     }
+    // single-node: existing behavior
+    const closed = this._sessions.delete(sessionId);
+    if (closed) this._notifySessionClosed(sessionId);
     return closed;
   }
 
@@ -399,8 +439,13 @@ export class CpSubsystemService {
     const now = Date.now();
     for (const [sessionId, session] of this._sessions) {
       if (now - session.lastHeartbeatAt >= session.ttlMs) {
-        this._sessions.delete(sessionId);
-        this._notifySessionClosed(sessionId);
+        if (this._multiNodeEnabled) {
+          // In multi-node mode, route session close through Raft
+          void this.closeSession(sessionId);
+        } else {
+          this._sessions.delete(sessionId);
+          this._notifySessionClosed(sessionId);
+        }
       }
     }
   }

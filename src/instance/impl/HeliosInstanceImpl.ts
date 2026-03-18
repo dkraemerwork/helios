@@ -3877,7 +3877,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const cpSessionOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CpSessionOperations = {
       createSession: async (groupName, endpointName) => {
         this._getOrCreateCpSubsystemService().getOrCreateGroup(groupName);
-        const session = this._getOrCreateCpSubsystemService().createSession(endpointName);
+        const session = await this._getOrCreateCpSubsystemService().createSession(endpointName);
         return {
           sessionId: BigInt(session.sessionId),
           ttlMillis: BigInt(this._getOrCreateCpSubsystemService().getSessionTtlMs()),
@@ -3886,7 +3886,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       closeSession: async (_groupName, sessionId) => this._getOrCreateCpSubsystemService().closeSession(String(sessionId)),
       heartbeatSession: async (_groupName, sessionId) => {
-        this._getOrCreateCpSubsystemService().heartbeatSession(String(sessionId));
+        await this._getOrCreateCpSubsystemService().heartbeatSession(String(sessionId));
       },
       generateThreadId: async (_groupName) => this._getOrCreateCpSubsystemService().createThreadId(),
     };
