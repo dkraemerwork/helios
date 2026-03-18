@@ -70,7 +70,11 @@ export class FencedLockService {
      */
     private readonly _pendingWaiters = new Map<string, PendingWaiter[]>();
 
-    constructor(private readonly _cp: CpSubsystemService) {}
+    constructor(private readonly _cp: CpSubsystemService) {
+        this._cp.onSessionClosed((sessionId) => {
+            this._evictSessionWaiters(BigInt(sessionId));
+        });
+    }
 
     // ── Public API ──────────────────────────────────────────────────────────
 
@@ -382,6 +386,40 @@ export class FencedLockService {
     }
 
     // ── Internal ─────────────────────────────────────────────────────────────
+
+    /**
+     * Called when a CP session expires or is explicitly closed.
+     * Evicts all pending waiters belonging to that session across every lock queue,
+     * cancels their timeouts, and resolves their promises with INVALID_FENCE so that
+     * callers receive a well-defined failure signal rather than leaking forever.
+     */
+    private _evictSessionWaiters(sessionId: bigint): void {
+        for (const [key, queue] of this._pendingWaiters) {
+            const evicted: PendingWaiter[] = [];
+            const remaining: PendingWaiter[] = [];
+
+            for (const waiter of queue) {
+                if (waiter.sessionId === sessionId) {
+                    evicted.push(waiter);
+                } else {
+                    remaining.push(waiter);
+                }
+            }
+
+            for (const waiter of evicted) {
+                if (waiter.timeoutId !== null) {
+                    clearTimeout(waiter.timeoutId);
+                }
+                waiter.complete(INVALID_FENCE);
+            }
+
+            if (remaining.length === 0) {
+                this._pendingWaiters.delete(key);
+            } else {
+                this._pendingWaiters.set(key, remaining);
+            }
+        }
+    }
 
     private _enqueueWaiter(key: string, waiter: PendingWaiter): void {
         const queue = this._pendingWaiters.get(key) ?? [];
