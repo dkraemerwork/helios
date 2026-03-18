@@ -935,7 +935,8 @@ export class RaftNode {
     ) {
       this._commitIndex = newCommit;
       this._applyCommitted();
-      this._maybeTakeSnapshot();
+      // Snapshot is taken inside _applyCommitted() after each entry is applied,
+      // ensuring the state machine is up-to-date before snapshot data is captured.
     }
   }
 
@@ -995,6 +996,10 @@ export class RaftNode {
           this._pendingProposals.delete(index);
           proposal.resolve({ commitIndex: index, result });
         }
+
+        // Followers (and candidates) also need to take snapshots for memory
+        // efficiency — prevents unbounded log growth on non-leader nodes.
+        this._maybeTakeSnapshot();
 
         applyNext(index + 1);
       });
