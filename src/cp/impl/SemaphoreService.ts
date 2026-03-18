@@ -125,7 +125,7 @@ export class SemaphoreService {
     invocationUuid?: string,
   ): Promise<void> {
     if (permits <= 0) throw new Error('Permits must be positive');
-    const state = this._readState(name);
+    const state = await this._readState(name);
     if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
       return;
     }
@@ -152,14 +152,14 @@ export class SemaphoreService {
   // ── Query ────────────────────────────────────────────────────────────────
 
   async availablePermits(name: string): Promise<number> {
-    return this._readState(name).available;
+    return (await this._readState(name)).available;
   }
 
   /**
    * Drain all available permits, returning the number drained.
    */
   async drain(name: string, sessionId: string | null = null, invocationUuid?: string): Promise<number> {
-    const state = this._readState(name);
+    const state = await this._readState(name);
     if (invocationUuid !== undefined) {
       const previous = state.invocationResults[invocationUuid];
       if (typeof previous === 'number') {
@@ -184,7 +184,7 @@ export class SemaphoreService {
    */
   async reducePermits(name: string, reduction: number): Promise<void> {
     if (reduction < 0) throw new Error('Reduction must be >= 0');
-    const state = this._readState(name);
+    const state = await this._readState(name);
     state.available = Math.max(0, state.available - reduction);
     await this._writeState(name, state);
   }
@@ -194,14 +194,14 @@ export class SemaphoreService {
    */
   async increasePermits(name: string, increase: number): Promise<void> {
     if (increase < 0) throw new Error('Increase must be >= 0');
-    const state = this._readState(name);
+    const state = await this._readState(name);
     state.available += increase;
     await this._writeState(name, state);
     this._drainWaitQueue(name);
   }
 
   async change(name: string, permits: number, invocationUuid?: string): Promise<void> {
-    const state = this._readState(name);
+    const state = await this._readState(name);
     if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
       return;
     }
@@ -221,7 +221,7 @@ export class SemaphoreService {
    * Release all permits held by the given session (called on session expiry).
    */
   async releaseSessionPermits(name: string, sessionId: string): Promise<void> {
-    const state = this._readState(name);
+    const state = await this._readState(name);
     const held = state.sessionPermits[sessionId];
     if (held === undefined || held === 0) return;
     delete state.sessionPermits[sessionId];
@@ -249,8 +249,8 @@ export class SemaphoreService {
 
   // ── Internal ───────────────────────────────────────────────────────────
 
-  private _readState(name: string): SemaphoreState {
-    const raw = this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
+  private async _readState(name: string): Promise<SemaphoreState> {
+    const raw = await this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
     return deserializeState(raw);
   }
 
@@ -275,7 +275,7 @@ export class SemaphoreService {
     timeoutMs: number | undefined,
     invocationUuid?: string,
   ): Promise<boolean> {
-    const state = this._readState(name);
+    const state = await this._readState(name);
     if (invocationUuid !== undefined && state.invocationResults[invocationUuid] === true) {
       return true;
     }
@@ -338,7 +338,7 @@ export class SemaphoreService {
       let changed = true;
       while (changed) {
         changed = false;
-        const state = this._readState(name);
+        const state = await this._readState(name);
         for (let i = 0; i < queue.length; ) {
           const waiter = queue[i]!;
           if (state.available >= waiter.permits) {

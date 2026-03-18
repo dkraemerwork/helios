@@ -14,6 +14,7 @@ export interface PreVoteResponse {
   readonly groupId: string;
   readonly term: number;
   readonly granted: boolean;
+  readonly voterId: string;
 }
 
 export interface VoteRequest {
@@ -30,6 +31,7 @@ export interface VoteResponse {
   readonly groupId: string;
   readonly term: number;
   readonly voteGranted: boolean;
+  readonly voterId: string;
 }
 
 export interface AppendRequest {

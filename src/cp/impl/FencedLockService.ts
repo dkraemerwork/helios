@@ -293,13 +293,13 @@ export class FencedLockService {
      * Returns the current lock ownership snapshot.
      * If the lock is free, fence = 0n, lockCount = 0, sessionId = -1n, threadId = -1n.
      */
-    getLockOwnership(
+    async getLockOwnership(
         groupName: string,
         lockName: string,
-    ): { fence: bigint; lockCount: number; sessionId: bigint; threadId: bigint } {
+    ): Promise<{ fence: bigint; lockCount: number; sessionId: bigint; threadId: bigint }> {
         const key = lockKey(groupName, lockName);
         const groupId = this._cp.resolveGroupId(groupName);
-        const raw = this._cp.linearizableRead(groupId, key);
+        const raw = await this._cp.linearizableRead(groupId, key);
         const state = readFlockState(raw);
 
         if (state.owner === null) {
@@ -317,10 +317,10 @@ export class FencedLockService {
     /**
      * Returns true if the lock is currently held by anyone.
      */
-    isLocked(groupName: string, lockName: string): boolean {
+    async isLocked(groupName: string, lockName: string): Promise<boolean> {
         const key = lockKey(groupName, lockName);
         const groupId = this._cp.resolveGroupId(groupName);
-        const raw = this._cp.linearizableRead(groupId, key);
+        const raw = await this._cp.linearizableRead(groupId, key);
         const state = readFlockState(raw);
         return state.owner !== null;
     }
@@ -328,15 +328,15 @@ export class FencedLockService {
     /**
      * Returns true if the lock is currently held by the given session+thread.
      */
-    isLockedByCurrentThread(
+    async isLockedByCurrentThread(
         groupName: string,
         lockName: string,
         sessionId: bigint,
         threadId: bigint,
-    ): boolean {
+    ): Promise<boolean> {
         const key = lockKey(groupName, lockName);
         const groupId = this._cp.resolveGroupId(groupName);
-        const raw = this._cp.linearizableRead(groupId, key);
+        const raw = await this._cp.linearizableRead(groupId, key);
         const state = readFlockState(raw);
         return (
             state.owner !== null &&
@@ -348,10 +348,10 @@ export class FencedLockService {
     /**
      * Returns the reentrant lock depth for the current holder, or 0 if unlocked.
      */
-    getLockCount(groupName: string, lockName: string): number {
+    async getLockCount(groupName: string, lockName: string): Promise<number> {
         const key = lockKey(groupName, lockName);
         const groupId = this._cp.resolveGroupId(groupName);
-        const raw = this._cp.linearizableRead(groupId, key);
+        const raw = await this._cp.linearizableRead(groupId, key);
         const state = readFlockState(raw);
         return state.lockCount;
     }

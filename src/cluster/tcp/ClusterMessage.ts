@@ -702,6 +702,7 @@ export interface RaftPreVoteResponseMsg {
   readonly groupId: string;
   readonly term: number;
   readonly granted: boolean;
+  readonly voterId: string;
 }
 
 export interface RaftVoteRequestMsg {
@@ -718,6 +719,7 @@ export interface RaftVoteResponseMsg {
   readonly groupId: string;
   readonly term: number;
   readonly voteGranted: boolean;
+  readonly voterId: string;
 }
 
 export interface RaftAppendRequestMsg {

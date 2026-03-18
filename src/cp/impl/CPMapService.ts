@@ -55,7 +55,7 @@ export class CPMapService {
   }
 
   async get<K, V>(mapName: string, key: K): Promise<V | null> {
-    const mapState = this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(mapName));
+    const mapState = await this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(mapName));
     if (mapState === undefined || mapState === null) return null;
     const map = mapState as Map<string, string>;
     const raw = map.get(serializeEntry(key));

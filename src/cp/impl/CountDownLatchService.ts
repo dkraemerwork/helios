@@ -62,7 +62,7 @@ export class CountDownLatchService {
    */
   async trySetCount(name: string, count: number): Promise<boolean> {
     if (count < 0) throw new Error('Count must be >= 0');
-    const current = this._readState(name);
+    const current = await this._readState(name);
     if (current.count > 0) return false;
 
     await this._writeState(name, {
@@ -78,7 +78,7 @@ export class CountDownLatchService {
    * are released.
    */
   async countDown(name: string, expectedRound?: number, invocationUuid?: string): Promise<void> {
-    const current = this._readState(name);
+    const current = await this._readState(name);
     if (current.count <= 0) return;
     if (expectedRound !== undefined && current.round !== expectedRound) return;
     if (invocationUuid !== undefined && current.invocationUuids.includes(invocationUuid)) return;
@@ -99,11 +99,11 @@ export class CountDownLatchService {
 
   /** Returns the current count. */
   async getCount(name: string): Promise<number> {
-    return this._readState(name).count;
+    return (await this._readState(name)).count;
   }
 
   async getRound(name: string): Promise<number> {
-    return this._readState(name).round;
+    return (await this._readState(name)).round;
   }
 
   /**
@@ -111,7 +111,7 @@ export class CountDownLatchService {
    * Returns true if count reached zero, false if timeout elapsed.
    */
   async await(name: string, timeoutMs?: number): Promise<boolean> {
-    const current = this._readState(name);
+    const current = await this._readState(name);
     if (current.count <= 0) return true;
 
     return new Promise<boolean>((resolve) => {
@@ -163,8 +163,8 @@ export class CountDownLatchService {
 
   // ── Internal ───────────────────────────────────────────────────────────
 
-  private _readState(name: string): CountDownLatchState {
-    const raw = this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
+  private async _readState(name: string): Promise<CountDownLatchState> {
+    const raw = await this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
     return deserializeState(raw);
   }
 

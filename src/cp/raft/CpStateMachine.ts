@@ -268,8 +268,10 @@ export class CpStateMachine implements RaftStateMachine {
       }
 
       case 'NOP':
-      case 'LINEARIZABLE_READ':
         return null;
+
+      case 'LINEARIZABLE_READ':
+        return this._state.get(command.key);
 
       default:
         return null;

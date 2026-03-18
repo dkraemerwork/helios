@@ -129,15 +129,17 @@ export class CpSubsystemService {
   /**
    * Perform a linearizable read. In single-node mode reads directly from
    * the CpStateMachine, falling back to the SingleNodeRaftGroup for backward compat.
+   * In multi-node mode routes through RaftNode.linearizableRead() for true linearizability.
    */
-  linearizableRead(groupId: string, key: string): unknown {
+  async linearizableRead(groupId: string, key: string): Promise<unknown> {
     if (!this._multiNodeEnabled) {
       return this._singleNodeStateMachine.getState().get(key) ?? this.readState(groupId, key);
     }
 
     const groupInfo = this._groupManager!.getGroup(groupId);
     if (!groupInfo) return undefined;
-    return groupInfo.stateMachine.getState().get(key);
+    const result = await groupInfo.raftNode.linearizableRead(key);
+    return result.result;
   }
 
   /**

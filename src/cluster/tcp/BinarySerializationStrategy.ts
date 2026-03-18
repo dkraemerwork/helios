@@ -511,6 +511,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.groupId);
                 out.writeInt(message.term);
                 out.writeBoolean(message.granted);
+                out.writeString(message.voterId);
                 return;
             case 'RAFT_VOTE_REQUEST':
                 out.writeString(message.groupId);
@@ -523,6 +524,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.groupId);
                 out.writeInt(message.term);
                 out.writeBoolean(message.voteGranted);
+                out.writeString(message.voterId);
                 return;
             case 'RAFT_APPEND_REQUEST':
                 out.writeString(message.groupId);
@@ -890,6 +892,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     groupId: readRequiredString(inp),
                     term: inp.readInt(),
                     granted: inp.readBoolean(),
+                    voterId: readRequiredString(inp),
                 };
             case 'RAFT_VOTE_REQUEST':
                 return {
@@ -906,6 +909,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     groupId: readRequiredString(inp),
                     term: inp.readInt(),
                     voteGranted: inp.readBoolean(),
+                    voterId: readRequiredString(inp),
                 };
             case 'RAFT_APPEND_REQUEST': {
                 const groupId = readRequiredString(inp);

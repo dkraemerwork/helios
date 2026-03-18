@@ -299,6 +299,7 @@ export class RaftNode {
       groupId: this._groupId,
       term: this._currentTerm,
       granted,
+      voterId: this._localEndpoint.uuid,
     };
   }
 
@@ -316,12 +317,9 @@ export class RaftNode {
     }
     if (!msg.granted) return;
 
-    // PreVoteResponse does not carry a voter ID in the current message schema.
-    // We rely on the transport layer to call this handler exactly once per
-    // responding peer, and count grants with a simple integer counter.
-    this._preVoteGrantedCount++;
+    this._preVoteGrantedVoters.add(msg.voterId);
 
-    if (this._preVoteGrantedCount >= this._quorumSize()) {
+    if (this._preVoteGrantedVoters.size >= this._quorumSize()) {
       this._inPreVote = false;
       this._startElection();
     }
@@ -344,6 +342,7 @@ export class RaftNode {
         groupId: this._groupId,
         term: this._currentTerm,
         voteGranted: false,
+        voterId: this._localEndpoint.uuid,
       };
     }
 
@@ -369,6 +368,7 @@ export class RaftNode {
       groupId: this._groupId,
       term: this._currentTerm,
       voteGranted: canVote,
+      voterId: this._localEndpoint.uuid,
     };
   }
 
@@ -388,11 +388,9 @@ export class RaftNode {
     if (msg.term !== this._currentTerm) return;
     if (!msg.voteGranted) return;
 
-    // VoteResponse does not carry a voter ID in the current message schema;
-    // the transport calls this handler once per responding peer.
-    this._votesGrantedCount++;
+    this._votesGrantedVoters.add(msg.voterId);
 
-    if (this._votesGrantedCount >= this._quorumSize()) {
+    if (this._votesGrantedVoters.size >= this._quorumSize()) {
       this._becomeLeader();
     }
   }
@@ -711,7 +709,7 @@ export class RaftNode {
     if (this._destroyed) return;
 
     this._inPreVote = true;
-    this._preVoteGrantedCount = 0;
+    this._preVoteGrantedVoters = new Set();
     this._preVoteTerm = this._currentTerm + 1;
 
     // Single-member cluster skips pre-vote entirely.
@@ -722,7 +720,7 @@ export class RaftNode {
     }
 
     // Vote for self immediately.
-    this._preVoteGrantedCount = 1;
+    this._preVoteGrantedVoters.add(this._localEndpoint.uuid);
 
     const req: PreVoteRequest = {
       type: 'RAFT_PRE_VOTE_REQUEST',
@@ -753,7 +751,8 @@ export class RaftNode {
 
     this._role = 'CANDIDATE';
     this._leader = null;
-    this._votesGrantedCount = 1; // Vote for self.
+    this._votesGrantedVoters = new Set();
+    this._votesGrantedVoters.add(this._localEndpoint.uuid);
 
     this._resetElectionTimer();
 
@@ -1118,8 +1117,7 @@ export class RaftNode {
     this._pendingProposals.clear();
   }
 
-  // ── Vote counters (simple integers, not sets, because response messages
-  //    don't carry a voter ID field in the current message schema) ───────────
-  private _preVoteGrantedCount = 0;
-  private _votesGrantedCount = 0;
+  // ── Vote sets (deduplicate by voterId to prevent double-counting) ──────────
+  private _preVoteGrantedVoters: Set<string> = new Set();
+  private _votesGrantedVoters: Set<string> = new Set();
 }
