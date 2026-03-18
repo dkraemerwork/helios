@@ -245,6 +245,12 @@ export class CpStateMachine implements RaftStateMachine {
       case 'FLOCK_UNLOCK':
         return this._flockUnlock(command.key, command.payload as { sessionId: string; threadId: string });
 
+      case 'FLOCK_FORCE_UNLOCK':
+        return this._flockForceUnlock(command.key);
+
+      case 'FLOCK_DESTROY':
+        return this._flockDestroy(command.key);
+
       // ── Session ──────────────────────────────────────────────────────────
       case 'SESSION_CREATE':
         return this._sessionCreate(command.payload as { memberId: string; ttlMs: number; createdAt?: number });
@@ -658,6 +664,31 @@ export class CpStateMachine implements RaftStateMachine {
     state.owner = null;
     this._state.set(key, state);
     return true;
+  }
+
+  /**
+   * Force-release a lock regardless of who holds it or the reentrant depth.
+   * Returns true if the lock was held (and released), false if it was already free.
+   */
+  private _flockForceUnlock(key: string): boolean {
+    const state = readFlock(this._state, key);
+    if (state.owner === null) {
+      return false;
+    }
+    state.owner = null;
+    state.lockCount = 0;
+    this._state.set(key, state);
+    return true;
+  }
+
+  /**
+   * Destroy a lock: clear all state for the key.
+   * Returns true if there was state to remove.
+   */
+  private _flockDestroy(key: string): boolean {
+    const existed = this._state.has(key);
+    this._state.delete(key);
+    return existed;
   }
 
   // ── Session implementations ───────────────────────────────────────────────
