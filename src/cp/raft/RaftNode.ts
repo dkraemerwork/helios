@@ -268,14 +268,16 @@ export class RaftNode {
       return Promise.resolve({ commitIndex: this._commitIndex, result });
     }
 
-    // Propose a NOP command; the state machine must handle 'NOP' by returning null.
-    const nop: RaftCommand = {
-      type: 'NOP',
+    // Multi-member: propose a LINEARIZABLE_READ command through the commit pipeline.
+    // This guarantees linearizability (the command is committed at a specific log index)
+    // and returns the actual state value when the state machine applies it.
+    const readCmd: RaftCommand = {
+      type: 'LINEARIZABLE_READ',
       groupId: this._groupId,
       key,
       payload: null,
     };
-    return this.propose(nop);
+    return this.propose(readCmd);
   }
 
   // ── Pre-vote message handlers ─────────────────────────────────────────────
