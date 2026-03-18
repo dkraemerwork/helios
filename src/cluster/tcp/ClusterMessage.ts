@@ -686,6 +686,89 @@ export interface MigrationAckMsg {
   readonly error?: string;
 }
 
+// ── Raft consensus protocol messages ─────────────────────────────────
+
+export interface RaftPreVoteRequestMsg {
+  readonly type: 'RAFT_PRE_VOTE_REQUEST';
+  readonly groupId: string;
+  readonly candidateId: string;
+  readonly nextTerm: number;
+  readonly lastLogTerm: number;
+  readonly lastLogIndex: number;
+}
+
+export interface RaftPreVoteResponseMsg {
+  readonly type: 'RAFT_PRE_VOTE_RESPONSE';
+  readonly groupId: string;
+  readonly term: number;
+  readonly granted: boolean;
+}
+
+export interface RaftVoteRequestMsg {
+  readonly type: 'RAFT_VOTE_REQUEST';
+  readonly groupId: string;
+  readonly term: number;
+  readonly candidateId: string;
+  readonly lastLogTerm: number;
+  readonly lastLogIndex: number;
+}
+
+export interface RaftVoteResponseMsg {
+  readonly type: 'RAFT_VOTE_RESPONSE';
+  readonly groupId: string;
+  readonly term: number;
+  readonly voteGranted: boolean;
+}
+
+export interface RaftAppendRequestMsg {
+  readonly type: 'RAFT_APPEND_REQUEST';
+  readonly groupId: string;
+  readonly term: number;
+  readonly leaderId: string;
+  readonly prevLogIndex: number;
+  readonly prevLogTerm: number;
+  readonly entries: readonly import('../../cp/raft/types.js').RaftLogEntry[];
+  readonly leaderCommit: number;
+}
+
+export interface RaftAppendSuccessMsg {
+  readonly type: 'RAFT_APPEND_SUCCESS';
+  readonly groupId: string;
+  readonly term: number;
+  readonly followerId: string;
+  readonly lastLogIndex: number;
+}
+
+export interface RaftAppendFailureMsg {
+  readonly type: 'RAFT_APPEND_FAILURE';
+  readonly groupId: string;
+  readonly term: number;
+  readonly followerId: string;
+  readonly lastLogIndex: number;
+}
+
+export interface RaftInstallSnapshotMsg {
+  readonly type: 'RAFT_INSTALL_SNAPSHOT';
+  readonly groupId: string;
+  readonly term: number;
+  readonly leaderId: string;
+  readonly snapshot: import('../../cp/raft/types.js').SnapshotEntry;
+}
+
+export interface RaftInstallSnapshotResponseMsg {
+  readonly type: 'RAFT_INSTALL_SNAPSHOT_RESPONSE';
+  readonly groupId: string;
+  readonly term: number;
+  readonly followerId: string;
+  readonly success: boolean;
+  readonly lastLogIndex: number;
+}
+
+export interface RaftTriggerElectionMsg {
+  readonly type: 'RAFT_TRIGGER_ELECTION';
+  readonly groupId: string;
+}
+
 export type ClusterMessage =
   | HelloMsg
   | MapPutMsg
@@ -752,4 +835,14 @@ export type ClusterMessage =
   | TransactionBackupReplicationMsg
   | TransactionBackupReplicationAckMsg
   | MigrationDataMsg
-  | MigrationAckMsg;
+  | MigrationAckMsg
+  | RaftPreVoteRequestMsg
+  | RaftPreVoteResponseMsg
+  | RaftVoteRequestMsg
+  | RaftVoteResponseMsg
+  | RaftAppendRequestMsg
+  | RaftAppendSuccessMsg
+  | RaftAppendFailureMsg
+  | RaftInstallSnapshotMsg
+  | RaftInstallSnapshotResponseMsg
+  | RaftTriggerElectionMsg;

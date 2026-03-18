@@ -118,6 +118,16 @@ const MESSAGE_TYPE_TO_ID = {
     RINGBUFFER_BACKUP_ACK: 64,
     MIGRATION_DATA: 65,
     MIGRATION_ACK: 66,
+    RAFT_PRE_VOTE_REQUEST: 67,
+    RAFT_PRE_VOTE_RESPONSE: 68,
+    RAFT_VOTE_REQUEST: 69,
+    RAFT_VOTE_RESPONSE: 70,
+    RAFT_APPEND_REQUEST: 71,
+    RAFT_APPEND_SUCCESS: 72,
+    RAFT_APPEND_FAILURE: 73,
+    RAFT_INSTALL_SNAPSHOT: 74,
+    RAFT_INSTALL_SNAPSHOT_RESPONSE: 75,
+    RAFT_TRIGGER_ELECTION: 76,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -490,6 +500,81 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeBoolean(message.success);
                 out.writeString(message.error ?? null);
                 return;
+            case 'RAFT_PRE_VOTE_REQUEST':
+                out.writeString(message.groupId);
+                out.writeString(message.candidateId);
+                out.writeInt(message.nextTerm);
+                out.writeInt(message.lastLogTerm);
+                out.writeInt(message.lastLogIndex);
+                return;
+            case 'RAFT_PRE_VOTE_RESPONSE':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeBoolean(message.granted);
+                return;
+            case 'RAFT_VOTE_REQUEST':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeString(message.candidateId);
+                out.writeInt(message.lastLogTerm);
+                out.writeInt(message.lastLogIndex);
+                return;
+            case 'RAFT_VOTE_RESPONSE':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeBoolean(message.voteGranted);
+                return;
+            case 'RAFT_APPEND_REQUEST':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeString(message.leaderId);
+                out.writeInt(message.prevLogIndex);
+                out.writeInt(message.prevLogTerm);
+                out.writeInt(message.entries.length);
+                for (const entry of message.entries) {
+                    out.writeInt(entry.term);
+                    out.writeInt(entry.index);
+                    out.writeString(JSON.stringify(entry.command));
+                }
+                out.writeInt(message.leaderCommit);
+                return;
+            case 'RAFT_APPEND_SUCCESS':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeString(message.followerId);
+                out.writeInt(message.lastLogIndex);
+                return;
+            case 'RAFT_APPEND_FAILURE':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeString(message.followerId);
+                out.writeInt(message.lastLogIndex);
+                return;
+            case 'RAFT_INSTALL_SNAPSHOT':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeString(message.leaderId);
+                out.writeInt(message.snapshot.term);
+                out.writeInt(message.snapshot.index);
+                out.writeByteArray(Buffer.from(message.snapshot.data));
+                out.writeInt(message.snapshot.groupMembersLogIndex);
+                out.writeInt(message.snapshot.groupMembers.length);
+                for (const member of message.snapshot.groupMembers) {
+                    out.writeString(member.uuid);
+                    out.writeString(member.address.host);
+                    out.writeInt(member.address.port);
+                }
+                return;
+            case 'RAFT_INSTALL_SNAPSHOT_RESPONSE':
+                out.writeString(message.groupId);
+                out.writeInt(message.term);
+                out.writeString(message.followerId);
+                out.writeBoolean(message.success);
+                out.writeInt(message.lastLogIndex);
+                return;
+            case 'RAFT_TRIGGER_ELECTION':
+                out.writeString(message.groupId);
+                return;
         }
     }
 
@@ -790,6 +875,109 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 const error = inp.readString() ?? undefined;
                 return { type: 'MIGRATION_ACK', migrationId, success, ...(error !== undefined ? { error } : {}) };
             }
+            case 'RAFT_PRE_VOTE_REQUEST':
+                return {
+                    type: 'RAFT_PRE_VOTE_REQUEST',
+                    groupId: readRequiredString(inp),
+                    candidateId: readRequiredString(inp),
+                    nextTerm: inp.readInt(),
+                    lastLogTerm: inp.readInt(),
+                    lastLogIndex: inp.readInt(),
+                };
+            case 'RAFT_PRE_VOTE_RESPONSE':
+                return {
+                    type: 'RAFT_PRE_VOTE_RESPONSE',
+                    groupId: readRequiredString(inp),
+                    term: inp.readInt(),
+                    granted: inp.readBoolean(),
+                };
+            case 'RAFT_VOTE_REQUEST':
+                return {
+                    type: 'RAFT_VOTE_REQUEST',
+                    groupId: readRequiredString(inp),
+                    term: inp.readInt(),
+                    candidateId: readRequiredString(inp),
+                    lastLogTerm: inp.readInt(),
+                    lastLogIndex: inp.readInt(),
+                };
+            case 'RAFT_VOTE_RESPONSE':
+                return {
+                    type: 'RAFT_VOTE_RESPONSE',
+                    groupId: readRequiredString(inp),
+                    term: inp.readInt(),
+                    voteGranted: inp.readBoolean(),
+                };
+            case 'RAFT_APPEND_REQUEST': {
+                const groupId = readRequiredString(inp);
+                const term = inp.readInt();
+                const leaderId = readRequiredString(inp);
+                const prevLogIndex = inp.readInt();
+                const prevLogTerm = inp.readInt();
+                const entryCount = inp.readInt();
+                const entries = new Array(entryCount);
+                for (let i = 0; i < entryCount; i++) {
+                    const entryTerm = inp.readInt();
+                    const entryIndex = inp.readInt();
+                    const command = JSON.parse(readRequiredString(inp)) as import('../../cp/raft/types.js').RaftCommand;
+                    entries[i] = { term: entryTerm, index: entryIndex, command };
+                }
+                const leaderCommit = inp.readInt();
+                return { type: 'RAFT_APPEND_REQUEST', groupId, term, leaderId, prevLogIndex, prevLogTerm, entries, leaderCommit };
+            }
+            case 'RAFT_APPEND_SUCCESS':
+                return {
+                    type: 'RAFT_APPEND_SUCCESS',
+                    groupId: readRequiredString(inp),
+                    term: inp.readInt(),
+                    followerId: readRequiredString(inp),
+                    lastLogIndex: inp.readInt(),
+                };
+            case 'RAFT_APPEND_FAILURE':
+                return {
+                    type: 'RAFT_APPEND_FAILURE',
+                    groupId: readRequiredString(inp),
+                    term: inp.readInt(),
+                    followerId: readRequiredString(inp),
+                    lastLogIndex: inp.readInt(),
+                };
+            case 'RAFT_INSTALL_SNAPSHOT': {
+                const groupId = readRequiredString(inp);
+                const term = inp.readInt();
+                const leaderId = readRequiredString(inp);
+                const snapshotTerm = inp.readInt();
+                const snapshotIndex = inp.readInt();
+                const data = inp.readByteArray() ?? Buffer.alloc(0);
+                const groupMembersLogIndex = inp.readInt();
+                const memberCount = inp.readInt();
+                const groupMembers: import('../../cp/raft/types.js').RaftEndpoint[] = new Array(memberCount);
+                for (let i = 0; i < memberCount; i++) {
+                    const uuid = readRequiredString(inp);
+                    const host = readRequiredString(inp);
+                    const port = inp.readInt();
+                    groupMembers[i] = { uuid, address: { host, port } };
+                }
+                return {
+                    type: 'RAFT_INSTALL_SNAPSHOT',
+                    groupId,
+                    term,
+                    leaderId,
+                    snapshot: { term: snapshotTerm, index: snapshotIndex, data, groupMembers, groupMembersLogIndex },
+                };
+            }
+            case 'RAFT_INSTALL_SNAPSHOT_RESPONSE':
+                return {
+                    type: 'RAFT_INSTALL_SNAPSHOT_RESPONSE',
+                    groupId: readRequiredString(inp),
+                    term: inp.readInt(),
+                    followerId: readRequiredString(inp),
+                    success: inp.readBoolean(),
+                    lastLogIndex: inp.readInt(),
+                };
+            case 'RAFT_TRIGGER_ELECTION':
+                return {
+                    type: 'RAFT_TRIGGER_ELECTION',
+                    groupId: readRequiredString(inp),
+                };
         }
         throw new Error(`Unknown message type ID: ${messageTypeId}`);
     }
