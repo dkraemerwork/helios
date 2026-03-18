@@ -128,14 +128,6 @@ function readCpMap(state: Map<string, unknown>, key: string): Map<string, string
 
 const CPMAP_NULL = '__CPMAP_NULL__';
 
-// ── Session helpers ─────────────────────────────────────────────────────────
-
-let _nextSessionId = 1n;
-
-function nextSessionId(): string {
-  return String(_nextSessionId++);
-}
-
 // ── CpStateMachine ──────────────────────────────────────────────────────────
 
 /**
@@ -154,8 +146,11 @@ function nextSessionId(): string {
  * The only exception is SESSION_CREATE, which uses a monotone counter for IDs and
  * accepts `createdAt` from the payload (provided by the caller).
  */
+const META_NEXT_SESSION_ID = '__meta:nextSessionId';
+
 export class CpStateMachine implements RaftStateMachine {
   private readonly _state = new Map<string, unknown>();
+  private _nextSessionId = 1n;
 
   // ── RaftStateMachine interface ─────────────────────────────────────────────
 
@@ -202,6 +197,9 @@ export class CpStateMachine implements RaftStateMachine {
 
       case 'CPMAP_COMPARE_AND_SET':
         return this._cpmapCompareAndSet(command.key, command.payload as { key: string; expectedValue: string; newValue: string });
+
+      case 'CPMAP_DESTROY':
+        return this._cpmapDestroy(command.key);
 
       // ── Semaphore ────────────────────────────────────────────────────────
       case 'SEM_INIT':
@@ -279,13 +277,20 @@ export class CpStateMachine implements RaftStateMachine {
   }
 
   takeSnapshot(): Uint8Array {
-    return serializeState(this._state);
+    const snapshot = new Map(this._state);
+    snapshot.set(META_NEXT_SESSION_ID, String(this._nextSessionId));
+    return serializeState(snapshot);
   }
 
   restoreFromSnapshot(data: Uint8Array): void {
     this._state.clear();
     for (const [k, v] of deserializeState(data)) {
       this._state.set(k, v);
+    }
+    const metaValue = this._state.get(META_NEXT_SESSION_ID);
+    if (metaValue !== undefined) {
+      this._nextSessionId = BigInt(metaValue as string);
+      this._state.delete(META_NEXT_SESSION_ID);
     }
   }
 
@@ -401,6 +406,12 @@ export class CpStateMachine implements RaftStateMachine {
     map.set(payload.key, payload.newValue);
     this._state.set(key, map);
     return true;
+  }
+
+  private _cpmapDestroy(key: string): boolean {
+    const existed = this._state.has(key);
+    this._state.delete(key);
+    return existed;
   }
 
   // ── Semaphore implementations ─────────────────────────────────────────────
@@ -696,7 +707,7 @@ export class CpStateMachine implements RaftStateMachine {
   // ── Session implementations ───────────────────────────────────────────────
 
   private _sessionCreate(payload: { memberId: string; ttlMs: number; createdAt?: number }): string {
-    const sessionId = nextSessionId();
+    const sessionId = String(this._nextSessionId++);
     // Use caller-supplied timestamp for determinism; fall back to 0 if not provided.
     // Callers should always include a createdAt from their monotone clock.
     const createdAt = payload.createdAt ?? 0;

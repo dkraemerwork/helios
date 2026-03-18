@@ -5,6 +5,19 @@ import { RaftMessageRouter } from './RaftMessageRouter.js';
 import type { RaftEndpoint, RaftGroupId } from './types.js';
 import { CpStateMachine } from './CpStateMachine.js';
 
+/**
+ * Deterministic FNV-1a 32-bit hash of a string, returned as a BigInt.
+ * Ensures all nodes derive the same seed for a given group name.
+ */
+function deterministicSeed(name: string): bigint {
+  let hash = 2166136261n; // FNV offset basis
+  for (let i = 0; i < name.length; i++) {
+    hash ^= BigInt(name.charCodeAt(i));
+    hash = (hash * 16777619n) & 0xFFFFFFFFn; // FNV prime, keep 32-bit
+  }
+  return hash;
+}
+
 export interface CpGroupInfo {
   readonly groupId: RaftGroupId;
   readonly members: readonly RaftEndpoint[];
@@ -138,7 +151,7 @@ export class CpGroupManager {
   ): Promise<CpGroupInfo> {
     const groupId: RaftGroupId = {
       name: groupName,
-      seed: BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)),
+      seed: deterministicSeed(groupName),
       id: this._nextGroupId++,
     };
 

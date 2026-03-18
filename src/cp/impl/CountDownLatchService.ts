@@ -62,15 +62,15 @@ export class CountDownLatchService {
    */
   async trySetCount(name: string, count: number): Promise<boolean> {
     if (count < 0) throw new Error('Count must be >= 0');
-    const current = await this._readState(name);
-    if (current.count > 0) return false;
-
-    await this._writeState(name, {
-      count,
-      round: current.round + (count > 0 ? 1 : 0),
-      invocationUuids: [],
+    const groupId = this._cp.resolveGroupId(name);
+    const objectName = this._cp.resolveObjectName(name);
+    const result = await this._cp.executeRaftCommand(name, {
+      type: 'CDL_TRY_SET_COUNT',
+      groupId,
+      key: `cdl:${objectName}`,
+      payload: { count },
     });
-    return true;
+    return result as boolean;
   }
 
   /**

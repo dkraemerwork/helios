@@ -105,7 +105,14 @@ export class CPMapService {
     return result as boolean;
   }
 
-  destroy(_mapName: string): void {
-    // Maps are managed by the state machine; no local cleanup needed.
+  async destroy(mapName: string): Promise<void> {
+    const groupId = this._cp.resolveGroupId(mapName);
+    const objectName = this._cp.resolveObjectName(mapName);
+    await this._cp.executeRaftCommand(mapName, {
+      type: 'CPMAP_DESTROY',
+      groupId,
+      key: `cpmap:${objectName}`,
+      payload: null,
+    });
   }
 }
