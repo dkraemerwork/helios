@@ -369,6 +369,9 @@ describe('SplitBrainMergeHandler', () => {
                             }
                         })();
                     },
+                    getEntryStats(_key: Data) {
+                        return null;
+                    },
                 };
             },
             getMapNames(): string[] {
@@ -519,6 +522,9 @@ describe('SplitBrainDetector lifecycle events', () => {
                                     yield [makeData(k), makeData(v)] as const;
                                 }
                             })();
+                        },
+                        getEntryStats(_key: Data) {
+                            return null;
                         },
                     };
                 },

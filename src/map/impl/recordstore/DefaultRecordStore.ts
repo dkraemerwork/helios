@@ -11,6 +11,7 @@ import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryProcessor, MapEntry } from '@zenystx/helios-core/map/EntryProcessor';
 import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView';
 import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import type { MergeEntryStats, MergeableRecordStore } from '@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler';
 
 interface Entry {
     key: Data;
@@ -25,7 +26,7 @@ interface Entry {
     maxIdle: number;
 }
 
-export class DefaultRecordStore implements RecordStore {
+export class DefaultRecordStore implements RecordStore, MergeableRecordStore {
     /**
      * Keyed by the base64 representation of the Data payload.
      * This gives us content-equality semantics without referencing the Data.equals()
@@ -296,6 +297,19 @@ export class DefaultRecordStore implements RecordStore {
             .setVersion(entry.version)
             .setTtl(entry.ttl)
             .setMaxIdle(entry.maxIdle);
+    }
+
+    getEntryStats(key: Data): MergeEntryStats | null {
+        const entry = this._data.get(this._key(key));
+        if (entry === undefined) return null;
+        return {
+            hits: entry.hits,
+            creationTime: entry.createdAt,
+            lastAccessTime: entry.lastAccessTime,
+            lastUpdateTime: entry.lastUpdateTime,
+            expirationTime: this._expirationTime(entry),
+            version: entry.version,
+        };
     }
 
     setTtl(key: Data, ttl: number): boolean {

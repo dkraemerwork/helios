@@ -86,6 +86,8 @@ import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
+import { SplitBrainDetector } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainDetector";
+import { SplitBrainMergeHandler } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler";
 import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
@@ -175,6 +177,8 @@ import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/Distrib
 import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
 import { ProjectionDataSerializerHook } from "@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook";
 import { PredicateDataSerializerHook } from "@zenystx/helios-core/query/impl/predicates/PredicateDataSerializerHook";
+import { PartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl";
+import { MultiPartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl";
 import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
@@ -679,6 +683,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Persistence service — non-null when persistence is enabled in config. */
   private _persistenceService: PersistenceService | null = null;
 
+  /** Split-brain detector — non-null when clustering is enabled. */
+  private _splitBrainDetector: SplitBrainDetector | null = null;
+
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
     this._name = this._config.getName();
@@ -716,6 +723,12 @@ export class HeliosInstanceImpl implements HeliosInstance {
     // Start TCP networking if configured (creates NodeEngine with routing)
     // or create default single-node NodeEngine
     this._startNetworking();
+
+    // Wire split-brain detection when clustering is enabled.
+    // _clusterCoordinator is non-null after _startNetworking() only when TCP-IP or multicast join is enabled.
+    if (this._clusterCoordinator !== null) {
+      this._initSplitBrainDetector();
+    }
 
     this._transactionManagerService = new TransactionManagerServiceImpl(this._nodeEngine);
     this._transactionCoordinator = new TransactionCoordinator(
@@ -830,6 +843,53 @@ export class HeliosInstanceImpl implements HeliosInstance {
         );
       }
     }
+  }
+
+  // ── Split-brain detection ────────────────────────────────────────────
+
+  /**
+   * Wire a SplitBrainDetector into the cluster coordinator.
+   * Called after _startNetworking() when _clusterCoordinator is non-null.
+   *
+   * The local member is pre-seeded as reachable. Member joins call
+   * onMemberReachable; member removals call onMemberUnreachable. The
+   * total member count is updated on every membership change.
+   */
+  private _initSplitBrainDetector(): void {
+    const coordinator = this._clusterCoordinator!;
+    const localMemberUuid = coordinator.getLocalMemberId();
+    const totalMembers = this._config.getNetworkConfig().getJoin().getTcpIpConfig().getMembers().length + 1;
+
+    const mergeHandler = new SplitBrainMergeHandler();
+    const detector = new SplitBrainDetector(totalMembers, localMemberUuid);
+    detector.setLifecycleService(this._lifecycleService);
+    detector.setMergeHandler(mergeHandler);
+    this._splitBrainDetector = detector;
+
+    // Track which member UUIDs were previously known so we can detect joins vs. re-joins.
+    const knownMembers = new Set<string>([localMemberUuid]);
+
+    coordinator.onMembershipChanged(() => {
+      const currentMembers = this._captureCurrentMemberIds();
+      const newCount = currentMembers.size;
+
+      // Update total for quorum recalculation.
+      detector.updateTotalMembers(newCount);
+
+      // Mark newly joined members reachable.
+      for (const memberId of currentMembers) {
+        if (!knownMembers.has(memberId)) {
+          knownMembers.add(memberId);
+          detector.onMemberReachable(memberId);
+        }
+      }
+    });
+
+    coordinator.onMemberRemoved((memberId) => {
+      knownMembers.delete(memberId);
+      detector.onMemberUnreachable(memberId);
+      detector.updateTotalMembers(this._captureCurrentMemberIds().size);
+    });
   }
 
   // ── TCP networking ───────────────────────────────────────────────────
@@ -2463,6 +2523,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const previous = store.get(key);
         const interceptedValue = this._mapInterceptorSupport.interceptPut(name, previous, value) as typeof value;
         const storedPrevious = store.put(key, interceptedValue, Number(ttl), -1);
+        const _kb = key.toByteArray(); const _vb = interceptedValue.toByteArray();
+        if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
         this._publishClientMapEvent(name, key, interceptedValue, storedPrevious, storedPrevious === null ? 1 : 4);
         this._mapInterceptorSupport.interceptAfterPut(name, interceptedValue);
         this._mapEventJournal.writeAddEvent(name, partitionId, key, storedPrevious, interceptedValue);
@@ -2481,6 +2543,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const previous = store.remove(key);
         const intercepted = this._mapInterceptorSupport.interceptRemove(name, previous) as typeof previous;
         if (previous !== null) {
+          const _kb = key.toByteArray();
+          if (_kb) this._persistenceService?.recordRemove(name, partitionId, _kb);
           this._publishClientMapEvent(name, key, null, intercepted, 2);
           this._mapEventJournal.writeRemoveEvent(name, partitionId, key, intercepted);
         }
@@ -2516,12 +2580,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
           }
         }
         if (affectedEntries > 0) {
+          this._persistenceService?.recordClear(name, 0);
           this._publishClientMapBulkEvent(name, 64, affectedEntries);
         }
       },
       delete: async (name, key, _threadId) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         if (store.delete(key)) {
+          const _kb = key.toByteArray();
+          if (_kb) this._persistenceService?.recordRemove(name, partitionId, _kb);
           this._publishClientMapEvent(name, key, null, null, 2);
         }
       },
@@ -2529,6 +2597,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const partitionId = ps.getPartitionId(key);
         const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.put(key, value, Number(ttl), -1);
+        const _kb = key.toByteArray(); const _vb = value.toByteArray();
+        if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
         this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
         this._mapEventJournal.writeAddEvent(name, partitionId, key, previous, value);
       },
@@ -2543,42 +2613,62 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       putAll: async (name, entries) => {
         for (const [key, value] of entries) {
-          const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+          const partitionId = ps.getPartitionId(key);
+          const store = this._mapService.getOrCreateRecordStore(name, partitionId);
           const previous = store.put(key, value, -1, -1);
+          const _kb = key.toByteArray(); const _vb = value.toByteArray();
+          if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
           this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
+          this._mapEventJournal.writeAddEvent(name, partitionId, key, previous, value);
         }
       },
       putIfAbsent: async (name, key, value, _threadId, ttl) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.putIfAbsent(key, value, Number(ttl), -1);
         if (previous === null) {
+          const _kb = key.toByteArray(); const _vb = value.toByteArray();
+          if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
           this._publishClientMapEvent(name, key, value, null, 1);
+          this._mapEventJournal.writeAddEvent(name, partitionId, key, null, value);
         }
         return previous;
       },
       replace: async (name, key, value, _threadId) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.replace(key, value, -1, -1);
         if (previous !== null) {
+          const _kb = key.toByteArray(); const _vb = value.toByteArray();
+          if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
           this._publishClientMapEvent(name, key, value, previous, 4);
+          this._mapEventJournal.writeAddEvent(name, partitionId, key, previous, value);
         }
         return previous;
       },
       replaceIfSame: async (name, key, oldValue, newValue, _threadId) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const current = store.get(key);
         if (current === null || !current.equals(oldValue)) {
           return false;
         }
         store.replace(key, newValue, -1, -1);
+        const _kb = key.toByteArray(); const _vb = newValue.toByteArray();
+        if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
         this._publishClientMapEvent(name, key, newValue, oldValue, 4);
+        this._mapEventJournal.writeAddEvent(name, partitionId, key, oldValue, newValue);
         return true;
       },
       removeIfSame: async (name, key, value, _threadId) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const removed = store.removeIfSame(key, value);
         if (removed) {
+          const _kb = key.toByteArray();
+          if (_kb) this._persistenceService?.recordRemove(name, partitionId, _kb);
           this._publishClientMapEvent(name, key, null, value, 2);
+          this._mapEventJournal.writeRemoveEvent(name, partitionId, key, value);
         }
         return removed;
       },
@@ -2592,6 +2682,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const previous = store.get(key);
         const evicted = store.evict(key);
         if (evicted) {
+          const _kb = key.toByteArray();
+          if (_kb) this._persistenceService?.recordRemove(name, partitionId, _kb);
           this._publishClientMapEvent(name, key, null, previous, 8);
           this._mapEventJournal.writeEvictEvent(name, partitionId, key, previous);
         }
@@ -2610,6 +2702,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
               continue;
             }
             if (store.evict(key)) {
+              const _kb = key.toByteArray();
+              if (_kb) this._persistenceService?.recordRemove(name, i, _kb);
               affectedEntries += 1;
             }
           }
@@ -2650,8 +2744,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
           return false;
         }
         try {
-          const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+          const partitionId = ps.getPartitionId(key);
+          const store = this._mapService.getOrCreateRecordStore(name, partitionId);
           const previous = store.put(key, value, -1, -1);
+          const _kb = key.toByteArray(); const _vb = value.toByteArray();
+          if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
           this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
           return true;
         } finally {
@@ -2740,16 +2837,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return true;
       },
       tryRemove: async (name, key, _threadId, _timeout) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.remove(key);
         if (previous !== null) {
+          const _kb = key.toByteArray();
+          if (_kb) this._persistenceService?.recordRemove(name, partitionId, _kb);
           this._publishClientMapEvent(name, key, null, previous, 2);
         }
         return previous !== null;
       },
       putWithMaxIdle: async (name, key, value, _threadId, ttl, maxIdle) => {
-        const store = this._mapService.getOrCreateRecordStore(name, ps.getPartitionId(key));
+        const partitionId = ps.getPartitionId(key);
+        const store = this._mapService.getOrCreateRecordStore(name, partitionId);
         const previous = store.put(key, value, Number(ttl), Number(maxIdle));
+        const _kb = key.toByteArray(); const _vb = value.toByteArray();
+        if (_kb && _vb) this._persistenceService?.recordPut(name, partitionId, _kb, _vb);
         this._publishClientMapEvent(name, key, value, previous, previous === null ? 1 : 4);
         return previous;
       },
@@ -2760,37 +2863,100 @@ export class HeliosInstanceImpl implements HeliosInstance {
         // No-op: no MapStore configured in this implementation
       },
       keySetWithPredicate: async (name, predicateData) => {
-        const predicate = deserializePredicate(predicateData);
+        const rawPredicate = deserializePredicate(predicateData);
+        let effectivePredicate = rawPredicate;
+        let targetPartitionIds: Set<number> | null = null;
+        if (rawPredicate instanceof PartitionPredicateImpl) {
+          effectivePredicate = rawPredicate.getTarget();
+          const keyData = this._ss.toData(rawPredicate.getPartitionKey());
+          if (keyData !== null) {
+            targetPartitionIds = new Set([ps.getPartitionId(keyData)]);
+          }
+        } else if (rawPredicate instanceof MultiPartitionPredicateImpl) {
+          effectivePredicate = rawPredicate.getTarget();
+          targetPartitionIds = new Set<number>();
+          for (const pk of rawPredicate.getPartitionKeys()) {
+            const keyData = this._ss.toData(pk);
+            if (keyData !== null) {
+              targetPartitionIds.add(ps.getPartitionId(keyData));
+            }
+          }
+        }
+        const partitions = targetPartitionIds !== null
+          ? [...targetPartitionIds]
+          : Array.from({ length: partitionCount }, (_, i) => i);
         const keys: Data[] = [];
-        for (let i = 0; i < partitionCount; i++) {
+        for (const i of partitions) {
           const store = this._mapService.getRecordStore(name, i);
           if (!store) continue;
           for (const [key, value] of store.entries()) {
-            if (predicateMatches(predicate, key, value)) keys.push(key);
+            if (predicateMatches(effectivePredicate, key, value)) keys.push(key);
           }
         }
         return keys;
       },
       valuesWithPredicate: async (name, predicateData) => {
-        const predicate = deserializePredicate(predicateData);
+        const rawPredicate = deserializePredicate(predicateData);
+        let effectivePredicate = rawPredicate;
+        let targetPartitionIds: Set<number> | null = null;
+        if (rawPredicate instanceof PartitionPredicateImpl) {
+          effectivePredicate = rawPredicate.getTarget();
+          const keyData = this._ss.toData(rawPredicate.getPartitionKey());
+          if (keyData !== null) {
+            targetPartitionIds = new Set([ps.getPartitionId(keyData)]);
+          }
+        } else if (rawPredicate instanceof MultiPartitionPredicateImpl) {
+          effectivePredicate = rawPredicate.getTarget();
+          targetPartitionIds = new Set<number>();
+          for (const pk of rawPredicate.getPartitionKeys()) {
+            const keyData = this._ss.toData(pk);
+            if (keyData !== null) {
+              targetPartitionIds.add(ps.getPartitionId(keyData));
+            }
+          }
+        }
+        const partitions = targetPartitionIds !== null
+          ? [...targetPartitionIds]
+          : Array.from({ length: partitionCount }, (_, i) => i);
         const values: Data[] = [];
-        for (let i = 0; i < partitionCount; i++) {
+        for (const i of partitions) {
           const store = this._mapService.getRecordStore(name, i);
           if (!store) continue;
           for (const [key, value] of store.entries()) {
-            if (predicateMatches(predicate, key, value)) values.push(value);
+            if (predicateMatches(effectivePredicate, key, value)) values.push(value);
           }
         }
         return values;
       },
       entriesWithPredicate: async (name, predicateData) => {
-        const predicate = deserializePredicate(predicateData);
+        const rawPredicate = deserializePredicate(predicateData);
+        let effectivePredicate = rawPredicate;
+        let targetPartitionIds: Set<number> | null = null;
+        if (rawPredicate instanceof PartitionPredicateImpl) {
+          effectivePredicate = rawPredicate.getTarget();
+          const keyData = this._ss.toData(rawPredicate.getPartitionKey());
+          if (keyData !== null) {
+            targetPartitionIds = new Set([ps.getPartitionId(keyData)]);
+          }
+        } else if (rawPredicate instanceof MultiPartitionPredicateImpl) {
+          effectivePredicate = rawPredicate.getTarget();
+          targetPartitionIds = new Set<number>();
+          for (const pk of rawPredicate.getPartitionKeys()) {
+            const keyData = this._ss.toData(pk);
+            if (keyData !== null) {
+              targetPartitionIds.add(ps.getPartitionId(keyData));
+            }
+          }
+        }
+        const partitions = targetPartitionIds !== null
+          ? [...targetPartitionIds]
+          : Array.from({ length: partitionCount }, (_, i) => i);
         const result: Array<[Data, Data]> = [];
-        for (let i = 0; i < partitionCount; i++) {
+        for (const i of partitions) {
           const store = this._mapService.getRecordStore(name, i);
           if (!store) continue;
           for (const [key, value] of store.entries()) {
-            if (predicateMatches(predicate, key, value)) result.push([key, value]);
+            if (predicateMatches(effectivePredicate, key, value)) result.push([key, value]);
           }
         }
         return result;
@@ -2818,6 +2984,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
           for (const key of toRemove) {
             const previous = store.remove(key);
             if (previous !== null) {
+              const _kb = key.toByteArray();
+              if (_kb) this._persistenceService?.recordRemove(name, i, _kb);
               this._publishClientMapEvent(name, key, null, previous, 2);
             }
           }
@@ -2960,70 +3128,87 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const queueOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').QueueServiceOperations = {
       offer: async (name, value, timeoutMs) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.offer(name, value, Number(timeoutMs));
       },
       poll: async (name, timeoutMs) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.poll(name, Number(timeoutMs));
       },
       peek: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.peek(name);
       },
       size: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.size(name);
       },
       clear: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.clear(name);
       },
       isEmpty: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.isEmpty(name);
       },
       contains: async (name, value) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.contains(name, value);
       },
       containsAll: async (name, values) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.containsAll(name, values);
       },
       remove: async (name, value) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.remove(name, value);
       },
       addAll: async (name, values) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.addAll(name, values);
       },
       removeAll: async (name, values) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.removeAll(name, values);
       },
       retainAll: async (name, values) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.retainAll(name, values);
       },
       drain: async (name, maxElements) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.drain(name, maxElements);
       },
       iterator: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.toArray(name);
       },
       remainingCapacity: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.remainingCapacity(name);
       },
       take: async (name) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         return this._distributedQueueService!.poll(name, 0);
       },
       put: async (name, value) => {
         this._ensureQueueService();
+        this._wireQueueStore(name);
         await this._distributedQueueService!.offer(name, value, 0);
       },
       addItemListener: async (name, includeValue, correlationId, session) =>
@@ -3421,6 +3606,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       },
       readMany: async (name, startSequence, minCount, maxCount, filter) => {
         this._ensureRingbufferService();
+        this._wireRingbufferStore(name);
         const effectiveStartSequence = Math.max(
           Number(startSequence),
           await this._distributedRingbufferService!.headSequence(name),
@@ -6080,11 +6266,13 @@ export class HeliosInstanceImpl implements HeliosInstance {
       // Block 21.1: Always use MapProxy — routing is handled by OperationService
       // (no more NetworkedMapProxy broadcast path)
       proxy = new MapProxy<unknown, unknown>(
-        name,
-        store,
-        this._nodeEngine,
-        this._mapService,
-        mapStoreConfig,
+          name,
+          store,
+          this._nodeEngine,
+          this._mapService,
+          mapStoreConfig,
+          undefined,
+          this._mapEventJournal,
       );
       this._maps.set(name, proxy);
     }

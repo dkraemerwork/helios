@@ -909,7 +909,7 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
 
     // Map.EventJournalRead (0x014200)
     // Request: startSequence (long), minCount (int), maxCount (int), partitionId (int), name (string), predicate (Data nullable)
-    // Response: readCount (int), items (list of Data)
+    // Response: readCount (int), items (list of journal events), nextSeq (long)
     dispatcher.register(MAP_EVENT_JOURNAL_READ_REQUEST_TYPE, async (msg, _session) => {
         const iter = msg.forwardFrameIterator();
         const initialFrame = iter.next();
@@ -919,17 +919,41 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         const partitionId = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET);
         const name = StringCodec.decode(iter);
         const events = await operations.eventJournalRead(name, partitionId, startSequence, minCount, maxCount);
-        // Encode response: readCount (int in initial frame) + items (list of Data, each event key serialized)
-        const headerBuf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES);
+        // Encode response: readCount (int) + nextSeq (long) in initial frame
+        // items: list of event objects (each is a data structure with key, newValue, oldValue, eventType, timestamp)
+        const nextSeq = startSequence + BigInt(events.length);
+        const headerBuf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
         headerBuf.fill(0);
         headerBuf.writeUInt32LE(MAP_EVENT_JOURNAL_READ_RESPONSE_TYPE >>> 0, 0);
         headerBuf.writeInt32LE(events.length, RESPONSE_HEADER_SIZE);
+        headerBuf.writeBigInt64LE(nextSeq, RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES);
         const response = CM.createForEncode();
         response.add(new CM.Frame(headerBuf, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
-        // Encode items as list of Data (we encode the key for each event)
+        // Encode items as a list of journal event data structures
         response.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
         for (const event of events) {
+            // Each event is a data structure: fixed fields (eventType int32, timestamp long) + key + newValue + oldValue
+            response.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+            // Fixed-size fields frame: eventType (int32) + timestamp (long)
+            const eventFrameBuf = Buffer.allocUnsafe(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+            eventFrameBuf.writeInt32LE(event.eventType, 0);
+            eventFrameBuf.writeBigInt64LE(BigInt(event.timestamp), INT_SIZE_IN_BYTES);
+            response.add(new CM.Frame(eventFrameBuf, 0));
+            // key (required Data)
             DataCodec.encode(response, event.key);
+            // newValue (nullable Data)
+            if (event.newValue !== null) {
+                DataCodec.encode(response, event.newValue);
+            } else {
+                response.add(CM.NULL_FRAME);
+            }
+            // oldValue (nullable Data)
+            if (event.oldValue !== null) {
+                DataCodec.encode(response, event.oldValue);
+            } else {
+                response.add(CM.NULL_FRAME);
+            }
+            response.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
         }
         response.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
         response.setFinal();

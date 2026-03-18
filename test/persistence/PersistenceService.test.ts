@@ -31,6 +31,17 @@ function makeAdapter(store: Map<string, Uint8Array> = new Map()): MapStoreAdapte
             const storeKey = `${mapName}::${partitionId}::${Buffer.from(key).toString('base64')}`;
             data.set(storeKey, value);
         },
+        removeEntry(mapName: string, partitionId: number, key: Uint8Array) {
+            const storeKey = `${mapName}::${partitionId}::${Buffer.from(key).toString('base64')}`;
+            data.delete(storeKey);
+        },
+        clearMap(mapName: string) {
+            for (const key of [...data.keys()]) {
+                if (key.startsWith(`${mapName}::`)) {
+                    data.delete(key);
+                }
+            }
+        },
         clearAll() {
             data.clear();
         },

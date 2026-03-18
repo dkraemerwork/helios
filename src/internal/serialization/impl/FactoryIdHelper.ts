@@ -53,6 +53,9 @@ export const FactoryIdHelper = {
     AGGREGATOR_DS_FACTORY: 'hazelcast.serialization.ds.aggregator',
     AGGREGATOR_DS_FACTORY_ID: -29,
 
+    PROJECTION_DS_FACTORY: 'hazelcast.serialization.ds.projection',
+    PROJECTION_DS_FACTORY_ID: -30,
+
     CONFIG_DS_FACTORY: 'hazelcast.serialization.ds.config',
     CONFIG_DS_FACTORY_ID: -31,
 

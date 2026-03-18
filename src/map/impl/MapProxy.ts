@@ -23,6 +23,7 @@ import type { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { MapEventJournal } from '@zenystx/helios-core/internal/journal/MapEventJournal';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
@@ -48,6 +49,8 @@ import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEn
 import { IndexMatchHint } from '@zenystx/helios-core/query/impl/QueryContext';
 import type { SortedIndex } from '@zenystx/helios-core/query/impl/SortedIndex';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
+import { PartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl';
+import { MultiPartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
@@ -88,6 +91,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** QueryCache manager — manages continuous query caches for this map. */
     private readonly _queryCacheManager: QueryCacheManager;
 
+    /** Optional MapEventJournal — when set, mutations are recorded. */
+    private readonly _mapEventJournal: MapEventJournal | null;
+
     constructor(
         name: string,
         store: RecordStore,
@@ -95,6 +101,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
         containerService: MapContainerService,
         mapStoreConfig?: MapStoreConfig,
         mapConfig?: MapConfig,
+        mapEventJournal?: MapEventJournal,
     ) {
         this._name = name;
         this._store = store;
@@ -123,6 +130,8 @@ export class MapProxy<K, V> implements IMap<K, V> {
             },
             this._containerService,
         );
+
+        this._mapEventJournal = mapEventJournal ?? null;
     }
 
     /** Lazily initialize MapDataStore on first store-touching call (singleflight). */
@@ -207,6 +216,10 @@ export class MapProxy<K, V> implements IMap<K, V> {
         // Index maintenance
         this._updateIndex(key, value, oldValue);
         this._queryCacheManager.onMapEvent(this._name, 'put', kd, oldData ?? null, vd);
+        if (this._mapEventJournal !== null) {
+            const partitionId = this._partitionIdForKeyData(kd);
+            this._mapEventJournal.writeAddEvent(this._name, partitionId, kd, oldData ?? null, vd);
+        }
         if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
@@ -227,6 +240,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
         // MapStore write now happens inside SetOperation on the partition owner
         this._updateIndex(key, value, oldValue);
         this._queryCacheManager.onMapEvent(this._name, 'put', kd, oldData, vd);
+        if (this._mapEventJournal !== null) {
+            this._mapEventJournal.writeAddEvent(this._name, partitionId, kd, oldData, vd);
+        }
         if (oldValue === null) {
             this._fireAdded(key, value);
         } else {
@@ -261,6 +277,10 @@ export class MapProxy<K, V> implements IMap<K, V> {
             this._removeFromIndex(key, oldValue);
         }
         this._queryCacheManager.onMapEvent(this._name, 'remove', kd, oldData, null);
+        if (this._mapEventJournal !== null) {
+            const partitionId = this._partitionIdForKeyData(kd);
+            this._mapEventJournal.writeRemoveEvent(this._name, partitionId, kd, oldData);
+        }
         this._fireRemoved(key, oldValue);
         return oldValue;
     }
@@ -279,6 +299,9 @@ export class MapProxy<K, V> implements IMap<K, V> {
         }
         if (removed) {
             this._queryCacheManager.onMapEvent(this._name, 'remove', kd, oldData, null);
+            if (this._mapEventJournal !== null) {
+                this._mapEventJournal.writeRemoveEvent(this._name, partitionId, kd, oldData);
+            }
             this._fireRemoved(key, null);
         }
     }
@@ -348,6 +371,11 @@ export class MapProxy<K, V> implements IMap<K, V> {
         // MapStore write now happens inside PutIfAbsentOperation on the partition owner
         // Index the new entry (only reached when key was absent)
         this._addToIndex(key, value);
+        this._queryCacheManager.onMapEvent(this._name, 'put', kd, null, vd);
+        if (this._mapEventJournal !== null) {
+            const partitionId = this._partitionIdForKeyData(kd);
+            this._mapEventJournal.writeAddEvent(this._name, partitionId, kd, null, vd);
+        }
         return null;
     }
 
@@ -358,10 +386,15 @@ export class MapProxy<K, V> implements IMap<K, V> {
         for (const [k, v] of pairs) {
             const kd = this._toData(k);
             const vd = this._toData(v);
-            await this._invokeOnKeyPartition<Data | null>(
+            const oldData = await this._invokeOnKeyPartition<Data | null>(
                 new PutOperation(this._name, kd, vd, -1, -1), kd,
             );
             this._addToIndex(k, v);
+            this._queryCacheManager.onMapEvent(this._name, 'put', kd, oldData ?? null, vd);
+            if (this._mapEventJournal !== null) {
+                const partitionId = this._partitionIdForKeyData(kd);
+                this._mapEventJournal.writeAddEvent(this._name, partitionId, kd, oldData ?? null, vd);
+            }
         }
     }
 
@@ -394,18 +427,39 @@ export class MapProxy<K, V> implements IMap<K, V> {
     values(): V[];
     values(predicate: Predicate<K, V>): V[];
     values(predicate?: Predicate<K, V>): V[] {
-        if (predicate !== undefined) {
-            const indexedKeys = this._tryIndexScan(predicate);
-            if (indexedKeys !== null) {
-                return this._collectValuesByKeys(indexedKeys, predicate);
+        let effectivePredicate = predicate;
+        let targetPartitionIds: Set<number> | null = null;
+        if (predicate instanceof PartitionPredicateImpl) {
+            effectivePredicate = predicate.getTarget();
+            const keyData = this._nodeEngine.toData(predicate.getPartitionKey());
+            if (keyData !== null) {
+                targetPartitionIds = new Set([this._nodeEngine.getPartitionService().getPartitionId(keyData)]);
+            }
+        } else if (predicate instanceof MultiPartitionPredicateImpl) {
+            effectivePredicate = predicate.getTarget();
+            targetPartitionIds = new Set<number>();
+            for (const pk of predicate.getPartitionKeys()) {
+                const keyData = this._nodeEngine.toData(pk);
+                if (keyData !== null) {
+                    targetPartitionIds.add(this._nodeEngine.getPartitionService().getPartitionId(keyData));
+                }
             }
         }
+        if (effectivePredicate !== undefined) {
+            const indexedKeys = this._tryIndexScan(effectivePredicate);
+            if (indexedKeys !== null) {
+                return this._collectValuesByKeys(indexedKeys, effectivePredicate);
+            }
+        }
+        const entries = targetPartitionIds !== null
+            ? this._containerService.getEntriesForPartitions(this._name, targetPartitionIds)
+            : this._containerService.getAllEntries(this._name);
         const result: V[] = [];
-        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+        for (const [kd, vd] of entries) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
-            if (predicate === undefined || predicate.apply(this._makeEntry(k, v))) {
+            if (effectivePredicate === undefined || effectivePredicate.apply(this._makeEntry(k, v))) {
                 result.push(v);
             }
         }
@@ -415,18 +469,39 @@ export class MapProxy<K, V> implements IMap<K, V> {
     keySet(): Set<K>;
     keySet(predicate: Predicate<K, V>): Set<K>;
     keySet(predicate?: Predicate<K, V>): Set<K> {
-        if (predicate !== undefined) {
-            const indexedKeys = this._tryIndexScan(predicate);
-            if (indexedKeys !== null) {
-                return this._collectKeysByKeys(indexedKeys, predicate);
+        let effectivePredicate = predicate;
+        let targetPartitionIds: Set<number> | null = null;
+        if (predicate instanceof PartitionPredicateImpl) {
+            effectivePredicate = predicate.getTarget();
+            const keyData = this._nodeEngine.toData(predicate.getPartitionKey());
+            if (keyData !== null) {
+                targetPartitionIds = new Set([this._nodeEngine.getPartitionService().getPartitionId(keyData)]);
+            }
+        } else if (predicate instanceof MultiPartitionPredicateImpl) {
+            effectivePredicate = predicate.getTarget();
+            targetPartitionIds = new Set<number>();
+            for (const pk of predicate.getPartitionKeys()) {
+                const keyData = this._nodeEngine.toData(pk);
+                if (keyData !== null) {
+                    targetPartitionIds.add(this._nodeEngine.getPartitionService().getPartitionId(keyData));
+                }
             }
         }
+        if (effectivePredicate !== undefined) {
+            const indexedKeys = this._tryIndexScan(effectivePredicate);
+            if (indexedKeys !== null) {
+                return this._collectKeysByKeys(indexedKeys, effectivePredicate);
+            }
+        }
+        const entries = targetPartitionIds !== null
+            ? this._containerService.getEntriesForPartitions(this._name, targetPartitionIds)
+            : this._containerService.getAllEntries(this._name);
         const result = new Set<K>();
-        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+        for (const [kd, vd] of entries) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
-            if (predicate === undefined || predicate.apply(this._makeEntry(k, v))) {
+            if (effectivePredicate === undefined || effectivePredicate.apply(this._makeEntry(k, v))) {
                 result.add(k);
             }
         }
@@ -436,18 +511,39 @@ export class MapProxy<K, V> implements IMap<K, V> {
     entrySet(): Map<K, V>;
     entrySet(predicate: Predicate<K, V>): Map<K, V>;
     entrySet(predicate?: Predicate<K, V>): Map<K, V> {
-        if (predicate !== undefined) {
-            const indexedKeys = this._tryIndexScan(predicate);
-            if (indexedKeys !== null) {
-                return this._collectEntriesByKeys(indexedKeys, predicate);
+        let effectivePredicate = predicate;
+        let targetPartitionIds: Set<number> | null = null;
+        if (predicate instanceof PartitionPredicateImpl) {
+            effectivePredicate = predicate.getTarget();
+            const keyData = this._nodeEngine.toData(predicate.getPartitionKey());
+            if (keyData !== null) {
+                targetPartitionIds = new Set([this._nodeEngine.getPartitionService().getPartitionId(keyData)]);
+            }
+        } else if (predicate instanceof MultiPartitionPredicateImpl) {
+            effectivePredicate = predicate.getTarget();
+            targetPartitionIds = new Set<number>();
+            for (const pk of predicate.getPartitionKeys()) {
+                const keyData = this._nodeEngine.toData(pk);
+                if (keyData !== null) {
+                    targetPartitionIds.add(this._nodeEngine.getPartitionService().getPartitionId(keyData));
+                }
             }
         }
+        if (effectivePredicate !== undefined) {
+            const indexedKeys = this._tryIndexScan(effectivePredicate);
+            if (indexedKeys !== null) {
+                return this._collectEntriesByKeys(indexedKeys, effectivePredicate);
+            }
+        }
+        const entries = targetPartitionIds !== null
+            ? this._containerService.getEntriesForPartitions(this._name, targetPartitionIds)
+            : this._containerService.getAllEntries(this._name);
         const result = new Map<K, V>();
-        for (const [kd, vd] of this._containerService.getAllEntries(this._name)) {
+        for (const [kd, vd] of entries) {
             const k = this._toObject<K>(kd);
             const v = this._toObject<V>(vd);
             if (k === null || v === null) continue;
-            if (predicate === undefined || predicate.apply(this._makeEntry(k, v))) {
+            if (effectivePredicate === undefined || effectivePredicate.apply(this._makeEntry(k, v))) {
                 result.set(k, v);
             }
         }

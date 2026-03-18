@@ -11,11 +11,22 @@ import { MergePolicyProvider } from '@zenystx/helios-core/spi/merge/MergePolicyP
 import { SplitBrainMergeDataImpl } from '@zenystx/helios-core/spi/merge/SplitBrainMergeDataImpl';
 import type { SplitBrainMergePolicy } from '@zenystx/helios-core/spi/merge/SplitBrainMergePolicy';
 
+export interface MergeEntryStats {
+    hits: number;
+    creationTime: number;
+    lastAccessTime: number;
+    lastUpdateTime: number;
+    expirationTime: number;
+    version: number;
+}
+
 export interface MergeableRecordStore {
     put(key: Data, value: Data, ttl: number, maxIdle: number): Data | null;
     get(key: Data): Data | null;
     remove(key: Data): Data | null;
     entries(): IterableIterator<readonly [Data, Data]>;
+    /** Returns the full stats for a key without touching access counters, or null if absent. */
+    getEntryStats(key: Data): MergeEntryStats | null;
 }
 
 export interface MergeableMapStore {
@@ -63,9 +74,20 @@ export class SplitBrainMergeHandler {
             const partitionId = partitionResolver(mergingKey);
             const store = existingStore.getRecordStore(mapName, partitionId);
             const existingRawValue = store?.get(mergingKey) ?? null;
-            const existingData = existingRawValue !== null
-                ? new SplitBrainMergeDataImpl(mergingKey, existingRawValue)
-                : null;
+            let existingData: SplitBrainMergeDataImpl | null = null;
+            if (existingRawValue !== null && store !== null) {
+                const stats = store.getEntryStats(mergingKey);
+                existingData = new SplitBrainMergeDataImpl(
+                    mergingKey,
+                    existingRawValue,
+                    stats?.hits ?? 0,
+                    stats?.creationTime ?? 0,
+                    stats?.lastAccessTime ?? 0,
+                    stats?.lastUpdateTime ?? 0,
+                    stats?.expirationTime ?? Number.MAX_SAFE_INTEGER,
+                    stats?.version ?? 0,
+                );
+            }
 
             const winner = policy.merge(mergingData, existingData);
 

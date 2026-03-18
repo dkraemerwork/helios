@@ -31,15 +31,22 @@ export class SplitBrainDetector {
     private readonly _reachableMembers: Set<string> = new Set();
     private _readOnlyMode = false;
 
+    /** The UUID of the local member — always counted as reachable. */
+    private readonly _localMemberUuid: string | null;
+
     /** Optional lifecycle service for emitting MERGING/MERGED events. */
     private _lifecycleService: HeliosLifecycleService | null = null;
 
     /** Optional merge handler for reconciling data after split-brain heal. */
     private _mergeHandler: SplitBrainMergeHandler | null = null;
 
-    constructor(totalMembers: number) {
+    constructor(totalMembers: number, localMemberUuid: string | null = null) {
         this._totalMembers = totalMembers;
         this._quorumSize = Math.floor(totalMembers / 2) + 1;
+        this._localMemberUuid = localMemberUuid;
+        if (localMemberUuid !== null) {
+            this._reachableMembers.add(localMemberUuid);
+        }
     }
 
     setLifecycleService(lifecycleService: HeliosLifecycleService): void {

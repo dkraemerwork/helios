@@ -6,6 +6,9 @@
  * Stores key-value pairs per named CPMap instance. All mutations go through
  * CpSubsystemService for linearizability. Keys are serialized as JSON strings
  * (using the serialization service) and stored per-map in simple Maps.
+ *
+ * Linearizability guarantee: state is only mutated AFTER the Raft proposal
+ * succeeds. If the proposal fails, the in-memory state remains unchanged.
  */
 
 import { CpSubsystemService } from './CpSubsystemService.js';
@@ -63,19 +66,19 @@ export class CPMapService {
     async put<K, V>(mapName: string, key: K, value: V): Promise<V | null> {
         const keyStr = serializeEntry(key);
         const valueStr = serializeEntry(value);
+        await this._execute(mapName, 'CPMAP_PUT', { key: keyStr, value: valueStr });
         const map = this._getOrCreateMap(mapName);
         const prev = map.get(keyStr);
         map.set(keyStr, valueStr);
-        await this._execute(mapName, 'CPMAP_PUT', { key: keyStr, value: valueStr });
         return prev !== undefined ? deserializeEntry<V>(prev) : null;
     }
 
     async set<K, V>(mapName: string, key: K, value: V): Promise<void> {
         const keyStr = serializeEntry(key);
         const valueStr = serializeEntry(value);
+        await this._execute(mapName, 'CPMAP_SET', { key: keyStr, value: valueStr });
         const map = this._getOrCreateMap(mapName);
         map.set(keyStr, valueStr);
-        await this._execute(mapName, 'CPMAP_SET', { key: keyStr, value: valueStr });
     }
 
     async get<K, V>(mapName: string, key: K): Promise<V | null> {
@@ -87,18 +90,18 @@ export class CPMapService {
 
     async remove<K, V>(mapName: string, key: K): Promise<V | null> {
         const keyStr = serializeEntry(key);
+        await this._execute(mapName, 'CPMAP_REMOVE', { key: keyStr });
         const map = this._getOrCreateMap(mapName);
         const prev = map.get(keyStr);
         map.delete(keyStr);
-        await this._execute(mapName, 'CPMAP_REMOVE', { key: keyStr });
         return prev !== undefined ? deserializeEntry<V>(prev) : null;
     }
 
     async delete<K>(mapName: string, key: K): Promise<void> {
         const keyStr = serializeEntry(key);
+        await this._execute(mapName, 'CPMAP_DELETE', { key: keyStr });
         const map = this._getOrCreateMap(mapName);
         map.delete(keyStr);
-        await this._execute(mapName, 'CPMAP_DELETE', { key: keyStr });
     }
 
     async putIfAbsent<K, V>(mapName: string, key: K, value: V): Promise<V | null> {
@@ -109,8 +112,8 @@ export class CPMapService {
         if (existing !== undefined) {
             return deserializeEntry<V>(existing);
         }
-        map.set(keyStr, valueStr);
         await this._execute(mapName, 'CPMAP_PUT_IF_ABSENT', { key: keyStr, value: valueStr });
+        map.set(keyStr, valueStr);
         return null;
     }
 
@@ -124,8 +127,8 @@ export class CPMapService {
         if (currentStr !== expectedStr) {
             return false;
         }
-        map.set(keyStr, newStr);
         await this._execute(mapName, 'CPMAP_COMPARE_AND_SET', { key: keyStr, expectedValue: expectedStr, newValue: newStr });
+        map.set(keyStr, newStr);
         return true;
     }
 

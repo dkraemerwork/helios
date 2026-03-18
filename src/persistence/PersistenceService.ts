@@ -32,6 +32,8 @@ export interface MapStoreAdapter {
         value: Uint8Array;
     }>;
     restoreEntry(mapName: string, partitionId: number, key: Uint8Array, value: Uint8Array): void;
+    removeEntry(mapName: string, partitionId: number, key: Uint8Array): void;
+    clearMap(mapName: string): void;
     clearAll(): void;
 }
 
@@ -42,6 +44,7 @@ export class PersistenceService {
     private _running = false;
     private _forceStarting = false;
     private _checkpointTimer: ReturnType<typeof setInterval> | null = null;
+    private _storeAdapter: MapStoreAdapter | null = null;
 
     constructor(config: PersistenceConfig) {
         this._config = config;
@@ -63,7 +66,9 @@ export class PersistenceService {
 
         // Schedule periodic checkpoints (every 5 minutes)
         this._checkpointTimer = setInterval(() => {
-            // Checkpoint is triggered externally or on a schedule
+            if (this._storeAdapter !== null) {
+                void this.createCheckpoint(this._storeAdapter);
+            }
         }, 300_000);
     }
 
@@ -115,6 +120,9 @@ export class PersistenceService {
 
     /** Recover state from checkpoint + WAL replay. */
     async recover(storeAdapter: MapStoreAdapter): Promise<PersistenceRecoveryResult> {
+        // Store the adapter so the periodic checkpoint timer can use it.
+        this._storeAdapter = storeAdapter;
+
         const errors: string[] = [];
         let entriesRecovered = 0;
         let mapsRecovered = 0;
@@ -164,8 +172,13 @@ export class PersistenceService {
                         storeAdapter.restoreEntry(entry.mapName, entry.partitionId, entry.key, entry.value);
                         entriesRecovered++;
                     }
+                } else if (entry.type === WALEntryType.REMOVE) {
+                    if (entry.key) {
+                        storeAdapter.removeEntry(entry.mapName, entry.partitionId, entry.key);
+                    }
+                } else if (entry.type === WALEntryType.CLEAR) {
+                    storeAdapter.clearMap(entry.mapName);
                 }
-                // REMOVE and CLEAR operations are noted but not yet applied during replay
                 walEntriesReplayed++;
             } catch (e) {
                 errors.push(`WAL replay error at seq ${entry.sequence}: ${e}`);

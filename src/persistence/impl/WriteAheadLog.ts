@@ -144,10 +144,40 @@ export class WriteAheadLog {
         }
     }
 
-    /** Remove all WAL segments before the given sequence (after checkpoint). */
-    async truncateBefore(_sequence: bigint): Promise<void> {
-        // Safe approach: keep all files — more sophisticated truncation can be added later.
-        // This preserves all data, at the cost of disk space.
+    /** Remove all WAL segments where every entry has a sequence less than the given sequence. */
+    async truncateBefore(sequence: bigint): Promise<void> {
+        const files = await fs.promises.readdir(this._dir);
+        const walFiles = files
+            .filter(f => f.startsWith('wal-') && f.endsWith('.log'))
+            .sort();
+
+        // Never delete the current (last) segment — it may still be open for appending.
+        const deletionCandidates = walFiles.slice(0, -1);
+
+        for (const file of deletionCandidates) {
+            const filePath = path.join(this._dir, file);
+            const data = await fs.promises.readFile(filePath);
+            let offset = 0;
+            let allBefore = true;
+
+            while (offset < data.length) {
+                if (offset + 4 > data.length) break;
+                const totalSize = data.readUInt32BE(offset); offset += 4;
+                if (offset + totalSize > data.length) break;
+
+                // sequence is at bytes [1..8] within the entry (after 1-byte type)
+                const entrySeq = data.readBigInt64BE(offset + 1);
+                if (entrySeq >= sequence) {
+                    allBefore = false;
+                    break;
+                }
+                offset += totalSize;
+            }
+
+            if (allBefore) {
+                await fs.promises.unlink(filePath);
+            }
+        }
     }
 
     getCurrentSequence(): bigint { return this._currentSequence; }
