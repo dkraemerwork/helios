@@ -13,6 +13,7 @@ import { RaftTransportAdapter } from '../raft/RaftTransportAdapter.js';
 import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
 import { NotLeaderException } from '../raft/errors.js';
 import { SingleNodeRaftGroup, type RaftLogEntry as SingleNodeLogEntry } from './SingleNodeRaftGroup.js';
+import { CpStateMachine } from '../raft/CpStateMachine.js';
 
 // ── Exported types (backward compatible) ────────────────────────────────────
 
@@ -56,6 +57,7 @@ export class CpSubsystemService {
   // -- Single-node state (backward compat) --
   private readonly _groups = new Map<string, SingleNodeRaftGroup>();
   private readonly _groupStates = new Map<string, CpGroupState>();
+  private readonly _singleNodeStateMachine = new CpStateMachine();
 
   // -- Session management --
   private readonly _sessions = new Map<string, CpSession>();
@@ -126,11 +128,11 @@ export class CpSubsystemService {
 
   /**
    * Perform a linearizable read. In single-node mode reads directly from
-   * the SingleNodeRaftGroup state machine.
+   * the CpStateMachine, falling back to the SingleNodeRaftGroup for backward compat.
    */
   linearizableRead(groupId: string, key: string): unknown {
     if (!this._multiNodeEnabled) {
-      return this._singleNodeRead(groupId, key);
+      return this._singleNodeStateMachine.getState().get(key) ?? this.readState(groupId, key);
     }
 
     const groupInfo = this._groupManager!.getGroup(groupId);
@@ -406,12 +408,21 @@ export class CpSubsystemService {
     }
   }
 
-  private _executeSingleNode(command: RaftCommand): unknown {
-    const raft = this._getRaft(command.groupId);
-    return raft.propose(command as CpCommand);
+  private async _executeSingleNode(command: RaftCommand): Promise<unknown> {
+    // Ensure the SingleNodeRaftGroup exists for backward compat metadata tracking
+    this._getRaft(command.groupId);
+    // Apply through the deterministic state machine
+    const result = this._singleNodeStateMachine.apply(command);
+    // Sync the computed value back into the SingleNodeRaftGroup for backward compat reads
+    const raft = this._groups.get(command.groupId);
+    if (raft !== undefined) {
+      const stateValue = this._singleNodeStateMachine.getState().get(command.key);
+      raft.setState(command.key, stateValue);
+    }
+    return result;
   }
 
   private _singleNodeRead(groupId: string, key: string): unknown {
-    return this.readState(groupId, key);
+    return this._singleNodeStateMachine.getState().get(key) ?? this.readState(groupId, key);
   }
 }

@@ -5,7 +5,8 @@
  *
  * Provides a distributed counting semaphore. Permits acquired by a CP session
  * are automatically released if the session times out, preventing deadlocks
- * from failed clients. Backed by Raft consensus for linearizability.
+ * from failed clients. All mutations go through Raft consensus via
+ * executeRaftCommand(). The local waiter queue manages blocking acquires.
  */
 
 import { CpSubsystemService } from './CpSubsystemService.js';
@@ -70,12 +71,13 @@ export class SemaphoreService {
    */
   async init(name: string, permits: number): Promise<boolean> {
     if (permits < 0) throw new Error('Initial permits cannot be negative');
-    const current = this._readState(name);
-    if (current.available !== 0 || Object.keys(current.sessionPermits).length > 0) {
-      return false;
-    }
-    await this._writeState(name, defaultState(permits));
-    return true;
+    const result = await this._cp.executeRaftCommand(name, {
+      type: 'SEM_INIT',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: { permits },
+    });
+    return result as boolean;
   }
 
   // ── Acquire ──────────────────────────────────────────────────────────────
@@ -237,28 +239,28 @@ export class SemaphoreService {
       }
       this._waitQueues.delete(name);
     }
-    this._cp.applyStateMutation(CP_GROUP_DEFAULT, stateKey(name), undefined);
+    void this._cp.executeRaftCommand(name, {
+      type: 'SEM_SET',
+      groupId: CP_GROUP_DEFAULT,
+      key: stateKey(name),
+      payload: defaultState(0),
+    });
   }
 
   // ── Internal ───────────────────────────────────────────────────────────
 
   private _readState(name: string): SemaphoreState {
-    this._cp.getOrCreateGroup(CP_GROUP_DEFAULT);
-    const raw = this._cp.readState(CP_GROUP_DEFAULT, stateKey(name));
+    const raw = this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
     return deserializeState(raw);
   }
 
   private async _writeState(name: string, state: SemaphoreState): Promise<void> {
-    this._cp.getOrCreateGroup(CP_GROUP_DEFAULT);
-
-    await this._cp.executeCommand({
+    await this._cp.executeRaftCommand(name, {
       type: 'SEM_SET',
       groupId: CP_GROUP_DEFAULT,
       key: stateKey(name),
       payload: state,
     });
-
-    this._cp.applyStateMutation(CP_GROUP_DEFAULT, stateKey(name), state);
   }
 
   /**

@@ -5,7 +5,8 @@
  *
  * Provides a distributed synchronization primitive that allows one or more
  * threads to wait until a set of operations being performed by other threads
- * completes. Backed by Raft consensus for linearizability.
+ * completes. All mutations go through Raft consensus via executeRaftCommand().
+ * Local waiters are resolved when count reaches zero.
  */
 
 import { CpSubsystemService } from './CpSubsystemService.js';
@@ -24,23 +25,15 @@ function stateKey(name: string): string {
 }
 
 function defaultState(): CountDownLatchState {
-  return {
-    count: 0,
-    round: 0,
-    invocationUuids: [],
-  };
+  return { count: 0, round: 0, invocationUuids: [] };
 }
 
 function deserializeState(raw: unknown): CountDownLatchState {
-  if (raw === undefined) {
+  if (raw === undefined || raw === null) {
     return defaultState();
   }
   if (typeof raw === 'number') {
-    return {
-      count: raw,
-      round: raw > 0 ? 1 : 0,
-      invocationUuids: [],
-    };
+    return { count: raw, round: raw > 0 ? 1 : 0, invocationUuids: [] };
   }
   const value = raw as Partial<CountDownLatchState>;
   return {
@@ -69,7 +62,7 @@ export class CountDownLatchService {
    */
   async trySetCount(name: string, count: number): Promise<boolean> {
     if (count < 0) throw new Error('Count must be >= 0');
-    const current = await this._readState(name);
+    const current = this._readState(name);
     if (current.count > 0) return false;
 
     await this._writeState(name, {
@@ -85,7 +78,7 @@ export class CountDownLatchService {
    * are released.
    */
   async countDown(name: string, expectedRound?: number, invocationUuid?: string): Promise<void> {
-    const current = await this._readState(name);
+    const current = this._readState(name);
     if (current.count <= 0) return;
     if (expectedRound !== undefined && current.round !== expectedRound) return;
     if (invocationUuid !== undefined && current.invocationUuids.includes(invocationUuid)) return;
@@ -106,11 +99,11 @@ export class CountDownLatchService {
 
   /** Returns the current count. */
   async getCount(name: string): Promise<number> {
-    return (await this._readState(name)).count;
+    return this._readState(name).count;
   }
 
   async getRound(name: string): Promise<number> {
-    return (await this._readState(name)).round;
+    return this._readState(name).round;
   }
 
   /**
@@ -118,7 +111,7 @@ export class CountDownLatchService {
    * Returns true if count reached zero, false if timeout elapsed.
    */
   async await(name: string, timeoutMs?: number): Promise<boolean> {
-    const current = await this._readState(name);
+    const current = this._readState(name);
     if (current.count <= 0) return true;
 
     return new Promise<boolean>((resolve) => {
@@ -138,7 +131,11 @@ export class CountDownLatchService {
         resolve(true);
       };
 
-      const waiter: { resolve: () => void; reject: (err: Error) => void; timeoutHandle: ReturnType<typeof setTimeout> | null } = {
+      const waiter: {
+        resolve: () => void;
+        reject: (err: Error) => void;
+        timeoutHandle: ReturnType<typeof setTimeout> | null;
+      } = {
         resolve: onResolve,
         reject: () => {},
         timeoutHandle: null,
@@ -161,28 +158,23 @@ export class CountDownLatchService {
   destroy(name: string): void {
     this._releaseWaiters(name);
     this._waiters.delete(name);
-    this._cp.applyStateMutation(CP_GROUP_DEFAULT, stateKey(name), undefined);
+    void this._writeState(name, defaultState());
   }
 
   // ── Internal ───────────────────────────────────────────────────────────
 
-  private async _readState(name: string): Promise<CountDownLatchState> {
-    this._cp.getOrCreateGroup(CP_GROUP_DEFAULT);
-    const raw = this._cp.readState(CP_GROUP_DEFAULT, stateKey(name));
+  private _readState(name: string): CountDownLatchState {
+    const raw = this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
     return deserializeState(raw);
   }
 
   private async _writeState(name: string, state: CountDownLatchState): Promise<void> {
-    this._cp.getOrCreateGroup(CP_GROUP_DEFAULT);
-
-    await this._cp.executeCommand({
+    await this._cp.executeRaftCommand(name, {
       type: 'CDL_SET',
       groupId: CP_GROUP_DEFAULT,
       key: stateKey(name),
       payload: state,
     });
-
-    this._cp.applyStateMutation(CP_GROUP_DEFAULT, stateKey(name), state);
   }
 
   private _releaseWaiters(name: string): void {
