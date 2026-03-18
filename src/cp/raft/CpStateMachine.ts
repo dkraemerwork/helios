@@ -226,6 +226,9 @@ export class CpStateMachine implements RaftStateMachine {
       case 'SEM_SET':
         return this._semSet(command.key, command.payload as SemaphoreState);
 
+      case 'SEM_DESTROY':
+        return this._genericDestroy(command.key);
+
       // ── CountDownLatch ───────────────────────────────────────────────────
       case 'CDL_TRY_SET_COUNT':
         return this._cdlTrySetCount(command.key, command.payload as { count: number });
@@ -233,11 +236,11 @@ export class CpStateMachine implements RaftStateMachine {
       case 'CDL_COUNT_DOWN':
         return this._cdlCountDown(command.key, command.payload as { expectedRound?: number; invocationUuid?: string });
 
-      case 'CDL_GET_COUNT':
-        return this._cdlGetCount(command.key);
-
       case 'CDL_SET':
         return this._cdlSet(command.key, command.payload as CountDownLatchState);
+
+      case 'CDL_DESTROY':
+        return this._genericDestroy(command.key);
 
       // ── FencedLock ───────────────────────────────────────────────────────
       case 'FLOCK_LOCK':
@@ -267,7 +270,8 @@ export class CpStateMachine implements RaftStateMachine {
 
       // ── Membership / protocol ────────────────────────────────────────────
       case 'RAFT_UPDATE_MEMBERS': {
-        // Membership tracking is handled by RaftNode. No state change needed.
+        // Reserved for future membership change operations.
+        // Membership tracking is handled by RaftNode; no state change needed here.
         return undefined;
       }
 
@@ -577,10 +581,6 @@ export class CpStateMachine implements RaftStateMachine {
 
     this._state.set(key, nextState);
     return nextCount;
-  }
-
-  private _cdlGetCount(key: string): number {
-    return readCdl(this._state, key).count;
   }
 
   private _cdlSet(key: string, payload: CountDownLatchState): undefined {

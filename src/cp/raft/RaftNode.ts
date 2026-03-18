@@ -251,7 +251,8 @@ export class RaftNode {
    * we are reading from an up-to-date committed state.
    *
    * For a single-member cluster the read is applied directly.
-   * For multi-member clusters, a NOP barrier entry is committed first.
+   * For multi-member clusters, a LINEARIZABLE_READ command is committed to
+   * establish linearizability and return the current state value.
    */
   linearizableRead(key: string): Promise<RaftProposalResult> {
     if (this._destroyed) {

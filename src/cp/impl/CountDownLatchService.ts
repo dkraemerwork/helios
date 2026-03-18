@@ -150,10 +150,17 @@ export class CountDownLatchService {
     });
   }
 
-  destroy(name: string): void {
+  async destroy(name: string): Promise<void> {
     this._releaseWaiters(name);
     this._waiters.delete(name);
-    void this._writeState(name, defaultState());
+    const groupId = this._cp.resolveGroupId(name);
+    const objectName = this._cp.resolveObjectName(name);
+    await this._cp.executeRaftCommand(name, {
+      type: 'CDL_DESTROY',
+      groupId,
+      key: `cdl:${objectName}`,
+      payload: null,
+    });
   }
 
   // ── Internal ───────────────────────────────────────────────────────────

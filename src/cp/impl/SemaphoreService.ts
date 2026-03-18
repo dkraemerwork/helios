@@ -217,7 +217,7 @@ export class SemaphoreService {
     this._drainWaitQueue(name);
   }
 
-  destroy(name: string): void {
+  async destroy(name: string): Promise<void> {
     const waiters = this._waitQueues.get(name);
     if (waiters !== undefined) {
       for (const w of waiters) {
@@ -226,11 +226,13 @@ export class SemaphoreService {
       }
       this._waitQueues.delete(name);
     }
-    void this._cp.executeRaftCommand(name, {
-      type: 'SEM_SET',
-      groupId: CP_GROUP_DEFAULT,
-      key: stateKey(name),
-      payload: defaultState(0),
+    const groupId = this._cp.resolveGroupId(name);
+    const objectName = this._cp.resolveObjectName(name);
+    await this._cp.executeRaftCommand(name, {
+      type: 'SEM_DESTROY',
+      groupId,
+      key: `sem:${objectName}`,
+      payload: null,
     });
   }
 
