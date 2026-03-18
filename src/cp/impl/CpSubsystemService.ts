@@ -1,16 +1,20 @@
 /**
  * CP Subsystem Service — Raft-based consensus for linearizable distributed operations.
  *
- * Port of com.hazelcast.cp.CPSubsystem.
- *
- * Implements a single CP group with Raft-like consensus:
- *  - Leader election among CP group members
- *  - Log replication with majority acknowledgement
- *  - CP group creation/destruction
- *  - Session management for CP data structures
+ * In single-node mode (cpMemberCount < 3): uses SingleNodeRaftGroup for immediate commit.
+ * In multi-node mode (cpMemberCount >= 3): uses full Raft consensus via RaftNode.
  */
 
-// ── Raft log entry ──────────────────────────────────────────────────────
+import type { RaftCommand } from '../raft/types.js';
+import type { CPSubsystemConfig } from '../../config/CPSubsystemConfig.js';
+import { CpGroupManager } from '../raft/CpGroupManager.js';
+import { RaftMessageRouter } from '../raft/RaftMessageRouter.js';
+import { RaftTransportAdapter } from '../raft/RaftTransportAdapter.js';
+import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
+import { NotLeaderException } from '../raft/errors.js';
+import { SingleNodeRaftGroup, type RaftLogEntry as SingleNodeLogEntry } from './SingleNodeRaftGroup.js';
+
+// ── Exported types (backward compatible) ────────────────────────────────────
 
 export interface RaftLogEntry {
   term: number;
@@ -26,8 +30,6 @@ export interface CpCommand {
   sessionId?: string;
 }
 
-// ── CP Group state ──────────────────────────────────────────────────────
-
 export interface CpGroupState {
   groupId: string;
   members: string[];
@@ -38,8 +40,6 @@ export interface CpGroupState {
   stateMachine: Map<string, unknown>;
 }
 
-// ── Session ─────────────────────────────────────────────────────────────
-
 export interface CpSession {
   sessionId: string;
   memberId: string;
@@ -48,105 +48,17 @@ export interface CpSession {
   lastHeartbeatAt: number;
 }
 
-// ── Raft node (per CP group, single-node embedded implementation) ────────
-
-class RaftNode {
-  private _term = 0;
-  private _leader: string | null = null;
-  private _log: RaftLogEntry[] = [];
-  private _commitIndex = -1;
-  private _stateMachine: Map<string, unknown> = new Map();
-  private _applyListeners: Array<(entry: RaftLogEntry) => void> = [];
-
-  constructor(
-    private readonly _localMemberId: string,
-    private readonly _groupMembers: string[],
-  ) {
-    // In single-node mode the local member is always leader
-    if (this._groupMembers.length === 1 || this._groupMembers[0] === this._localMemberId) {
-      this._leader = this._localMemberId;
-      this._term = 1;
-    }
-  }
-
-  getLeader(): string | null {
-    return this._leader;
-  }
-
-  getTerm(): number {
-    return this._term;
-  }
-
-  getCommitIndex(): number {
-    return this._commitIndex;
-  }
-
-  getStateMachine(): Map<string, unknown> {
-    return this._stateMachine;
-  }
-
-  isLeader(): boolean {
-    return this._leader === this._localMemberId;
-  }
-
-  onApply(listener: (entry: RaftLogEntry) => void): void {
-    this._applyListeners.push(listener);
-  }
-
-  /**
-   * Propose a command. In single-node mode this immediately appends and commits.
-   * In multi-node mode this would replicate to majority before committing.
-   */
-  async propose(command: CpCommand): Promise<unknown> {
-    if (!this.isLeader()) {
-      throw new Error(`Not the leader. Leader is ${this._leader ?? 'unknown'}`);
-    }
-
-    const entry: RaftLogEntry = {
-      term: this._term,
-      index: this._log.length,
-      command,
-    };
-    this._log.push(entry);
-
-    // Majority write — with a single member, local commit satisfies majority.
-    // With multiple members in the group array, we'd wait for ACKs (not modeled here).
-    this._commitIndex = entry.index;
-    this._apply(entry);
-
-    return this._stateMachine.get(command.key);
-  }
-
-  /** Apply a committed log entry to the state machine. */
-  private _apply(entry: RaftLogEntry): void {
-    for (const listener of this._applyListeners) {
-      listener(entry);
-    }
-  }
-
-  /** For external state machine manipulation after apply. */
-  setState(key: string, value: unknown): void {
-    this._stateMachine.set(key, value);
-  }
-
-  getState(key: string): unknown {
-    return this._stateMachine.get(key);
-  }
-
-  hasState(key: string): boolean {
-    return this._stateMachine.has(key);
-  }
-}
-
-// ── CP Subsystem Service ────────────────────────────────────────────────
+// ── CP Subsystem Service ─────────────────────────────────────────────────────
 
 export class CpSubsystemService {
   static readonly SERVICE_NAME = 'hz:impl:cpSubsystemService';
 
-  private readonly _groups = new Map<string, RaftNode>();
-  private readonly _sessions = new Map<string, CpSession>();
+  // -- Single-node state (backward compat) --
+  private readonly _groups = new Map<string, SingleNodeRaftGroup>();
   private readonly _groupStates = new Map<string, CpGroupState>();
 
+  // -- Session management --
+  private readonly _sessions = new Map<string, CpSession>();
   private static readonly SESSION_TTL_MS = 60_000;
   private static readonly SESSION_HEARTBEAT_INTERVAL_MS = 5_000;
   private _sessionHeartbeatHandle: ReturnType<typeof setInterval> | null = null;
@@ -154,11 +66,153 @@ export class CpSubsystemService {
   private _nextThreadId = 1n;
   private readonly _sessionCloseListeners: Array<(sessionId: string) => void> = [];
 
-  constructor(private readonly _localMemberId: string) {
+  // -- Multi-node state --
+  private readonly _multiNodeEnabled: boolean;
+  private _groupManager: CpGroupManager | null = null;
+  private _messageRouter: RaftMessageRouter | null = null;
+  private _transportAdapter: RaftTransportAdapter | null = null;
+
+  // -- WaitKey mechanism --
+  private readonly _waitKeys = new Map<string, {
+    resolve: (r: unknown) => void;
+    reject: (e: Error) => void;
+    timeoutId?: ReturnType<typeof setTimeout>;
+  }>();
+
+  constructor(
+    private readonly _localMemberId: string,
+    cpConfig?: CPSubsystemConfig,
+    transport?: TcpClusterTransport,
+    cpMembers?: Array<{ uuid: string; address: { host: string; port: number } }>,
+  ) {
+    this._multiNodeEnabled = cpConfig?.isEnabled() ?? false;
+
+    if (this._multiNodeEnabled && transport && cpMembers && cpConfig) {
+      this._messageRouter = new RaftMessageRouter();
+      this._transportAdapter = new RaftTransportAdapter(transport);
+      this._groupManager = new CpGroupManager(
+        { uuid: _localMemberId, address: { host: '127.0.0.1', port: 0 } },
+        cpMembers,
+        cpConfig,
+        this._transportAdapter,
+        this._messageRouter,
+      );
+    }
+
     this._startSessionHeartbeat();
   }
 
-  // ── Group lifecycle ────────────────────────────────────────────────────
+  // ── New Multi-Node API ───────────────────────────────────────────────────────
+
+  /**
+   * Execute a command through Raft consensus. In single-node mode, falls back to
+   * the embedded SingleNodeRaftGroup for immediate commit.
+   */
+  async executeRaftCommand(proxyName: string, command: RaftCommand): Promise<unknown> {
+    if (!this._multiNodeEnabled) {
+      return this._executeSingleNode(command);
+    }
+
+    const groupId = this.resolveGroupId(proxyName);
+    const groupInfo = await this._groupManager!.getOrCreateGroup(groupId);
+    const node = groupInfo.raftNode;
+
+    if (!node.isLeader()) {
+      throw new NotLeaderException(node.getLeader(), groupId);
+    }
+
+    return node.propose(command);
+  }
+
+  /**
+   * Perform a linearizable read. In single-node mode reads directly from
+   * the SingleNodeRaftGroup state machine.
+   */
+  linearizableRead(groupId: string, key: string): unknown {
+    if (!this._multiNodeEnabled) {
+      return this._singleNodeRead(groupId, key);
+    }
+
+    const groupInfo = this._groupManager!.getGroup(groupId);
+    if (!groupInfo) return undefined;
+    return groupInfo.stateMachine.getState().get(key);
+  }
+
+  /**
+   * Extract the CP group name from a proxy name in the form "objectName@groupName".
+   * Returns "default" if no "@" is present.
+   */
+  resolveGroupId(proxyName: string): string {
+    const idx = proxyName.indexOf('@');
+    return idx >= 0 ? proxyName.slice(idx + 1) : 'default';
+  }
+
+  /**
+   * Extract the object name from a proxy name in the form "objectName@groupName".
+   * Returns the full string if no "@" is present.
+   */
+  resolveObjectName(proxyName: string): string {
+    const idx = proxyName.indexOf('@');
+    return idx >= 0 ? proxyName.slice(0, idx) : proxyName;
+  }
+
+  /**
+   * Await a wait-key indefinitely (used by blocking CP operations like FencedLock.lock).
+   * The returned promise resolves when completeWaitKey() is called with this key.
+   */
+  async awaitWaitKey(
+    groupName: string,
+    resourceName: string,
+    sessionId: bigint,
+    threadId: bigint,
+    invocationUid: string,
+  ): Promise<bigint> {
+    return new Promise((resolve, reject) => {
+      const key = `${groupName}:${resourceName}:${sessionId}:${threadId}:${invocationUid}`;
+      this._waitKeys.set(key, { resolve: (r) => resolve(r as bigint), reject });
+    });
+  }
+
+  /**
+   * Await a wait-key with a timeout. Resolves with -1n (INVALID_FENCE) on timeout.
+   */
+  async awaitWaitKeyWithTimeout(
+    groupName: string,
+    resourceName: string,
+    sessionId: bigint,
+    threadId: bigint,
+    invocationUid: string,
+    timeoutMs: number,
+  ): Promise<bigint> {
+    return new Promise((resolve, reject) => {
+      const key = `${groupName}:${resourceName}:${sessionId}:${threadId}:${invocationUid}`;
+      const timeoutId = setTimeout(() => {
+        this._waitKeys.delete(key);
+        resolve(-1n); // INVALID_FENCE
+      }, timeoutMs);
+      this._waitKeys.set(key, {
+        resolve: (r) => {
+          clearTimeout(timeoutId);
+          resolve(r as bigint);
+        },
+        reject,
+        timeoutId,
+      });
+    });
+  }
+
+  /**
+   * Complete a pending wait-key, resolving the awaiting promise.
+   */
+  completeWaitKey(key: string, result: unknown): void {
+    const waiter = this._waitKeys.get(key);
+    if (waiter) {
+      this._waitKeys.delete(key);
+      waiter.resolve(result);
+    }
+  }
+
+  // ── Backward-Compatible API ──────────────────────────────────────────────────
 
   /**
    * Create or retrieve a CP group. A CP group represents a Raft cluster
@@ -167,7 +221,7 @@ export class CpSubsystemService {
   getOrCreateGroup(groupId: string, members?: string[]): CpGroupState {
     if (!this._groups.has(groupId)) {
       const groupMembers = members ?? [this._localMemberId];
-      const raft = new RaftNode(this._localMemberId, groupMembers);
+      const raft = new SingleNodeRaftGroup(this._localMemberId, groupMembers);
       raft.onApply((entry) => {
         this._notifyGroupStateChanged(groupId, entry);
       });
@@ -196,8 +250,6 @@ export class CpSubsystemService {
   listGroups(): string[] {
     return Array.from(this._groups.keys());
   }
-
-  // ── Consensus execution ────────────────────────────────────────────────
 
   /**
    * Execute a command through the Raft log for the given group.
@@ -233,7 +285,7 @@ export class CpSubsystemService {
     }
   }
 
-  // ── Session management ─────────────────────────────────────────────────
+  // ── Session management ───────────────────────────────────────────────────────
 
   createSession(memberId: string): CpSession {
     const sessionId = String(this._nextSessionId++);
@@ -292,9 +344,28 @@ export class CpSubsystemService {
     return Date.now() - session.lastHeartbeatAt < session.ttlMs;
   }
 
-  // ── Internal ───────────────────────────────────────────────────────────
+  // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-  private _getRaft(groupId: string): RaftNode {
+  async initialize(): Promise<void> {
+    if (this._groupManager) {
+      await this._groupManager.initialize();
+    }
+  }
+
+  shutdown(): void {
+    if (this._sessionHeartbeatHandle !== null) {
+      clearInterval(this._sessionHeartbeatHandle);
+      this._sessionHeartbeatHandle = null;
+    }
+    this._groupManager?.shutdown();
+    this._groups.clear();
+    this._sessions.clear();
+    this._groupStates.clear();
+  }
+
+  // ── Internal ─────────────────────────────────────────────────────────────────
+
+  private _getRaft(groupId: string): SingleNodeRaftGroup {
     const raft = this._groups.get(groupId);
     if (raft === undefined) {
       // Auto-create on first access (matching Hazelcast's lazy CP group init)
@@ -304,7 +375,7 @@ export class CpSubsystemService {
     return raft;
   }
 
-  private _notifyGroupStateChanged(groupId: string, _entry: RaftLogEntry): void {
+  private _notifyGroupStateChanged(groupId: string, _entry: SingleNodeLogEntry): void {
     const raft = this._groups.get(groupId);
     const groupState = this._groupStates.get(groupId);
     if (raft === undefined || groupState === undefined) return;
@@ -335,13 +406,12 @@ export class CpSubsystemService {
     }
   }
 
-  shutdown(): void {
-    if (this._sessionHeartbeatHandle !== null) {
-      clearInterval(this._sessionHeartbeatHandle);
-      this._sessionHeartbeatHandle = null;
-    }
-    this._groups.clear();
-    this._sessions.clear();
-    this._groupStates.clear();
+  private _executeSingleNode(command: RaftCommand): unknown {
+    const raft = this._getRaft(command.groupId);
+    return raft.propose(command as CpCommand);
+  }
+
+  private _singleNodeRead(groupId: string, key: string): unknown {
+    return this.readState(groupId, key);
   }
 }
