@@ -16,6 +16,7 @@ import { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig.js';
 import { MaxSizePolicy } from '@zenystx/helios-core/config/MaxSizePolicy.js';
 import { NearCacheConfig } from '@zenystx/helios-core/config/NearCacheConfig.js';
 import { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig.js';
+import type { WanReplicationRef } from '@zenystx/helios-core/config/WanReplicationRef.js';
 
 export class MapConfig {
     static readonly MIN_BACKUP_COUNT = 0;
@@ -49,6 +50,7 @@ export class MapConfig {
     private _mergePolicyName = 'PutIfAbsentMergePolicy';
     private _indexConfigs: IndexConfig[] = [];
     private _queryCacheConfigs: QueryCacheConfig[] = [];
+    private _wanReplicationRef: WanReplicationRef | null = null;
 
     constructor(name?: string) {
         // Initialize eviction config with map defaults
@@ -229,6 +231,15 @@ export class MapConfig {
 
     addQueryCacheConfig(config: QueryCacheConfig): this {
         this._queryCacheConfigs.push(config);
+        return this;
+    }
+
+    getWanReplicationRef(): WanReplicationRef | null {
+        return this._wanReplicationRef;
+    }
+
+    setWanReplicationRef(ref: WanReplicationRef | null): this {
+        this._wanReplicationRef = ref;
         return this;
     }
 

@@ -23,6 +23,7 @@ import { HazelcastSerializationConfig } from '@zenystx/helios-core/internal/seri
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry.js";
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory.js";
 import { CPSubsystemConfig } from '@zenystx/helios-core/config/CPSubsystemConfig.js';
+import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;
@@ -44,6 +45,7 @@ export class HeliosConfig implements InstanceConfig {
   private _blitzConfig: HeliosBlitzRuntimeConfig | null = null;
   private _configOrigin: string | null = null;
   private _cpSubsystemConfig = new CPSubsystemConfig();
+  private readonly _wanReplicationConfigs = new Map<string, WanReplicationConfig>();
 
   constructor(name?: string) {
     this._name = name ?? "helios";
@@ -277,6 +279,33 @@ export class HeliosConfig implements InstanceConfig {
   setBlitzConfig(config: HeliosBlitzRuntimeConfig): this {
     this._blitzConfig = config;
     return this;
+  }
+
+  /**
+   * Register a WanReplicationConfig. The config's name is used as the lookup key.
+   * Throws if the WanReplicationConfig has no name set.
+   */
+  addWanReplicationConfig(config: WanReplicationConfig): this {
+    const name = config.getName();
+    if (!name || name.trim() === '') {
+      throw new Error('WanReplicationConfig must have a non-empty name when added to HeliosConfig');
+    }
+    this._wanReplicationConfigs.set(name, config);
+    return this;
+  }
+
+  /**
+   * Returns the WanReplicationConfig registered with the given name, or null.
+   */
+  getWanReplicationConfig(name: string): WanReplicationConfig | null {
+    return this._wanReplicationConfigs.get(name) ?? null;
+  }
+
+  /**
+   * Returns all registered WanReplicationConfigs.
+   */
+  getWanReplicationConfigs(): ReadonlyMap<string, WanReplicationConfig> {
+    return this._wanReplicationConfigs;
   }
 
   registerMapStoreProvider(name: string, factory: MapStoreFactory<unknown, unknown>): this {

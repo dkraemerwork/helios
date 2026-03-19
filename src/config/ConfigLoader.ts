@@ -22,6 +22,16 @@ import { ReliableTopicConfig, TopicOverloadPolicy } from '@zenystx/helios-core/c
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
 import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
 import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
+import {
+    WanAcknowledgeType,
+    WanBatchPublisherConfig,
+    WanConsumerConfig,
+    WanQueueFullBehavior,
+    WanReplicationConfig,
+    WanSyncConfig,
+    WanConsistencyCheckStrategy,
+} from '@zenystx/helios-core/config/WanReplicationConfig';
+import { WanReplicationRef } from '@zenystx/helios-core/config/WanReplicationRef';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.
@@ -163,6 +173,16 @@ export function parseRawConfig(raw: unknown, configOrigin?: string): HeliosConfi
         }
     }
 
+    // --- wan-replication configs ---
+    if ('wan-replication' in obj && obj['wan-replication'] !== undefined) {
+        if (!Array.isArray(obj['wan-replication'])) {
+            throw new Error('"wan-replication" must be an array');
+        }
+        for (const entry of obj['wan-replication'] as unknown[]) {
+            config.addWanReplicationConfig(parseWanReplicationConfig(entry));
+        }
+    }
+
     return config;
 }
 
@@ -267,6 +287,22 @@ function parseMapConfig(entry: unknown): MapConfig {
     }
     if (typeof e['readBackupData'] === 'boolean') {
         mc.setReadBackupData(e['readBackupData'] as boolean);
+    }
+
+    // --- wan-replication-ref ---
+    if ('wan-replication-ref' in e && e['wan-replication-ref'] !== null && typeof e['wan-replication-ref'] === 'object') {
+        const wr = e['wan-replication-ref'] as Record<string, unknown>;
+        const ref = new WanReplicationRef();
+        if (typeof wr['name'] === 'string') {
+            ref.setName(wr['name'] as string);
+        }
+        if (typeof wr['mergePolicyClassName'] === 'string') {
+            ref.setMergePolicyClassName(wr['mergePolicyClassName'] as string);
+        }
+        if (typeof wr['republishingEnabled'] === 'boolean') {
+            ref.setRepublishingEnabled(wr['republishingEnabled'] as boolean);
+        }
+        mc.setWanReplicationRef(ref);
     }
 
     // --- map-store config ---
@@ -416,6 +452,93 @@ function parseJoinConfig(raw: Record<string, unknown>, config: HeliosConfig): vo
             }
         }
     }
+}
+
+// ── WAN replication config parsing ───────────────────────────────────────────
+
+function parseWanReplicationConfig(entry: unknown): WanReplicationConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each wan-replication entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    if (typeof e['name'] !== 'string' || (e['name'] as string).trim() === '') {
+        throw new Error('Each wan-replication config entry must have a non-empty "name" field');
+    }
+    const wrc = new WanReplicationConfig();
+    wrc.setName(e['name'] as string);
+
+    if (Array.isArray(e['batch-publishers'])) {
+        for (const pub of e['batch-publishers'] as unknown[]) {
+            wrc.addBatchPublisher(parseWanBatchPublisherConfig(pub));
+        }
+    }
+
+    if ('consumer' in e && e['consumer'] !== null && typeof e['consumer'] === 'object') {
+        const c = e['consumer'] as Record<string, unknown>;
+        const consumerConfig = new WanConsumerConfig();
+        if (typeof c['persistWanReplicatedData'] === 'boolean') {
+            consumerConfig.setPersistWanReplicatedData(c['persistWanReplicatedData'] as boolean);
+        }
+        if (typeof c['mergePolicyClassName'] === 'string') {
+            consumerConfig.setMergePolicyClassName(c['mergePolicyClassName'] as string);
+        }
+        wrc.setConsumerConfig(consumerConfig);
+    }
+
+    return wrc;
+}
+
+function parseWanBatchPublisherConfig(entry: unknown): WanBatchPublisherConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each batch-publisher entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    const cfg = new WanBatchPublisherConfig();
+
+    if (typeof e['clusterName'] === 'string') {
+        cfg.setClusterName(e['clusterName'] as string);
+    }
+    if (Array.isArray(e['targetEndpoints'])) {
+        for (const ep of e['targetEndpoints'] as unknown[]) {
+            if (typeof ep === 'string') cfg.addTargetEndpoint(ep);
+        }
+    }
+    if (typeof e['batchSize'] === 'number') {
+        cfg.setBatchSize(e['batchSize'] as number);
+    }
+    if (typeof e['batchMaxDelayMillis'] === 'number') {
+        cfg.setBatchMaxDelayMillis(e['batchMaxDelayMillis'] as number);
+    }
+    if (typeof e['queueCapacity'] === 'number') {
+        cfg.setQueueCapacity(e['queueCapacity'] as number);
+    }
+    if (typeof e['queueFullBehavior'] === 'string') {
+        const behavior = WanQueueFullBehavior[e['queueFullBehavior'] as keyof typeof WanQueueFullBehavior];
+        if (behavior === undefined) {
+            throw new Error(`Invalid queueFullBehavior: "${e['queueFullBehavior']}". Valid values: ${Object.keys(WanQueueFullBehavior).join(', ')}`);
+        }
+        cfg.setQueueFullBehavior(behavior);
+    }
+    if (typeof e['acknowledgeType'] === 'string') {
+        const ackType = WanAcknowledgeType[e['acknowledgeType'] as keyof typeof WanAcknowledgeType];
+        if (ackType === undefined) {
+            throw new Error(`Invalid acknowledgeType: "${e['acknowledgeType']}". Valid values: ${Object.keys(WanAcknowledgeType).join(', ')}`);
+        }
+        cfg.setAcknowledgeType(ackType);
+    }
+    if ('syncConfig' in e && e['syncConfig'] !== null && typeof e['syncConfig'] === 'object') {
+        const sc = e['syncConfig'] as Record<string, unknown>;
+        const syncConfig = new WanSyncConfig();
+        if (typeof sc['consistencyCheckStrategy'] === 'string') {
+            const strategy = WanConsistencyCheckStrategy[sc['consistencyCheckStrategy'] as keyof typeof WanConsistencyCheckStrategy];
+            if (strategy === undefined) {
+                throw new Error(`Invalid consistencyCheckStrategy: "${sc['consistencyCheckStrategy']}". Valid values: ${Object.keys(WanConsistencyCheckStrategy).join(', ')}`);
+            }
+            syncConfig.setConsistencyCheckStrategy(strategy);
+        }
+        cfg.setSyncConfig(syncConfig);
+    }
+    return cfg;
 }
 
 // ── Backpressure config parsing ───────────────────────────────────────────

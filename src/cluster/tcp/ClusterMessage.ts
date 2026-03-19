@@ -771,6 +771,85 @@ export interface RaftTriggerElectionMsg {
   readonly groupId: string;
 }
 
+// ── WAN replication protocol messages ────────────────────────────────────────
+
+/** A single WAN event within a batch. */
+export interface WanReplicationEventEntry {
+  readonly mapName: string;
+  readonly eventType: 'PUT' | 'REMOVE' | 'CLEAR';
+  readonly keyData: Buffer | null;
+  readonly valueData: Buffer | null;
+  readonly ttl: number;
+}
+
+/**
+ * Sent from a WAN publisher to the target cluster's WAN consumer port.
+ * Carries a batch of map mutation events for cross-cluster replication.
+ */
+export interface WanReplicationEventBatchMsg {
+  readonly type: 'WAN_REPLICATION_EVENT_BATCH';
+  /** Unique batch identifier for ACK correlation. */
+  readonly batchId: string;
+  /** Cluster name of the originating (source) cluster. */
+  readonly sourceClusterName: string;
+  /** Ordered list of replication events in this batch. */
+  readonly events: readonly WanReplicationEventEntry[];
+}
+
+/**
+ * Sent by the WAN consumer back to the publisher after processing a batch.
+ */
+export interface WanReplicationAckMsg {
+  readonly type: 'WAN_REPLICATION_ACK';
+  /** Matches the batchId from the corresponding WanReplicationEventBatchMsg. */
+  readonly batchId: string;
+  /** true if all events were applied successfully; false on error. */
+  readonly success: boolean;
+  /** Human-readable error reason when success is false. */
+  readonly error?: string;
+}
+
+/** Request from a WAN publisher to trigger a full sync of a map. */
+export interface WanSyncRequestMsg {
+  readonly type: 'WAN_SYNC_REQUEST';
+  /** Unique identifier for this sync request. */
+  readonly requestId: string;
+  /** Source cluster name. */
+  readonly sourceClusterName: string;
+  /** Map to synchronize. */
+  readonly mapName: string;
+  /** Whether this is a full sync (true) or delta sync (false). */
+  readonly fullSync: boolean;
+}
+
+/** Response to a WAN sync request — confirms the sync was received. */
+export interface WanSyncResponseMsg {
+  readonly type: 'WAN_SYNC_RESPONSE';
+  readonly requestId: string;
+  readonly accepted: boolean;
+  readonly error?: string;
+}
+
+/** Request from a WAN publisher to compare Merkle tree roots for anti-entropy. */
+export interface WanConsistencyCheckRequestMsg {
+  readonly type: 'WAN_CONSISTENCY_CHECK_REQUEST';
+  readonly requestId: string;
+  readonly sourceClusterName: string;
+  readonly mapName: string;
+  /** SHA-256 hex of the local Merkle tree root for comparison. */
+  readonly merkleRootHex: string;
+}
+
+/** Response to a consistency check — reports diverging leaf count. */
+export interface WanConsistencyCheckResponseMsg {
+  readonly type: 'WAN_CONSISTENCY_CHECK_RESPONSE';
+  readonly requestId: string;
+  /** true if the remote Merkle root matches the local root exactly. */
+  readonly consistent: boolean;
+  /** Number of differing leaves when not consistent. */
+  readonly differingLeafCount: number;
+}
+
 export type ClusterMessage =
   | HelloMsg
   | MapPutMsg
@@ -847,4 +926,10 @@ export type ClusterMessage =
   | RaftAppendFailureMsg
   | RaftInstallSnapshotMsg
   | RaftInstallSnapshotResponseMsg
-  | RaftTriggerElectionMsg;
+  | RaftTriggerElectionMsg
+  | WanReplicationEventBatchMsg
+  | WanReplicationAckMsg
+  | WanSyncRequestMsg
+  | WanSyncResponseMsg
+  | WanConsistencyCheckRequestMsg
+  | WanConsistencyCheckResponseMsg;

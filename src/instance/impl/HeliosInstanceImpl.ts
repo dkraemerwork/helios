@@ -199,6 +199,8 @@ import { IndexConfig as HeliosIndexConfig } from "@zenystx/helios-core/config/In
 import { IndexType as HeliosIndexType } from "@zenystx/helios-core/query/impl/Index";
 import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
 import { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
+import { WanReplicationService } from "@zenystx/helios-core/wan/impl/WanReplicationService";
+import { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -685,6 +687,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Persistence service — non-null when persistence is enabled in config. */
   private _persistenceService: PersistenceService | null = null;
 
+  /** WAN replication service — non-null when wan-replication configs are present. */
+  private _wanReplicationService: WanReplicationService | null = null;
+
   /** Split-brain detector — non-null when clustering is enabled. */
   private _splitBrainDetector: SplitBrainDetector | null = null;
 
@@ -811,6 +816,20 @@ export class HeliosInstanceImpl implements HeliosInstance {
       dataHandler.handle(req),
     );
 
+    // WAN replication REST handler — registered lazily; _wanReplicationService
+    // is initialized later in _initWanReplicationService() which is called after
+    // the constructor body. Use a closure so the handler captures the service reference.
+    this._restServer.registerHandler("/hazelcast/rest/wan", (req) => {
+      if (this._wanReplicationService === null) {
+        return new Response(
+          JSON.stringify({ status: 503, message: 'WAN replication is not configured.' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      const handler = new WanHandler(this._wanReplicationService);
+      return handler.handle(req);
+    });
+
     this._restServer.start();
     this._syncLocalMemberEndpoints();
 
@@ -822,6 +841,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Initialize persistence service if enabled
     this._initPersistenceService();
+
+    // Initialize WAN replication service if any WAN configs are present
+    this._initWanReplicationService();
   }
 
   // ── config validation ────────────────────────────────────────────────
@@ -1294,6 +1316,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
         return;
       }
 
+      if (this._wanReplicationService?.handleIncomingMessage(message) === true) {
+        return;
+      }
       if (this._clusterCoordinator?.handleMessage(message) === true) {
         return;
       }
@@ -6042,6 +6067,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
       void this._persistenceService.shutdown();
       this._persistenceService = null;
     }
+    // Shutdown WAN replication service — stops all publishers gracefully
+    if (this._wanReplicationService !== null) {
+      this._wanReplicationService.shutdown();
+      this._wanReplicationService = null;
+    }
   }
 
   // ── REST server access ────────────────────────────────────────────────────
@@ -6669,6 +6699,40 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._persistenceService = new PersistenceService(persistenceConfig);
     // Start is async; fire and forget — recovery is user-initiated via getPersistenceService().recover()
     void this._persistenceService.start();
+  }
+
+  /**
+   * Initialize the WAN replication service from all WanReplicationConfig entries
+   * registered in HeliosConfig. Registers the service in NodeEngine so map
+   * operations can look it up via getServiceOrNull(WanReplicationService.SERVICE_NAME).
+   *
+   * No-ops when no WAN configs are present (the common case for single-cluster setups).
+   */
+  private _initWanReplicationService(): void {
+    const wanConfigs = this._config.getWanReplicationConfigs();
+    if (wanConfigs.size === 0) {
+      return;
+    }
+
+    const wanService = new WanReplicationService(
+      wanConfigs as Map<string, import('@zenystx/helios-core/config/WanReplicationConfig').WanReplicationConfig>,
+      this._config.getClusterName(),
+    );
+
+    // Wire map container service for record store access
+    wanService.setMapContainerService(this._mapService);
+
+    // Register MapConfig WAN refs so the service knows which maps to replicate
+    for (const [, mapConfig] of this._config.getMapConfigs()) {
+      wanService.registerMapConfig(mapConfig);
+    }
+
+    // Initialize publishers and consumers
+    wanService.init();
+
+    // Register in NodeEngine so map operations can resolve it via getServiceOrNull
+    this._nodeEngine.registerService(WanReplicationService.SERVICE_NAME, wanService);
+    this._wanReplicationService = wanService;
   }
 
   private _initMonitor(): void {

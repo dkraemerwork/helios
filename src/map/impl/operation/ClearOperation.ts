@@ -20,6 +20,10 @@ export class ClearOperation extends MapOperation implements BackupAwareOperation
         if (hadEntries) {
             this.recordNamespaceMutation();
         }
+        // WAN replication: publish CLEAR event on primary replica (only if map had entries)
+        if (hadEntries) {
+            this.publishWanEvent('CLEAR', null, null, 0);
+        }
         this.sendResponse(undefined);
     }
 

@@ -13,6 +13,7 @@ import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
 import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { WanReplicationService } from '@zenystx/helios-core/wan/impl/WanReplicationService';
 
 export abstract class MapOperation extends Operation {
     protected readonly mapName: string;
@@ -70,5 +71,42 @@ export abstract class MapOperation extends Operation {
 
     protected recordMapRemove(latencyMs: number): void {
         this.containerService.getOrCreateMapStats(this.mapName).incrementRemoveCount(latencyMs);
+    }
+
+    /**
+     * Publish a WAN replication event for this map mutation.
+     * Only fires on the primary replica (replicaIndex === 0) to avoid
+     * duplicate replication from backup replicas.
+     *
+     * The WanReplicationService is looked up by its service name from NodeEngine
+     * using a safe service-or-null pattern. If no WAN replication is configured,
+     * the lookup returns null/throws and this is a no-op.
+     */
+    protected publishWanEvent(
+        eventType: 'PUT' | 'REMOVE' | 'CLEAR',
+        key: import('@zenystx/helios-core/internal/serialization/Data').Data | null,
+        value: import('@zenystx/helios-core/internal/serialization/Data').Data | null,
+        ttl: number,
+    ): void {
+        // Only publish on primary replica
+        if (this.replicaIndex !== 0) {
+            return;
+        }
+        const ne = this.getNodeEngine();
+        if (ne === null) {
+            return;
+        }
+        // Use getServiceOrNull pattern: cast to NodeEngineImpl-like interface
+        // that exposes getServiceOrNull for safe service lookup.
+        const neImpl = ne as { getServiceOrNull?: <T>(name: string) => T | null };
+        const wanService: WanReplicationService | null = typeof neImpl.getServiceOrNull === 'function'
+            ? neImpl.getServiceOrNull<WanReplicationService>(WanReplicationService.SERVICE_NAME)
+            : null;
+        if (wanService === null) {
+            return;
+        }
+        const keyBuf = key?.toByteArray() ?? null;
+        const valueBuf = value?.toByteArray() ?? null;
+        wanService.publishMapEvent(this.mapName, eventType, keyBuf, valueBuf, ttl);
     }
 }

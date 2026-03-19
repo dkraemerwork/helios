@@ -247,5 +247,26 @@ export type { ClusterDataRecoveryPolicy } from "@zenystx/helios-core/config/Pers
 export { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
 export type { PersistenceRecoveryResult, PersistenceBackupResult, MapStoreAdapter } from "@zenystx/helios-core/persistence/PersistenceService";
 
+// ── WAN Replication ───────────────────────────────────────────────────────────
+export {
+    WanReplicationConfig,
+    WanBatchPublisherConfig,
+    WanConsumerConfig,
+    WanSyncConfig,
+    WanQueueFullBehavior,
+    WanAcknowledgeType,
+    WanConsistencyCheckStrategy,
+} from "@zenystx/helios-core/config/WanReplicationConfig";
+export { WanReplicationRef } from "@zenystx/helios-core/config/WanReplicationRef";
+export type { WanReplicationEvent } from "@zenystx/helios-core/wan/WanReplicationEvent";
+export { WanReplicationService } from "@zenystx/helios-core/wan/impl/WanReplicationService";
+export type { WanPublisherStatus } from "@zenystx/helios-core/wan/impl/WanReplicationService";
+export { WanBatchPublisher, WanPublisherState } from "@zenystx/helios-core/wan/impl/WanBatchPublisher";
+export { WanConsumerService } from "@zenystx/helios-core/wan/impl/WanConsumer";
+export { WanSyncManager } from "@zenystx/helios-core/wan/impl/WanSyncManager";
+export { MerkleTree, MerkleTreeNode } from "@zenystx/helios-core/wan/impl/MerkleTree";
+export { WanReplicationEventQueue } from "@zenystx/helios-core/wan/impl/WanReplicationEventQueue";
+export { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
+
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";

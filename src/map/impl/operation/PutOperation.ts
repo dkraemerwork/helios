@@ -40,6 +40,8 @@ export class PutOperation extends MapOperation implements BackupAwareOperation {
             const value = ne.toObject(this._value);
             await this.mapDataStore.add(key, value, Date.now());
         }
+        // WAN replication: publish PUT event on primary replica
+        this.publishWanEvent('PUT', this._key, this._value, this._ttl);
         this.recordMapPut(Date.now() - startedAt);
     }
 

@@ -34,6 +34,10 @@ export class RemoveOperation extends MapOperation implements BackupAwareOperatio
             const key = ne.toObject(this._key);
             await this.mapDataStore.remove(key, Date.now());
         }
+        // WAN replication: publish REMOVE event on primary replica (only if key existed)
+        if (old !== null) {
+            this.publishWanEvent('REMOVE', this._key, null, 0);
+        }
         this.recordMapRemove(Date.now() - startedAt);
     }
 

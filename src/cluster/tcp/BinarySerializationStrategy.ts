@@ -128,6 +128,12 @@ const MESSAGE_TYPE_TO_ID = {
     RAFT_INSTALL_SNAPSHOT: 74,
     RAFT_INSTALL_SNAPSHOT_RESPONSE: 75,
     RAFT_TRIGGER_ELECTION: 76,
+    WAN_REPLICATION_EVENT_BATCH: 77,
+    WAN_REPLICATION_ACK: 78,
+    WAN_SYNC_REQUEST: 79,
+    WAN_SYNC_RESPONSE: 80,
+    WAN_CONSISTENCY_CHECK_REQUEST: 81,
+    WAN_CONSISTENCY_CHECK_RESPONSE: 82,
 } as const satisfies Record<ClusterMessage['type'], number>;
 
 type MessageTypeId = (typeof MESSAGE_TYPE_TO_ID)[keyof typeof MESSAGE_TYPE_TO_ID];
@@ -577,6 +583,45 @@ export class BinarySerializationStrategy implements SerializationStrategy {
             case 'RAFT_TRIGGER_ELECTION':
                 out.writeString(message.groupId);
                 return;
+            case 'WAN_REPLICATION_EVENT_BATCH':
+                out.writeString(message.batchId);
+                out.writeString(message.sourceClusterName);
+                out.writeInt(message.events.length);
+                for (const ev of message.events) {
+                    out.writeString(ev.mapName);
+                    out.writeString(ev.eventType);
+                    writeOptionalByteArray(out, ev.keyData);
+                    writeOptionalByteArray(out, ev.valueData);
+                    out.writeLong(BigInt(ev.ttl));
+                }
+                return;
+            case 'WAN_REPLICATION_ACK':
+                out.writeString(message.batchId);
+                out.writeBoolean(message.success);
+                out.writeString(message.error ?? null);
+                return;
+            case 'WAN_SYNC_REQUEST':
+                out.writeString(message.requestId);
+                out.writeString(message.sourceClusterName);
+                out.writeString(message.mapName);
+                out.writeBoolean(message.fullSync);
+                return;
+            case 'WAN_SYNC_RESPONSE':
+                out.writeString(message.requestId);
+                out.writeBoolean(message.accepted);
+                out.writeString(message.error ?? null);
+                return;
+            case 'WAN_CONSISTENCY_CHECK_REQUEST':
+                out.writeString(message.requestId);
+                out.writeString(message.sourceClusterName);
+                out.writeString(message.mapName);
+                out.writeString(message.merkleRootHex);
+                return;
+            case 'WAN_CONSISTENCY_CHECK_RESPONSE':
+                out.writeString(message.requestId);
+                out.writeBoolean(message.consistent);
+                out.writeInt(message.differingLeafCount);
+                return;
         }
     }
 
@@ -982,6 +1027,59 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     type: 'RAFT_TRIGGER_ELECTION',
                     groupId: readRequiredString(inp),
                 };
+            case 'WAN_REPLICATION_EVENT_BATCH': {
+                const batchId = readRequiredString(inp);
+                const sourceClusterName = readRequiredString(inp);
+                const eventCount = inp.readInt();
+                const events: import('./ClusterMessage.js').WanReplicationEventEntry[] = [];
+                for (let i = 0; i < eventCount; i++) {
+                    events.push({
+                        mapName: readRequiredString(inp),
+                        eventType: readRequiredString(inp) as 'PUT' | 'REMOVE' | 'CLEAR',
+                        keyData: readOptionalByteArray(inp),
+                        valueData: readOptionalByteArray(inp),
+                        ttl: Number(inp.readLong()),
+                    });
+                }
+                return { type: 'WAN_REPLICATION_EVENT_BATCH', batchId, sourceClusterName, events };
+            }
+            case 'WAN_REPLICATION_ACK':
+                return {
+                    type: 'WAN_REPLICATION_ACK',
+                    batchId: readRequiredString(inp),
+                    success: inp.readBoolean(),
+                    error: inp.readString() ?? undefined,
+                };
+            case 'WAN_SYNC_REQUEST':
+                return {
+                    type: 'WAN_SYNC_REQUEST',
+                    requestId: readRequiredString(inp),
+                    sourceClusterName: readRequiredString(inp),
+                    mapName: readRequiredString(inp),
+                    fullSync: inp.readBoolean(),
+                };
+            case 'WAN_SYNC_RESPONSE':
+                return {
+                    type: 'WAN_SYNC_RESPONSE',
+                    requestId: readRequiredString(inp),
+                    accepted: inp.readBoolean(),
+                    error: inp.readString() ?? undefined,
+                };
+            case 'WAN_CONSISTENCY_CHECK_REQUEST':
+                return {
+                    type: 'WAN_CONSISTENCY_CHECK_REQUEST',
+                    requestId: readRequiredString(inp),
+                    sourceClusterName: readRequiredString(inp),
+                    mapName: readRequiredString(inp),
+                    merkleRootHex: readRequiredString(inp),
+                };
+            case 'WAN_CONSISTENCY_CHECK_RESPONSE':
+                return {
+                    type: 'WAN_CONSISTENCY_CHECK_RESPONSE',
+                    requestId: readRequiredString(inp),
+                    consistent: inp.readBoolean(),
+                    differingLeafCount: inp.readInt(),
+                };
         }
         throw new Error(`Unknown message type ID: ${messageTypeId}`);
     }
@@ -1033,6 +1131,31 @@ function toBufferView(buffer: Uint8Array): Buffer {
         return buffer;
     }
     return Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+}
+
+// ── Optional byte array helpers ───────────────────────────────────────────────
+
+/**
+ * Write an optional Buffer: writes a flag byte (0=absent, 1=present) followed
+ * by the byte array when present. Used for WAN event key/value data.
+ */
+function writeOptionalByteArray(out: ByteArrayObjectDataOutput, buf: Buffer | null): void {
+    if (buf === null) {
+        out.writeByte(0);
+    } else {
+        out.writeByte(1);
+        out.writeByteArray(buf);
+    }
+}
+
+/**
+ * Read an optional Buffer written by writeOptionalByteArray.
+ * Returns null when the absent flag is set.
+ */
+function readOptionalByteArray(inp: ByteArrayObjectDataInput): Buffer | null {
+    const present = inp.readUnsignedByte();
+    if (present === 0) return null;
+    return inp.readByteArray() ?? Buffer.alloc(0);
 }
 
 function writeMembershipMessage(out: ByteArrayObjectDataOutput, message: FinalizeJoinMsg | MembersUpdateMsg): void {
