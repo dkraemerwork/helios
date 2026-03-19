@@ -98,6 +98,16 @@ type QueueOperation =
   | "retainAll"
   | "clear";
 
+export interface QueueMutationEvent {
+  queueName: string;
+  operation: 'offer' | 'poll' | 'clear';
+  valueData?: Data;
+}
+
+export interface DistributedQueueServiceOptions {
+  onMutation?: (event: QueueMutationEvent) => void;
+}
+
 export class DistributedQueueService {
   private readonly _runtimes = new Map<string, QueueRuntime>();
   private readonly _listeners = new Map<
@@ -111,6 +121,7 @@ export class DistributedQueueService {
     PendingRemoteRequest
   >();
   private readonly _storeWrappers = new Map<string, QueueStoreWrapper<unknown>>();
+  private readonly _options: DistributedQueueServiceOptions;
 
   constructor(
     private readonly _instanceName: string,
@@ -118,7 +129,9 @@ export class DistributedQueueService {
     private readonly _serializationService: SerializationService,
     private readonly _transport: TcpClusterTransport | null,
     private readonly _coordinator: HeliosClusterCoordinator | null,
+    options: DistributedQueueServiceOptions = {},
   ) {
+    this._options = options;
     this._coordinator?.onMembershipChanged(() => {
       this._resyncAllStates();
     });
@@ -813,6 +826,7 @@ export class DistributedQueueService {
     runtime.state.version++;
     this._broadcastEvent(name, "REMOVED", entry.data);
     this._scheduleDestroyIfNeeded(name, runtime);
+    this._options.onMutation?.({ queueName: name, operation: 'poll' });
 
     const store = this._storeWrappers.get(name);
     if (store !== undefined) {
@@ -833,6 +847,7 @@ export class DistributedQueueService {
     runtime.state.ownerNodeId = this._instanceName;
     this._getStats(name).offerOperationCount++;
     this._broadcastEvent(name, "ADDED", data);
+    this._options.onMutation?.({ queueName: name, operation: 'offer', valueData: data });
 
     const store = this._storeWrappers.get(name);
     if (store !== undefined) {
@@ -1014,6 +1029,7 @@ export class DistributedQueueService {
     this._scheduleDestroyIfNeeded(name, runtime);
     void this._replicateState(name, runtime);
     this._drainWaiters(name, runtime);
+    this._options.onMutation?.({ queueName: name, operation: 'clear' });
 
     const store = this._storeWrappers.get(name);
     if (store !== undefined && removed.length > 0) {

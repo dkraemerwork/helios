@@ -1385,6 +1385,20 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._ss,
       this._transport,
       this._clusterCoordinator,
+      {
+        onMutation: (event) => {
+          if (this._persistenceService !== null) {
+            const valueBytes = event.valueData?.toByteArray();
+            if (event.operation === 'offer' && valueBytes) {
+              this._persistenceService.recordQueueOffer(event.queueName, Buffer.from(valueBytes));
+            } else if (event.operation === 'poll') {
+              this._persistenceService.recordQueuePoll(event.queueName);
+            } else if (event.operation === 'clear') {
+              this._persistenceService.recordQueueClear(event.queueName);
+            }
+          }
+        },
+      },
     );
     this._distributedListService = new DistributedListService(
       localMemberId,
@@ -5015,6 +5029,20 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._ss,
         this._transport,
         this._clusterCoordinator,
+        {
+          onMutation: (event) => {
+            if (this._persistenceService !== null) {
+              const valueBytes = event.valueData?.toByteArray();
+              if (event.operation === 'offer' && valueBytes) {
+                this._persistenceService.recordQueueOffer(event.queueName, Buffer.from(valueBytes));
+              } else if (event.operation === 'poll') {
+                this._persistenceService.recordQueuePoll(event.queueName);
+              } else if (event.operation === 'clear') {
+                this._persistenceService.recordQueueClear(event.queueName);
+              }
+            }
+          },
+        },
       );
     }
   }
@@ -5052,6 +5080,22 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const rbConfig = this._config.getRingbufferConfig(name);
     const storeConfig = rbConfig.getRingbufferStoreConfig();
+
+    const rbService = this._ringbufferService;
+    const partitionId = rbService.getRingbufferPartitionId(name);
+    const ns = RingbufferService.getRingbufferNamespace(name);
+    const container = rbService.getOrCreateContainer(partitionId, ns, rbConfig);
+
+    // Wire WAL persistence callback if persistence is enabled
+    if (this._persistenceService !== null) {
+      container.setMutationCallback((event) => {
+        const valueBytes = event.valueData.toByteArray();
+        if (valueBytes) {
+          this._persistenceService!.recordRingbufferAdd(name, event.sequence, Buffer.from(valueBytes));
+        }
+      });
+    }
+
     if (storeConfig === null || !storeConfig.isEnabled()) return;
 
     const rawStore = storeConfig.getStoreImplementation() ?? (() => {
@@ -5064,10 +5108,6 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     if (rawStore === null) return;
 
-    const rbService = this._ringbufferService;
-    const partitionId = rbService.getRingbufferPartitionId(name);
-    const ns = RingbufferService.getRingbufferNamespace(name);
-    const container = rbService.getOrCreateContainer(partitionId, ns, rbConfig);
     const wrapper = new RingbufferStoreWrapper(rawStore as any);
     container.setStoreWrapper(wrapper as any);
     void container.loadFromStore();
@@ -6192,6 +6232,29 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Returns the persistence service, or null if persistence is not enabled. */
   getPersistenceService(): PersistenceService | null {
     return this._persistenceService;
+  }
+
+  /**
+   * Perform a hot backup to the given directory.
+   * Flushes WAL segments, copies checkpoint + WAL files, and writes backup metadata.
+   * Returns null if persistence is not enabled.
+   */
+  async hotBackup(backupDir: string): Promise<import('@zenystx/helios-core/persistence/impl/HotBackupService').BackupResult | null> {
+    if (this._persistenceService === null) return null;
+    const memberList = this._cluster.getMembers().map(m => m.getUuid());
+    return this._persistenceService.hotBackup(backupDir, memberList);
+  }
+
+  /**
+   * Restore from a hot backup directory.
+   * Validates backup metadata, copies files back, triggers recovery on next startup.
+   * Throws if persistence is not enabled or backup is invalid.
+   */
+  async restoreFromHotBackup(backupDir: string): Promise<void> {
+    if (this._persistenceService === null) {
+      throw new Error('Persistence is not enabled. Cannot restore from backup.');
+    }
+    return this._persistenceService.restoreFromBackup(backupDir);
   }
 
   // ── ClusterReadState (for ClusterReadHandler) ─────────────────────────────

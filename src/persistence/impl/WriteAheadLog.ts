@@ -9,6 +9,12 @@ export enum WALEntryType {
     PUT = 1,
     REMOVE = 2,
     CLEAR = 3,
+    // Queue operations
+    OFFER = 4,
+    POLL = 5,
+    // Ringbuffer operations
+    ADD = 6,
+    // Checkpoint markers
     CHECKPOINT_START = 10,
     CHECKPOINT_END = 11,
 }

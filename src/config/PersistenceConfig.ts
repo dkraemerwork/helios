@@ -4,6 +4,17 @@
  * Configuration for the WAL-based Hot Restart / disk persistence engine.
  */
 
+export interface EncryptionAtRestConfig {
+    /** Whether AES-256-GCM encryption is applied to WAL segments at rest. */
+    enabled: boolean;
+    /**
+     * Encryption key as a hex string (64 hex chars = 32 bytes) or a plain passphrase
+     * from which a key is derived via PBKDF2. When using a passphrase, prefix with
+     * "passphrase:" to indicate derivation should be used.
+     */
+    key: string;
+}
+
 export class PersistenceConfig {
     static readonly DEFAULT_BASE_DIR = 'helios-persistence';
     static readonly DEFAULT_PARALLELISM = 1;
@@ -20,6 +31,7 @@ export class PersistenceConfig {
     private _rebalanceDelaySeconds: number = PersistenceConfig.DEFAULT_REBALANCE_DELAY_SECONDS;
     private _autoRemoveStaleData = true;
     private _clusterDataRecoveryPolicy: ClusterDataRecoveryPolicy = 'FULL_RECOVERY_ONLY';
+    private _encryptionAtRest: EncryptionAtRestConfig = { enabled: false, key: '' };
 
     isEnabled(): boolean { return this._enabled; }
     setEnabled(enabled: boolean): this { this._enabled = enabled; return this; }
@@ -47,6 +59,11 @@ export class PersistenceConfig {
 
     getClusterDataRecoveryPolicy(): ClusterDataRecoveryPolicy { return this._clusterDataRecoveryPolicy; }
     setClusterDataRecoveryPolicy(policy: ClusterDataRecoveryPolicy): this { this._clusterDataRecoveryPolicy = policy; return this; }
+
+    getEncryptionAtRest(): EncryptionAtRestConfig { return this._encryptionAtRest; }
+    setEncryptionAtRest(config: EncryptionAtRestConfig): this { this._encryptionAtRest = config; return this; }
+
+    isEncryptionAtRestEnabled(): boolean { return this._encryptionAtRest.enabled && this._encryptionAtRest.key.length > 0; }
 }
 
 export type ClusterDataRecoveryPolicy =

@@ -17,6 +17,14 @@ import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
  * Manages the ringbuffer data structure: TTL expiration, store integration,
  * wait/notify key, and serialization format conversion.
  */
+export interface RingbufferAddEvent {
+    name: string;
+    sequence: number;
+    valueData: Data;
+}
+
+export type RingbufferMutationCallback = (event: RingbufferAddEvent) => void;
+
 export class RingbufferContainer<T = unknown, E = unknown> {
     private static readonly TTL_DISABLED = 0;
 
@@ -28,6 +36,7 @@ export class RingbufferContainer<T = unknown, E = unknown> {
     private serializationService: SerializationService;
     private readonly ringbuffer: ArrayRingbuffer<E>;
     private _storeWrapper: RingbufferStoreWrapper<unknown> | null = null;
+    private _mutationCallback: RingbufferMutationCallback | null = null;
 
     constructor(
         namespace: ObjectNamespace,
@@ -60,6 +69,10 @@ export class RingbufferContainer<T = unknown, E = unknown> {
 
     getStoreWrapper(): RingbufferStoreWrapper<unknown> | null {
         return this._storeWrapper;
+    }
+
+    setMutationCallback(callback: RingbufferMutationCallback | null): void {
+        this._mutationCallback = callback;
     }
 
     tailSequence(): number { return this.ringbuffer.tailSequence(); }
@@ -268,6 +281,16 @@ export class RingbufferContainer<T = unknown, E = unknown> {
         if (this._storeWrapper !== null) {
             // Store the original item (before format conversion) as the user value
             void this._storeWrapper.store(BigInt(tailSequence), item as unknown);
+        }
+        if (this._mutationCallback !== null) {
+            const data = this.serializationService.toData(item);
+            if (data !== null) {
+                this._mutationCallback({
+                    name: this.objectNamespace.getObjectName(),
+                    sequence: tailSequence,
+                    valueData: data,
+                });
+            }
         }
         return tailSequence;
     }
