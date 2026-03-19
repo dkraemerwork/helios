@@ -16,8 +16,9 @@ export { Helios } from "@zenystx/helios-core/Helios";
 // ── Config ────────────────────────────────────────────────────────────────────
 export { resolveHeliosBlitzConfigFromEnv } from "@zenystx/helios-core/config/BlitzEnvHelper";
 export type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
-export { loadConfig } from "@zenystx/helios-core/config/ConfigLoader";
+export { loadConfig, applySystemPropertyOverrides } from "@zenystx/helios-core/config/ConfigLoader";
 export { ConfigValidationError, validateHeliosConfig } from "@zenystx/helios-core/config/ConfigValidator";
+export { XmlConfigLoader, parseXml as parseXmlConfig } from "@zenystx/helios-core/config/XmlConfigLoader";
 export { EvictionConfig } from "@zenystx/helios-core/config/EvictionConfig";
 export { EvictionPolicy } from "@zenystx/helios-core/config/EvictionPolicy";
 export * as HazelcastDefaults from "@zenystx/helios-core/config/HazelcastDefaults";
@@ -225,6 +226,15 @@ export type {
     MulticastJoinMessage,
     MulticastJoinRequest, MulticastListener, MulticastMessage, MulticastSplitBrainMessage
 } from "@zenystx/helios-core/cluster/multicast/MulticastService";
+
+// ── Load Balancer ─────────────────────────────────────────────────────────────
+export {
+    LoadBalancerType,
+    RoundRobinLoadBalancer,
+    RandomLoadBalancer,
+    createLoadBalancer,
+} from "@zenystx/helios-core/server/clientprotocol/LoadBalancer";
+export type { LoadBalancer } from "@zenystx/helios-core/server/clientprotocol/LoadBalancer";
 
 // ── Server / CLI ──────────────────────────────────────────────────────────────
 export { HeliosServer } from "@zenystx/helios-core/server/HeliosServer";

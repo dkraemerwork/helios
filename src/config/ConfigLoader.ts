@@ -1,11 +1,12 @@
 /**
- * Loads a HeliosConfig from a JSON or YAML file.
+ * Loads a HeliosConfig from a JSON, YAML, or XML file.
  *
  * Supported formats:
- *   - .json  — JSON object
- *   - .yml / .yaml — YAML document
+ *   - .json       — JSON object
+ *   - .yml/.yaml  — YAML document
+ *   - .xml        — Hazelcast XML config (hazelcast.xml)
  *
- * File schema:
+ * File schema (JSON / YAML):
  * ```yaml
  * name: my-cluster          # optional, defaults to 'helios'
  * maps:                     # optional list of MapConfig entries
@@ -13,9 +14,15 @@
  *     ttlSeconds: 300
  *     backupCount: 2
  * ```
+ *
+ * System property / environment variable overrides applied after loading:
+ *   HAZELCAST_CONFIG              — override the config file path
+ *   HAZELCAST_CLUSTER_NAME        — override the cluster name
+ *   HAZELCAST_PORT                — override the member port
  */
 import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import { XmlConfigLoader } from '@zenystx/helios-core/config/XmlConfigLoader';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { SecurityConfig, PermissionConfig, PermissionType, TokenConfig } from '@zenystx/helios-core/config/SecurityConfig';
 import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
@@ -36,36 +43,76 @@ import { WanReplicationRef } from '@zenystx/helios-core/config/WanReplicationRef
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.
+ *
+ * The file path may be overridden by the {@code HAZELCAST_CONFIG} environment
+ * variable.  After loading, cluster-name and port overrides are applied from
+ * {@code HAZELCAST_CLUSTER_NAME} and {@code HAZELCAST_PORT} respectively.
+ *
  * @throws Error if the file is not found, has an unsupported extension, or fails validation.
  */
 export async function loadConfig(filePath: string): Promise<HeliosConfig> {
-    const file = Bun.file(filePath);
+    // Allow HAZELCAST_CONFIG env var to redirect the config file path
+    const resolvedPath = process.env['HAZELCAST_CONFIG'] ?? filePath;
+
+    const file = Bun.file(resolvedPath);
     const exists = await file.exists();
     if (!exists) {
-        throw new Error(`Config file not found: ${filePath}`);
+        throw new Error(`Config file not found: ${resolvedPath}`);
     }
 
     const content = await file.text();
     let raw: unknown;
 
-    if (filePath.endsWith('.json')) {
+    if (resolvedPath.endsWith('.json')) {
         try {
             raw = JSON.parse(content);
         } catch (e) {
-            throw new Error(`Failed to parse JSON config file "${filePath}": ${String(e)}`);
+            throw new Error(`Failed to parse JSON config file "${resolvedPath}": ${String(e)}`);
         }
-    } else if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
+    } else if (resolvedPath.endsWith('.yml') || resolvedPath.endsWith('.yaml')) {
         try {
             raw = Bun.YAML.parse(content);
         } catch (e) {
-            throw new Error(`Failed to parse YAML config file "${filePath}": ${String(e)}`);
+            throw new Error(`Failed to parse YAML config file "${resolvedPath}": ${String(e)}`);
+        }
+    } else if (resolvedPath.endsWith('.xml')) {
+        try {
+            raw = XmlConfigLoader.parseXml(content);
+        } catch (e) {
+            throw new Error(`Failed to parse XML config file "${resolvedPath}": ${String(e)}`);
         }
     } else {
-        const ext = filePath.includes('.') ? filePath.slice(filePath.lastIndexOf('.')) : '(no extension)';
-        throw new Error(`Unsupported config file format: "${ext}". Use .json or .yml/.yaml`);
+        const ext = resolvedPath.includes('.') ? resolvedPath.slice(resolvedPath.lastIndexOf('.')) : '(no extension)';
+        throw new Error(`Unsupported config file format: "${ext}". Use .json, .yml/.yaml, or .xml`);
     }
 
-    return parseRawConfig(raw, filePath);
+    const config = parseRawConfig(raw, resolvedPath);
+    applySystemPropertyOverrides(config);
+    return config;
+}
+
+/**
+ * Apply system property / environment variable overrides to a loaded config.
+ *
+ * Recognised variables:
+ *   - {@code HAZELCAST_CLUSTER_NAME} — overrides the cluster name
+ *     (maps to {@code hazelcast.cluster.name} in JVM-land)
+ *   - {@code HAZELCAST_PORT} — overrides the member port
+ *     (maps to {@code hazelcast.port} in JVM-land)
+ */
+export function applySystemPropertyOverrides(config: HeliosConfig): void {
+    const clusterName = process.env['HAZELCAST_CLUSTER_NAME'];
+    if (clusterName && clusterName.trim() !== '') {
+        config.setClusterName(clusterName.trim());
+    }
+
+    const portStr = process.env['HAZELCAST_PORT'];
+    if (portStr) {
+        const port = parseInt(portStr, 10);
+        if (!isNaN(port) && port >= 0 && port <= 65535) {
+            config.getNetworkConfig().setPort(port);
+        }
+    }
 }
 
 /**
