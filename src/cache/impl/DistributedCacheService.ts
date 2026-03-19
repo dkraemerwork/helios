@@ -20,6 +20,7 @@ import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import { LocalCacheStatsImpl } from "@zenystx/helios-core/cache/impl/LocalCacheStats";
 
 // ── Cache entry ───────────────────────────────────────────────────────
 
@@ -118,6 +119,7 @@ export interface CacheMutationEvent {
   cacheName: string;
   operation: CacheOperation;
   keyData?: Data;
+  valueData?: Data;
   keyDataList?: Data[];
 }
 
@@ -133,6 +135,7 @@ export class DistributedCacheService {
     string,
     PendingRemoteRequest
   >();
+  private readonly _stats = new Map<string, LocalCacheStatsImpl>();
 
   constructor(
     private readonly _instanceName: string,
@@ -172,7 +175,15 @@ export class DistributedCacheService {
   // ── Public API ───────────────────────────────────────────────────────
 
   async get(name: string, keyData: Data): Promise<Data | null> {
+    const start = Date.now();
     const r = await this._invoke(name, "get", { keyData });
+    const elapsed = Date.now() - start;
+    const stats = this._getStats(name);
+    if (r.data !== undefined) {
+      stats.incrementHit(elapsed);
+    } else {
+      stats.incrementMiss(elapsed);
+    }
     return r.data !== undefined ? decodeData(r.data) : null;
   }
 
@@ -182,7 +193,9 @@ export class DistributedCacheService {
     valueData: Data,
     ttlMs = -1,
   ): Promise<void> {
+    const start = Date.now();
     await this._invoke(name, "put", { keyData, valueData, ttlMs });
+    this._getStats(name).incrementPut(Date.now() - start);
   }
 
   async putIfAbsent(
@@ -191,11 +204,15 @@ export class DistributedCacheService {
     valueData: Data,
     ttlMs = -1,
   ): Promise<boolean> {
+    const start = Date.now();
     const r = await this._invoke(name, "putIfAbsent", {
       keyData,
       valueData,
       ttlMs,
     });
+    if (r.booleanResult) {
+      this._getStats(name).incrementPut(Date.now() - start);
+    }
     return r.booleanResult ?? false;
   }
 
@@ -205,16 +222,20 @@ export class DistributedCacheService {
     valueData: Data,
     ttlMs = -1,
   ): Promise<Data | null> {
+    const start = Date.now();
     const r = await this._invoke(name, "getAndPut", {
       keyData,
       valueData,
       ttlMs,
     });
+    this._getStats(name).incrementPut(Date.now() - start);
     return r.data !== undefined ? decodeData(r.data) : null;
   }
 
   async getAndRemove(name: string, keyData: Data): Promise<Data | null> {
+    const start = Date.now();
     const r = await this._invoke(name, "getAndRemove", { keyData });
+    this._getStats(name).incrementRemoval(Date.now() - start);
     return r.data !== undefined ? decodeData(r.data) : null;
   }
 
@@ -224,16 +245,22 @@ export class DistributedCacheService {
     valueData: Data,
     ttlMs = -1,
   ): Promise<Data | null> {
+    const start = Date.now();
     const r = await this._invoke(name, "getAndReplace", {
       keyData,
       valueData,
       ttlMs,
     });
+    this._getStats(name).incrementPut(Date.now() - start);
     return r.data !== undefined ? decodeData(r.data) : null;
   }
 
   async remove(name: string, keyData: Data): Promise<boolean> {
+    const start = Date.now();
     const r = await this._invoke(name, "remove", { keyData });
+    if (r.booleanResult) {
+      this._getStats(name).incrementRemoval(Date.now() - start);
+    }
     return r.booleanResult ?? false;
   }
 
@@ -243,7 +270,11 @@ export class DistributedCacheService {
     valueData: Data,
     ttlMs = -1,
   ): Promise<boolean> {
+    const start = Date.now();
     const r = await this._invoke(name, "replace", { keyData, valueData, ttlMs });
+    if (r.booleanResult) {
+      this._getStats(name).incrementPut(Date.now() - start);
+    }
     return r.booleanResult ?? false;
   }
 
@@ -259,6 +290,16 @@ export class DistributedCacheService {
 
   async clear(name: string): Promise<void> {
     await this._invoke(name, "clear");
+  }
+
+  /** Returns the local stats for a named cache. Creates a zero-state if not present. */
+  getLocalCacheStats(name: string): LocalCacheStatsImpl {
+    return this._getStats(name);
+  }
+
+  /** Returns stats snapshots for all known caches. */
+  getAllCacheStats(): Map<string, LocalCacheStatsImpl> {
+    return new Map(this._stats);
   }
 
   async removeAll(name: string, keyDataList?: Data[]): Promise<void> {
@@ -386,7 +427,7 @@ export class DistributedCacheService {
           this._putEntry(container, key, val, expiresAt);
           container.version++;
           await this._replicateState(name, container);
-          this._notifyMutation({ cacheName: name, operation, keyData: key });
+          this._notifyMutation({ cacheName: name, operation, keyData: key, valueData: val });
           return this._voidResponse();
         }
         case "putIfAbsent": {
@@ -400,7 +441,7 @@ export class DistributedCacheService {
             this._putEntry(container, key, val, expiresAt);
             container.version++;
             await this._replicateState(name, container);
-            this._notifyMutation({ cacheName: name, operation, keyData: key });
+            this._notifyMutation({ cacheName: name, operation, keyData: key, valueData: val });
           }
           return this._boolResponse(!exists);
         }
@@ -414,7 +455,7 @@ export class DistributedCacheService {
           this._putEntry(container, key, val, expiresAt);
           container.version++;
           await this._replicateState(name, container);
-          this._notifyMutation({ cacheName: name, operation, keyData: key });
+          this._notifyMutation({ cacheName: name, operation, keyData: key, valueData: val });
           return old === null
             ? this._voidResponse()
             : { type: "CACHE_RESPONSE", requestId: "local", success: true, resultType: "data", data: encodeData(old.value) };
@@ -444,7 +485,7 @@ export class DistributedCacheService {
             this._putEntry(container, key, val, expiresAt);
             container.version++;
             await this._replicateState(name, container);
-            this._notifyMutation({ cacheName: name, operation, keyData: key });
+            this._notifyMutation({ cacheName: name, operation, keyData: key, valueData: val });
             return { type: "CACHE_RESPONSE", requestId: "local", success: true, resultType: "data", data: encodeData(old.value) };
           }
           return this._voidResponse();
@@ -472,7 +513,7 @@ export class DistributedCacheService {
             this._putEntry(container, key, val, expiresAt);
             container.version++;
             await this._replicateState(name, container);
-            this._notifyMutation({ cacheName: name, operation, keyData: key });
+            this._notifyMutation({ cacheName: name, operation, keyData: key, valueData: val });
           }
           return this._boolResponse(existing !== null);
         }
@@ -773,5 +814,14 @@ export class DistributedCacheService {
       success: true,
       resultType: "none",
     };
+  }
+
+  private _getStats(name: string): LocalCacheStatsImpl {
+    let stats = this._stats.get(name);
+    if (stats === undefined) {
+      stats = new LocalCacheStatsImpl();
+      this._stats.set(name, stats);
+    }
+    return stats;
   }
 }

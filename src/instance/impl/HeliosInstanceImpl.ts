@@ -58,6 +58,12 @@ import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemServ
 import { FencedLockService } from "@zenystx/helios-core/cp/impl/FencedLockService";
 import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
 import { PNCounterService } from "@zenystx/helios-core/crdt/impl/PNCounterService";
+import {
+    ConnectionMetricsPlugin,
+    DiagnosticsService,
+    OperationMetricsPlugin,
+    SystemMetricsPlugin,
+} from "@zenystx/helios-core/diagnostics/DiagnosticsService";
 import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
 import type { StoreLatencyMetrics } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
 import { StoreLatencyTracker } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
@@ -203,6 +209,8 @@ import { WanReplicationService } from "@zenystx/helios-core/wan/impl/WanReplicat
 import { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
 import { DurableExecutorService } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorService";
 import { DurableExecutorServiceProxy } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorServiceProxy";
+import type { StatsHandlerState } from "@zenystx/helios-core/rest/handler/StatsHandler";
+import { StatsHandler } from "@zenystx/helios-core/rest/handler/StatsHandler";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -691,6 +699,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   /** Store latency tracker — created in _initMonitor(), wired to MapContainerService. */
   private _storeLatencyTracker: StoreLatencyTracker | null = null;
+
+  /** Diagnostics service — plugin-based periodic metric collection. */
+  private _diagnosticsService: DiagnosticsService | null = null;
 
   /** System event log — ring buffer of cluster lifecycle events. */
   private readonly _systemEventLog = new SystemEventLog();
@@ -5147,6 +5158,24 @@ export class HeliosInstanceImpl implements HeliosInstance {
       {
         onMutation: (event) => {
           this._publishCacheMutationInvalidation(event.cacheName, event.operation, event.keyData, event.keyDataList);
+          // Wire cache mutations into WAL persistence
+          if (this._persistenceService !== null) {
+            const keyBytes = event.keyData?.toByteArray();
+            const valBytes = event.valueData?.toByteArray();
+            if (event.operation === 'put' || event.operation === 'putIfAbsent' ||
+                event.operation === 'getAndPut' || event.operation === 'replace' ||
+                event.operation === 'getAndReplace') {
+              if (keyBytes && valBytes) {
+                this._persistenceService.recordCachePut(event.cacheName, Buffer.from(keyBytes), Buffer.from(valBytes));
+              }
+            } else if (event.operation === 'remove' || event.operation === 'getAndRemove') {
+              if (keyBytes) {
+                this._persistenceService.recordCacheRemove(event.cacheName, Buffer.from(keyBytes));
+              }
+            } else if (event.operation === 'clear') {
+              this._persistenceService.recordCacheClear(event.cacheName);
+            }
+          }
         },
       },
     );
@@ -6136,6 +6165,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._slowOperationDetector?.stop();
     this._slowOperationDetector = null;
     this._storeLatencyTracker = null;
+    this._diagnosticsService?.stop();
+    this._diagnosticsService = null;
     this._restServer.stop();
     // Shutdown persistence service (fire-and-forget; close and fsync WAL)
     if (this._persistenceService !== null) {
@@ -6865,6 +6896,27 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     // Start sampling
     this._metricsSampler.start();
+
+    // Initialize and start the DiagnosticsService with built-in plugins
+    this._diagnosticsService = new DiagnosticsService();
+    this._diagnosticsService.registerPlugin(new SystemMetricsPlugin());
+    this._diagnosticsService.registerPlugin(new ConnectionMetricsPlugin(
+      () => globalResourceLimiter.getSnapshot().activeConnections,
+      () => this._transport?.peerCount() ?? 0,
+      () => globalResourceLimiter.getSnapshot().totalConnectionsCreated,
+    ));
+    this._diagnosticsService.registerPlugin(new OperationMetricsPlugin(
+      () => this._operationServiceImpl?.getStats().queueSize ?? 0,
+      () => this._operationServiceImpl?.getStats().completedCount ?? 0,
+      () => this._slowOperationDetector?.getInFlightCount() ?? 0,
+    ));
+    this._diagnosticsService.start();
+
+    // Register StatsHandler under /hazelcast/rest/stats (avoids conflict with DataHandler
+    // on /maps and /queues, and ClusterReadHandler on /cluster).
+    const statsHandler = new StatsHandler(this._createStatsHandlerState());
+    this._restServer.registerHandler('/hazelcast/rest/stats', (req) => statsHandler.handle(req));
+    this._restServer.registerHandler('/hazelcast/rest/diagnostics', (req) => statsHandler.handle(req));
   }
 
   private _createMonitorJobsProvider(): MonitorJobsProvider {
@@ -7058,6 +7110,48 @@ export class HeliosInstanceImpl implements HeliosInstance {
         }
         // Bun's --expose-gc or V8 flag needed; otherwise this is a best-effort no-op.
       },
+    };
+  }
+
+  private _createStatsHandlerState(): StatsHandlerState {
+    return {
+      getMapStats: (name: string) => {
+        const allStats = this._mapService.getAllMapStats();
+        return allStats.get(name) ?? null;
+      },
+
+      getQueueStats: (name: string) => {
+        const queue = this._queues.get(name);
+        if (queue === undefined) return null;
+        return queue.getLocalQueueStats();
+      },
+
+      getMembers: () => {
+        const localMember = this._cluster.getLocalMember();
+        return this._cluster.getMembers().map((member) => ({
+          uuid: member.getUuid(),
+          address: `${member.getAddress().getHost()}:${member.getAddress().getPort()}`,
+          localMember: member.getUuid() === localMember.getUuid(),
+          liteMember: member.isLiteMember(),
+        }));
+      },
+
+      getClusterVersion: () => this.getMemberVersion(),
+
+      setClusterState: (state: string): void => {
+        const clusterState = parseAdminClusterState(state);
+        if (this._clusterCoordinator !== null) {
+          this._clusterCoordinator.setClusterState(clusterState);
+          return;
+        }
+        if (this._cluster instanceof ClusterServiceImpl) {
+          this._cluster.setClusterState(clusterState);
+          return;
+        }
+        throw new Error('Cluster state changes require a cluster service.');
+      },
+
+      getDiagnostics: () => this._diagnosticsService?.getLatestSnapshot() ?? [],
     };
   }
 

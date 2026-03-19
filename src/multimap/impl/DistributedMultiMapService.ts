@@ -24,6 +24,7 @@ import type { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentS
 import { RecentStringSet as RecentStringSetImpl } from "@zenystx/helios-core/internal/util/RecentStringSet";
 import { EntryEventImpl } from "@zenystx/helios-core/map/EntryListener";
 import { ValueCollectionType } from "@zenystx/helios-core/multimap/MultiMapConfig";
+import { LocalMultiMapStatsImpl } from "@zenystx/helios-core/multimap/impl/LocalMultiMapStats";
 
 // ── Container helpers ─────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ export class DistributedMultiMapService {
     Map<string, MultiMapListenerRegistration>
   >();
   private readonly _listenerCounters = new Map<string, number>();
+  private readonly _stats = new Map<string, LocalMultiMapStatsImpl>();
 
   constructor(
     private readonly _instanceName: string,
@@ -174,32 +176,42 @@ export class DistributedMultiMapService {
     dedupeId?: string,
     dedupeSet?: RecentStringSet,
   ): Promise<boolean> {
+    const start = Date.now();
     const r = await this._invoke(name, "put", { keyData, valueData }, type, dedupeId, dedupeSet);
+    this._getStats(name).incrementPut(Date.now() - start);
     return r.booleanResult ?? false;
   }
 
   async get(name: string, keyData: Data): Promise<Data[]> {
+    const start = Date.now();
     const r = await this._invoke(name, "get", { keyData });
+    this._getStats(name).incrementGet(Date.now() - start);
     return (r.dataList ?? []).map(decodeData);
   }
 
   async remove(name: string, keyData: Data, valueData: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<boolean> {
+    const start = Date.now();
     const r = await this._invoke(name, "remove", { keyData, valueData }, ValueCollectionType.LIST, dedupeId, dedupeSet);
+    this._getStats(name).incrementRemove(Date.now() - start);
     return r.booleanResult ?? false;
   }
 
   async removeAll(name: string, keyData: Data, dedupeId?: string, dedupeSet?: RecentStringSet): Promise<Data[]> {
+    const start = Date.now();
     const r = await this._invoke(name, "removeAll", { keyData }, ValueCollectionType.LIST, dedupeId, dedupeSet);
+    this._getStats(name).incrementRemove(Date.now() - start);
     return (r.dataList ?? []).map(decodeData);
   }
 
   async containsKey(name: string, keyData: Data): Promise<boolean> {
     const r = await this._invoke(name, "containsKey", { keyData });
+    this._getStats(name).incrementOther();
     return r.booleanResult ?? false;
   }
 
   async containsValue(name: string, valueData: Data): Promise<boolean> {
     const r = await this._invoke(name, "containsValue", { valueData });
+    this._getStats(name).incrementOther();
     return r.booleanResult ?? false;
   }
 
@@ -209,36 +221,53 @@ export class DistributedMultiMapService {
     valueData: Data,
   ): Promise<boolean> {
     const r = await this._invoke(name, "containsEntry", { keyData, valueData });
+    this._getStats(name).incrementOther();
     return r.booleanResult ?? false;
   }
 
   async keySet(name: string): Promise<Data[]> {
     const r = await this._invoke(name, "keySet");
+    this._getStats(name).incrementOther();
     return (r.dataList ?? []).map(decodeData);
   }
 
   async values(name: string): Promise<Data[]> {
     const r = await this._invoke(name, "values");
+    this._getStats(name).incrementOther();
     return (r.dataList ?? []).map(decodeData);
   }
 
   async entrySet(name: string): Promise<[Data, Data][]> {
     const r = await this._invoke(name, "entrySet");
+    this._getStats(name).incrementOther();
     return (r.entrySet ?? []).map(([k, v]) => [decodeData(k), decodeData(v)]);
   }
 
   async size(name: string): Promise<number> {
     const r = await this._invoke(name, "size");
+    this._getStats(name).incrementOther();
     return r.numberResult ?? 0;
   }
 
   async valueCount(name: string, keyData: Data): Promise<number> {
     const r = await this._invoke(name, "valueCount", { keyData });
+    this._getStats(name).incrementOther();
     return r.numberResult ?? 0;
   }
 
   async clear(name: string): Promise<void> {
     await this._invoke(name, "clear");
+    this._getStats(name).incrementOther();
+  }
+
+  /** Returns the local stats for a named multimap. Creates a zero-state if not present. */
+  getLocalMultiMapStats(name: string): LocalMultiMapStatsImpl {
+    return this._getStats(name);
+  }
+
+  /** Returns stats snapshots for all known multimaps. */
+  getAllMultiMapStats(): Map<string, LocalMultiMapStatsImpl> {
+    return new Map(this._stats);
   }
 
   addEntryListener<K, V>(
@@ -843,5 +872,14 @@ export class DistributedMultiMapService {
       success: true,
       resultType: "none",
     };
+  }
+
+  private _getStats(name: string): LocalMultiMapStatsImpl {
+    let stats = this._stats.get(name);
+    if (stats === undefined) {
+      stats = new LocalMultiMapStatsImpl();
+      this._stats.set(name, stats);
+    }
+    return stats;
   }
 }
