@@ -35,6 +35,9 @@ function makeNodeEngine(): MapNearCacheNodeEngine {
     };
     const ss = new TestSerializationService() as never;
     const props = new MapHeliosProperties();
+    const lifecycleService = {
+        isRunning: () => true,
+    };
 
     return {
         getLogger: () => logger,
@@ -42,6 +45,7 @@ function makeNodeEngine(): MapNearCacheNodeEngine {
         getSerializationService: () => ss,
         getProperties: () => props,
         getEventService: () => eventService,
+        getLifecycleService: () => lifecycleService as never,
         getLocalMemberUuid: () => 'uuid-invalidation-test',
         getTaskScheduler: () => scheduler,
     } as MapNearCacheNodeEngine;

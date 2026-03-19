@@ -44,6 +44,9 @@ function makeNodeEngine(): MapNearCacheNodeEngine {
         getInteger: (p: { defaultValue: string }) => parseInt(p.defaultValue, 10),
         getString: (p: { defaultValue: string }) => p.defaultValue,
     };
+    const lifecycleService = {
+        isRunning: () => true,
+    };
 
     return {
         getLogger: (_cls: unknown) => logger,
@@ -51,6 +54,7 @@ function makeNodeEngine(): MapNearCacheNodeEngine {
         getSerializationService: () => ss,
         getProperties: () => props,
         getEventService: () => eventService,
+        getLifecycleService: () => lifecycleService as never,
         getLocalMemberUuid: () => 'member-uuid-001',
         getTaskScheduler: () => scheduler,
     } as MapNearCacheNodeEngine;
