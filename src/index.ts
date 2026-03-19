@@ -321,5 +321,12 @@ export type {
     MigrationListenerEntry,
 } from "@zenystx/helios-core/server/clientprotocol/handlers/ClientServiceHandlers";
 
+// ── Durable Executor ──────────────────────────────────────────────────────────
+export { DurableExecutorConfig } from "@zenystx/helios-core/config/DurableExecutorConfig";
+export { DurableTaskRingbuffer } from "@zenystx/helios-core/durableexecutor/impl/DurableTaskRingbuffer";
+export type { DurableTaskRecord } from "@zenystx/helios-core/durableexecutor/impl/DurableTaskRingbuffer";
+export { DurableExecutorService, DURABLE_EXECUTOR_SERVICE_NAME } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorService";
+export { DurableExecutorServiceProxy } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorServiceProxy";
+
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";

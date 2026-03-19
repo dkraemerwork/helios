@@ -25,6 +25,7 @@ import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory.j
 import { CPSubsystemConfig } from '@zenystx/helios-core/config/CPSubsystemConfig.js';
 import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 import { SecurityConfig } from '@zenystx/helios-core/config/SecurityConfig.js';
+import { DurableExecutorConfig } from '@zenystx/helios-core/config/DurableExecutorConfig.js';
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;
@@ -36,6 +37,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _reliableTopicConfigs = new Map<string, ReliableTopicConfig>();
   private readonly _ringbufferConfigs = new Map<string, RingbufferConfig>();
   private readonly _scheduledExecutorConfigs = new Map<string, ScheduledExecutorConfig>();
+  private readonly _durableExecutorConfigs = new Map<string, DurableExecutorConfig>();
   private readonly _splitBrainProtectionConfigs = new Map<string, SplitBrainProtectionConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
@@ -260,6 +262,23 @@ export class HeliosConfig implements InstanceConfig {
 
   getScheduledExecutorConfigs(): ReadonlyMap<string, ScheduledExecutorConfig> {
     return this._scheduledExecutorConfigs;
+  }
+
+  addDurableExecutorConfig(config: DurableExecutorConfig): this {
+    this._durableExecutorConfigs.set(config.getName(), config);
+    return this;
+  }
+
+  /**
+   * Returns the DurableExecutorConfig for the given name. If none is registered,
+   * returns a new default DurableExecutorConfig with that name (fallback behavior).
+   */
+  getDurableExecutorConfig(name: string): DurableExecutorConfig {
+    return this._durableExecutorConfigs.get(name) ?? new DurableExecutorConfig(name);
+  }
+
+  getDurableExecutorConfigs(): ReadonlyMap<string, DurableExecutorConfig> {
+    return this._durableExecutorConfigs;
   }
 
   /**

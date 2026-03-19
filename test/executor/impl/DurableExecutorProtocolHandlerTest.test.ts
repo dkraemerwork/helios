@@ -45,8 +45,12 @@ const DE_DISPOSE_RESPONSE            = 0x180501;
 const DE_RETRIEVE_DISPOSE_REQUEST    = 0x180600;
 const DE_RETRIEVE_DISPOSE_RESPONSE   = 0x180601;
 
-// Response-frame header: messageType(4) + backupAcks(1) + unused(3) + correlationId(8)
+// Request initial frame header: messageType(4) + correlationId(8) + partitionId(4) = 16
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // = 16
+
+// Response initial frame header: messageType(4) + correlationId(8) + backupAcks(1) = 13
+// Payload (boolean/int) is encoded immediately after the 13-byte response header.
+const RESP_H = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + 1; // = 13
 
 // ── Fake session ──────────────────────────────────────────────────────────────
 
@@ -119,11 +123,12 @@ function buildDeSubmitRequest(
 
 /**
  * Decode DE_SUBMIT response → sequence number (int32 per protocol spec).
+ * The sequence integer is at offset RESP_H (13) in the response initial frame.
  */
 function decodeDeSubmitResponse(response: ClientMessage): number {
     const iter = response.forwardFrameIterator();
     const frame = iter.next();
-    return frame.content.readInt32LE(RH);
+    return frame.content.readInt32LE(RESP_H);
 }
 
 /**
@@ -258,8 +263,8 @@ describe('DurableExecutor protocol handlers', () => {
         const msgType = response!.getStartFrame().content.readUInt32LE(0);
         expect(msgType).toBe(DE_IS_SHUTDOWN_RESPONSE);
 
-        // Read boolean at position RH
-        const isShutdown = response!.getStartFrame().content.readUInt8(RH) !== 0;
+        // Read boolean at position RESP_H (13) — immediately after the 13-byte response header
+        const isShutdown = response!.getStartFrame().content.readUInt8(RESP_H) !== 0;
         expect(isShutdown).toBe(false);
     });
 
@@ -276,7 +281,7 @@ describe('DurableExecutor protocol handlers', () => {
         const response = await dispatcher.dispatch(buildDeIsShutdownRequest('de-exec-3', 2), session);
         expect(response).not.toBeNull();
 
-        const isShutdown = response!.getStartFrame().content.readUInt8(RH) !== 0;
+        const isShutdown = response!.getStartFrame().content.readUInt8(RESP_H) !== 0;
         expect(isShutdown).toBe(true);
     });
 

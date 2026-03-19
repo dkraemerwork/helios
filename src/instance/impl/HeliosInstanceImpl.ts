@@ -201,6 +201,8 @@ import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJ
 import { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
 import { WanReplicationService } from "@zenystx/helios-core/wan/impl/WanReplicationService";
 import { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
+import { DurableExecutorService } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorService";
+import { DurableExecutorServiceProxy } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorServiceProxy";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -513,9 +515,10 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _scheduledExecutorContainers = new Map<string, ScheduledContainerService>();
   /** Shared container managing all named scheduled executors for the client protocol. */
   private _sharedScheduledExecutorContainer: ScheduledContainerService | null = null;
-  /** Durable executor result store: executorName → (sequence → Promise<Data|null>) */
-  private readonly _durableExecutorResults = new Map<string, Map<number, Promise<import('@zenystx/helios-core/internal/serialization/Data').Data | null>>>();
-  private _durableSeqCounter = 0;
+  /** Durable executor service instances: executorName → DurableExecutorServiceProxy */
+  private readonly _durableExecutors = new Map<string, DurableExecutorServiceProxy>();
+  /** Executor names that have received a shutdown signal, tracked for isShutdown queries. */
+  private readonly _shutdownExecutorNames = new Set<string>();
   private _knownExecutorMemberIds = new Set<string>();
   private _sqlService: SqlService | null = null;
   private _cpSubsystemService: CpSubsystemService | null = null;
@@ -3878,11 +3881,33 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
     const executorOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ExecutorServiceOperations = {
       shutdown: async (name) => {
-        const { container, proxy } = this._getOrCreateExecutorRuntime(name);
-        await container.shutdown();
-        await proxy.shutdown();
+        // Record the shutdown so isShutdown() is correct even before first use.
+        this._shutdownExecutorNames.add(name);
+        // Shut down standard executor if it exists.
+        const standardProxy = this._executors.get(name);
+        if (standardProxy !== undefined) {
+          const container = this._executorContainers.get(name);
+          await container?.shutdown();
+          await standardProxy.shutdown();
+        }
+        // Shut down durable executor if it exists.
+        const durableProxy = this._durableExecutors.get(name);
+        if (durableProxy !== undefined) {
+          durableProxy.shutdown();
+        }
       },
-      isShutdown: async (name) => this._getOrCreateExecutorRuntime(name).container.isShutdown(),
+      isShutdown: async (name) => {
+        // If shutdown was explicitly requested, always return true.
+        if (this._shutdownExecutorNames.has(name)) return true;
+        // Check live durable executor state.
+        const durableProxy = this._durableExecutors.get(name);
+        if (durableProxy !== undefined) {
+          return durableProxy.isShutdown();
+        }
+        // Fall back to standard executor.
+        const container = this._executorContainers.get(name);
+        return container?.isShutdown() ?? false;
+      },
       cancelOnPartition: async (uuid, partitionId, interrupt) =>
         this._cancelClientExecutorTaskOnPartition(uuid, partitionId, interrupt),
       cancelOnMember: async (uuid, memberUuid, interrupt) =>
@@ -3891,12 +3916,21 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._submitClientExecutorTaskToPartition(name, uuid, callable, partitionId),
       submitToMember: async (name, uuid, callable, memberUuid) =>
         this._submitClientExecutorTaskToMember(name, uuid, callable, memberUuid),
-      durableSubmitToPartition: (name, callable, partitionId) =>
-        this._durableSubmitToPartition(name, callable, partitionId),
-      durableRetrieveResult: (name, sequence) =>
-        this._durableRetrieveResult(name, sequence),
-      durableDisposeResult: async (name, sequence) =>
-        this._durableDisposeResult(name, sequence),
+      durableSubmitToPartition: async (name, callable, partitionId) => {
+        const sequence = this._getDurableExecutorService(name).submitToPartition(partitionId, callable);
+        return { sequence };
+      },
+      durableRetrieveResult: async (name, sequence) => {
+        const { result } = this._getDurableExecutorService(name).retrieveResult(
+          this._durablePartitionForSequence(sequence), sequence,
+        );
+        return result;
+      },
+      durableDisposeResult: async (name, sequence) => {
+        this._getDurableExecutorService(name).disposeResult(
+          this._durablePartitionForSequence(sequence), sequence,
+        );
+      },
     };
 
     const atomicLongOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').AtomicLongOperations = {
@@ -4798,85 +4832,40 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   // ── Durable executor helpers ─────────────────────────────────────────────
 
-  private _durableGetOrCreateResultMap(name: string): Map<number, Promise<import('@zenystx/helios-core/internal/serialization/Data').Data | null>> {
-    let map = this._durableExecutorResults.get(name);
-    if (map === undefined) {
-      map = new Map();
-      this._durableExecutorResults.set(name, map);
-    }
-    return map;
+  /**
+   * Get or create a DurableExecutorService for the named executor.
+   * The service is backed by a per-partition DurableTaskRingbuffer.
+   */
+  private _getDurableExecutorService(name: string): DurableExecutorService {
+    return this._getOrCreateDurableExecutorProxy(name).getService();
   }
 
-  private async _durableSubmitToPartition(
-    name: string,
-    callable: import('@zenystx/helios-core/internal/serialization/Data').Data,
-    partitionId: number,
-  ): Promise<{ sequence: number }> {
-    const sequence = ++this._durableSeqCounter;
-    const uuid = crypto.randomUUID();
-
-    // Build and invoke the operation, capturing the result as a stored promise.
-    let resolveResult!: (value: import('@zenystx/helios-core/internal/serialization/Data').Data | null) => void;
-    let rejectResult!: (reason: unknown) => void;
-    const resultPromise = new Promise<import('@zenystx/helios-core/internal/serialization/Data').Data | null>((resolve, reject) => {
-      resolveResult = resolve;
-      rejectResult = reject;
-    });
-
-    const resultMap = this._durableGetOrCreateResultMap(name);
-    resultMap.set(sequence, resultPromise);
-
-    try {
-      const operation = this._buildClientExecutorOperation(name, uuid, callable);
-      const future = this._nodeEngine.getOperationService().invokeOnPartition<import('@zenystx/helios-core/executor/ExecutorOperationResult').ExecutorOperationResult>(
-        'helios:executor',
-        operation,
-        partitionId,
-      );
-      this._trackClientExecutorTask(uuid, { name, partitionId, memberUuid: null }, future);
-
-      void future.get().then((envelope) => {
-        switch (envelope.status) {
-          case 'success':
-            resolveResult(envelope.resultData ?? null);
-            break;
-          case 'cancelled':
-            rejectResult(new Error('Task was cancelled'));
-            break;
-          case 'task-lost':
-            rejectResult(new Error(envelope.errorMessage ?? 'Task lost: member departed'));
-            break;
-          default:
-            rejectResult(new Error(envelope.errorMessage ?? 'Executor task failed'));
-        }
-      }).catch(rejectResult);
-    } catch (err) {
-      rejectResult(err);
+  /**
+   * Get or create the DurableExecutorServiceProxy for a named executor.
+   * Registers a shutdown hook on first creation.
+   */
+  private _getOrCreateDurableExecutorProxy(name: string): DurableExecutorServiceProxy {
+    let proxy = this._durableExecutors.get(name);
+    if (proxy === undefined) {
+      const config = this._config.getDurableExecutorConfig(name);
+      const service = new DurableExecutorService(name, config, this._nodeEngine);
+      proxy = new DurableExecutorServiceProxy(name, service, this._nodeEngine);
+      this._durableExecutors.set(name, proxy);
+      this.registerShutdownHook(async () => {
+        proxy!.shutdown();
+      });
     }
-
-    return { sequence };
+    return proxy;
   }
 
-  private _durableRetrieveResult(
-    name: string,
-    sequence: number,
-  ): Promise<import('@zenystx/helios-core/internal/serialization/Data').Data | null> {
-    const resultMap = this._durableExecutorResults.get(name);
-    const promise = resultMap?.get(sequence);
-    if (promise === undefined) {
-      return Promise.reject(new Error(`No durable executor result for sequence ${sequence} in executor "${name}"`));
-    }
-    return promise;
-  }
-
-  private _durableDisposeResult(name: string, sequence: number): void {
-    const resultMap = this._durableExecutorResults.get(name);
-    if (resultMap !== undefined) {
-      resultMap.delete(sequence);
-      if (resultMap.size === 0) {
-        this._durableExecutorResults.delete(name);
-      }
-    }
+  /**
+   * Recover the partition ID from a durable sequence number.
+   * Matches how DurableExecutorServiceProxy encodes partitions.
+   */
+  private _durablePartitionForSequence(sequence: number): number {
+    const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
+    const pid = sequence % partitionCount;
+    return pid < 0 ? pid + partitionCount : pid;
   }
 
   private _getTransactionalMap(
@@ -5997,6 +5986,11 @@ export class HeliosInstanceImpl implements HeliosInstance {
     this._executors.clear();
     this._executorContainers.clear();
     this._clientExecutorTasks.clear();
+    // Shut down all durable executor proxies
+    for (const durableProxy of this._durableExecutors.values()) {
+      durableProxy.shutdown();
+    }
+    this._durableExecutors.clear();
     for (const queryKey of Array.from(this._clientSqlResults.keys())) {
       this._closeStoredClientSqlResult(queryKey);
     }
