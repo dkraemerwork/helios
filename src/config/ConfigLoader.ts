@@ -41,6 +41,7 @@ import {
 import { WanReplicationRef } from '@zenystx/helios-core/config/WanReplicationRef';
 import { DiscoveryStrategyConfig as SpiDiscoveryStrategyConfig } from '@zenystx/helios-core/discovery/spi/DiscoverySPI';
 import { DiscoveryStrategyConfig } from '@zenystx/helios-core/config/DiscoveryStrategyConfig';
+import { XmlConfigLoader } from './XmlConfigLoader';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.
