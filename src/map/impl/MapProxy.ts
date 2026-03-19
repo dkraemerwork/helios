@@ -351,6 +351,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     containsValue(value: V): boolean {
+        this._checkReadQuorum();
         const vd = this._toData(value);
         for (const [, entryValue] of this._containerService.getAllEntries(this._name)) {
             if (this._dataEquals(vd, entryValue)) return true;
@@ -452,11 +453,13 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async replace(key: K, value: V): Promise<V | null> {
+        this._checkWriteQuorum();
         if (!this.containsKey(key)) return null;
         return this.put(key, value);
     }
 
     async replaceIfSame(key: K, oldValue: V, newValue: V): Promise<boolean> {
+        this._checkWriteQuorum();
         const current = await this.get(key);
         if (current === null) return false;
         if (!this._equals(current, oldValue)) return false;
