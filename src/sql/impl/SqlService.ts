@@ -1,19 +1,16 @@
 /**
- * SQL query engine — Block G.
+ * SQL query engine — Block G / WP8.
  *
  * Port of {@code com.hazelcast.sql.impl.SqlServiceImpl}.
  *
- * Features:
- * - execute(statement, params) → SqlResult
- * - Cursor lifecycle: create cursor, fetch rows, close cursor
- * - Statement parsing: SELECT, INSERT, UPDATE, DELETE on IMap backing
- * - Query planning: determines target partitions from WHERE clause
- * - Result paging with configurable page size (default 4096)
- * - Cancellation: cancel running query by query ID
- * - Error semantics: syntax errors, execution errors, timeout
- *
- * The backing store is IMap (via MapContainerService), accessed via the
- * NodeEngine's serialization service.
+ * Features (WP8 additions):
+ * - CREATE/DROP MAPPING → MappingRegistry
+ * - GROUP BY + HAVING + aggregate functions (COUNT, SUM, AVG, MIN, MAX)
+ * - DISTINCT
+ * - OR in WHERE clauses (full condition tree)
+ * - Expression engine (arithmetic, functions, CASE, CAST)
+ * - SELECT with aliases and computed expressions
+ * - Enhanced error codes (SqlErrorCode)
  */
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
 import type { SqlColumnMetadata, SqlColumnType } from '@zenystx/helios-core/sql/impl/SqlRowMetadata.js';
@@ -22,16 +19,44 @@ import { SqlResult, type SqlRow } from '@zenystx/helios-core/sql/impl/SqlResult.
 import {
     SqlStatement,
     SqlStatementParseError,
+    isWhereGroup,
+    type ParsedCreateMappingStatement,
     type ParsedDeleteStatement,
+    type ParsedDropMappingStatement,
     type ParsedInsertStatement,
     type ParsedSelectStatement,
     type ParsedUpdateStatement,
+    type SelectItem,
+    type AggregateCall,
+    type SqlConditionNode,
     type SqlWhereClause,
 } from '@zenystx/helios-core/sql/impl/SqlStatement.js';
+import {
+    MappingRegistry,
+    MappingAlreadyExistsError,
+    MappingNotFoundError,
+    type MappingConfig,
+} from '@zenystx/helios-core/sql/impl/MappingRegistry.js';
+import { SqlErrorCode } from '@zenystx/helios-core/sql/impl/SqlTypeSystem.js';
+import { AggregateExpression, type AggregateAccumulator } from '@zenystx/helios-core/sql/impl/expression/AggregateExpression.js';
+import {
+    ColumnExpression,
+    LiteralExpression,
+    FunctionExpression,
+    _equals,
+    _compare,
+} from '@zenystx/helios-core/sql/impl/expression/Expression.js';
+import type { Expression } from '@zenystx/helios-core/sql/impl/expression/Expression.js';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
 
+// ── Error types ───────────────────────────────────────────────────────────────
+
 export class SqlExecutionError extends Error {
-    constructor(message: string, public readonly queryId: string) {
+    constructor(
+        message: string,
+        public readonly queryId: string,
+        public readonly errorCode: SqlErrorCode = SqlErrorCode.GENERIC,
+    ) {
         super(message);
         this.name = 'SqlExecutionError';
     }
@@ -44,7 +69,8 @@ export class SqlTimeoutError extends Error {
     }
 }
 
-/** Active query handle used for cancellation. */
+// ── Active query tracking ─────────────────────────────────────────────────────
+
 interface ActiveQuery {
     readonly queryId: string;
     readonly startTime: number;
@@ -52,14 +78,24 @@ interface ActiveQuery {
     timeoutTimer?: ReturnType<typeof setTimeout>;
 }
 
+// ── Aggregate result slot ─────────────────────────────────────────────────────
+
+interface AggregateSlot {
+    readonly alias: string;
+    readonly aggExpr: AggregateExpression;
+    accumulator: AggregateAccumulator;
+}
+
+// ── SqlService ────────────────────────────────────────────────────────────────
+
 export class SqlService {
     static readonly SERVICE_NAME = 'helios:sql';
 
     private readonly _nodeEngine: NodeEngine;
     private readonly _containerService: MapContainerService;
     private readonly _defaultPageSize: number;
+    private readonly _mappingRegistry = new MappingRegistry();
 
-    /** Active (in-progress) queries keyed by query ID. */
     private readonly _activeQueries = new Map<string, ActiveQuery>();
 
     constructor(
@@ -70,6 +106,11 @@ export class SqlService {
         this._nodeEngine = nodeEngine;
         this._containerService = containerService;
         this._defaultPageSize = defaultPageSize;
+    }
+
+    /** Expose the mapping registry for external access (e.g. handlers). */
+    getMappingRegistry(): MappingRegistry {
+        return this._mappingRegistry;
     }
 
     /**
@@ -90,7 +131,6 @@ export class SqlService {
         const query: ActiveQuery = { queryId, startTime: Date.now(), cancelled: false };
         this._activeQueries.set(queryId, query);
 
-        // Set up timeout if configured
         const timeoutMs = statement.getTimeoutMillis();
         if (timeoutMs > 0) {
             query.timeoutTimer = setTimeout(() => {
@@ -120,6 +160,12 @@ export class SqlService {
                 case 'DELETE':
                     result = this._executeDelete(parsed, queryId, query);
                     break;
+                case 'CREATE_MAPPING':
+                    result = this._executeCreateMapping(parsed, queryId);
+                    break;
+                case 'DROP_MAPPING':
+                    result = this._executeDropMapping(parsed, queryId);
+                    break;
             }
         } catch (e) {
             this._cleanupQuery(query);
@@ -140,10 +186,7 @@ export class SqlService {
         return result;
     }
 
-    /**
-     * Cancel a running query by its query ID.
-     * Returns true if the query was found and cancelled.
-     */
+    /** Cancel a running query by its query ID. Returns true if cancelled. */
     cancelQuery(queryId: string): boolean {
         const query = this._activeQueries.get(queryId);
         if (!query) return false;
@@ -152,14 +195,63 @@ export class SqlService {
         return true;
     }
 
-    /**
-     * Returns all currently active query IDs.
-     */
+    /** Returns all currently active query IDs. */
     getActiveQueryIds(): string[] {
         return [...this._activeQueries.keys()];
     }
 
-    // ── SELECT ─────────────────────────────────────────────────────────────
+    // ── CREATE MAPPING ────────────────────────────────────────────────────────
+
+    private _executeCreateMapping(
+        stmt: ParsedCreateMappingStatement,
+        queryId: string,
+    ): SqlResult {
+        const config: MappingConfig = {
+            name: stmt.mappingName,
+            type: 'IMap',
+            columns: stmt.columns,
+            options: stmt.options,
+        };
+
+        if (stmt.ifNotExists) {
+            this._mappingRegistry.createMappingIfNotExists(config);
+        } else {
+            try {
+                this._mappingRegistry.createMapping(config);
+            } catch (e) {
+                if (e instanceof MappingAlreadyExistsError) {
+                    throw new SqlExecutionError(e.message, queryId, SqlErrorCode.PARSING);
+                }
+                throw e;
+            }
+        }
+
+        return new SqlResult(new SqlRowMetadata([]), [], 0, queryId);
+    }
+
+    // ── DROP MAPPING ──────────────────────────────────────────────────────────
+
+    private _executeDropMapping(
+        stmt: ParsedDropMappingStatement,
+        queryId: string,
+    ): SqlResult {
+        if (stmt.ifExists) {
+            this._mappingRegistry.dropMappingIfExists(stmt.mappingName);
+        } else {
+            try {
+                this._mappingRegistry.dropMapping(stmt.mappingName);
+            } catch (e) {
+                if (e instanceof MappingNotFoundError) {
+                    throw new SqlExecutionError(e.message, queryId, SqlErrorCode.PARSING);
+                }
+                throw e;
+            }
+        }
+
+        return new SqlResult(new SqlRowMetadata([]), [], 0, queryId);
+    }
+
+    // ── SELECT ────────────────────────────────────────────────────────────────
 
     private _executeSelect(
         stmt: ParsedSelectStatement,
@@ -169,53 +261,345 @@ export class SqlService {
     ): SqlResult {
         const allEntries = [...this._containerService.getAllEntries(stmt.mapName)];
 
-        const rows: SqlRow[] = [];
+        // Determine whether we have aggregates in the select list
+        const hasAggregates = stmt.selectItems.some(
+            (item) => typeof item.expression !== 'string',
+        );
+        const hasGroupBy = stmt.groupBy.length > 0;
+
+        // ── Phase 1: scan + WHERE filter ─────────────────────────────────────
+
+        type RawEntry = { row: SqlRow; key: unknown; value: unknown };
+        const filtered: RawEntry[] = [];
         let sampleEntry: unknown = null;
 
+        // For aggregate / GROUP BY queries we need ALL fields available for evaluation.
+        // For plain projection we can use the declared column list.
+        const scanColumns = (hasAggregates || hasGroupBy) ? ['*'] : stmt.columns;
+
         for (const [kd, vd] of allEntries) {
-            if (query.cancelled) {
-                throw new SqlTimeoutError(queryId, 0);
-            }
+            if (query.cancelled) throw new SqlTimeoutError(queryId, 0);
 
             const key = this._nodeEngine.toObject<unknown>(kd);
             const value = this._nodeEngine.toObject<unknown>(vd);
 
             if (!sampleEntry && value !== null) sampleEntry = value;
 
-            const row = this._buildRow(key, value, stmt.columns);
+            const row = this._buildRow(key, value, scanColumns);
 
-            // Apply WHERE filter
-            if (!this._applyWhere(row, key, value, stmt.where)) continue;
+            if (!this._applyConditionTree(row, key, value, stmt.where)) continue;
 
-            rows.push(row);
+            filtered.push({ row, key, value });
         }
 
-        // Apply ORDER BY
+        let resultRows: SqlRow[];
+
+        if (hasAggregates || hasGroupBy) {
+            // ── Phase 2a: GROUP BY + aggregation ─────────────────────────────
+            resultRows = this._executeGroupBy(stmt, filtered, queryId, query);
+        } else {
+            // ── Phase 2b: plain projection ────────────────────────────────────
+            resultRows = filtered.map(({ row, key, value }) =>
+                this._projectRow(row, key, value, stmt.selectItems),
+            );
+
+            // DISTINCT (no aggregation case)
+            if (stmt.distinct) {
+                resultRows = this._deduplicateRows(resultRows);
+            }
+
+            // ORDER BY
+            if (stmt.orderBy.length > 0) {
+                resultRows.sort((a, b) => {
+                    for (const { column, direction } of stmt.orderBy) {
+                        const cmp = _compare(a[column], b[column]);
+                        if (cmp !== 0) return direction === 'DESC' ? -cmp : cmp;
+                    }
+                    return 0;
+                });
+            }
+        }
+
+        // ── Phase 3: OFFSET + LIMIT ───────────────────────────────────────────
+        const offsetVal = stmt.offset ?? 0;
+        const limitedRows = stmt.limit !== null
+            ? resultRows.slice(offsetVal, offsetVal + stmt.limit)
+            : resultRows.slice(offsetVal);
+
+        const metadata = this._buildMetadata(stmt.selectItems, sampleEntry);
+        return new SqlResult(metadata, limitedRows, -1, queryId);
+    }
+
+    private _executeGroupBy(
+        stmt: ParsedSelectStatement,
+        filtered: Array<{ row: SqlRow; key: unknown; value: unknown }>,
+        queryId: string,
+        query: ActiveQuery,
+    ): SqlRow[] {
+        // Build aggregate slot descriptors from the select item list
+        const aggSlotTemplates: Array<{
+            alias: string;
+            aggExpr: AggregateExpression;
+        }> = [];
+
+        for (const item of stmt.selectItems) {
+            if (typeof item.expression !== 'string') {
+                const agg = item.expression as AggregateCall;
+                const fn = agg.function.toUpperCase() as 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+                const operand = agg.column === '*'
+                    ? null
+                    : new ColumnExpression(agg.column);
+                const distinct = agg.distinct ?? false;
+                const alias = item.alias ?? `${agg.function}(${agg.column})`;
+                aggSlotTemplates.push({ alias, aggExpr: new AggregateExpression(fn, operand, distinct) });
+            }
+        }
+
+        // Group rows
+        const groups = new Map<string, {
+            groupRow: SqlRow;
+            key: unknown;
+            value: unknown;
+            rows: Array<{ row: SqlRow; key: unknown; value: unknown }>;
+        }>();
+
+        const noGroupBy = stmt.groupBy.length === 0;
+
+        for (const entry of filtered) {
+            if (query.cancelled) throw new SqlTimeoutError(queryId, 0);
+
+            let groupKey: string;
+            let groupRowSample: SqlRow;
+
+            if (noGroupBy) {
+                groupKey = '__all__';
+                groupRowSample = entry.row;
+            } else {
+                const keyParts = stmt.groupBy.map((col) => {
+                    const v = entry.row[col] ?? entry.key;
+                    return String(v);
+                });
+                groupKey = keyParts.join('\x00');
+                groupRowSample = entry.row;
+            }
+
+            if (!groups.has(groupKey)) {
+                groups.set(groupKey, {
+                    groupRow: groupRowSample,
+                    key: entry.key,
+                    value: entry.value,
+                    rows: [],
+                });
+            }
+            groups.get(groupKey)!.rows.push(entry);
+        }
+
+        // Evaluate aggregates per group
+        const resultRows: SqlRow[] = [];
+
+        for (const [, group] of groups) {
+            // Create fresh accumulators for this group
+            const slots: AggregateSlot[] = aggSlotTemplates.map((t) => ({
+                alias: t.alias,
+                aggExpr: t.aggExpr,
+                accumulator: t.aggExpr.createAccumulator(),
+            }));
+
+            for (const entry of group.rows) {
+                for (const slot of slots) {
+                    slot.aggExpr.feed(slot.accumulator, entry.row, entry.key, entry.value);
+                }
+            }
+
+            // Build result row
+            const resultRow: SqlRow = {};
+
+            // Include GROUP BY columns
+            for (const col of stmt.groupBy) {
+                resultRow[col] = group.groupRow[col] ?? null;
+            }
+
+            // Include aggregate results
+            for (const slot of slots) {
+                resultRow[slot.alias] = slot.accumulator.getResult();
+            }
+
+            // Apply HAVING filter
+            if (stmt.having.length > 0) {
+                const dummyKey = group.key;
+                const dummyValue = group.value;
+                if (!this._applyConditionTree(resultRow, dummyKey, dummyValue, stmt.having)) continue;
+            }
+
+            resultRows.push(resultRow);
+        }
+
+        // ORDER BY on grouped results
         if (stmt.orderBy.length > 0) {
-            rows.sort((a, b) => {
+            resultRows.sort((a, b) => {
                 for (const { column, direction } of stmt.orderBy) {
-                    const av = a[column];
-                    const bv = b[column];
-                    const cmp = this._compareValues(av, bv);
+                    const cmp = _compare(a[column], b[column]);
                     if (cmp !== 0) return direction === 'DESC' ? -cmp : cmp;
                 }
                 return 0;
             });
         }
 
-        // Apply OFFSET + LIMIT
-        const offsetVal = stmt.offset ?? 0;
-        const limitedRows = stmt.limit !== null
-            ? rows.slice(offsetVal, offsetVal + stmt.limit)
-            : rows.slice(offsetVal);
-
-        // Build metadata from column info
-        const metadata = this._buildMetadata(stmt.columns, sampleEntry);
-
-        return new SqlResult(metadata, limitedRows, -1, queryId);
+        return resultRows;
     }
 
-    // ── INSERT ─────────────────────────────────────────────────────────────
+    // ── Row projection (SELECT item evaluation) ───────────────────────────────
+
+    private _projectRow(
+        row: SqlRow,
+        key: unknown,
+        value: unknown,
+        selectItems: SelectItem[],
+    ): SqlRow {
+        // Wildcard: return as-is
+        if (selectItems.length === 1 && selectItems[0].expression === '*') {
+            return row;
+        }
+
+        const result: SqlRow = {};
+        for (const item of selectItems) {
+            const expr = item.expression;
+            const alias = item.alias;
+
+            if (typeof expr === 'string') {
+                const outKey = alias ?? expr;
+                result[outKey] = this._evaluateSimpleExpression(expr, row, key, value);
+            }
+            // Aggregates in non-grouped context are handled by _executeGroupBy
+        }
+        return result;
+    }
+
+    /**
+     * Evaluate a simple column reference or function call string.
+     * This is used for non-aggregate SELECT expressions.
+     */
+    private _evaluateSimpleExpression(
+        expr: string,
+        row: SqlRow,
+        key: unknown,
+        value: unknown,
+    ): unknown {
+        const trimmed = expr.trim();
+        const upper = trimmed.toUpperCase();
+
+        // __key / this
+        if (upper === '__KEY') return key;
+        if (upper === 'THIS') return value;
+
+        // Numeric literal
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+            return trimmed.includes('.') ? parseFloat(trimmed) : parseInt(trimmed, 10);
+        }
+
+        // String literal
+        if ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+            (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+            return trimmed.slice(1, -1);
+        }
+
+        // Function call: FNNAME(args...) — must have balanced parens
+        const parenIdx = trimmed.indexOf('(');
+        if (parenIdx > 0 && trimmed.endsWith(')')) {
+            const fnName = trimmed.substring(0, parenIdx).trim().toUpperCase();
+            const argsStr = trimmed.substring(parenIdx + 1, trimmed.length - 1);
+            const argExprs = this._splitTopLevel(argsStr, ',').map((a) => {
+                const at = a.trim();
+                if (/^\w+$/.test(at)) return new ColumnExpression(at);
+                return new LiteralExpression(this._evaluateSimpleExpression(at, row, key, value));
+            });
+            try {
+                const fn = new FunctionExpression(fnName as never, argExprs);
+                return fn.evaluate(row, key, value);
+            } catch {
+                return null;
+            }
+        }
+
+        // Arithmetic: split on +/-/*/÷/% outside parens (right-to-left for left-assoc)
+        // We attempt the split only on tokens that look like binary ops
+        for (const op of ['+', '-', '*', '/', '%'] as const) {
+            const idx = this._findBinaryOpOutsideParens(trimmed, op);
+            if (idx !== -1) {
+                const l = this._evaluateSimpleExpression(trimmed.substring(0, idx).trim(), row, key, value);
+                const r = this._evaluateSimpleExpression(trimmed.substring(idx + 1).trim(), row, key, value);
+                const ln = Number(l);
+                const rn = Number(r);
+                if (!isNaN(ln) && !isNaN(rn)) {
+                    switch (op) {
+                        case '+': return ln + rn;
+                        case '-': return ln - rn;
+                        case '*': return ln * rn;
+                        case '/': return rn === 0 ? null : ln / rn;
+                        case '%': return rn === 0 ? null : ln % rn;
+                    }
+                }
+                break;
+            }
+        }
+
+        // Plain column reference
+        return new ColumnExpression(trimmed).evaluate(row, key, value);
+    }
+
+    /** Find the last occurrence of a binary operator outside parentheses/quotes. */
+    private _findBinaryOpOutsideParens(str: string, op: string): number {
+        let depth = 0;
+        let inString = false;
+        let quoteChar = '';
+        // Scan right-to-left so we get left-associativity
+        for (let i = str.length - 1; i >= 0; i--) {
+            const ch = str[i];
+            if (inString) {
+                if (ch === quoteChar) inString = false;
+                continue;
+            }
+            if (ch === ')') { depth++; continue; }
+            if (ch === '(') { depth--; continue; }
+            if (depth === 0 && ch === op) return i;
+        }
+        return -1;
+    }
+
+    private _splitTopLevel(str: string, sep: string): string[] {
+        const parts: string[] = [];
+        let current = '';
+        let depth = 0;
+        let inString = false;
+        let quoteChar = '';
+
+        for (let i = 0; i < str.length; i++) {
+            const ch = str[i];
+            if (inString) {
+                if (ch === quoteChar) inString = false;
+                current += ch;
+            } else if (ch === "'" || ch === '"') {
+                inString = true;
+                quoteChar = ch;
+                current += ch;
+            } else if (ch === '(') {
+                depth++;
+                current += ch;
+            } else if (ch === ')') {
+                depth--;
+                current += ch;
+            } else if (depth === 0 && ch === sep) {
+                parts.push(current);
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+        parts.push(current);
+        return parts;
+    }
+
+    // ── INSERT ────────────────────────────────────────────────────────────────
 
     private _executeInsert(
         stmt: ParsedInsertStatement,
@@ -224,7 +608,7 @@ export class SqlService {
     ): SqlResult {
         const keyIdx = stmt.columns.indexOf('__key');
         if (keyIdx === -1) {
-            throw new SqlExecutionError('INSERT requires __key column', queryId);
+            throw new SqlExecutionError('INSERT requires __key column', queryId, SqlErrorCode.DATA_EXCEPTION);
         }
 
         const keyValue = stmt.values[keyIdx];
@@ -238,18 +622,17 @@ export class SqlService {
         const kd = this._nodeEngine.toData(keyValue);
         const vd = this._nodeEngine.toData(valueObj);
         if (kd === null || vd === null) {
-            throw new SqlExecutionError('Failed to serialize INSERT values', queryId);
+            throw new SqlExecutionError('Failed to serialize INSERT values', queryId, SqlErrorCode.DATA_EXCEPTION);
         }
 
         const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
         const store = this._containerService.getOrCreateRecordStore(stmt.mapName, partitionId);
         store.put(kd, vd, -1, -1);
 
-        const metadata = new SqlRowMetadata([]);
-        return new SqlResult(metadata, [], 1, queryId);
+        return new SqlResult(new SqlRowMetadata([]), [], 1, queryId);
     }
 
-    // ── UPDATE ─────────────────────────────────────────────────────────────
+    // ── UPDATE ────────────────────────────────────────────────────────────────
 
     private _executeUpdate(
         stmt: ParsedUpdateStatement,
@@ -265,15 +648,14 @@ export class SqlService {
             const value = this._nodeEngine.toObject<unknown>(vd);
 
             const row = this._buildRow(key, value, ['*']);
-            if (!this._applyWhere(row, key, value, stmt.where)) continue;
+            if (!this._applyConditionTree(row, key, value, stmt.where)) continue;
 
-            // Apply updates
             const updatedValue: Record<string, unknown> = typeof value === 'object' && value !== null
                 ? { ...(value as Record<string, unknown>) }
                 : {};
 
             for (const { column, value: newVal } of stmt.assignments) {
-                if (column === '__key') continue; // can't update key
+                if (column === '__key') continue;
                 updatedValue[column] = newVal;
             }
 
@@ -286,11 +668,10 @@ export class SqlService {
             }
         }
 
-        const metadata = new SqlRowMetadata([]);
-        return new SqlResult(metadata, [], updateCount, queryId);
+        return new SqlResult(new SqlRowMetadata([]), [], updateCount, queryId);
     }
 
-    // ── DELETE ─────────────────────────────────────────────────────────────
+    // ── DELETE ────────────────────────────────────────────────────────────────
 
     private _executeDelete(
         stmt: ParsedDeleteStatement,
@@ -308,7 +689,7 @@ export class SqlService {
             const value = this._nodeEngine.toObject<unknown>(vd);
 
             const row = this._buildRow(key, value, ['*']);
-            if (!this._applyWhere(row, key, value, stmt.where)) continue;
+            if (!this._applyConditionTree(row, key, value, stmt.where)) continue;
 
             const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
             toDelete.push({ kd, partitionId });
@@ -320,22 +701,46 @@ export class SqlService {
             deleteCount++;
         }
 
-        const metadata = new SqlRowMetadata([]);
-        return new SqlResult(metadata, [], deleteCount, queryId);
+        return new SqlResult(new SqlRowMetadata([]), [], deleteCount, queryId);
     }
 
-    // ── WHERE evaluation ───────────────────────────────────────────────────
+    // ── Condition tree evaluation ─────────────────────────────────────────────
 
-    private _applyWhere(
+    /**
+     * Evaluate the full condition tree (AND/OR nodes + leaf predicates).
+     * Returns true if the row passes all conditions.
+     */
+    private _applyConditionTree(
         row: SqlRow,
         key: unknown,
         value: unknown,
-        where: SqlWhereClause[],
+        nodes: SqlConditionNode[],
     ): boolean {
-        for (const clause of where) {
-            if (!this._evaluateWhereClause(row, key, value, clause)) return false;
+        // No conditions → match all
+        if (nodes.length === 0) return true;
+
+        // Top-level is implicitly AND between all top-level nodes
+        for (const node of nodes) {
+            if (!this._evaluateNode(row, key, value, node)) return false;
         }
         return true;
+    }
+
+    private _evaluateNode(
+        row: SqlRow,
+        key: unknown,
+        value: unknown,
+        node: SqlConditionNode,
+    ): boolean {
+        if (isWhereGroup(node)) {
+            switch (node.op) {
+                case 'AND':
+                    return node.clauses.every((c) => this._evaluateNode(row, key, value, c));
+                case 'OR':
+                    return node.clauses.some((c) => this._evaluateNode(row, key, value, c));
+            }
+        }
+        return this._evaluateWhereClause(row, key, value, node as SqlWhereClause);
     }
 
     private _evaluateWhereClause(
@@ -344,40 +749,39 @@ export class SqlService {
         value: unknown,
         clause: SqlWhereClause,
     ): boolean {
-        // Resolve the column value
         let colVal: unknown;
         if (clause.column === '__key') {
             colVal = key;
         } else if (typeof value === 'object' && value !== null) {
-            colVal = (value as Record<string, unknown>)[clause.column];
+            colVal = (value as Record<string, unknown>)[clause.column] ?? row[clause.column];
         } else {
             colVal = row[clause.column];
         }
 
         switch (clause.operator) {
             case '=':
-                return this._equals(colVal, clause.value);
+                return _equals(colVal, clause.value);
             case '!=':
-                return !this._equals(colVal, clause.value);
+                return !_equals(colVal, clause.value);
             case '<':
-                return this._compareValues(colVal, clause.value) < 0;
+                return _compare(colVal, clause.value) < 0;
             case '<=':
-                return this._compareValues(colVal, clause.value) <= 0;
+                return _compare(colVal, clause.value) <= 0;
             case '>':
-                return this._compareValues(colVal, clause.value) > 0;
+                return _compare(colVal, clause.value) > 0;
             case '>=':
-                return this._compareValues(colVal, clause.value) >= 0;
+                return _compare(colVal, clause.value) >= 0;
             case 'LIKE': {
                 if (typeof colVal !== 'string' || typeof clause.value !== 'string') return false;
                 return this._likeMatch(colVal, clause.value);
             }
             case 'IN': {
                 const vals = clause.values ?? [clause.value];
-                return vals.some((v) => this._equals(colVal, v));
+                return vals.some((v) => _equals(colVal, v));
             }
             case 'BETWEEN': {
-                const cmp1 = this._compareValues(colVal, clause.value);
-                const cmp2 = this._compareValues(colVal, clause.value2);
+                const cmp1 = _compare(colVal, clause.value);
+                const cmp2 = _compare(colVal, clause.value2);
                 return cmp1 >= 0 && cmp2 <= 0;
             }
             case 'IS NULL':
@@ -388,22 +792,34 @@ export class SqlService {
     }
 
     private _likeMatch(str: string, pattern: string): boolean {
-        // Convert SQL LIKE pattern to regex
         const regexStr = pattern
-            .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // escape regex chars
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&')
             .replace(/%/g, '.*')
             .replace(/_/g, '.');
         const regex = new RegExp(`^${regexStr}$`, 'i');
         return regex.test(str);
     }
 
-    // ── Row building ───────────────────────────────────────────────────────
+    // ── DISTINCT ──────────────────────────────────────────────────────────────
+
+    private _deduplicateRows(rows: SqlRow[]): SqlRow[] {
+        const seen = new Set<string>();
+        return rows.filter((row) => {
+            const key = JSON.stringify(row, (_, v) =>
+                typeof v === 'bigint' ? v.toString() : v,
+            );
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    // ── Row building ──────────────────────────────────────────────────────────
 
     private _buildRow(key: unknown, value: unknown, columns: string[]): SqlRow {
         const row: SqlRow = {};
 
         if (columns.length === 1 && columns[0] === '*') {
-            // Return all fields from the value object + the key
             row['__key'] = key;
             if (typeof value === 'object' && value !== null) {
                 Object.assign(row, value as Record<string, unknown>);
@@ -427,11 +843,10 @@ export class SqlService {
         return row;
     }
 
-    private _buildMetadata(columns: string[], sampleValue: unknown): SqlRowMetadata {
-        if (columns.length === 1 && columns[0] === '*') {
-            const cols: SqlColumnMetadata[] = [
-                { name: '__key', type: 'OBJECT', nullable: false },
-            ];
+    private _buildMetadata(selectItems: SelectItem[], sampleValue: unknown): SqlRowMetadata {
+        // Wildcard
+        if (selectItems.length === 1 && selectItems[0].expression === '*') {
+            const cols: SqlColumnMetadata[] = [{ name: '__key', type: 'OBJECT', nullable: false }];
             if (typeof sampleValue === 'object' && sampleValue !== null) {
                 for (const key of Object.keys(sampleValue as Record<string, unknown>)) {
                     cols.push({
@@ -446,11 +861,24 @@ export class SqlService {
             return new SqlRowMetadata(cols);
         }
 
-        const cols: SqlColumnMetadata[] = columns.map((col) => ({
-            name: col,
-            type: 'OBJECT' as SqlColumnType,
-            nullable: true,
-        }));
+        const cols: SqlColumnMetadata[] = selectItems.map((item) => {
+            if (typeof item.expression === 'string') {
+                return {
+                    name: item.alias ?? item.expression,
+                    type: 'OBJECT' as SqlColumnType,
+                    nullable: true,
+                };
+            }
+            const agg = item.expression as AggregateCall;
+            const name = item.alias ?? `${agg.function}(${agg.column})`;
+            const type: SqlColumnType = agg.function === 'COUNT'
+                ? 'BIGINT'
+                : agg.function === 'AVG'
+                    ? 'DOUBLE'
+                    : 'OBJECT';
+            return { name, type, nullable: true };
+        });
+
         return new SqlRowMetadata(cols);
     }
 
@@ -464,32 +892,7 @@ export class SqlService {
         }
     }
 
-    // ── Value comparison ───────────────────────────────────────────────────
-
-    private _equals(a: unknown, b: unknown): boolean {
-        if (a === b) return true;
-        if (a === null || b === null) return false;
-        if (typeof a === 'string' && typeof b === 'string') return a === b;
-        if (typeof a === 'number' && typeof b === 'number') return a === b;
-        try {
-            return JSON.stringify(a) === JSON.stringify(b);
-        } catch {
-            return false;
-        }
-    }
-
-    private _compareValues(a: unknown, b: unknown): number {
-        if (a === b) return 0;
-        if (a === null || a === undefined) return -1;
-        if (b === null || b === undefined) return 1;
-        if (typeof a === 'number' && typeof b === 'number') return a - b;
-        if (typeof a === 'string' && typeof b === 'string') return a < b ? -1 : a > b ? 1 : 0;
-        const aStr = String(a);
-        const bStr = String(b);
-        return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
-    }
-
-    // ── Cleanup ────────────────────────────────────────────────────────────
+    // ── Cleanup ───────────────────────────────────────────────────────────────
 
     private _cleanupQuery(query: ActiveQuery): void {
         if (query.timeoutTimer !== undefined) {
