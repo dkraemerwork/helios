@@ -32,6 +32,13 @@ export { NearCachePreloaderConfig } from "@zenystx/helios-core/config/NearCacheP
 export { NetworkConfig } from "@zenystx/helios-core/config/NetworkConfig";
 export { QueueConfig } from "@zenystx/helios-core/config/QueueConfig";
 export { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig";
+export {
+    SplitBrainProtectionConfig,
+    ProbabilisticSplitBrainProtectionConfig,
+    RecentlyActiveSplitBrainProtectionConfig,
+    SplitBrainProtectionOn,
+    SplitBrainProtectionFunctionType,
+} from "@zenystx/helios-core/config/SplitBrainProtectionConfig";
 export { TcpIpConfig } from "@zenystx/helios-core/config/TcpIpConfig";
 export { TopicConfig } from "@zenystx/helios-core/config/TopicConfig";
 export { TcpTransportScatterConfig } from "@zenystx/helios-core/config/TcpTransportScatterConfig";
@@ -40,6 +47,8 @@ export { TcpTransportScatterConfig } from "@zenystx/helios-core/config/TcpTransp
 export type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 export type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
 export type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig";
+export { SplitBrainProtectionException } from "@zenystx/helios-core/core/exception/SplitBrainProtectionException";
+export { SplitBrainProtectionServiceImpl } from "@zenystx/helios-core/splitbrainprotection/impl/SplitBrainProtectionServiceImpl";
 export { BuildInfo } from "@zenystx/helios-core/instance/BuildInfo";
 export { BuildInfoProvider } from "@zenystx/helios-core/instance/BuildInfoProvider";
 export { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/HeliosInstanceImpl";

@@ -20,6 +20,7 @@
 import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 import type { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { SplitBrainProtectionOn } from '@zenystx/helios-core/config/SplitBrainProtectionConfig';
 import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
@@ -94,6 +95,16 @@ export class MapProxy<K, V> implements IMap<K, V> {
     /** Optional MapEventJournal — when set, mutations are recorded. */
     private readonly _mapEventJournal: MapEventJournal | null;
 
+    /**
+     * Optional split-brain protection enforcement callback.
+     * When set, called before each operation to enforce named quorum.
+     * Throws SplitBrainProtectionException if quorum is not met.
+     */
+    private _quorumChecker: ((opType: SplitBrainProtectionOn, protectionName: string | null) => void) | null = null;
+
+    /** Name of the split-brain protection to enforce, from MapConfig. */
+    private _splitBrainProtectionName: string | null = null;
+
     constructor(
         name: string,
         store: RecordStore,
@@ -115,11 +126,12 @@ export class MapProxy<K, V> implements IMap<K, V> {
             this._containerService.registerMapStoreConfig(name, this._mapStoreConfig);
         }
 
-        // Bootstrap indexes from config
+        // Bootstrap indexes from config and capture split-brain protection name
         if (mapConfig !== undefined) {
             for (const idxCfg of mapConfig.getIndexConfigs()) {
                 this._indexRegistry.addIndex(idxCfg);
             }
+            this._splitBrainProtectionName = mapConfig.getSplitBrainProtectionName();
         }
 
         // QueryCache manager — shares nodeEngine's serialization bridge and containerService
@@ -157,6 +169,25 @@ export class MapProxy<K, V> implements IMap<K, V> {
         } finally {
             this._mapStoreInitPromise = null;
         }
+    }
+
+    // ── Split-brain protection ────────────────────────────────────────────
+
+    /**
+     * Wire in the split-brain protection quorum enforcement callback.
+     * Called from HeliosInstanceImpl after proxy construction when a
+     * SplitBrainProtectionServiceImpl is available.
+     */
+    setQuorumChecker(checker: (opType: SplitBrainProtectionOn, protectionName: string | null) => void): void {
+        this._quorumChecker = checker;
+    }
+
+    private _checkReadQuorum(): void {
+        this._quorumChecker?.(SplitBrainProtectionOn.READ, this._splitBrainProtectionName);
+    }
+
+    private _checkWriteQuorum(): void {
+        this._quorumChecker?.(SplitBrainProtectionOn.WRITE, this._splitBrainProtectionName);
     }
 
     // ── Identification ────────────────────────────────────────────────────
@@ -205,6 +236,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     // ── Core point ops ────────────────────────────────────────────────────
 
     async put(key: K, value: V): Promise<V | null> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
@@ -229,6 +261,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async set(key: K, value: V): Promise<void> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
@@ -251,6 +284,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async get(key: K): Promise<V | null> {
+        this._checkReadQuorum();
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         // GetOperation now handles load-on-miss on the partition owner
@@ -264,6 +298,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async remove(key: K): Promise<V | null> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const oldData = await this._invokeOnKeyPartition<Data | null>(
@@ -286,6 +321,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async delete(key: K): Promise<void> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const partitionId = this._partitionIdForKeyData(kd);
@@ -307,6 +343,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     containsKey(key: K): boolean {
+        this._checkReadQuorum();
         const kd = this._toData(key);
         const partitionId = this._partitionIdForKeyData(kd);
         const store = this._containerService.getOrCreateRecordStore(this._name, partitionId);
@@ -322,6 +359,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     size(): number {
+        this._checkReadQuorum();
         let total = 0;
         const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
         const localAddress = this._nodeEngine.getLocalAddress();
@@ -341,6 +379,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async clear(): Promise<void> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const partitionCount = this._nodeEngine.getPartitionService().getPartitionCount();
         for (let i = 0; i < partitionCount; i++) {
@@ -359,6 +398,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async putIfAbsent(key: K, value: V): Promise<V | null> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const kd = this._toData(key);
         const vd = this._toData(value);
@@ -380,6 +420,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async putAll(entries: Iterable<[K, V]>): Promise<void> {
+        this._checkWriteQuorum();
         await this._ensureMapDataStore();
         const pairs: [K, V][] = Array.from(entries);
         // Each PutOperation handles MapStore write on the partition owner
@@ -399,6 +440,7 @@ export class MapProxy<K, V> implements IMap<K, V> {
     }
 
     async getAll(keys: K[]): Promise<Map<K, V | null>> {
+        this._checkReadQuorum();
         await this._ensureMapDataStore();
         const result = new Map<K, V | null>();
         // Each get() now handles load-on-miss inside GetOperation on the partition owner

@@ -16,6 +16,7 @@ import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig.js";
 import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig.js";
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig.js";
 import { ScheduledExecutorConfig } from "@zenystx/helios-core/config/ScheduledExecutorConfig.js";
+import { SplitBrainProtectionConfig } from "@zenystx/helios-core/config/SplitBrainProtectionConfig.js";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig.js";
 import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig.js";
 import { HazelcastSerializationConfig } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService.js';
@@ -33,6 +34,7 @@ export class HeliosConfig implements InstanceConfig {
   private readonly _reliableTopicConfigs = new Map<string, ReliableTopicConfig>();
   private readonly _ringbufferConfigs = new Map<string, RingbufferConfig>();
   private readonly _scheduledExecutorConfigs = new Map<string, ScheduledExecutorConfig>();
+  private readonly _splitBrainProtectionConfigs = new Map<string, SplitBrainProtectionConfig>();
   private readonly _network: NetworkConfig = new NetworkConfig();
   private readonly _mapStoreProviderRegistry = new MapStoreProviderRegistry();
   private readonly _monitorConfig = new MonitorConfig();
@@ -241,6 +243,31 @@ export class HeliosConfig implements InstanceConfig {
 
   getScheduledExecutorConfigs(): ReadonlyMap<string, ScheduledExecutorConfig> {
     return this._scheduledExecutorConfigs;
+  }
+
+  /**
+   * Register a named SplitBrainProtectionConfig.
+   *
+   * Referenced by data-structure configs (e.g. MapConfig.setSplitBrainProtectionName())
+   * to enforce quorum before operations execute.
+   */
+  addSplitBrainProtectionConfig(config: SplitBrainProtectionConfig): this {
+    this._splitBrainProtectionConfigs.set(config.getName(), config);
+    return this;
+  }
+
+  /**
+   * Returns the SplitBrainProtectionConfig with the given name, or null if not registered.
+   */
+  getSplitBrainProtectionConfig(name: string): SplitBrainProtectionConfig | null {
+    return this._splitBrainProtectionConfigs.get(name) ?? null;
+  }
+
+  /**
+   * Returns all registered SplitBrainProtectionConfigs.
+   */
+  getSplitBrainProtectionConfigs(): ReadonlyMap<string, SplitBrainProtectionConfig> {
+    return this._splitBrainProtectionConfigs;
   }
 
   getBlitzConfig(): HeliosBlitzRuntimeConfig | null {

@@ -17,6 +17,7 @@ export class QueueConfig {
   private _emptyQueueTtlSeconds = QueueConfig.DEFAULT_EMPTY_QUEUE_TTL_SECONDS;
   private _statisticsEnabled = true;
   private _queueStoreConfig: QueueStoreConfig | null = null;
+  private _splitBrainProtectionName: string | null = null;
 
   constructor(name: string) {
     this._name = name;
@@ -99,6 +100,15 @@ export class QueueConfig {
 
   setQueueStoreConfig(config: QueueStoreConfig): this {
     this._queueStoreConfig = config;
+    return this;
+  }
+
+  getSplitBrainProtectionName(): string | null {
+    return this._splitBrainProtectionName;
+  }
+
+  setSplitBrainProtectionName(name: string): this {
+    this._splitBrainProtectionName = name;
     return this;
   }
 }

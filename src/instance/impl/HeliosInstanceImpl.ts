@@ -88,6 +88,8 @@ import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { SplitBrainDetector } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainDetector";
 import { SplitBrainMergeHandler } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler";
+import { SplitBrainProtectionServiceImpl } from "@zenystx/helios-core/splitbrainprotection/impl/SplitBrainProtectionServiceImpl";
+import { SplitBrainProtectionOn } from "@zenystx/helios-core/config/SplitBrainProtectionConfig";
 import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
@@ -686,6 +688,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
   /** Split-brain detector — non-null when clustering is enabled. */
   private _splitBrainDetector: SplitBrainDetector | null = null;
 
+  /** Split-brain protection service — non-null after construction when any protection configs exist. */
+  private _splitBrainProtectionService: SplitBrainProtectionServiceImpl | null = null;
+
   constructor(config?: HeliosConfig) {
     this._config = config ?? new HeliosConfig();
     this._name = this._config.getName();
@@ -729,6 +734,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (this._clusterCoordinator !== null) {
       this._initSplitBrainDetector();
     }
+
+    // Initialize split-brain protection service if any protection configs are registered.
+    this._initSplitBrainProtectionService();
 
     this._transactionManagerService = new TransactionManagerServiceImpl(this._nodeEngine);
     this._transactionCoordinator = new TransactionCoordinator(
@@ -890,6 +898,75 @@ export class HeliosInstanceImpl implements HeliosInstance {
       detector.onMemberUnreachable(memberId);
       detector.updateTotalMembers(this._captureCurrentMemberIds().size);
     });
+  }
+
+  /**
+   * Initialize the split-brain protection service with all named protection configs
+   * from HeliosConfig. Registers itself as a membership listener so quorum state
+   * is re-evaluated whenever the cluster view changes.
+   *
+   * The cluster-size provider delegates to the cluster coordinator when clustering
+   * is enabled, or returns 1 in single-node mode.
+   */
+  private _initSplitBrainProtectionService(): void {
+    const protectionConfigs = this._config.getSplitBrainProtectionConfigs();
+    if (protectionConfigs.size === 0) {
+      return;
+    }
+
+    const coordinator = this._clusterCoordinator;
+    const clusterSizeProvider = {
+      getSize: (): number => {
+        if (coordinator === null) return 1;
+        return this._captureCurrentMemberIds().size;
+      },
+      getMemberIds: (): ReadonlySet<string> => {
+        if (coordinator === null) {
+          return new Set(['local']);
+        }
+        return this._captureCurrentMemberIds();
+      },
+    };
+
+    this._splitBrainProtectionService = new SplitBrainProtectionServiceImpl(
+      protectionConfigs,
+      clusterSizeProvider,
+    );
+
+    // Re-evaluate all quorums on membership changes
+    if (coordinator !== null) {
+      coordinator.onMembershipChanged(() => {
+        this._splitBrainProtectionService?.onMembershipChanged();
+      });
+      coordinator.onMemberRemoved(() => {
+        this._splitBrainProtectionService?.onMembershipChanged();
+      });
+    }
+  }
+
+  /**
+   * Returns the SplitBrainProtectionServiceImpl, or null if no protection configs are registered.
+   * Accessible for operation dispatch quorum enforcement.
+   */
+  getSplitBrainProtectionService(): SplitBrainProtectionServiceImpl | null {
+    return this._splitBrainProtectionService;
+  }
+
+  /**
+   * Check quorum for a named protection before executing an operation.
+   *
+   * @param operationType — READ, WRITE, or READ_WRITE
+   * @param protectionName — the name from splitBrainProtectionRef on the data-structure config
+   * @throws SplitBrainProtectionException if quorum is not met
+   */
+  checkSplitBrainProtection(
+    operationType: SplitBrainProtectionOn,
+    protectionName: string | null,
+  ): void {
+    if (protectionName === null || this._splitBrainProtectionService === null) {
+      return;
+    }
+    this._splitBrainProtectionService.ensureQuorum(operationType, protectionName);
   }
 
   // ── TCP networking ───────────────────────────────────────────────────
@@ -6260,20 +6337,25 @@ export class HeliosInstanceImpl implements HeliosInstance {
     let proxy = this._maps.get(name);
     if (!proxy) {
       const store = this._mapService.getOrCreateRecordStore(name, 0);
-      const mapStoreConfig = this._config
-        .getMapConfig(name)
-        ?.getMapStoreConfig();
       // Block 21.1: Always use MapProxy — routing is handled by OperationService
       // (no more NetworkedMapProxy broadcast path)
+      const mapConfig = this._config.getMapConfig(name);
+      const mapStoreConfig = mapConfig?.getMapStoreConfig();
       proxy = new MapProxy<unknown, unknown>(
           name,
           store,
           this._nodeEngine,
           this._mapService,
           mapStoreConfig,
-          undefined,
+          mapConfig ?? undefined,
           this._mapEventJournal,
       );
+      // Wire split-brain protection quorum enforcement if protection service is available
+      if (this._splitBrainProtectionService !== null) {
+        proxy.setQuorumChecker((opType, protectionName) => {
+          this._splitBrainProtectionService!.ensureQuorum(opType, protectionName ?? '');
+        });
+      }
       this._maps.set(name, proxy);
     }
     return proxy;
