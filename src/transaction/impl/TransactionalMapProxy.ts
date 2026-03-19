@@ -12,6 +12,7 @@
  */
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate.js';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
 import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord.js';
@@ -328,6 +329,72 @@ export class TransactionalMapProxy<K, V> {
         return result;
     }
 
+    /**
+     * Returns keys that match the predicate, taking the pending transactional view into account.
+     * Deleted/removed entries are excluded; pending puts for new keys are included if they match.
+     */
+    keySetWithPredicate(predicateData: Data): Set<K> {
+        this._checkActive();
+        const predicate = this._deserializePredicate(predicateData);
+        const result = new Set<K>();
+        for (const [kd, vd] of this._containerService.getAllEntries(this._mapName)) {
+            const ks = this._keyStr(kd);
+            const pending = this._pendingEntries.get(ks);
+            if (pending !== undefined) {
+                if (pending.pending.value !== null && this._predicateMatches(predicate, kd, pending.pending.value)) {
+                    const k = this._toObject<K>(kd);
+                    if (k !== null) result.add(k);
+                }
+            } else if (this._predicateMatches(predicate, kd, vd)) {
+                const k = this._toObject<K>(kd);
+                if (k !== null) result.add(k);
+            }
+        }
+        // Include pending new keys not yet in the committed store
+        for (const [, { keyData, pending }] of this._pendingEntries) {
+            const partitionId = this._partitionId(keyData);
+            const store = this._containerService.getOrCreateRecordStore(this._mapName, partitionId);
+            if (!store.containsKey(keyData) && pending.value !== null && this._predicateMatches(predicate, keyData, pending.value)) {
+                const k = this._toObject<K>(keyData);
+                if (k !== null) result.add(k);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns values that match the predicate, taking the pending transactional view into account.
+     * Deleted/removed entries are excluded; pending puts for new keys are included if they match.
+     */
+    valuesWithPredicate(predicateData: Data): V[] {
+        this._checkActive();
+        const predicate = this._deserializePredicate(predicateData);
+        const result: V[] = [];
+        for (const [kd, vd] of this._containerService.getAllEntries(this._mapName)) {
+            const ks = this._keyStr(kd);
+            const pending = this._pendingEntries.get(ks);
+            if (pending !== undefined) {
+                if (pending.pending.value !== null && this._predicateMatches(predicate, kd, pending.pending.value)) {
+                    const v = this._toObject<V>(pending.pending.value);
+                    if (v !== null) result.push(v);
+                }
+            } else if (this._predicateMatches(predicate, kd, vd)) {
+                const v = this._toObject<V>(vd);
+                if (v !== null) result.push(v);
+            }
+        }
+        // Include pending new keys not yet in the committed store
+        for (const [, { keyData, pending }] of this._pendingEntries) {
+            const partitionId = this._partitionId(keyData);
+            const store = this._containerService.getOrCreateRecordStore(this._mapName, partitionId);
+            if (!store.containsKey(keyData) && pending.value !== null && this._predicateMatches(predicate, keyData, pending.value)) {
+                const v = this._toObject<V>(pending.value);
+                if (v !== null) result.push(v);
+            }
+        }
+        return result;
+    }
+
     // ── transactional write ───────────────────────────────────────────────
 
     put(key: K, value: V): V | null {
@@ -421,6 +488,34 @@ export class TransactionalMapProxy<K, V> {
         const vd = store.get(kd);
         if (vd === null) return null;
         return this._toObject<V>(vd);
+    }
+
+    private _deserializePredicate(data: Data): Predicate {
+        const predicate = this._nodeEngine.getSerializationService().toObject<Predicate>(data);
+        if (predicate === null || typeof predicate.apply !== 'function') {
+            throw new Error('Predicate payload is not a valid Predicate');
+        }
+        return predicate;
+    }
+
+    private _predicateMatches(predicate: Predicate, keyData: Data, valueData: Data): boolean {
+        const keyObject = this._nodeEngine.toObject(keyData);
+        const valueObject = this._nodeEngine.toObject(valueData);
+        return predicate.apply({
+            getKey: () => keyObject,
+            getValue: () => valueObject,
+            getAttributeValue: (attribute: string) => {
+                if (attribute === '__key') return keyObject;
+                if (attribute === 'this') return valueObject;
+                const segments = attribute.split('.');
+                let current: unknown = valueObject;
+                for (const segment of segments) {
+                    if (current === null || current === undefined || typeof current !== 'object') return undefined;
+                    current = (current as Record<string, unknown>)[segment];
+                }
+                return current;
+            },
+        });
     }
 
     private _addPendingEntry(kd: Data, opType: TxMapOpType, value: Data | null): void {

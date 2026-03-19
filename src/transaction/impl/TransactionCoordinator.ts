@@ -17,7 +17,6 @@ import { TransactionImpl } from '@zenystx/helios-core/transaction/impl/Transacti
 import { TransactionManagerServiceImpl } from '@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl.js';
 import { TransactionException } from '@zenystx/helios-core/transaction/TransactionException.js';
 import { TransactionOptions, TransactionType } from '@zenystx/helios-core/transaction/TransactionOptions.js';
-import { TransactionTimedOutException } from '@zenystx/helios-core/transaction/TransactionTimedOutException.js';
 
 /** Describes the full metadata of an active transaction managed by this coordinator. */
 export interface ManagedTransaction {
@@ -205,9 +204,6 @@ export class TransactionCoordinator {
                 this._transactions.delete(tx.getTxnId());
                 this._timeoutTimers.delete(tx.getTxnId());
             }
-
-            // Re-throw the timeout error via an unhandled rejection so callers awaiting tx.commit() get it
-            void Promise.reject(new TransactionTimedOutException(`Transaction ${tx.getTxnId()} timed out`));
         }, timeoutMs);
 
         this._timeoutTimers.set(tx.getTxnId(), timer);

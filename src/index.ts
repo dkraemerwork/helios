@@ -120,6 +120,10 @@ export { CacheRecordStore } from "@zenystx/helios-core/cache/impl/CacheRecordSto
 // ── Transaction ───────────────────────────────────────────────────────────────
 export { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
 export { TransactionManagerServiceImpl } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
+export { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
+export type { ManagedTransaction } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
+export { TransactionRecoveryService } from "@zenystx/helios-core/transaction/impl/TransactionRecoveryService";
+export type { ReplicatedTransactionLog } from "@zenystx/helios-core/transaction/impl/TransactionRecoveryService";
 export type { TransactionContext } from "@zenystx/helios-core/transaction/TransactionContext";
 export { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
 export { TransactionNotActiveException } from "@zenystx/helios-core/transaction/TransactionNotActiveException";

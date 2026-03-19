@@ -3845,7 +3845,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
         this._getTransactionalMap(txId, name).delete(key);
       },
       mapKeySet: async (txId, name) => this._toClientDataList([...this._getTransactionalMap(txId, name).keySet()]),
+      mapKeySetWithPredicate: async (txId, name, predicate) => this._toClientDataList([...this._getTransactionalMap(txId, name).keySetWithPredicate(predicate)]),
       mapValues: async (txId, name) => this._toClientDataList(this._getTransactionalMap(txId, name).values()),
+      mapValuesWithPredicate: async (txId, name, predicate) => this._toClientDataList(this._getTransactionalMap(txId, name).valuesWithPredicate(predicate)),
       queueOffer: async (txId, name, value) => this._getTransactionalQueue(txId, name).offer(value),
       queuePoll: async (txId, name) => this._toClientData(await this._getTransactionalQueue(txId, name).poll()),
       queuePeek: async (txId, name) => this._toClientData(await this._getTransactionalQueue(txId, name).peek()),

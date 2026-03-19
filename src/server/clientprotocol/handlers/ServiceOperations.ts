@@ -254,7 +254,9 @@ export interface TransactionServiceOperations {
     mapRemove(txId: string, name: string, key: Data, threadId: bigint): Promise<Data | null>;
     mapDelete(txId: string, name: string, key: Data, threadId: bigint): Promise<void>;
     mapKeySet(txId: string, name: string): Promise<Data[]>;
+    mapKeySetWithPredicate(txId: string, name: string, predicate: Data): Promise<Data[]>;
     mapValues(txId: string, name: string): Promise<Data[]>;
+    mapValuesWithPredicate(txId: string, name: string, predicate: Data): Promise<Data[]>;
     queueOffer(txId: string, name: string, value: Data, timeout: bigint, threadId: bigint): Promise<boolean>;
     queuePoll(txId: string, name: string, timeout: bigint, threadId: bigint): Promise<Data | null>;
     queuePeek(txId: string, name: string, timeout: bigint, threadId: bigint): Promise<Data | null>;

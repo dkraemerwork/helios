@@ -307,8 +307,8 @@ export function registerTransactionServiceHandlers(
         const iter = msg.forwardFrameIterator(); iter.next();
         const txId = StringCodec.decode(iter);
         const name = StringCodec.decode(iter);
-        // predicate ignored in this implementation
-        return _dataList(TXM_KEY_SET_PRED_RESPONSE, await operations.mapKeySet(txId, name));
+        const predicate = DataCodec.decode(iter);
+        return _dataList(TXM_KEY_SET_PRED_RESPONSE, await operations.mapKeySetWithPredicate(txId, name, predicate));
     });
 
     // TxMap.Values
@@ -324,7 +324,8 @@ export function registerTransactionServiceHandlers(
         const iter = msg.forwardFrameIterator(); iter.next();
         const txId = StringCodec.decode(iter);
         const name = StringCodec.decode(iter);
-        return _dataList(TXM_VALUES_PRED_RESPONSE, await operations.mapValues(txId, name));
+        const predicate = DataCodec.decode(iter);
+        return _dataList(TXM_VALUES_PRED_RESPONSE, await operations.mapValuesWithPredicate(txId, name, predicate));
     });
 
     // TxMap.IsEmpty
