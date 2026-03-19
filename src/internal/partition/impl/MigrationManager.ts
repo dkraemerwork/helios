@@ -6,6 +6,7 @@
  * Block 16.B3b: real partition data transfer between members via cluster transport.
  */
 import type { Member } from '@zenystx/helios-core/cluster/Member';
+import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { MigrationCommitOperation } from '@zenystx/helios-core/internal/partition/impl/MigrationCommitOperation';
 import { MigrationPlanner, type MigrationDecisionCallback } from '@zenystx/helios-core/internal/partition/impl/MigrationPlanner';
 import type { MigrationQueue } from '@zenystx/helios-core/internal/partition/impl/MigrationQueue';
@@ -14,8 +15,10 @@ import type { PartitionContainer } from '@zenystx/helios-core/internal/partition
 import type { PartitionStateManager } from '@zenystx/helios-core/internal/partition/impl/PartitionStateManager';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 import { MigrationInfo, MigrationStatus } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import type { MigrationEvent } from '@zenystx/helios-core/internal/partition/MigrationListener';
 import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import type { ServiceNamespace } from '@zenystx/helios-core/internal/services/ServiceNamespace';
+import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
 
 export interface MigrationManagerOptions {
     maxParallelMigrations?: number;
@@ -94,6 +97,10 @@ export class MigrationManager {
     private _paused: boolean;
     private _completedMigrations = 0;
     private _transport: MigrationTransport | null = null;
+    /** Optional callback wired by the partition service to receive migration lifecycle events. */
+    private _migrationEventCallback: ((event: MigrationEvent) => void) | null = null;
+    /** Sequential index counter for migrations within the current round. */
+    private _migrationIndex = 0;
 
     constructor(stateManager: PartitionStateManager, migrationQueue: MigrationQueue, options?: MigrationManagerOptions) {
         this._stateManager = stateManager;
@@ -106,6 +113,15 @@ export class MigrationManager {
     /** Wire the transport callbacks required for real partition data transfer. */
     setMigrationTransport(transport: MigrationTransport): void {
         this._transport = transport;
+    }
+
+    /**
+     * Wire a callback that receives migration lifecycle events.
+     * Called by {@link InternalPartitionServiceImpl} to bridge migration
+     * events to registered {@link MigrationListener} instances.
+     */
+    setMigrationEventCallback(callback: (event: MigrationEvent) => void): void {
+        this._migrationEventCallback = callback;
     }
 
     getMaxParallelMigrations(): number {
@@ -190,12 +206,18 @@ export class MigrationManager {
 
     /** Drains and runs all queued migration tasks synchronously (legacy / no-transport path). */
     processQueue(): void {
-        let task = this._migrationQueue.poll();
+        this._migrationIndex = 0;
+        let task = this._migrationQueue.poll() as AsyncMigrationTask | null;
         while (task !== null) {
+            const migration = task.migration;
+            this._fireMigrationEvent(migration, 'STARTED');
             task.run();
             this._migrationQueue.afterTaskCompletion(task);
             this._completedMigrations++;
-            task = this._migrationQueue.poll();
+            const status = migration?.getStatus() === MigrationStatus.FAILED ? 'FAILED' : 'COMPLETED';
+            this._fireMigrationEvent(migration, status);
+            this._migrationIndex++;
+            task = this._migrationQueue.poll() as AsyncMigrationTask | null;
         }
     }
 
@@ -213,11 +235,13 @@ export class MigrationManager {
      * concurrent state corruption on a single-threaded Bun runtime.
      */
     async processQueueAsync(): Promise<void> {
+        this._migrationIndex = 0;
         let task = this._migrationQueue.poll() as AsyncMigrationTask | null;
         while (task !== null) {
             await this._executeAsyncTask(task);
             this._migrationQueue.afterTaskCompletion(task);
             this._completedMigrations++;
+            this._migrationIndex++;
             task = this._migrationQueue.poll() as AsyncMigrationTask | null;
         }
     }
@@ -227,7 +251,10 @@ export class MigrationManager {
 
         if (transport === null || migration === undefined) {
             // No transport wired or no migration info — legacy path.
+            this._fireMigrationEvent(migration, 'STARTED');
             task.run();
+            const status = migration?.getStatus() === MigrationStatus.FAILED ? 'FAILED' : 'COMPLETED';
+            this._fireMigrationEvent(migration, status);
             return;
         }
 
@@ -242,6 +269,8 @@ export class MigrationManager {
         const sourceUuid = source?.uuid() ?? null;
         const destinationUuid = destination?.uuid() ?? null;
 
+        this._fireMigrationEvent(migration, 'STARTED');
+
         // Case 1: This member is the source and needs to push data to another member.
         if (sourceUuid === localMemberId && destinationUuid !== null && destinationUuid !== localMemberId) {
             const namespaces = transport.exportPartitionData(partitionId);
@@ -253,8 +282,10 @@ export class MigrationManager {
                     transport.clearPartitionData(partitionId);
                 }
                 migration.setStatus(MigrationStatus.SUCCESS);
+                this._fireMigrationEvent(migration, 'COMPLETED');
             } catch {
                 migration.setStatus(MigrationStatus.FAILED);
+                this._fireMigrationEvent(migration, 'FAILED');
             }
             return;
         }
@@ -266,11 +297,26 @@ export class MigrationManager {
             // Destination side: data will be pushed by the source member.
             // Mark SUCCESS so the partition table update proceeds.
             migration.setStatus(MigrationStatus.SUCCESS);
+            this._fireMigrationEvent(migration, 'COMPLETED');
             return;
         }
 
         // Case 3: Local-only migration (source === destination, or no remote peers involved).
         migration.setStatus(MigrationStatus.SUCCESS);
+        this._fireMigrationEvent(migration, 'COMPLETED');
+    }
+
+    private _fireMigrationEvent(migration: MigrationInfo | undefined, status: MigrationEvent['status']): void {
+        if (this._migrationEventCallback === null || migration === undefined) return;
+        const source = migration.getSource();
+        const destination = migration.getDestination();
+        this._migrationEventCallback({
+            partitionId: migration.getPartitionId(),
+            oldOwner: source !== null ? _replicaToMemberInfo(source) : null,
+            newOwner: destination !== null ? _replicaToMemberInfo(destination) : null,
+            migrationIndex: this._migrationIndex,
+            status,
+        });
     }
 
     pauseMigration(): void {
@@ -338,4 +384,19 @@ interface AsyncMigrationTask {
     run(): void;
     migration: MigrationInfo;
     transport: MigrationTransport | null;
+}
+
+/**
+ * Build a lightweight MemberInfo from a PartitionReplica.
+ * Used when firing migration events — the full member metadata is not
+ * available in MigrationManager, so we use UNKNOWN version and empty attributes.
+ */
+function _replicaToMemberInfo(replica: PartitionReplica): MemberInfo {
+    return new MemberInfo(
+        replica.address(),
+        replica.uuid(),
+        null,
+        false,
+        MemberVersion.UNKNOWN,
+    );
 }

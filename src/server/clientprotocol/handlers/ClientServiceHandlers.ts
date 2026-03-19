@@ -35,10 +35,12 @@ import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin
 import { ListUUIDCodec } from '../../../client/impl/protocol/codec/builtin/ListUUIDCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
+import { ClientAddMigrationListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddMigrationListenerCodec.js';
 import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
 import { compactFieldKindFromWire, compactFieldKindToWire, Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { TopologyPublisher } from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
+import type { MigrationListener } from '@zenystx/helios-core/internal/partition/MigrationListener.js';
 import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Message type constants not covered by existing codecs ─────────────────────
@@ -61,6 +63,16 @@ const CLIENT_CREATE_PROXIES_REQUEST_TYPE                  = 0x000e00;
 const CLIENT_CREATE_PROXIES_RESPONSE_TYPE                 = 0x000e01;
 const CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE           = 0x000f00;
 const CLIENT_LOCAL_BACKUP_LISTENER_RESPONSE_TYPE          = 0x000f01;
+
+/**
+ * Maps client-facing migration listener registration IDs (returned to the
+ * client) to the partition-service-level registration IDs (used internally
+ * to remove the listener from InternalPartitionServiceImpl).
+ *
+ * Using a module-level map keeps the handler closures allocation-free for
+ * the remove path, matching the pattern used by DistributedObjectRegistry.
+ */
+const _migrationListenerSessionMap = new Map<string, string>();
 
 // ── Distributed object registry ───────────────────────────────────────────────
 
@@ -112,6 +124,27 @@ export class DistributedObjectRegistry {
     }
 }
 
+// ── Migration listener registry ───────────────────────────────────────────────
+
+/**
+ * Per-session entry for a migration listener subscription.
+ * Mirrors the shape used by DistributedObjectListenerEntry.
+ */
+export interface MigrationListenerEntry {
+    readonly registrationId: string;
+    readonly correlationId: number;
+    readonly session: import('@zenystx/helios-core/server/clientprotocol/ClientSession.js').ClientSession;
+}
+
+/**
+ * Interface that exposes migration listener registration to the handler.
+ * Implemented by InternalPartitionServiceImpl and wired at startup.
+ */
+export interface MigrationListenerRegistry {
+    addMigrationListener(listener: MigrationListener): string;
+    removeMigrationListener(listenerId: string): boolean;
+}
+
 // ── Handler registration ──────────────────────────────────────────────────────
 
 export interface ClientServiceHandlersOptions {
@@ -120,6 +153,8 @@ export interface ClientServiceHandlersOptions {
     schemaService?: SchemaService;
     localMemberUuid?: string;
     objectRegistry?: DistributedObjectRegistry;
+    /** If provided, migration listener opcodes are registered. */
+    migrationListenerRegistry?: MigrationListenerRegistry;
     logger?: ILogger;
 }
 
@@ -130,6 +165,7 @@ export interface ClientServiceHandlersOptions {
 export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions): void {
     const { dispatcher, topologyPublisher, schemaService, localMemberUuid } = opts;
     const objectRegistry = opts.objectRegistry ?? new DistributedObjectRegistry();
+    const migrationListenerRegistry = opts.migrationListenerRegistry ?? null;
 
     // ── Ping (0x000b00) ───────────────────────────────────────────────────────
     dispatcher.register(CLIENT_PING_REQUEST_TYPE, async (_msg, _session) => {
@@ -241,6 +277,74 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
     // we must accept the registration so the client starts cleanly.
     dispatcher.register(CLIENT_LOCAL_BACKUP_LISTENER_REQUEST_TYPE, async (_msg, _session) => {
         return _encodeLocalBackupListenerResponse();
+    });
+
+    // ── AddMigrationListener (0x001700) ─────────────────────────────────────
+    // Clients may subscribe to partition migration lifecycle events.
+    // When no migration registry is wired the handler silently acks with a
+    // dummy registration ID and never fires events — this keeps the client
+    // connection alive without requiring the full partition service wiring.
+    dispatcher.register(ClientAddMigrationListenerCodec.ADD_REQUEST_MESSAGE_TYPE, async (msg, session) => {
+        const registrationId = crypto.randomUUID();
+        const correlationId = msg.getCorrelationId();
+
+        if (migrationListenerRegistry !== null) {
+            // Build a MigrationListener that pushes events back to this session.
+            const listener: MigrationListener = {
+                migrationStarted(event) {
+                    const evt = ClientAddMigrationListenerCodec.encodeMigrationStartedEvent(
+                        event.partitionId,
+                        event.migrationIndex,
+                        event.oldOwner?.getUuid() ?? null,
+                        event.newOwner?.getUuid() ?? null,
+                        correlationId,
+                    );
+                    session.sendMessage(evt);
+                },
+                migrationCompleted(event) {
+                    const evt = ClientAddMigrationListenerCodec.encodeMigrationCompletedEvent(
+                        event.partitionId,
+                        event.migrationIndex,
+                        event.oldOwner?.getUuid() ?? null,
+                        event.newOwner?.getUuid() ?? null,
+                        correlationId,
+                    );
+                    session.sendMessage(evt);
+                },
+                migrationFailed(event) {
+                    const evt = ClientAddMigrationListenerCodec.encodeMigrationFailedEvent(
+                        event.partitionId,
+                        event.migrationIndex,
+                        event.oldOwner?.getUuid() ?? null,
+                        event.newOwner?.getUuid() ?? null,
+                        correlationId,
+                    );
+                    session.sendMessage(evt);
+                },
+            };
+            // Register on the partition service and stash the service-level
+            // registration ID so RemoveMigrationListener can unregister it.
+            const serviceRegistrationId = migrationListenerRegistry.addMigrationListener(listener);
+            _migrationListenerSessionMap.set(registrationId, serviceRegistrationId);
+        }
+
+        return ClientAddMigrationListenerCodec.encodeAddResponse(registrationId);
+    });
+
+    // ── RemoveMigrationListener (0x001705) ───────────────────────────────────
+    dispatcher.register(ClientAddMigrationListenerCodec.REMOVE_REQUEST_MESSAGE_TYPE, async (msg, _session) => {
+        const { registrationId } = ClientAddMigrationListenerCodec.decodeRemoveRequest(msg);
+        let removed = false;
+
+        if (migrationListenerRegistry !== null && registrationId !== null) {
+            const serviceId = _migrationListenerSessionMap.get(registrationId);
+            if (serviceId !== undefined) {
+                removed = migrationListenerRegistry.removeMigrationListener(serviceId);
+                _migrationListenerSessionMap.delete(registrationId);
+            }
+        }
+
+        return ClientAddMigrationListenerCodec.encodeRemoveResponse(removed);
     });
 }
 

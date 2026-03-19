@@ -18,6 +18,7 @@ import { MAX_REPLICA_COUNT } from '@zenystx/helios-core/internal/partition/Inter
 import { MAX_BACKUP_COUNT } from '@zenystx/helios-core/internal/partition/IPartition';
 import type { MigrationAwareService } from '@zenystx/helios-core/internal/partition/MigrationAwareService';
 import type { MigrationInfo } from '@zenystx/helios-core/internal/partition/MigrationInfo';
+import type { MigrationEvent, MigrationListener } from '@zenystx/helios-core/internal/partition/MigrationListener';
 import type { PartitionBackupReplicaAntiEntropyOp } from '@zenystx/helios-core/internal/partition/operation/PartitionBackupReplicaAntiEntropyOp';
 import type { PartitionReplica } from '@zenystx/helios-core/internal/partition/PartitionReplica';
 import type { PartitionTableView } from '@zenystx/helios-core/internal/partition/PartitionTableView';
@@ -140,6 +141,8 @@ export class InternalPartitionServiceImpl {
     private readonly _snapshots = new Map<string, PartitionTableView>();
     /** Partition-lost listeners keyed by registration ID. */
     private readonly _partitionLostListeners = new Map<string, PartitionLostListener>();
+    /** Migration lifecycle listeners keyed by registration ID. */
+    private readonly _migrationListeners = new Map<string, MigrationListener>();
     /** Map-scoped partition-lost listeners: registrationId → { mapName, listener }. */
     private readonly _mapPartitionLostListeners = new Map<string, { mapName: string; listener: MapPartitionLostListener }>();
     /** Pending replica sync requests keyed by sync ID. */
@@ -417,6 +420,42 @@ export class InternalPartitionServiceImpl {
 
     removePartitionLostListener(listenerId: string): boolean {
         return this._partitionLostListeners.delete(listenerId);
+    }
+
+    // ── Migration lifecycle listeners (WP10) ────────────────────
+
+    /**
+     * Register a migration lifecycle listener.
+     * @returns A registration ID that can be passed to {@link removeMigrationListener}.
+     */
+    addMigrationListener(listener: MigrationListener): string {
+        const id = crypto.randomUUID();
+        this._migrationListeners.set(id, listener);
+        return id;
+    }
+
+    removeMigrationListener(listenerId: string): boolean {
+        return this._migrationListeners.delete(listenerId);
+    }
+
+    /**
+     * Fire a migration lifecycle event to all registered listeners.
+     * Called by MigrationManager hooks when a migration starts, completes, or fails.
+     */
+    fireMigrationEvent(event: MigrationEvent): void {
+        for (const listener of this._migrationListeners.values()) {
+            switch (event.status) {
+                case 'STARTED':
+                    listener.migrationStarted(event);
+                    break;
+                case 'COMPLETED':
+                    listener.migrationCompleted(event);
+                    break;
+                case 'FAILED':
+                    listener.migrationFailed(event);
+                    break;
+            }
+        }
     }
 
     private _emitPartitionLost(event: PartitionLostEvent): void {

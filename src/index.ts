@@ -131,7 +131,14 @@ export { Address } from "@zenystx/helios-core/cluster/Address";
 export type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 export { MemberImpl, MemberImplBuilder } from "@zenystx/helios-core/cluster/impl/MemberImpl";
 export type { Member } from "@zenystx/helios-core/cluster/Member";
+export { MemberInfo } from "@zenystx/helios-core/cluster/MemberInfo";
 export type { MemberSelector } from "@zenystx/helios-core/cluster/MemberSelector";
+export type {
+    MembershipListener,
+    MembershipEvent,
+    MemberAttributeEvent,
+    MemberAttributeOperationType,
+} from "@zenystx/helios-core/cluster/MembershipListener";
 export { MemberSelectors } from "@zenystx/helios-core/cluster/memberselector/MemberSelectors";
 
 // ── Security ──────────────────────────────────────────────────────────────────
@@ -267,6 +274,18 @@ export { WanSyncManager } from "@zenystx/helios-core/wan/impl/WanSyncManager";
 export { MerkleTree, MerkleTreeNode } from "@zenystx/helios-core/wan/impl/MerkleTree";
 export { WanReplicationEventQueue } from "@zenystx/helios-core/wan/impl/WanReplicationEventQueue";
 export { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
+
+// ── Partition ─────────────────────────────────────────────────────────────────
+export type {
+    MigrationListener,
+    MigrationEvent,
+    MigrationStatus,
+} from "@zenystx/helios-core/internal/partition/MigrationListener";
+export { ClientAddMigrationListenerCodec } from "@zenystx/helios-core/server/clientprotocol/codec/ClientAddMigrationListenerCodec";
+export type {
+    MigrationListenerRegistry,
+    MigrationListenerEntry,
+} from "@zenystx/helios-core/server/clientprotocol/handlers/ClientServiceHandlers";
 
 // ── SPI / internal (public surface) ──────────────────────────────────────────
 export { HeliosException } from "@zenystx/helios-core/core/exception/HeliosException";
