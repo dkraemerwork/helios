@@ -9,6 +9,8 @@ import { NearCacheDataRecordStore } from '@zenystx/helios-core/internal/nearcach
 import { NearCacheObjectRecordStore } from '@zenystx/helios-core/internal/nearcache/impl/store/NearCacheObjectRecordStore';
 import type { ScheduledTask, TaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
 import { NoOpTaskScheduler } from '@zenystx/helios-core/internal/nearcache/impl/TaskScheduler';
+import { NearCachePreloader } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloader';
+import { NearCachePreloaderLock } from '@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloaderLock';
 import type { NearCache, UpdateSemantic } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import { NOT_CACHED } from '@zenystx/helios-core/internal/nearcache/NearCache';
 import type { NearCacheRecordStore } from '@zenystx/helios-core/internal/nearcache/NearCacheRecordStore';
@@ -17,6 +19,8 @@ import type { SerializationService } from '@zenystx/helios-core/internal/seriali
 import type { NearCacheStats } from '@zenystx/helios-core/nearcache/NearCacheStats';
 import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
 import { MapHeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export class DefaultNearCache<K, V> implements NearCache<K, V> {
 
@@ -30,6 +34,7 @@ export class DefaultNearCache<K, V> implements NearCache<K, V> {
     private _nearCacheRecordStore: NearCacheRecordStore<K, V> | null;
     private _expirationTaskHandle: ScheduledTask | null = null;
     private _preloadDone = false;
+    private _preloader: NearCachePreloader | null = null;
 
     constructor(
         name: string,
@@ -55,6 +60,54 @@ export class DefaultNearCache<K, V> implements NearCache<K, V> {
         }
         this._nearCacheRecordStore.initialize();
         this._expirationTaskHandle = this.createAndScheduleExpirationTask();
+        this._initPreloader();
+    }
+
+    private _initPreloader(): void {
+        const preloaderConfig = this._nearCacheConfig.getPreloaderConfig();
+        if (!preloaderConfig.isEnabled()) return;
+
+        const dir = preloaderConfig.getDirectory() !== '' ? preloaderConfig.getDirectory() : tmpdir();
+        const lockPath = join(dir, `${this._name}.ncpreload.lock`);
+
+        try {
+            const lock = new NearCachePreloaderLock(
+                { warning: () => {}, fine: () => {} },
+                lockPath,
+            );
+            this._preloader = new NearCachePreloader(preloaderConfig, lock);
+
+            // Load persisted keys and populate the near cache (fire-and-forget async)
+            void this._preloader.load(this._name).then((keyBuffers) => {
+                this._populateFromPreloadedKeys(keyBuffers);
+                this._preloadDone = true;
+                this._preloader!.startPeriodicStore(this as unknown as DefaultNearCache<unknown, unknown>);
+            });
+        } catch {
+            // Lock acquisition failed — another instance owns the preloader; skip silently
+        }
+    }
+
+    /**
+     * Pre-populate the near cache with keys loaded from disk.
+     * Each buffer is a serialized Data key; we insert a reservation so the backing
+     * map loader will fill in values on the next access.
+     */
+    private _populateFromPreloadedKeys(keyBuffers: Buffer[]): void {
+        if (keyBuffers.length === 0) return;
+        // We reserve each key so callers know to fetch the value on next access.
+        // The actual value fetch happens transparently via the normal get/put path.
+        for (const buf of keyBuffers) {
+            // Re-construct a minimal Data wrapper around the raw bytes and reserve
+            const dataKey = this._serializationService.toData(buf);
+            if (dataKey !== null) {
+                this._nearCacheRecordStore!.tryReserveForUpdate(
+                    buf as unknown as K,
+                    dataKey,
+                    'READ_UPDATE',
+                );
+            }
+        }
     }
 
     private createNearCacheRecordStore(name: string, config: NearCacheConfig): NearCacheRecordStore<K, V> {
@@ -114,6 +167,12 @@ export class DefaultNearCache<K, V> implements NearCache<K, V> {
         if (this._expirationTaskHandle !== null) {
             this._expirationTaskHandle.cancel();
         }
+        if (this._preloader !== null) {
+            // Persist keys synchronously before destroying the store
+            void this._preloader.store(this as unknown as DefaultNearCache<unknown, unknown>).finally(() => {
+                this._preloader!.stopPeriodicStore();
+            });
+        }
         this._nearCacheRecordStore!.destroy();
     }
 
@@ -135,8 +194,8 @@ export class DefaultNearCache<K, V> implements NearCache<K, V> {
     }
 
     storeKeys(): void {
-        if (this._preloadDone) {
-            this._nearCacheRecordStore!.storeKeys();
+        if (this._preloadDone && this._preloader !== null) {
+            void this._preloader.store(this as unknown as DefaultNearCache<unknown, unknown>);
         }
     }
 

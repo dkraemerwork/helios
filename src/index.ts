@@ -184,6 +184,8 @@ export { SecurityConfig, PermissionConfig, PermissionType, TokenConfig } from "@
 
 // ── Near-cache ────────────────────────────────────────────────────────────────
 export type { NearCacheStats } from "@zenystx/helios-core/nearcache/NearCacheStats";
+export { NearCachePreloader } from "@zenystx/helios-core/internal/nearcache/impl/preloader/NearCachePreloader";
+export { NearCacheHandler } from "@zenystx/helios-core/rest/handler/NearCacheHandler";
 
 // ── Query / Predicates ───────────────────────────────────────────────────────
 export { Predicates } from "@zenystx/helios-core/query/Predicates";
