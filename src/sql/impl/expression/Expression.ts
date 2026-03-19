@@ -29,7 +29,7 @@ export class ColumnExpression implements Expression {
 export class LiteralExpression implements Expression {
     constructor(public readonly literalValue: unknown) {}
 
-    evaluate(): unknown {
+    evaluate(_row: SqlRow, _key: unknown, _value: unknown): unknown {
         return this.literalValue;
     }
 }
