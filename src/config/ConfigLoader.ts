@@ -22,7 +22,6 @@
  */
 import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
-import { XmlConfigLoader } from '@zenystx/helios-core/config/XmlConfigLoader';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
 import { SecurityConfig, PermissionConfig, PermissionType, TokenConfig } from '@zenystx/helios-core/config/SecurityConfig';
 import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
@@ -40,6 +39,8 @@ import {
     WanConsistencyCheckStrategy,
 } from '@zenystx/helios-core/config/WanReplicationConfig';
 import { WanReplicationRef } from '@zenystx/helios-core/config/WanReplicationRef';
+import { DiscoveryStrategyConfig as SpiDiscoveryStrategyConfig } from '@zenystx/helios-core/discovery/spi/DiscoverySPI';
+import { DiscoveryStrategyConfig } from '@zenystx/helios-core/config/DiscoveryStrategyConfig';
 
 /**
  * Loads and parses a config file, returning a HeliosConfig.
@@ -505,6 +506,62 @@ function parseJoinConfig(raw: Record<string, unknown>, config: HeliosConfig): vo
             }
         }
     }
+
+    // --- discovery (SPI strategies) ---
+    // Supports both 'discovery-strategies' (kebab) and 'discoveryStrategies' (camelCase).
+    const dsKey = 'discovery-strategies' in raw ? 'discovery-strategies' : 'discoveryStrategies';
+    if (Array.isArray(raw[dsKey])) {
+        const discoveryConfig = joinConfig.getDiscoveryConfig();
+        for (const entry of raw[dsKey] as unknown[]) {
+            discoveryConfig.addDiscoveryStrategyConfig(parseDiscoveryStrategyConfigEntry(entry));
+        }
+    }
+}
+
+function parseDiscoveryStrategyConfigEntry(entry: unknown): DiscoveryStrategyConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each discovery-strategy entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+
+    if (typeof e['className'] !== 'string' || (e['className'] as string).trim() === '') {
+        throw new Error('Each discovery-strategy entry must have a non-empty "className" field');
+    }
+
+    const cfg = new DiscoveryStrategyConfig();
+    cfg.setClassName(e['className'] as string);
+
+    if (typeof e['enabled'] === 'boolean' && !e['enabled']) {
+        // Mark as disabled by storing a sentinel property — DiscoveryStrategyConfig
+        // does not have an enabled flag, so callers must check the SPI config.
+        // We store it as a property for round-trip fidelity.
+        cfg.getProperties().set('__enabled__', 'false');
+    }
+
+    if (typeof e['properties'] === 'object' && e['properties'] !== null && !Array.isArray(e['properties'])) {
+        for (const [k, v] of Object.entries(e['properties'] as Record<string, unknown>)) {
+            cfg.getProperties().set(k, String(v));
+        }
+    }
+
+    return cfg;
+}
+
+/**
+ * Convert a DiscoveryStrategyConfig (from config classes) into the SPI
+ * DiscoveryStrategyConfig interface used by DiscoveryService.
+ */
+export function toSpiDiscoveryStrategyConfig(cfg: DiscoveryStrategyConfig): SpiDiscoveryStrategyConfig {
+    const className = cfg.getClassName() ?? '';
+    const props = cfg.getProperties();
+    const enabled = props.get('__enabled__') !== 'false';
+    const properties: Record<string, string> = {};
+    for (const [k, v] of props) {
+        if (k !== '__enabled__') {
+            properties[k] = v;
+        }
+    }
+    return { className, properties, enabled };
 }
 
 // ── WAN replication config parsing ───────────────────────────────────────────

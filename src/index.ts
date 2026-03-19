@@ -215,6 +215,35 @@ export { RestEndpointGroup } from "@zenystx/helios-core/rest/RestEndpointGroup";
 
 // ── Discovery ────────────────────────────────────────────────────────────────
 export { createDiscoveryResolver } from "@zenystx/helios-core/discovery/HeliosDiscovery";
+export type {
+    MemberAddress,
+    DiscoveryConfig,
+    DiscoveryProvider,
+    HeliosDiscoveryResolver,
+    DiscoveryResolverOptions,
+} from "@zenystx/helios-core/discovery/HeliosDiscovery";
+
+// ── Discovery SPI ─────────────────────────────────────────────────────────────
+export type {
+    DiscoveredNode,
+    DiscoveryStrategy,
+    DiscoveryStrategyConfig as SpiDiscoveryStrategyConfig,
+    DiscoveryStrategyFactory,
+} from "@zenystx/helios-core/discovery/spi/DiscoverySPI";
+export { DiscoveryService } from "@zenystx/helios-core/discovery/spi/DiscoveryService";
+export { createDiscoveryService } from "@zenystx/helios-core/discovery/spi/DiscoveryServiceFactory";
+export { toSpiDiscoveryStrategyConfig } from "@zenystx/helios-core/config/ConfigLoader";
+
+// ── Discovery SPI Adapters ────────────────────────────────────────────────────
+export { AwsDiscoveryStrategy, AwsDiscoveryStrategyFactory } from "@zenystx/helios-core/discovery/spi/adapters/AwsDiscoveryStrategy";
+export { AzureDiscoveryStrategy, AzureDiscoveryStrategyFactory } from "@zenystx/helios-core/discovery/spi/adapters/AzureDiscoveryStrategy";
+export { GcpDiscoveryStrategy, GcpDiscoveryStrategyFactory } from "@zenystx/helios-core/discovery/spi/adapters/GcpDiscoveryStrategy";
+export { KubernetesDiscoveryStrategy, KubernetesDiscoveryStrategyFactory } from "@zenystx/helios-core/discovery/spi/adapters/KubernetesDiscoveryStrategy";
+export { StaticDiscoveryStrategy, StaticDiscoveryStrategyFactory } from "@zenystx/helios-core/discovery/spi/adapters/StaticDiscoveryStrategy";
+
+// ── Auto-Detection ────────────────────────────────────────────────────────────
+export { AutoDetectionService } from "@zenystx/helios-core/discovery/AutoDetectionService";
+export type { CloudEnvironment } from "@zenystx/helios-core/discovery/AutoDetectionService";
 
 // ── Multicast Discovery ──────────────────────────────────────────────────────
 export { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
