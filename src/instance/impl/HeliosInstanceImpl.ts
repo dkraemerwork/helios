@@ -381,6 +381,12 @@ interface CacheClientInvalidationListenerRegistration {
   session: ClientSession;
 }
 
+interface CacheClientEntryListenerRegistration {
+  name: string;
+  registrationId: string;
+  session: ClientSession;
+}
+
 interface ClientTransactionContext {
   transaction: TransactionImpl;
   mapProxies: Map<string, TransactionalMapProxy<Data, Data>>;
@@ -635,6 +641,8 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private readonly _clientSessionReplicatedMapListeners = new Map<string, Set<string>>();
   private readonly _clientCacheInvalidationListenerRegistrations = new Map<string, CacheClientInvalidationListenerRegistration>();
   private readonly _clientSessionCacheInvalidationListeners = new Map<string, Set<string>>();
+  private readonly _clientCacheEntryListenerRegistrations = new Map<string, CacheClientEntryListenerRegistration>();
+  private readonly _clientSessionCacheEntryListeners = new Map<string, Set<string>>();
   private readonly _clientTransactions = new Map<string, ClientTransactionContext>();
   private readonly _pendingTxnBackupAcks = new Map<string, {
     resolve: (applied: boolean) => void;
@@ -3818,6 +3826,33 @@ export class HeliosInstanceImpl implements HeliosInstance {
       addInvalidationListener: async (name, _localOnly, session) => this._registerClientCacheInvalidationListener(name, session),
       removeInvalidationListener: async (registrationId, session) =>
         this._removeClientCacheInvalidationListener(session.getSessionId(), registrationId),
+      addEntryListener: async (_name, _localOnly, _oldValueRequired, _synchronous, session) => {
+        // JCache entry event listeners — registration is recorded server-side.
+        // Events are fired by CacheListenerRegistry in CacheRecordStore; for the
+        // client-protocol path, the session is tracked so it can be cleaned up
+        // on disconnect.  Full event push to clients requires a wire codec for
+        // Cache entry events (0x131202 / etc.) — that is added in a future work
+        // package.  Here we return a stable UUID so the client can deregister.
+        this._ensureCacheService();
+        return this._registerClientCacheEntryListener(_name, session);
+      },
+      removeEntryListener: async (registrationId, session) =>
+        this._removeClientCacheEntryListener(session.getSessionId(), registrationId),
+      invokeEntryProcessor: async (name, key, processorData, args) => {
+        this._ensureCacheService();
+        const { CacheEntryProcessorExecutor } =
+          await import('@zenystx/helios-core/cache/impl/CacheEntryProcessor.js');
+        const executor = new CacheEntryProcessorExecutor(this._ss, this._distributedCacheService!);
+        return executor.invoke(name, key, processorData, args);
+      },
+      invokeEntryProcessorAll: async (name, keys, processorData, args) => {
+        this._ensureCacheService();
+        const { CacheEntryProcessorExecutor } =
+          await import('@zenystx/helios-core/cache/impl/CacheEntryProcessor.js');
+        const executor = new CacheEntryProcessorExecutor(this._ss, this._distributedCacheService!);
+        const resultMap = await executor.invokeAll(name, keys, processorData, args);
+        return Array.from(resultMap.entries());
+      },
     };
 
     const transactionOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').TransactionServiceOperations = {
@@ -4097,6 +4132,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
       this._removeClientMultiMapListenersForSession(session.getSessionId());
       this._removeClientReplicatedMapListenersForSession(session.getSessionId());
       this._removeClientCacheInvalidationListenersForSession(session.getSessionId());
+      this._removeClientCacheEntryListenersForSession(session.getSessionId());
       this._nearCacheInvalidationManager.removeSession(session.getSessionId());
     });
 
@@ -5800,6 +5836,46 @@ export class HeliosInstanceImpl implements HeliosInstance {
     }
     for (const registrationId of Array.from(registrations)) {
       this._removeClientCacheInvalidationListener(sessionId, registrationId);
+    }
+  }
+
+  // ── JCache entry event listener management ──────────────────────────────────
+
+  private _registerClientCacheEntryListener(name: string, session: import('@zenystx/helios-core/server/clientprotocol/ClientSession.js').ClientSession): string {
+    const registrationId = crypto.randomUUID();
+    this._clientCacheEntryListenerRegistrations.set(registrationId, {
+      name,
+      registrationId,
+      session,
+    });
+    let registrations = this._clientSessionCacheEntryListeners.get(session.getSessionId());
+    if (registrations === undefined) {
+      registrations = new Set<string>();
+      this._clientSessionCacheEntryListeners.set(session.getSessionId(), registrations);
+    }
+    registrations.add(registrationId);
+    return registrationId;
+  }
+
+  private _removeClientCacheEntryListener(sessionId: string, registrationId: string): boolean {
+    const registration = this._clientCacheEntryListenerRegistrations.get(registrationId);
+    if (registration === undefined) {
+      return false;
+    }
+    this._clientCacheEntryListenerRegistrations.delete(registrationId);
+    const registrations = this._clientSessionCacheEntryListeners.get(sessionId);
+    registrations?.delete(registrationId);
+    if (registrations !== undefined && registrations.size === 0) {
+      this._clientSessionCacheEntryListeners.delete(sessionId);
+    }
+    return true;
+  }
+
+  private _removeClientCacheEntryListenersForSession(sessionId: string): void {
+    const registrations = this._clientSessionCacheEntryListeners.get(sessionId);
+    if (registrations === undefined) return;
+    for (const registrationId of Array.from(registrations)) {
+      this._removeClientCacheEntryListener(sessionId, registrationId);
     }
   }
 

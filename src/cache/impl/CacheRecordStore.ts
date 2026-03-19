@@ -1,6 +1,9 @@
 /**
  * Port of {@code com.hazelcast.cache.impl.CacheRecordStore}.
  * Single-partition key→value cache storage. Supports BINARY and OBJECT in-memory formats.
+ *
+ * Fires {@link CacheEntryEvent}s through an injected {@link CacheListenerRegistry}
+ * on put (CREATED / UPDATED), remove (REMOVED), and expiry (EXPIRED).
  */
 import type { ICacheRecordStore } from '@zenystx/helios-core/cache/impl/ICacheRecordStore';
 import { InMemoryFormat } from '@zenystx/helios-core/cache/impl/InMemoryFormat';
@@ -8,6 +11,8 @@ import { CacheDataRecord } from '@zenystx/helios-core/cache/impl/record/CacheDat
 import { CacheObjectRecord } from '@zenystx/helios-core/cache/impl/record/CacheObjectRecord';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import { CacheEntryEventType } from './CacheEntryEvent.js';
+import type { CacheListenerRegistry } from './CacheListenerRegistry.js';
 
 type AnyRecord = CacheDataRecord | CacheObjectRecord;
 
@@ -28,10 +33,19 @@ export class CacheRecordStore implements ICacheRecordStore {
     private readonly _records = new Map<string, AnyRecord>();
     /** Reverse map: stringKey → original Data key (for Data equality in BINARY format) */
     private readonly _dataKeys = new Map<string, Data>();
+    private readonly _cacheName: string;
+    private readonly _registry: CacheListenerRegistry | null;
 
-    constructor(format: InMemoryFormat, serializationService: SerializationService) {
+    constructor(
+        format: InMemoryFormat,
+        serializationService: SerializationService,
+        cacheName = '',
+        registry: CacheListenerRegistry | null = null,
+    ) {
         this._format = format;
         this._ss = serializationService;
+        this._cacheName = cacheName;
+        this._registry = registry;
     }
 
     get(key: Data, _expiryPolicy: unknown): unknown {
@@ -39,6 +53,8 @@ export class CacheRecordStore implements ICacheRecordStore {
         const record = this._records.get(k);
         if (!record) return null;
         if (record.isExpiredAt(Date.now())) {
+            // Fire EXPIRED event before removing
+            this._fireExpired(key, record);
             this._records.delete(k);
             this._dataKeys.delete(k);
             return null;
@@ -56,6 +72,9 @@ export class CacheRecordStore implements ICacheRecordStore {
 
     put(key: Data, value: unknown, _expiryPolicy: unknown, _caller: unknown, _completionId: number): void {
         const k = dataKey(key);
+        const isUpdate = this._records.has(k);
+        const oldRecord = isUpdate ? this._records.get(k)! : null;
+
         this._dataKeys.set(k, key);
 
         if (this._format === InMemoryFormat.BINARY) {
@@ -71,11 +90,23 @@ export class CacheRecordStore implements ICacheRecordStore {
             record.setValue(objValue);
             this._records.set(k, record);
         }
+
+        const newRecord = this._records.get(k)!;
+
+        if (isUpdate) {
+            this._fireUpdated(key, newRecord, oldRecord);
+        } else {
+            this._fireCreated(key, newRecord);
+        }
     }
 
     remove(key: Data, _expiryPolicy: unknown, _caller: unknown, _completionId: number): boolean {
         const k = dataKey(key);
-        const existed = this._records.has(k);
+        const record = this._records.get(k);
+        const existed = record !== undefined;
+        if (existed) {
+            this._fireRemoved(key, record!);
+        }
         this._records.delete(k);
         this._dataKeys.delete(k);
         return existed;
@@ -86,6 +117,7 @@ export class CacheRecordStore implements ICacheRecordStore {
         const record = this._records.get(k);
         if (!record) return false;
         if (record.isExpiredAt(Date.now())) {
+            this._fireExpired(key, record);
             this._records.delete(k);
             this._dataKeys.delete(k);
             return false;
@@ -128,6 +160,59 @@ export class CacheRecordStore implements ICacheRecordStore {
             return (record as CacheDataRecord).getExpiryPolicy();
         }
         return (record as CacheObjectRecord).getExpiryPolicy();
+    }
+
+    // ── Event helpers ─────────────────────────────────────────────────────────
+
+    private _fireCreated(key: Data, record: AnyRecord): void {
+        if (!this._registry || this._registry.isEmpty()) return;
+        this._registry.fireEvent({
+            key,
+            value: this._recordValue(record),
+            oldValue: null,
+            eventType: CacheEntryEventType.CREATED,
+            source: this._cacheName,
+        });
+    }
+
+    private _fireUpdated(key: Data, newRecord: AnyRecord, oldRecord: AnyRecord | null): void {
+        if (!this._registry || this._registry.isEmpty()) return;
+        this._registry.fireEvent({
+            key,
+            value: this._recordValue(newRecord),
+            oldValue: oldRecord !== null ? this._recordValue(oldRecord) : null,
+            eventType: CacheEntryEventType.UPDATED,
+            source: this._cacheName,
+        });
+    }
+
+    private _fireRemoved(key: Data, record: AnyRecord): void {
+        if (!this._registry || this._registry.isEmpty()) return;
+        this._registry.fireEvent({
+            key,
+            value: null,
+            oldValue: this._recordValue(record),
+            eventType: CacheEntryEventType.REMOVED,
+            source: this._cacheName,
+        });
+    }
+
+    private _fireExpired(key: Data, record: AnyRecord): void {
+        if (!this._registry || this._registry.isEmpty()) return;
+        this._registry.fireEvent({
+            key,
+            value: null,
+            oldValue: this._recordValue(record),
+            eventType: CacheEntryEventType.EXPIRED,
+            source: this._cacheName,
+        });
+    }
+
+    private _recordValue(record: AnyRecord): unknown {
+        if (this._format === InMemoryFormat.BINARY) {
+            return (record as CacheDataRecord).getValue();
+        }
+        return (record as CacheObjectRecord).getValue();
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

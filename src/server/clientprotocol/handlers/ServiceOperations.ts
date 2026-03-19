@@ -239,6 +239,55 @@ export interface CacheServiceOperations {
     destroy(name: string): Promise<void>;
     addInvalidationListener(name: string, localOnly: boolean, session: ClientSession): Promise<string>;
     removeInvalidationListener(registrationId: string, session: ClientSession): Promise<boolean>;
+    /**
+     * Registers a JCache entry listener for the given cache.
+     *
+     * @param name            Cache name.
+     * @param localOnly       Whether to subscribe to local events only.
+     * @param oldValueRequired Whether old values should be included in events.
+     * @param synchronous     Whether the listener is synchronous.
+     * @param session         The client session to push events to.
+     * @returns A registration UUID for later deregistration.
+     */
+    addEntryListener(
+        name: string,
+        localOnly: boolean,
+        oldValueRequired: boolean,
+        synchronous: boolean,
+        session: ClientSession,
+    ): Promise<string>;
+    /**
+     * Removes a previously registered JCache entry listener.
+     *
+     * @returns {@code true} if the listener was found and removed.
+     */
+    removeEntryListener(registrationId: string, session: ClientSession): Promise<boolean>;
+    /**
+     * Invokes a {@link CacheEntryProcessor} on a single key.
+     *
+     * @param name          Cache name.
+     * @param key           Serialized key.
+     * @param processorData Serialized entry processor.
+     * @param args          Additional serialized arguments for the processor.
+     * @returns Serialized result, or {@code null}.
+     */
+    invokeEntryProcessor(
+        name: string,
+        key: Data,
+        processorData: Data,
+        args: Data[],
+    ): Promise<Data | null>;
+    /**
+     * Invokes a {@link CacheEntryProcessor} on multiple keys.
+     *
+     * @returns Map of serialized key → serialized result (null results included).
+     */
+    invokeEntryProcessorAll(
+        name: string,
+        keys: Data[],
+        processorData: Data,
+        args: Data[],
+    ): Promise<Array<[Data, Data | null]>>;
 }
 
 // ── Transaction ───────────────────────────────────────────────────────────────

@@ -20,6 +20,10 @@
  *   Cache.Destroy                 (0x130f00)
  *   Cache.AddInvalidationListener (0x131000)
  *   Cache.RemoveInvalidationListener (0x131100)
+ *   Cache.AddEntryListener        (0x131200)  — JCache entry event listener
+ *   Cache.RemoveEntryListener     (0x131300)  — deregister JCache entry listener
+ *   Cache.Invoke                  (0x131400)  — single-key entry processor
+ *   Cache.InvokeAll               (0x131500)  — multi-key entry processor
  */
 
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
@@ -51,6 +55,15 @@ const CACHE_PUT_ALL_REQUEST       = 0x130e00; const CACHE_PUT_ALL_RESPONSE      
 const CACHE_DESTROY_REQUEST       = 0x130f00; const CACHE_DESTROY_RESPONSE       = 0x130f01;
 const CACHE_ADD_LISTENER_REQUEST  = 0x131000; const CACHE_ADD_LISTENER_RESPONSE  = 0x131001;
 const CACHE_REMOVE_LISTENER_REQUEST = 0x131100; const CACHE_REMOVE_LISTENER_RESPONSE = 0x131101;
+
+// JCache entry event listener (distinct from near-cache invalidation listener)
+const CACHE_ADD_ENTRY_LISTENER_REQUEST    = 0x131200; const CACHE_ADD_ENTRY_LISTENER_RESPONSE    = 0x131201;
+const CACHE_REMOVE_ENTRY_LISTENER_REQUEST = 0x131300; const CACHE_REMOVE_ENTRY_LISTENER_RESPONSE = 0x131301;
+
+// Cache.Invoke — single-key entry processor
+const CACHE_INVOKE_REQUEST    = 0x131400; const CACHE_INVOKE_RESPONSE    = 0x131401;
+// Cache.InvokeAll — multi-key entry processor
+const CACHE_INVOKE_ALL_REQUEST = 0x131500; const CACHE_INVOKE_ALL_RESPONSE = 0x131501;
 
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
 
@@ -212,7 +225,7 @@ export function registerCacheServiceHandlers(
         return _empty(CACHE_DESTROY_RESPONSE);
     });
 
-    // Cache.AddInvalidationListener
+    // Cache.AddInvalidationListener (near-cache invalidation)
     dispatcher.register(CACHE_ADD_LISTENER_REQUEST, async (msg, session) => {
         const iter = msg.forwardFrameIterator();
         const f = iter.next();
@@ -227,6 +240,62 @@ export function registerCacheServiceHandlers(
         const registrationId = StringCodec.decode(iter);
         return _bool(CACHE_REMOVE_LISTENER_RESPONSE, await operations.removeInvalidationListener(registrationId, session));
     });
+
+    // ── JCache entry event listener ──────────────────────────────────────────
+
+    // Cache.AddEntryListener
+    // Initial frame layout (after msgType + correlationId):
+    //   [0]  localOnly      boolean
+    //   [1]  oldValueRequired  boolean
+    //   [2]  synchronous    boolean
+    // Followed by: cacheName string frame
+    dispatcher.register(CACHE_ADD_ENTRY_LISTENER_REQUEST, async (msg, session) => {
+        const iter = msg.forwardFrameIterator();
+        const f = iter.next();
+        const flagsOffset = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+        const localOnly        = f.content.length > flagsOffset     ? f.content.readUInt8(flagsOffset)     !== 0 : false;
+        const oldValueRequired = f.content.length > flagsOffset + 1 ? f.content.readUInt8(flagsOffset + 1) !== 0 : false;
+        const synchronous      = f.content.length > flagsOffset + 2 ? f.content.readUInt8(flagsOffset + 2) !== 0 : false;
+        const name = StringCodec.decode(iter);
+        const registrationId = await operations.addEntryListener(name, localOnly, oldValueRequired, synchronous, session);
+        return _string(CACHE_ADD_ENTRY_LISTENER_RESPONSE, registrationId);
+    });
+
+    // Cache.RemoveEntryListener
+    dispatcher.register(CACHE_REMOVE_ENTRY_LISTENER_REQUEST, async (msg, session) => {
+        const iter = msg.forwardFrameIterator(); iter.next();
+        const registrationId = StringCodec.decode(iter);
+        return _bool(CACHE_REMOVE_ENTRY_LISTENER_RESPONSE, await operations.removeEntryListener(registrationId, session));
+    });
+
+    // ── Entry processors ─────────────────────────────────────────────────────
+
+    // Cache.Invoke — invoke a single-key entry processor
+    // Initial frame: completionId (INT at fixed offset after msgType + correlationId + partitionId)
+    // Frames: cacheName, key, entryProcessor, [args...]
+    dispatcher.register(CACHE_INVOKE_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // skip initial frame
+        const name = StringCodec.decode(iter);
+        const key = DataCodec.decode(iter);
+        const processorData = DataCodec.decode(iter);
+        const args = _decodeDataList(iter);
+        const result = await operations.invokeEntryProcessor(name, key, processorData, args);
+        return _nullable(CACHE_INVOKE_RESPONSE, result);
+    });
+
+    // Cache.InvokeAll — invoke an entry processor on multiple keys
+    // Frames: cacheName, keys (data-list), entryProcessor, [args...]
+    dispatcher.register(CACHE_INVOKE_ALL_REQUEST, async (msg, _s) => {
+        const iter = msg.forwardFrameIterator();
+        iter.next(); // skip initial frame
+        const name = StringCodec.decode(iter);
+        const keys = _decodeDataList(iter);
+        const processorData = DataCodec.decode(iter);
+        const args = _decodeDataList(iter);
+        const resultPairs = await operations.invokeEntryProcessorAll(name, keys, processorData, args);
+        return _nullableEntryList(CACHE_INVOKE_ALL_RESPONSE, resultPairs);
+    });
 }
 
 // ── Response helpers ──────────────────────────────────────────────────────────
@@ -237,6 +306,28 @@ function _int(t: number, v: number): ClientMessage { const msg = CM.createForEnc
 function _string(t: number, v: string): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); StringCodec.encode(msg, v); msg.setFinal(); return msg; }
 function _nullable(t: number, data: Data | null): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); if (data === null) { msg.add(CM.NULL_FRAME); } else { DataCodec.encode(msg, data); } msg.setFinal(); return msg; }
 function _entryList(t: number, entries: Array<[Data, Data]>): ClientMessage { const msg = CM.createForEncode(); const b = Buffer.allocUnsafe(RH); b.fill(0); b.writeUInt32LE(t >>> 0, 0); const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG; msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE)); msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG)); for (const [k, v] of entries) { DataCodec.encode(msg, k); DataCodec.encode(msg, v); } msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG)); msg.setFinal(); return msg; }
+
+/** Entry list where values may be null (used for InvokeAll results). */
+function _nullableEntryList(t: number, entries: Array<[Data, Data | null]>): ClientMessage {
+    const msg = CM.createForEncode();
+    const b = Buffer.allocUnsafe(RH);
+    b.fill(0);
+    b.writeUInt32LE(t >>> 0, 0);
+    const UNFRAGMENTED_MESSAGE = CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG;
+    msg.add(new CM.Frame(b, UNFRAGMENTED_MESSAGE));
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+    for (const [k, v] of entries) {
+        DataCodec.encode(msg, k);
+        if (v === null) {
+            msg.add(CM.NULL_FRAME);
+        } else {
+            DataCodec.encode(msg, v);
+        }
+    }
+    msg.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+    msg.setFinal();
+    return msg;
+}
 
 function _decodeDataList(iter: CM.ForwardFrameIterator): Data[] {
     const items: Data[] = [];

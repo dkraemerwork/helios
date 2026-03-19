@@ -116,6 +116,18 @@ export { RingbufferStoreConfig } from "@zenystx/helios-core/config/RingbufferSto
 // ── Cache / JCache ────────────────────────────────────────────────────────────
 export { CACHE_MANAGER_PREFIX } from "@zenystx/helios-core/cache/HazelcastCacheManager";
 export { CacheRecordStore } from "@zenystx/helios-core/cache/impl/CacheRecordStore";
+export {
+    CacheEntryEventType,
+    type CacheEntryEvent,
+    type CacheEntryListener,
+    type CacheEntryListenerConfiguration,
+} from "@zenystx/helios-core/cache/impl/CacheEntryEvent";
+export { CacheListenerRegistry } from "@zenystx/helios-core/cache/impl/CacheListenerRegistry";
+export type {
+    CacheEntryProcessor,
+    MutableCacheEntry,
+} from "@zenystx/helios-core/cache/impl/CacheEntryProcessor";
+export { CacheEntryProcessorExecutor } from "@zenystx/helios-core/cache/impl/CacheEntryProcessor";
 
 // ── Transaction ───────────────────────────────────────────────────────────────
 export { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
