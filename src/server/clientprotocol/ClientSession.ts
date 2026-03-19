@@ -8,6 +8,7 @@ import { ClientMessage } from "../../client/impl/protocol/ClientMessage";
 import { ClientMessageWriter } from "../../client/impl/protocol/ClientMessageWriter";
 import type { EventloopChannel } from "@zenystx/helios-core/internal/eventloop/Eventloop";
 import { ByteBuffer } from "@zenystx/helios-core/internal/networking/ByteBuffer";
+import type { SecurityContext } from "@zenystx/helios-core/security/impl/SecurityContext";
 
 export class ClientSession {
     private readonly _channel: EventloopChannel;
@@ -17,6 +18,7 @@ export class ClientSession {
     private _clientVersion: string | null = null;
     private _authenticated = false;
     private _lastSeenMs: number = Date.now();
+    private _securityContext: SecurityContext | null = null;
 
     constructor(channel: EventloopChannel, sessionId: string) {
         this._channel = channel;
@@ -57,6 +59,16 @@ export class ClientSession {
         this._clientVersion = clientVersion;
         this._authenticated = true;
         this._lastSeenMs = Date.now();
+    }
+
+    /** Returns the SecurityContext for this session, or null if not set. */
+    getSecurityContext(): SecurityContext | null {
+        return this._securityContext;
+    }
+
+    /** Attach a SecurityContext to this session after successful authentication. */
+    setSecurityContext(context: SecurityContext): void {
+        this._securityContext = context;
     }
 
     /** Send a response or event message to the client. */

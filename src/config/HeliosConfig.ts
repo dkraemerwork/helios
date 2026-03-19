@@ -24,6 +24,7 @@ import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory.js";
 import { CPSubsystemConfig } from '@zenystx/helios-core/config/CPSubsystemConfig.js';
 import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
+import { SecurityConfig } from '@zenystx/helios-core/config/SecurityConfig.js';
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;
@@ -46,6 +47,7 @@ export class HeliosConfig implements InstanceConfig {
   private _configOrigin: string | null = null;
   private _cpSubsystemConfig = new CPSubsystemConfig();
   private readonly _wanReplicationConfigs = new Map<string, WanReplicationConfig>();
+  private _securityConfig = new SecurityConfig();
 
   constructor(name?: string) {
     this._name = name ?? "helios";
@@ -131,6 +133,19 @@ export class HeliosConfig implements InstanceConfig {
 
   setCpSubsystemConfig(config: CPSubsystemConfig): this {
     this._cpSubsystemConfig = config;
+    return this;
+  }
+
+  /**
+   * Returns the security configuration.
+   * Security is opt-in: call `getSecurityConfig().setEnabled(true)` to activate permission enforcement.
+   */
+  getSecurityConfig(): SecurityConfig {
+    return this._securityConfig;
+  }
+
+  setSecurityConfig(config: SecurityConfig): this {
+    this._securityConfig = config;
     return this;
   }
 

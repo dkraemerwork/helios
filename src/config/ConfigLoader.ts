@@ -17,6 +17,7 @@
 import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
+import { SecurityConfig, PermissionConfig, PermissionType, TokenConfig } from '@zenystx/helios-core/config/SecurityConfig';
 import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { ReliableTopicConfig, TopicOverloadPolicy } from '@zenystx/helios-core/config/ReliableTopicConfig';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
@@ -181,6 +182,11 @@ export function parseRawConfig(raw: unknown, configOrigin?: string): HeliosConfi
         for (const entry of obj['wan-replication'] as unknown[]) {
             config.addWanReplicationConfig(parseWanReplicationConfig(entry));
         }
+    }
+
+    // --- security config ---
+    if ('security' in obj && obj['security'] !== null && typeof obj['security'] === 'object') {
+        config.setSecurityConfig(parseSecurityConfig(obj['security'] as Record<string, unknown>));
     }
 
     return config;
@@ -539,6 +545,98 @@ function parseWanBatchPublisherConfig(entry: unknown): WanBatchPublisherConfig {
         cfg.setSyncConfig(syncConfig);
     }
     return cfg;
+}
+
+// ── Security config parsing ───────────────────────────────────────────────────
+
+function parseSecurityConfig(raw: Record<string, unknown>): SecurityConfig {
+    const sc = new SecurityConfig();
+
+    if (typeof raw['enabled'] === 'boolean') {
+        sc.setEnabled(raw['enabled'] as boolean);
+    }
+    if (typeof raw['member-realm'] === 'string') {
+        sc.setMemberRealm(raw['member-realm'] as string);
+    }
+    if (typeof raw['memberRealm'] === 'string') {
+        sc.setMemberRealm(raw['memberRealm'] as string);
+    }
+    if (typeof raw['client-realm'] === 'string') {
+        sc.setClientRealm(raw['client-realm'] as string);
+    }
+    if (typeof raw['clientRealm'] === 'string') {
+        sc.setClientRealm(raw['clientRealm'] as string);
+    }
+
+    // --- client-permissions ---
+    const permKey = 'client-permissions' in raw ? 'client-permissions' : 'clientPermissions';
+    if (Array.isArray(raw[permKey])) {
+        for (const entry of raw[permKey] as unknown[]) {
+            sc.addClientPermissionConfig(parsePermissionConfig(entry));
+        }
+    }
+
+    // --- token-configs ---
+    const tokenKey = 'token-configs' in raw ? 'token-configs' : 'tokenConfigs';
+    if (Array.isArray(raw[tokenKey])) {
+        for (const entry of raw[tokenKey] as unknown[]) {
+            sc.addTokenConfig(parseTokenConfig(entry));
+        }
+    }
+
+    return sc;
+}
+
+function parsePermissionConfig(entry: unknown): PermissionConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each permission config entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    const pc = new PermissionConfig();
+
+    if (typeof e['type'] === 'string') {
+        const typeStr = (e['type'] as string).toUpperCase();
+        const type = PermissionType[typeStr as keyof typeof PermissionType];
+        if (type === undefined) {
+            throw new Error(`Invalid permission type: "${e['type']}". Valid values: ${Object.keys(PermissionType).join(', ')}`);
+        }
+        pc.setType(type);
+    }
+    if (typeof e['name'] === 'string') {
+        pc.setName(e['name'] as string);
+    }
+    if (typeof e['principal'] === 'string') {
+        pc.setPrincipal(e['principal'] as string);
+    }
+    if (Array.isArray(e['actions'])) {
+        pc.setActions((e['actions'] as unknown[]).filter((a) => typeof a === 'string') as string[]);
+    }
+    if (Array.isArray(e['endpoints'])) {
+        pc.setEndpoints((e['endpoints'] as unknown[]).filter((ep) => typeof ep === 'string') as string[]);
+    }
+
+    return pc;
+}
+
+function parseTokenConfig(entry: unknown): TokenConfig {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error('Each token config entry must be an object');
+    }
+    const e = entry as Record<string, unknown>;
+    if (typeof e['token'] !== 'string' || (e['token'] as string).trim() === '') {
+        throw new Error('Each token config entry must have a non-empty "token" field');
+    }
+    const tc = new TokenConfig();
+    tc.setToken(e['token'] as string);
+    if (typeof e['principal'] === 'string') {
+        tc.setPrincipal(e['principal'] as string);
+    }
+    if (Array.isArray(e['permissions'])) {
+        for (const perm of e['permissions'] as unknown[]) {
+            tc.addPermission(parsePermissionConfig(perm));
+        }
+    }
+    return tc;
 }
 
 // ── Backpressure config parsing ───────────────────────────────────────────

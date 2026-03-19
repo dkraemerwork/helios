@@ -147,6 +147,36 @@ export type { PasswordCredentials } from "@zenystx/helios-core/security/Password
 export { SimpleTokenCredentials } from "@zenystx/helios-core/security/SimpleTokenCredentials";
 export type { TokenCredentials } from "@zenystx/helios-core/security/TokenCredentials";
 export { UsernamePasswordCredentials } from "@zenystx/helios-core/security/UsernamePasswordCredentials";
+export { AccessControlException } from "@zenystx/helios-core/security/AccessControlException";
+export { SecurityContext } from "@zenystx/helios-core/security/impl/SecurityContext";
+export { SecurityInterceptor } from "@zenystx/helios-core/security/impl/SecurityInterceptor";
+export { TokenAuthenticator } from "@zenystx/helios-core/security/impl/TokenAuthenticator";
+export { AuthRateLimiter } from "@zenystx/helios-core/security/impl/AuthRateLimiter";
+export type { AuthRateLimiterOptions } from "@zenystx/helios-core/security/impl/AuthRateLimiter";
+// ── Permission classes ────────────────────────────────────────────────────────
+export { ActionConstants } from "@zenystx/helios-core/security/permission/ActionConstants";
+export { ClusterPermission } from "@zenystx/helios-core/security/permission/ClusterPermission";
+export { ClusterPermissionCollection } from "@zenystx/helios-core/security/permission/ClusterPermissionCollection";
+export { MapPermission } from "@zenystx/helios-core/security/permission/MapPermission";
+export { QueuePermission } from "@zenystx/helios-core/security/permission/QueuePermission";
+export { TopicPermission } from "@zenystx/helios-core/security/permission/TopicPermission";
+export { ListPermission } from "@zenystx/helios-core/security/permission/ListPermission";
+export { SetPermission } from "@zenystx/helios-core/security/permission/SetPermission";
+export { MultiMapPermission } from "@zenystx/helios-core/security/permission/MultiMapPermission";
+export { ReplicatedMapPermission } from "@zenystx/helios-core/security/permission/ReplicatedMapPermission";
+export { CachePermission } from "@zenystx/helios-core/security/permission/CachePermission";
+export { LockPermission } from "@zenystx/helios-core/security/permission/LockPermission";
+export { SemaphorePermission } from "@zenystx/helios-core/security/permission/SemaphorePermission";
+export { AtomicLongPermission } from "@zenystx/helios-core/security/permission/AtomicLongPermission";
+export { AtomicReferencePermission } from "@zenystx/helios-core/security/permission/AtomicReferencePermission";
+export { CountDownLatchPermission } from "@zenystx/helios-core/security/permission/CountDownLatchPermission";
+export { ExecutorServicePermission } from "@zenystx/helios-core/security/permission/ExecutorServicePermission";
+export { FlakeIdGeneratorPermission } from "@zenystx/helios-core/security/permission/FlakeIdGeneratorPermission";
+export { CardinalityEstimatorPermission } from "@zenystx/helios-core/security/permission/CardinalityEstimatorPermission";
+export { ScheduledExecutorPermission } from "@zenystx/helios-core/security/permission/ScheduledExecutorPermission";
+export { CPMapPermission } from "@zenystx/helios-core/security/permission/CPMapPermission";
+// ── Security Config ───────────────────────────────────────────────────────────
+export { SecurityConfig, PermissionConfig, PermissionType, TokenConfig } from "@zenystx/helios-core/config/SecurityConfig";
 
 // ── Near-cache ────────────────────────────────────────────────────────────────
 export type { NearCacheStats } from "@zenystx/helios-core/nearcache/NearCacheStats";

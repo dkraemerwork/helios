@@ -2515,6 +2515,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
           password: this._config.getNetworkConfig().getClientProtocolPassword() ?? '',
         }
         : null,
+      securityConfig: this._config.getSecurityConfig().isEnabled()
+        ? this._config.getSecurityConfig()
+        : null,
     });
 
     // Bun.listen() is synchronous — the port is bound as soon as start() runs.

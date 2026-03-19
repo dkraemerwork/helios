@@ -32,6 +32,11 @@ import { ClientSessionRegistry } from "@zenystx/helios-core/server/clientprotoco
 import { AuthGuard } from "@zenystx/helios-core/server/clientprotocol/AuthGuard";
 import type { TlsConfig } from "@zenystx/helios-core/server/clientprotocol/TlsConfig";
 import type { AuthAuditListener } from "@zenystx/helios-core/server/clientprotocol/AuthGuard";
+import type { SecurityConfig } from "@zenystx/helios-core/config/SecurityConfig";
+import { SecurityInterceptor } from "@zenystx/helios-core/security/impl/SecurityInterceptor";
+import { SecurityContext } from "@zenystx/helios-core/security/impl/SecurityContext";
+import { AuthRateLimiter } from "@zenystx/helios-core/security/impl/AuthRateLimiter";
+import { ErrorCodec } from "@zenystx/helios-core/server/clientprotocol/ErrorCodec";
 
 /** Options for ClientProtocolServer construction. */
 export interface ClientProtocolServerOptions {
@@ -55,6 +60,11 @@ export interface ClientProtocolServerOptions {
     tls?: TlsConfig;
     /** Optional audit listener for authentication events. */
     auditListener?: AuthAuditListener;
+    /**
+     * Optional security configuration.  When provided and enabled, per-operation
+     * permission checks are enforced on every client message.
+     */
+    securityConfig?: SecurityConfig | null;
 }
 
 // ClientAuthenticationCustom: hex 0x000200 = 512
@@ -95,6 +105,8 @@ export class ClientProtocolServer {
     private readonly _registry: ClientSessionRegistry;
     private readonly _dispatcher: ClientMessageDispatcher;
     private readonly _authGuard: AuthGuard;
+    private readonly _securityInterceptor: SecurityInterceptor | null;
+    private readonly _securityConfig: SecurityConfig | null;
 
     private _server: EventloopServer | null = null;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -136,13 +148,22 @@ export class ClientProtocolServer {
         this._auth = opts.auth ?? null;
         this._tls = opts.tls;
 
+        this._securityConfig = opts.securityConfig ?? null;
+        const rateLimiter = new AuthRateLimiter();
+
         this._registry = new ClientSessionRegistry();
         this._dispatcher = new ClientMessageDispatcher();
         this._authGuard = new AuthGuard({
             clusterName: opts.clusterName,
             credentials: opts.auth ?? null,
             auditListener: opts.auditListener,
+            securityConfig: this._securityConfig,
+            rateLimiter,
         });
+
+        this._securityInterceptor = (this._securityConfig !== null && this._securityConfig.isEnabled())
+            ? new SecurityInterceptor(this._securityConfig)
+            : null;
 
         // Register built-in handlers
         this._registerAuthHandler();
@@ -331,6 +352,21 @@ export class ClientProtocolServer {
     ): Promise<boolean> {
         session.recordActivity();
 
+        // ── Per-operation security check ────────────────────────────────────
+        if (this._securityInterceptor !== null && session.isAuthenticated()) {
+            const ctx = session.getSecurityContext();
+            const msgType = msg.getMessageType();
+            const requiredPerm = this._securityInterceptor.getRequiredPermission(msgType);
+            if (requiredPerm !== null && ctx !== null) {
+                if (!ctx.hasPermission(requiredPerm)) {
+                    const errResp = ErrorCodec.encodeAuthRequired();
+                    errResp.setCorrelationId(msg.getCorrelationId());
+                    session.sendMessage(errResp);
+                    return true; // keep session alive, just deny this op
+                }
+            }
+        }
+
         const { response, closeAfterSend, closeImmediately } =
             await this._authGuard.guardedDispatch(msg, session, this._dispatcher, this._registry);
 
@@ -416,6 +452,12 @@ export class ClientProtocolServer {
                     req.clientName,
                     req.clientHazelcastVersion,
                 );
+
+                // Attach SecurityContext — builds granted permissions from SecurityConfig
+                const principal = req.username ?? 'anonymous';
+                const ctx = this._authGuard.buildSecurityContext(principal, session.getClientName() ?? '');
+                session.setSecurityContext(ctx);
+
                 this._registry.register(session);
                 this._authGuard.auditAuthSuccess(session);
 
@@ -435,8 +477,9 @@ export class ClientProtocolServer {
         );
 
         // ── Custom authentication (0x000200) ─────────────────────────────────
-        // Same response shape as standard auth.  Helios does not inspect the
-        // custom credentials byte-array — it accepts all connections.
+        // Validates cluster name.  When security is enabled, attempts token auth
+        // using the custom credentials byte-array.  Falls back to anonymous
+        // SecurityContext when security is disabled.
         this._dispatcher.allowBeforeAuthentication(CLIENT_AUTH_CUSTOM_REQUEST_TYPE);
         this._dispatcher.register(
             CLIENT_AUTH_CUSTOM_REQUEST_TYPE,
@@ -447,8 +490,7 @@ export class ClientProtocolServer {
 
                 const req = _decodeCustomAuthRequest(msg);
 
-                // Only the cluster name is validated — custom credentials are
-                // accepted unconditionally (Helios doesn't enforce auth).
+                // Validate cluster name first
                 const credCheck = this._authGuard.validateCredentials({
                     clusterName: req.clusterName,
                     username: null,
@@ -468,6 +510,28 @@ export class ClientProtocolServer {
                     req.clientName,
                     req.clientHazelcastVersion,
                 );
+
+                // Token auth: if security enabled, validate the custom credentials byte-array as a token.
+                // If token auth fails and security is enabled, reject the connection.
+                const tokenBytes = req.credentialsBytes;
+                let securityCtx: SecurityContext | null = null;
+                if (tokenBytes.length > 0) {
+                    securityCtx = this._authGuard.validateTokenCredentials(
+                        tokenBytes,
+                        session.getClientName() ?? '',
+                    );
+                    if (securityCtx === null && this._securityConfig !== null && this._securityConfig.isEnabled()) {
+                        // Token not found — reject connection when security is enforced
+                        this._authGuard.auditAuthFailure(session.getSessionId(), 'auth_failure');
+                        return this._encodeAuthenticationFailureResponse();
+                    }
+                }
+
+                // Fall back to anonymous context if security is disabled or no token bytes
+                session.setSecurityContext(
+                    securityCtx ?? this._authGuard.buildSecurityContext('anonymous', session.getClientName() ?? ''),
+                );
+
                 this._registry.register(session);
                 this._authGuard.auditAuthSuccess(session);
 
@@ -590,6 +654,7 @@ function _decodeCustomAuthRequest(msg: ClientMessage): {
     clientHazelcastVersion: string;
     clientName: string;
     labels: string[];
+    credentialsBytes: Buffer;
 } {
     const iter = msg.forwardFrameIterator();
     const initialFrame = iter.next();
@@ -598,12 +663,12 @@ function _decodeCustomAuthRequest(msg: ClientMessage): {
     const serializationVersion = initialFrame.content.readUInt8(CUSTOM_AUTH_SERIALIZATION_VERSION_OFFSET);
 
     const clusterName = StringCodec.decode(iter);
-    // credentials byte-array — consumed but not validated
-    ByteArrayCodec.decode(iter);
+    // credentials byte-array — decoded and returned for token authentication
+    const credentialsBytes = Buffer.from(ByteArrayCodec.decode(iter));
     const clientType = StringCodec.decode(iter);
     const clientHazelcastVersion = StringCodec.decode(iter);
     const clientName = StringCodec.decode(iter);
     const labels = ListMultiFrameCodec.decode(iter, (i) => StringCodec.decode(i));
 
-    return { clusterName, uuid, serializationVersion, clientType, clientHazelcastVersion, clientName, labels };
+    return { clusterName, uuid, serializationVersion, clientType, clientHazelcastVersion, clientName, labels, credentialsBytes };
 }
