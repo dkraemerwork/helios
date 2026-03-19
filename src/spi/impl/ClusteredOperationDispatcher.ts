@@ -25,11 +25,11 @@
 
 import type { Address } from '@zenystx/helios-core/cluster/Address.js';
 import type { Member } from '@zenystx/helios-core/cluster/Member.js';
-import { WrongTargetException, TargetNotMemberException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
+import { TargetNotMemberException, WrongTargetException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
 import { InvocationFuture as InvocationFutureImpl } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation.js';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Operation types ───────────────────────────────────────────────────────────
 

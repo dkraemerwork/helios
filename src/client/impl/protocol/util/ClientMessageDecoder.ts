@@ -4,10 +4,10 @@
  * InboundHandler<ByteBuffer, Consumer<ClientMessage>>
  * Handles fragmentation reassembly using a Map<bigint, ClientMessage>.
  */
-import { ClientMessage } from '../ClientMessage';
-import { ClientMessageReader } from '../ClientMessageReader';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HandlerStatus } from '@zenystx/helios-core/internal/networking/HandlerStatus';
+import { ClientMessage } from '../ClientMessage';
+import { ClientMessageReader } from '../ClientMessageReader';
 
 export class ClientMessageDecoder {
     private readonly _reader: ClientMessageReader = new ClientMessageReader();

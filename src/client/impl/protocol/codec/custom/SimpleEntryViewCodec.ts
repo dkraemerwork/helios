@@ -1,11 +1,11 @@
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 import { ClientMessage } from '../../ClientMessage.js';
 import { DataCodec } from '../builtin/DataCodec.js';
 import {
     FixedSizeTypesCodec,
     LONG_SIZE_IN_BYTES,
 } from '../builtin/FixedSizeTypesCodec.js';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
-import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 
 const COST_FIELD_OFFSET = 0;
 const CREATION_TIME_FIELD_OFFSET = COST_FIELD_OFFSET + LONG_SIZE_IN_BYTES;

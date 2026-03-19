@@ -7,8 +7,8 @@
  */
 import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import { IdentityProjection } from '@zenystx/helios-core/projection/impl/IdentityProjection';
-import { SingleAttributeProjection } from '@zenystx/helios-core/projection/impl/SingleAttributeProjection';
 import { MultiAttributeProjection } from '@zenystx/helios-core/projection/impl/MultiAttributeProjection';
+import { SingleAttributeProjection } from '@zenystx/helios-core/projection/impl/SingleAttributeProjection';
 
 export class Projections {
     private constructor() {

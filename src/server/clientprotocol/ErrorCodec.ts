@@ -30,9 +30,9 @@
  */
 
 import { ClientMessage, ClientMessageFrame } from '../../client/impl/protocol/ClientMessage.js';
+import { CodecUtil } from '../../client/impl/protocol/codec/builtin/CodecUtil.js';
 import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from '../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '../../client/impl/protocol/codec/builtin/StringCodec.js';
-import { CodecUtil } from '../../client/impl/protocol/codec/builtin/CodecUtil.js';
 
 // ── Error codes (Hazelcast 5.x protocol error code enum) ─────────────────────
 

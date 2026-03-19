@@ -26,12 +26,12 @@
 
 import { ClientMessage, ClientMessageFrame } from '../../../client/impl/protocol/ClientMessage.js';
 import {
+    BOOLEAN_SIZE_IN_BYTES,
+    BYTE_SIZE_IN_BYTES,
     FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
-    BOOLEAN_SIZE_IN_BYTES,
-    BYTE_SIZE_IN_BYTES,
 } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
 // ── Message type constants ────────────────────────────────────────────────────

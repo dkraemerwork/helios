@@ -1,8 +1,8 @@
+import { LatencyTracker } from '../metrics/LatencyTracker.js';
+import { processorMetricStore } from '../metrics/Metrics.js';
+import { WatermarkTracker } from '../metrics/WatermarkTracker.js';
 import type { AsyncChannel } from './AsyncChannel.js';
 import type { ProcessorItem } from './ProcessorItem.js';
-import { LatencyTracker } from '../metrics/LatencyTracker.js';
-import { WatermarkTracker } from '../metrics/WatermarkTracker.js';
-import { processorMetricStore } from '../metrics/Metrics.js';
 
 const ABORTED = Symbol('aborted');
 

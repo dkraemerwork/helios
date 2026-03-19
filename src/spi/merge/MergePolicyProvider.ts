@@ -2,7 +2,6 @@
  * Registry and factory for split-brain merge policies.
  * Port of {@code com.hazelcast.spi.merge.SplitBrainMergePolicyProvider}.
  */
-import type { SplitBrainMergePolicy } from './SplitBrainMergePolicy';
 import { DiscardMergePolicy } from './DiscardMergePolicy';
 import { ExpirationTimeMergePolicy } from './ExpirationTimeMergePolicy';
 import { HigherHitsMergePolicy } from './HigherHitsMergePolicy';
@@ -11,6 +10,7 @@ import { LatestAccessMergePolicy } from './LatestAccessMergePolicy';
 import { LatestUpdateMergePolicy } from './LatestUpdateMergePolicy';
 import { PassThroughMergePolicy } from './PassThroughMergePolicy';
 import { PutIfAbsentMergePolicy } from './PutIfAbsentMergePolicy';
+import type { SplitBrainMergePolicy } from './SplitBrainMergePolicy';
 
 const BUILTIN_POLICIES: ReadonlyMap<string, () => SplitBrainMergePolicy> = new Map([
     ['PassThroughMergePolicy', () => new PassThroughMergePolicy()],

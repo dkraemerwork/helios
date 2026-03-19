@@ -11,11 +11,6 @@
  *   [data-start-pos:int]      (== position of first field data)
  *   field payloads in declaration order
  */
-import { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
-import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
-import { HazelcastSerializationError } from '@zenystx/helios-core/internal/serialization/impl/HazelcastSerializationError';
-import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
-import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
 import type {
     BigDecimal,
     LocalDate,
@@ -23,6 +18,11 @@ import type {
     LocalTime,
     OffsetDateTime,
 } from '@zenystx/helios-core/internal/serialization/GenericRecord';
+import { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
+import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
+import { HazelcastSerializationError } from '@zenystx/helios-core/internal/serialization/impl/HazelcastSerializationError';
+import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
+import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
 
 // ── Field types ───────────────────────────────────────────────────────────────
 

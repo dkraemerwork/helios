@@ -1,6 +1,6 @@
+import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 import type { AsyncChannel } from './AsyncChannel.js';
 import type { ProcessorItem } from './ProcessorItem.js';
-import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 
 const ABORTED = Symbol('aborted');
 

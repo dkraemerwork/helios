@@ -3,8 +3,8 @@
  *
  * Wire format: BEGIN_FRAME + initial frame (3 bytes: major, minor, patch) + END_FRAME
  */
-import { ClientMessage } from '../../ClientMessage';
 import { MemberVersion } from '@zenystx/helios-core/version/MemberVersion';
+import { ClientMessage } from '../../ClientMessage';
 import { CodecUtil } from '../builtin/CodecUtil';
 
 const INITIAL_FRAME_SIZE = 3; // major(1) + minor(1) + patch(1)

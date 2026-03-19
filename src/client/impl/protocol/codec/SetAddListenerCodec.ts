@@ -1,3 +1,4 @@
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import { ClientMessage } from '../ClientMessage.js';
 import { DataCodec } from './builtin/DataCodec.js';
 import {
@@ -5,7 +6,6 @@ import {
     INT_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
 } from './builtin/FixedSizeTypesCodec.js';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import { StringCodec } from './builtin/StringCodec.js';
 
 const REQUEST_INCLUDE_VALUE_FIELD_OFFSET = ClientMessage.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES;

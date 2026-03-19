@@ -4,11 +4,11 @@
  * Projection that extracts the value of a single attribute path from an Extractable input.
  * The attributePath does not support the [any] operator.
  */
-import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import type { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import type { IdentifiedDataSerializable } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
 import { PROJECTION_DS_FACTORY_ID, SINGLE_ATTRIBUTE } from '@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook';
+import type { Projection } from '@zenystx/helios-core/projection/Projection';
 
 /** Interface for objects that support attribute-path extraction. */
 interface Extractable {

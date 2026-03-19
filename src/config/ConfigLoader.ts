@@ -21,26 +21,26 @@
  *   HAZELCAST_PORT                — override the member port
  */
 import type { HeliosBlitzRuntimeConfig } from '@zenystx/helios-core/config/BlitzRuntimeConfig';
+import { DiscoveryStrategyConfig } from '@zenystx/helios-core/config/DiscoveryStrategyConfig';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import { SecurityConfig, PermissionConfig, PermissionType, TokenConfig } from '@zenystx/helios-core/config/SecurityConfig';
 import { InitialLoadMode, MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { ReliableTopicConfig, TopicOverloadPolicy } from '@zenystx/helios-core/config/ReliableTopicConfig';
 import { RingbufferConfig } from '@zenystx/helios-core/config/RingbufferConfig';
+import { PermissionConfig, PermissionType, SecurityConfig, TokenConfig } from '@zenystx/helios-core/config/SecurityConfig';
 import { TopicConfig } from '@zenystx/helios-core/config/TopicConfig';
-import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 import {
     WanAcknowledgeType,
     WanBatchPublisherConfig,
+    WanConsistencyCheckStrategy,
     WanConsumerConfig,
     WanQueueFullBehavior,
     WanReplicationConfig,
     WanSyncConfig,
-    WanConsistencyCheckStrategy,
 } from '@zenystx/helios-core/config/WanReplicationConfig';
 import { WanReplicationRef } from '@zenystx/helios-core/config/WanReplicationRef';
 import { DiscoveryStrategyConfig as SpiDiscoveryStrategyConfig } from '@zenystx/helios-core/discovery/spi/DiscoverySPI';
-import { DiscoveryStrategyConfig } from '@zenystx/helios-core/config/DiscoveryStrategyConfig';
+import { RestEndpointGroup } from '@zenystx/helios-core/rest/RestEndpointGroup';
 import { XmlConfigLoader } from './XmlConfigLoader';
 
 /**

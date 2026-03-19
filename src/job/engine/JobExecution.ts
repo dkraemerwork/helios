@@ -1,16 +1,16 @@
-import type { ExecutionPlan } from '../ExecutionPlan.js';
-import type { JobExecutionTimestamps, VertexMetrics } from '../metrics/BlitzJobMetrics.js';
-import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 import type { Sink } from '@zenystx/helios-blitz/sink/Sink.js';
+import type { Source } from '@zenystx/helios-blitz/source/Source.js';
+import type { ExecutionPlan } from '../ExecutionPlan.js';
 import type { ProcessingGuarantee } from '../JobConfig.js';
-import { AsyncChannel } from './AsyncChannel.js';
-import type { ProcessorItem } from './ProcessorItem.js';
-import { SourceProcessor } from './SourceProcessor.js';
-import { SinkProcessor } from './SinkProcessor.js';
-import { OperatorProcessor } from './OperatorProcessor.js';
-import type { DistributedEdgeSender } from './DistributedEdgeSender.js';
-import type { DistributedEdgeReceiver } from './DistributedEdgeReceiver.js';
+import type { JobExecutionTimestamps, VertexMetrics } from '../metrics/BlitzJobMetrics.js';
 import { tagsForVertex } from '../metrics/MetricTags.js';
+import { AsyncChannel } from './AsyncChannel.js';
+import type { DistributedEdgeReceiver } from './DistributedEdgeReceiver.js';
+import type { DistributedEdgeSender } from './DistributedEdgeSender.js';
+import { OperatorProcessor } from './OperatorProcessor.js';
+import type { ProcessorItem } from './ProcessorItem.js';
+import { SinkProcessor } from './SinkProcessor.js';
+import { SourceProcessor } from './SourceProcessor.js';
 
 export interface OperatorFnEntry {
   readonly fn: (value: unknown) => unknown;

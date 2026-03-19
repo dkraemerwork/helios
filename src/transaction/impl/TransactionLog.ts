@@ -8,8 +8,8 @@
 import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
-import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 import type { TargetAwareTransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TargetAwareTransactionLogRecord';
+import type { TransactionBackupRecord } from '@zenystx/helios-core/transaction/impl/TransactionBackupRecord';
 import type { TransactionLogRecord } from '@zenystx/helios-core/transaction/impl/TransactionLogRecord';
 
 export class TransactionLog {

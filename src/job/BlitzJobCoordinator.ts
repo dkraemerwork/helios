@@ -1,18 +1,18 @@
 import type { IMap } from '../map/IMap.js';
 import type { ITopic } from '../topic/ITopic.js';
-import type { JobCommand } from './JobCommand.js';
-import type { PipelineDescriptor } from './PipelineDescriptor.js';
-import type { ResolvedJobConfig } from './JobConfig.js';
-import type { BlitzJobExecutor } from './BlitzJobExecutor.js';
 import type { Message } from '../topic/Message.js';
-import type { BlitzJobMetrics, JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
+import { BlitzJob, type JobCoordinator } from './BlitzJob.js';
+import type { BlitzJobExecutor } from './BlitzJobExecutor.js';
+import { computeExecutionPlan } from './ExecutionPlan.js';
+import type { JobCommand } from './JobCommand.js';
+import type { ResolvedJobConfig } from './JobConfig.js';
 import { ProcessingGuarantee } from './JobConfig.js';
 import { JobRecord } from './JobRecord.js';
 import { JobStatus, isTerminalStatus } from './JobStatus.js';
-import { BlitzJob, type JobCoordinator } from './BlitzJob.js';
-import { computeExecutionPlan } from './ExecutionPlan.js';
-import { SnapshotCoordinator } from './snapshot/SnapshotCoordinator.js';
+import type { BlitzJobMetrics, JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
 import { MetricsCollector } from './metrics/MetricsCollector.js';
+import type { PipelineDescriptor } from './PipelineDescriptor.js';
+import { SnapshotCoordinator } from './snapshot/SnapshotCoordinator.js';
 
 export interface AuthorityTuple {
   masterMemberId: string;

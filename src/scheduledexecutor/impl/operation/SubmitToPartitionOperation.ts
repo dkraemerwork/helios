@@ -7,12 +7,12 @@
  * (partition-targeted variant)
  */
 
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import { ScheduledTaskHandler } from '@zenystx/helios-core/scheduledexecutor/ScheduledTaskHandler';
 import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
-import { ScheduleTaskBackupOperation } from './ScheduleTaskBackupOperation.js';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { ScheduledExecutorContainerService } from '../ScheduledExecutorContainerService.js';
 import type { TaskDefinition } from '../TaskDefinition.js';
+import { ScheduleTaskBackupOperation } from './ScheduleTaskBackupOperation.js';
 
 export class SubmitToPartitionOperation extends Operation implements BackupAwareOperation {
     private readonly _executorName: string;

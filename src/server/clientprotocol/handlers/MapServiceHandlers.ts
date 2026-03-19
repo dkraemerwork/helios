@@ -70,26 +70,26 @@
  * Port of Hazelcast Map message tasks.
  */
 
-import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
-import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import { MapPutCodec } from '../../../client/impl/protocol/codec/MapPutCodec.js';
-import { MapGetCodec } from '../../../client/impl/protocol/codec/MapGetCodec.js';
-import { MapRemoveCodec } from '../../../client/impl/protocol/codec/MapRemoveCodec.js';
-import { MapSizeCodec } from '../../../client/impl/protocol/codec/MapSizeCodec.js';
-import { MapContainsKeyCodec } from '../../../client/impl/protocol/codec/MapContainsKeyCodec.js';
-import { MapClearCodec } from '../../../client/impl/protocol/codec/MapClearCodec.js';
-import { MapDeleteCodec } from '../../../client/impl/protocol/codec/MapDeleteCodec.js';
-import { MapSetCodec } from '../../../client/impl/protocol/codec/MapSetCodec.js';
-import { MapAddEntryListenerCodec } from '../../../client/impl/protocol/codec/MapAddEntryListenerCodec.js';
-import { MapGetEntryViewCodec } from '../../../client/impl/protocol/codec/MapGetEntryViewCodec.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClusteredOperationDispatcher } from '@zenystx/helios-core/spi/impl/ClusteredOperationDispatcher.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, FixedSizeTypesCodec } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
+import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
 import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
-import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
+import { BOOLEAN_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { ListIntegerCodec } from '../../../client/impl/protocol/codec/builtin/ListIntegerCodec.js';
+import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import { MapAddEntryListenerCodec } from '../../../client/impl/protocol/codec/MapAddEntryListenerCodec.js';
+import { MapClearCodec } from '../../../client/impl/protocol/codec/MapClearCodec.js';
+import { MapContainsKeyCodec } from '../../../client/impl/protocol/codec/MapContainsKeyCodec.js';
+import { MapDeleteCodec } from '../../../client/impl/protocol/codec/MapDeleteCodec.js';
+import { MapGetCodec } from '../../../client/impl/protocol/codec/MapGetCodec.js';
+import { MapGetEntryViewCodec } from '../../../client/impl/protocol/codec/MapGetEntryViewCodec.js';
+import { MapPutCodec } from '../../../client/impl/protocol/codec/MapPutCodec.js';
+import { MapRemoveCodec } from '../../../client/impl/protocol/codec/MapRemoveCodec.js';
+import { MapSetCodec } from '../../../client/impl/protocol/codec/MapSetCodec.js';
+import { MapSizeCodec } from '../../../client/impl/protocol/codec/MapSizeCodec.js';
 import type { MapServiceOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
@@ -111,7 +111,6 @@ const MAP_GET_ALL_RESPONSE_TYPE   = 0x012301;
 const MAP_PUT_ALL_REQUEST_TYPE    = 0x012c00;
 const MAP_PUT_ALL_RESPONSE_TYPE   = 0x012c01;
 const MAP_GET_ENTRY_VIEW_REQUEST_TYPE  = 0x011d00;
-const MAP_GET_ENTRY_VIEW_RESPONSE_TYPE = 0x011d01;
 const MAP_EVICT_REQUEST_TYPE      = 0x011e00;
 const MAP_EVICT_RESPONSE_TYPE     = 0x011e01;
 const MAP_EVICT_ALL_REQUEST_TYPE  = 0x011f00;
@@ -592,7 +591,6 @@ export function registerMapServiceHandlers(opts: MapServiceHandlersOptions): voi
         const initialFrame = iter.next();
         const threadId = initialFrame.content.readBigInt64LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
         const ttl = initialFrame.content.readBigInt64LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
-        const maxIdle = initialFrame.content.readBigInt64LE(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
         const name = StringCodec.decode(iter);
         const key = DataCodec.decode(iter);
         const value = DataCodec.decode(iter);

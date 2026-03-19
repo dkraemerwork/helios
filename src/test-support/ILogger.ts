@@ -10,8 +10,8 @@
  * the simple console.* methods.
  */
 
-export type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 export { LogLevel } from '@zenystx/helios-core/logging/Logger.js';
+export type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 import { LogLevel } from '@zenystx/helios-core/logging/Logger.js';

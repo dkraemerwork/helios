@@ -9,8 +9,8 @@
 import { Helios } from '@zenystx/helios-core/Helios';
 import { loadConfig } from '@zenystx/helios-core/config/ConfigLoader';
 import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
+import type { ExtensionContext, ExtensionLogger, HeliosExtension } from '@zenystx/helios-core/extension/HeliosExtension';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
-import type { HeliosExtension, ExtensionContext, ExtensionLogger } from '@zenystx/helios-core/extension/HeliosExtension';
 
 export type ServerState = 'stopped' | 'starting' | 'running' | 'stopping';
 

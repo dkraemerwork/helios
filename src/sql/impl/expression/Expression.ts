@@ -4,8 +4,8 @@
  * Each Expression evaluates against a row context — the full row record plus
  * the raw key and value (for __key / this access).
  */
-import type { SqlColumnType } from '@zenystx/helios-core/sql/impl/SqlRowMetadata.js';
 import type { SqlRow } from '@zenystx/helios-core/sql/impl/SqlResult.js';
+import type { SqlColumnType } from '@zenystx/helios-core/sql/impl/SqlRowMetadata.js';
 import { sqlTypeSystem } from '@zenystx/helios-core/sql/impl/SqlTypeSystem.js';
 
 // ── Base interface ──────────────────────────────────────────────────────────

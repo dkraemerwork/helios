@@ -15,13 +15,6 @@
 import { CacheUtil } from "@zenystx/helios-core/cache/CacheUtil";
 import { DistributedCacheService } from "@zenystx/helios-core/cache/impl/DistributedCacheService";
 import { DistributedCardinalityEstimatorService } from "@zenystx/helios-core/cardinality/impl/DistributedCardinalityEstimatorService";
-import { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
-import { ListAddListenerCodec } from "../../client/impl/protocol/codec/ListAddListenerCodec.js";
-import { MapAddEntryListenerCodec } from "../../client/impl/protocol/codec/MapAddEntryListenerCodec";
-import { MultiMapAddEntryListenerCodec } from "../../client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
-import { QueueAddListenerCodec } from "../../client/impl/protocol/codec/QueueAddListenerCodec.js";
-import { SetAddListenerCodec } from "../../client/impl/protocol/codec/SetAddListenerCodec.js";
-import { TopicAddMessageListenerCodec } from "../../client/impl/protocol/codec/TopicAddMessageListenerCodec";
 import { Address } from "@zenystx/helios-core/cluster/Address";
 import type { Cluster } from "@zenystx/helios-core/cluster/Cluster";
 import type { Member } from "@zenystx/helios-core/cluster/Member";
@@ -30,7 +23,6 @@ import { LocalCluster } from "@zenystx/helios-core/cluster/impl/LocalCluster";
 import { MulticastJoiner } from "@zenystx/helios-core/cluster/multicast/MulticastJoiner";
 import { MulticastService } from "@zenystx/helios-core/cluster/multicast/MulticastService";
 import { decodeData, encodeData } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
-import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
 import type { IList } from "@zenystx/helios-core/collection/IList";
 import type { IQueue } from "@zenystx/helios-core/collection/IQueue";
@@ -47,33 +39,36 @@ import { DistributedSetService } from "@zenystx/helios-core/collection/impl/set/
 import { SetProxyImpl } from "@zenystx/helios-core/collection/impl/set/SetProxyImpl";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig";
 import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
+import { IndexConfig as HeliosIndexConfig } from "@zenystx/helios-core/config/IndexConfig";
 import type { MapConfig } from "@zenystx/helios-core/config/MapConfig";
+import { SplitBrainProtectionOn } from "@zenystx/helios-core/config/SplitBrainProtectionConfig";
 import type { DistributedObject } from "@zenystx/helios-core/core/DistributedObject";
 import type { HeliosInstance } from "@zenystx/helios-core/core/HeliosInstance";
 import { AtomicLongService } from "@zenystx/helios-core/cp/impl/AtomicLongService";
 import { AtomicReferenceService } from "@zenystx/helios-core/cp/impl/AtomicReferenceService";
-import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
 import { CPMapService } from "@zenystx/helios-core/cp/impl/CPMapService";
+import { CountDownLatchService } from "@zenystx/helios-core/cp/impl/CountDownLatchService";
 import { CpSubsystemService } from "@zenystx/helios-core/cp/impl/CpSubsystemService";
 import { FencedLockService } from "@zenystx/helios-core/cp/impl/FencedLockService";
 import { SemaphoreService } from "@zenystx/helios-core/cp/impl/SemaphoreService";
 import { PNCounterService } from "@zenystx/helios-core/crdt/impl/PNCounterService";
 import {
-    ConnectionMetricsPlugin,
-    DiagnosticsService,
-    OperationMetricsPlugin,
-    SystemMetricsPlugin,
+  ConnectionMetricsPlugin,
+  DiagnosticsService,
+  OperationMetricsPlugin,
+  SystemMetricsPlugin,
 } from "@zenystx/helios-core/diagnostics/DiagnosticsService";
 import { SlowOperationDetector } from "@zenystx/helios-core/diagnostics/SlowOperationDetector";
 import type { StoreLatencyMetrics } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
 import { StoreLatencyTracker } from "@zenystx/helios-core/diagnostics/StoreLatencyTracker";
 import type { SystemEvent } from "@zenystx/helios-core/diagnostics/SystemEventLog";
 import { SystemEventLog } from "@zenystx/helios-core/diagnostics/SystemEventLog";
+import { DurableExecutorService } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorService";
+import { DurableExecutorServiceProxy } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorServiceProxy";
 import { ExecutorRejectedExecutionException } from "@zenystx/helios-core/executor/ExecutorExceptions";
 import type { ExecutorOperationResult } from "@zenystx/helios-core/executor/ExecutorOperationResult";
 import type { IExecutorService } from "@zenystx/helios-core/executor/IExecutorService";
 import type { TaskCallable } from "@zenystx/helios-core/executor/TaskCallable";
-import { CancellationOperation } from "@zenystx/helios-core/executor/impl/CancellationOperation";
 import { ExecuteCallableOperation } from "@zenystx/helios-core/executor/impl/ExecuteCallableOperation";
 import { ExecutorContainerService } from "@zenystx/helios-core/executor/impl/ExecutorContainerService";
 import { ExecutorServiceProxy } from "@zenystx/helios-core/executor/impl/ExecutorServiceProxy";
@@ -91,12 +86,11 @@ import { BlitzReadinessState, HeliosBlitzLifecycleManager } from "@zenystx/helio
 import { HeliosLifecycleService } from "@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService";
 import type { LifecycleService } from "@zenystx/helios-core/instance/lifecycle/LifecycleService";
 import { NodeState } from "@zenystx/helios-core/instance/lifecycle/NodeState";
+import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { SplitBrainDetector } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainDetector";
 import { SplitBrainMergeHandler } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler";
-import { SplitBrainProtectionServiceImpl } from "@zenystx/helios-core/splitbrainprotection/impl/SplitBrainProtectionServiceImpl";
-import { SplitBrainProtectionOn } from "@zenystx/helios-core/config/SplitBrainProtectionConfig";
-import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
+import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
 import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
 import { BunTaskScheduler } from "@zenystx/helios-core/internal/nearcache/impl/TaskScheduler";
@@ -108,15 +102,17 @@ import { chunkNamespaceStates } from "@zenystx/helios-core/internal/partition/op
 import { PartitionReplicaSyncChunkAssembler, PartitionReplicaSyncResponse } from "@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import { HazelcastSerializationService } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService';
+import { HeapData } from "@zenystx/helios-core/internal/serialization/impl/HeapData";
 import { SerializationServiceImpl } from "@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl";
+import { RecentStringSet } from "@zenystx/helios-core/internal/util/RecentStringSet";
 import { blitzJobMetricsToJSON } from "@zenystx/helios-core/job/metrics/BlitzJobMetrics";
 import type { EntryProcessor } from "@zenystx/helios-core/map/EntryProcessor";
 import type { IMap } from "@zenystx/helios-core/map/IMap";
 import { MapContainerService } from "@zenystx/helios-core/map/impl/MapContainerService";
+import { MapInterceptorSupport } from "@zenystx/helios-core/map/impl/MapInterceptorSupport";
 import { MapProxy } from "@zenystx/helios-core/map/impl/MapProxy";
 import { MapService } from "@zenystx/helios-core/map/impl/MapService";
 import { NearCachedIMapWrapper } from "@zenystx/helios-core/map/impl/nearcache/NearCachedIMapWrapper";
-import { MapInterceptorSupport } from "@zenystx/helios-core/map/impl/MapInterceptorSupport";
 import { MapEntryProcessorEngine } from "@zenystx/helios-core/map/impl/query/MapEntryProcessorEngine";
 import { globalMetrics } from "@zenystx/helios-core/monitor/HazelcastMetrics";
 import { HealthMonitor } from "@zenystx/helios-core/monitor/HealthMonitor";
@@ -129,7 +125,13 @@ import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
 import { DistributedMultiMapService } from "@zenystx/helios-core/multimap/impl/DistributedMultiMapService";
 import { MultiMapImpl } from "@zenystx/helios-core/multimap/impl/MultiMapImpl";
 import { MultiMapProxyImpl } from "@zenystx/helios-core/multimap/impl/MultiMapProxyImpl";
+import { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
+import { ProjectionDataSerializerHook } from "@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook";
 import type { Predicate } from "@zenystx/helios-core/query/Predicate";
+import { IndexType as HeliosIndexType } from "@zenystx/helios-core/query/impl/Index";
+import { MultiPartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl";
+import { PartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl";
+import { PredicateDataSerializerHook } from "@zenystx/helios-core/query/impl/predicates/PredicateDataSerializerHook";
 import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
 import { DistributedReplicatedMapService } from "@zenystx/helios-core/replicatedmap/impl/DistributedReplicatedMapService";
 import { ReplicatedMapImpl } from "@zenystx/helios-core/replicatedmap/impl/ReplicatedMapImpl";
@@ -150,6 +152,9 @@ import { HealthCheckHandler } from "@zenystx/helios-core/rest/handler/HealthChec
 import { MetricsHandler } from "@zenystx/helios-core/rest/handler/MetricsHandler";
 import type { MonitorJobSnapshot, MonitorJobsProvider } from "@zenystx/helios-core/rest/handler/MonitorHandler";
 import { MonitorHandler } from "@zenystx/helios-core/rest/handler/MonitorHandler";
+import type { StatsHandlerState } from "@zenystx/helios-core/rest/handler/StatsHandler";
+import { StatsHandler } from "@zenystx/helios-core/rest/handler/StatsHandler";
+import { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
 import { DistributedRingbufferService } from "@zenystx/helios-core/ringbuffer/impl/DistributedRingbufferService";
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 import { RingbufferStoreWrapper } from "@zenystx/helios-core/ringbuffer/impl/RingbufferStoreWrapper";
@@ -160,7 +165,6 @@ import { ClientProtocolServer } from "@zenystx/helios-core/server/clientprotocol
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
 import { TopologyPublisher } from "@zenystx/helios-core/server/clientprotocol/TopologyPublisher";
 import { registerAllHandlers } from "@zenystx/helios-core/server/clientprotocol/handlers/registerAllHandlers";
-import { createScheduledExecutorMessageHandlers } from "../../server/clientprotocol/ScheduledExecutorMessageHandlers";
 import type { PartitionService } from "@zenystx/helios-core/spi/PartitionService";
 import { MutationTrigger } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent";
 import { NearCacheInvalidationManager } from "@zenystx/helios-core/spi/impl/NearCacheInvalidationManager";
@@ -174,6 +178,7 @@ import {
 } from "@zenystx/helios-core/spi/impl/operationservice/OperationWireCodec";
 import { RetryableException } from "@zenystx/helios-core/spi/impl/operationservice/RetryableException";
 import { OperationServiceImpl } from "@zenystx/helios-core/spi/impl/operationservice/impl/OperationServiceImpl";
+import { SplitBrainProtectionServiceImpl } from "@zenystx/helios-core/splitbrainprotection/impl/SplitBrainProtectionServiceImpl";
 import { SqlResult } from "@zenystx/helios-core/sql/impl/SqlResult";
 import type { SqlColumnType } from "@zenystx/helios-core/sql/impl/SqlRowMetadata";
 import { SqlExecutionError, SqlService, SqlTimeoutError } from "@zenystx/helios-core/sql/impl/SqlService";
@@ -183,16 +188,12 @@ import type { LocalTopicStats } from "@zenystx/helios-core/topic/LocalTopicStats
 import type { Message } from "@zenystx/helios-core/topic/Message";
 import { DistributedTopicService } from "@zenystx/helios-core/topic/impl/DistributedTopicService";
 import { TopicProxyImpl } from "@zenystx/helios-core/topic/impl/TopicProxyImpl";
-import { ProjectionDataSerializerHook } from "@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook";
-import { PredicateDataSerializerHook } from "@zenystx/helios-core/query/impl/predicates/PredicateDataSerializerHook";
-import { PartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl";
-import { MultiPartitionPredicateImpl } from "@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl";
 import { ReliableTopicProxyImpl } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicProxyImpl";
 import { ReliableTopicService } from "@zenystx/helios-core/topic/impl/reliable/ReliableTopicService";
 import { TransactionException } from "@zenystx/helios-core/transaction/TransactionException";
 import { TransactionOptions, TransactionType } from "@zenystx/helios-core/transaction/TransactionOptions";
-import { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
 import { TransactionBackupApplier } from "@zenystx/helios-core/transaction/impl/TransactionBackupApplier";
+import { TransactionCoordinator } from "@zenystx/helios-core/transaction/impl/TransactionCoordinator";
 import { TransactionImpl } from "@zenystx/helios-core/transaction/impl/TransactionImpl";
 import { TransactionManagerServiceImpl } from "@zenystx/helios-core/transaction/impl/TransactionManagerServiceImpl";
 import { TransactionalListProxy } from "@zenystx/helios-core/transaction/impl/TransactionalListProxy";
@@ -201,16 +202,14 @@ import { TransactionalMultiMapProxy } from "@zenystx/helios-core/transaction/imp
 import { TransactionalQueueProxy } from "@zenystx/helios-core/transaction/impl/TransactionalQueueProxy";
 import { TransactionalSetProxy } from "@zenystx/helios-core/transaction/impl/TransactionalSetProxy";
 import { MemberVersion } from "@zenystx/helios-core/version/MemberVersion";
-import { IndexConfig as HeliosIndexConfig } from "@zenystx/helios-core/config/IndexConfig";
-import { IndexType as HeliosIndexType } from "@zenystx/helios-core/query/impl/Index";
-import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
-import { PersistenceService } from "@zenystx/helios-core/persistence/PersistenceService";
 import { WanReplicationService } from "@zenystx/helios-core/wan/impl/WanReplicationService";
-import { WanHandler } from "@zenystx/helios-core/rest/handler/WanHandler";
-import { DurableExecutorService } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorService";
-import { DurableExecutorServiceProxy } from "@zenystx/helios-core/durableexecutor/impl/DurableExecutorServiceProxy";
-import type { StatsHandlerState } from "@zenystx/helios-core/rest/handler/StatsHandler";
-import { StatsHandler } from "@zenystx/helios-core/rest/handler/StatsHandler";
+import { ListAddListenerCodec } from "../../client/impl/protocol/codec/ListAddListenerCodec.js";
+import { MapAddEntryListenerCodec } from "../../client/impl/protocol/codec/MapAddEntryListenerCodec";
+import { MultiMapAddEntryListenerCodec } from "../../client/impl/protocol/codec/MultiMapAddEntryListenerCodec.js";
+import { QueueAddListenerCodec } from "../../client/impl/protocol/codec/QueueAddListenerCodec.js";
+import { SetAddListenerCodec } from "../../client/impl/protocol/codec/SetAddListenerCodec.js";
+import { TopicAddMessageListenerCodec } from "../../client/impl/protocol/codec/TopicAddMessageListenerCodec";
+import { createScheduledExecutorMessageHandlers } from "../../server/clientprotocol/ScheduledExecutorMessageHandlers";
 
 /** Service name constant for the distributed map service. */
 const MAP_SERVICE_NAME = "hz:impl:mapService";
@@ -6677,7 +6676,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   }
 
   /** Get (or create) a distributed cache by name. */
-  getCache<K, V>(name: string): DistributedCacheService {
+  getCache(name: string): DistributedCacheService {
     if (this._distributedCacheService === null) {
       this._distributedCacheService = this._createDistributedCacheService(this._name, null, null);
     }

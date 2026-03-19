@@ -24,9 +24,12 @@
  * {@code ClientProtocolService.messageArrived} security checks.
  */
 
-import { ClientMessage } from '../../client/impl/protocol/ClientMessage.js';
-import { ClientAuthenticationCodec } from '../../client/impl/protocol/codec/ClientAuthenticationCodec.js';
-import { ErrorCodec } from '@zenystx/helios-core/server/clientprotocol/ErrorCodec.js';
+import type { PermissionConfig, SecurityConfig } from '@zenystx/helios-core/config/SecurityConfig.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+import { AccessControlException } from '@zenystx/helios-core/security/AccessControlException.js';
+import { AuthRateLimiter } from '@zenystx/helios-core/security/impl/AuthRateLimiter.js';
+import { SecurityContext } from '@zenystx/helios-core/security/impl/SecurityContext.js';
+import { TokenAuthenticator } from '@zenystx/helios-core/security/impl/TokenAuthenticator.js';
 import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import {
     ClientAuthenticationRequiredError,
@@ -34,12 +37,9 @@ import {
 } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 import type { ClientSessionRegistry } from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
-import { SecurityContext } from '@zenystx/helios-core/security/impl/SecurityContext.js';
-import type { SecurityConfig, PermissionConfig } from '@zenystx/helios-core/config/SecurityConfig.js';
-import { TokenAuthenticator } from '@zenystx/helios-core/security/impl/TokenAuthenticator.js';
-import { AuthRateLimiter } from '@zenystx/helios-core/security/impl/AuthRateLimiter.js';
-import { AccessControlException } from '@zenystx/helios-core/security/AccessControlException.js';
+import { ErrorCodec } from '@zenystx/helios-core/server/clientprotocol/ErrorCodec.js';
+import { ClientMessage } from '../../client/impl/protocol/ClientMessage.js';
+import { ClientAuthenticationCodec } from '../../client/impl/protocol/codec/ClientAuthenticationCodec.js';
 
 // ── Audit event types ─────────────────────────────────────────────────────────
 

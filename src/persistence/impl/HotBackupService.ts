@@ -5,8 +5,8 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import type { WriteAheadLog } from './WriteAheadLog.js';
 import type { Checkpoint } from './Checkpoint.js';
+import type { WriteAheadLog } from './WriteAheadLog.js';
 
 export interface BackupResult {
     readonly success: boolean;

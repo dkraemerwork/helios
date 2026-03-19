@@ -1,6 +1,6 @@
+import type { Sink } from '@zenystx/helios-blitz/sink/Sink.js';
 import type { AsyncChannel } from './AsyncChannel.js';
 import type { ProcessorItem } from './ProcessorItem.js';
-import type { Sink } from '@zenystx/helios-blitz/sink/Sink.js';
 
 const ABORTED = Symbol('aborted');
 

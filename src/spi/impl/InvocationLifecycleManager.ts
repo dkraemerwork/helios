@@ -19,10 +19,10 @@
 import {
     DEFAULT_INVOCATION_TIMEOUT_MS,
 } from '@zenystx/helios-core/compatibility/CompatibilityTarget.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 import type { InvocationBackpressure } from '@zenystx/helios-core/spi/impl/InvocationBackpressure.js';
 import type { InvocationMonitor } from '@zenystx/helios-core/spi/impl/InvocationMonitor.js';
 import type { InvocationFuture } from '@zenystx/helios-core/spi/impl/operationservice/InvocationFuture.js';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Operation classification ───────────────────────────────────────────────────
 

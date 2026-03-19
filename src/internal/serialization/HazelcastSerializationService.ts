@@ -1,13 +1,13 @@
-import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
+import type { CompactSerializable } from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
+import { SchemaService, type Schema } from '@zenystx/helios-core/internal/serialization/compact/SchemaService';
 import {
     SerializationConfig,
     type CustomSerializer,
     type DataSerializableFactory,
     type StreamSerializer,
 } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
+import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
 import { SerializationServiceImpl } from '@zenystx/helios-core/internal/serialization/impl/SerializationServiceImpl';
-import type { CompactSerializable } from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
-import { SchemaService, type Schema } from '@zenystx/helios-core/internal/serialization/compact/SchemaService';
 import type { ClassDefinition, PortableFactory } from '@zenystx/helios-core/internal/serialization/portable/PortableSerializer';
 
 export class HazelcastSerializationConfig extends SerializationConfig {}

@@ -6,8 +6,8 @@
  * one at a time and then asked for its final result.
  */
 import type { Expression } from '@zenystx/helios-core/sql/impl/expression/Expression.js';
-import type { SqlRow } from '@zenystx/helios-core/sql/impl/SqlResult.js';
 import { _equals } from '@zenystx/helios-core/sql/impl/expression/Expression.js';
+import type { SqlRow } from '@zenystx/helios-core/sql/impl/SqlResult.js';
 
 export type AggregateFunctionName = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
 

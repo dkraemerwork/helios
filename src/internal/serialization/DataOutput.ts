@@ -7,5 +7,5 @@
  */
 export {
     ByteArrayObjectDataOutput as DataOutput,
-    MAX_ARRAY_SIZE,
+    MAX_ARRAY_SIZE
 } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';

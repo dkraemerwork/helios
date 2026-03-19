@@ -312,7 +312,6 @@ export class SqlStatement {
     }
 
     private _parseExpressionToken(token: string): string | AggregateCall {
-        const upper = token.toUpperCase();
 
         // Aggregate functions: COUNT(*), COUNT(DISTINCT col), SUM(col), AVG(col), MIN(col), MAX(col)
         const aggMatch = token.match(/^(COUNT|SUM|AVG|MIN|MAX)\s*\((.+)\)$/i);

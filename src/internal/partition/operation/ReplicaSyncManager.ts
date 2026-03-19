@@ -22,11 +22,11 @@
  */
 
 import { DEFAULT_INVOCATION_TIMEOUT_MS } from '@zenystx/helios-core/compatibility/CompatibilityTarget.js';
+import { DuplicateSyncChunkException, StaleReplicaSyncException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
 import type { PartitionContainer } from '@zenystx/helios-core/internal/partition/impl/PartitionContainer.js';
 import type { PartitionReplicaManager } from '@zenystx/helios-core/internal/partition/impl/PartitionReplicaManager.js';
-import { PartitionReplicaSyncChunkAssembler } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse.js';
 import type { ReplicationNamespaceState } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse.js';
-import { DuplicateSyncChunkException, StaleReplicaSyncException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
+import { PartitionReplicaSyncChunkAssembler } from '@zenystx/helios-core/internal/partition/operation/PartitionReplicaSyncResponse.js';
 import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────

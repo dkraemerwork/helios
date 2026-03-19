@@ -6,12 +6,12 @@
  * to remain decoupled and independently testable.
  */
 
-import type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 import type { LocalQueueStats } from '@zenystx/helios-core/collection/LocalQueueStats';
-import type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
 import type { StoreLatencyMetrics } from '@zenystx/helios-core/diagnostics/StoreLatencyTracker';
 import type { SystemEvent } from '@zenystx/helios-core/diagnostics/SystemEventLog';
+import type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 import type { BlitzMetrics, InvocationMetrics, JobCounterMetrics, MemberPartitionInfo, MigrationMetrics, ObjectInventory, OperationMetrics, ThreadPoolMetrics, TransportMetrics } from '@zenystx/helios-core/monitor/MetricsSample';
+import type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
 
 export interface MonitorStateProvider {
     /** Instance name. */

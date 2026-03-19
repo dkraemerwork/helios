@@ -438,7 +438,7 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
             const instance = new HeliosInstanceImpl(config);
 
             try {
-                const cache = instance.getCache<string, string>(cacheName);
+                const cache = instance.getCache(cacheName);
                 const engine = instance.getNodeEngine();
                 await cache.put(cacheName, engine.toData('key-1')!, engine.toData('value-1')!);
                 expect(await cache.size(cacheName)).toBe(1);
@@ -448,7 +448,7 @@ describe('Block 21.0 — Backup Partition Recovery Parity', () => {
 
                 const restarted = new HeliosInstanceImpl(makeRuntimeConfig('cache-recovery-b', portA));
                 try {
-                    const restartedCache = restarted.getCache<string, string>(cacheName);
+                    const restartedCache = restarted.getCache(cacheName);
                     const restartedEngine = restarted.getNodeEngine();
                     expect(await restartedCache.size(cacheName)).toBe(0);
                     expect(await restartedCache.get(cacheName, restartedEngine.toData('key-1')!)).toBeNull();

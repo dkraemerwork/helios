@@ -6,6 +6,8 @@
  */
 import { BackpressureConfig } from "@zenystx/helios-core/config/BackpressureConfig.js";
 import type { HeliosBlitzRuntimeConfig } from "@zenystx/helios-core/config/BlitzRuntimeConfig.js";
+import { CPSubsystemConfig } from '@zenystx/helios-core/config/CPSubsystemConfig.js';
+import { DurableExecutorConfig } from '@zenystx/helios-core/config/DurableExecutorConfig.js';
 import { ExecutorConfig } from "@zenystx/helios-core/config/ExecutorConfig.js";
 import { DEFAULT_CLUSTER_NAME } from "@zenystx/helios-core/config/HazelcastDefaults.js";
 import { MapConfig } from "@zenystx/helios-core/config/MapConfig.js";
@@ -16,16 +18,14 @@ import { QueueConfig } from "@zenystx/helios-core/config/QueueConfig.js";
 import { ReliableTopicConfig } from "@zenystx/helios-core/config/ReliableTopicConfig.js";
 import { RingbufferConfig } from "@zenystx/helios-core/config/RingbufferConfig.js";
 import { ScheduledExecutorConfig } from "@zenystx/helios-core/config/ScheduledExecutorConfig.js";
+import { SecurityConfig } from '@zenystx/helios-core/config/SecurityConfig.js';
 import { SplitBrainProtectionConfig } from "@zenystx/helios-core/config/SplitBrainProtectionConfig.js";
 import { TopicConfig } from "@zenystx/helios-core/config/TopicConfig.js";
+import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 import type { InstanceConfig } from "@zenystx/helios-core/core/InstanceConfig.js";
 import { HazelcastSerializationConfig } from '@zenystx/helios-core/internal/serialization/HazelcastSerializationService.js';
 import { MapStoreProviderRegistry } from "@zenystx/helios-core/map/impl/mapstore/MapStoreProviderRegistry.js";
 import type { MapStoreFactory } from "@zenystx/helios-core/map/MapStoreFactory.js";
-import { CPSubsystemConfig } from '@zenystx/helios-core/config/CPSubsystemConfig.js';
-import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
-import { SecurityConfig } from '@zenystx/helios-core/config/SecurityConfig.js';
-import { DurableExecutorConfig } from '@zenystx/helios-core/config/DurableExecutorConfig.js';
 
 export class HeliosConfig implements InstanceConfig {
   private readonly _name: string;

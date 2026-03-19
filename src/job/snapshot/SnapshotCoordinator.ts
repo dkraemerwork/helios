@@ -1,7 +1,7 @@
 import type { ITopic } from '../../topic/ITopic.js';
+import { Message } from '../../topic/Message.js';
 import type { JobCommand } from '../JobCommand.js';
 import type { SnapshotMetrics } from '../metrics/BlitzJobMetrics.js';
-import { Message } from '../../topic/Message.js';
 
 export interface SnapshotCoordinatorConfig {
   readonly jobId: string;

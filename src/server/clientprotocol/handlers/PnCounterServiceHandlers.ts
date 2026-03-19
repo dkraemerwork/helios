@@ -29,17 +29,17 @@
  * Note: UUID is 16 bytes (two 64-bit values: mostSigBits + leastSigBits) in little-endian.
  */
 
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type { PnCounterOperations } from './ServiceOperations.js';
 import {
+    BOOLEAN_SIZE_IN_BYTES,
+    FixedSizeTypesCodec,
     INT_SIZE_IN_BYTES,
     LONG_SIZE_IN_BYTES,
-    BOOLEAN_SIZE_IN_BYTES,
     UUID_SIZE_IN_BYTES,
 } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { FixedSizeTypesCodec } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import type { PnCounterOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 

@@ -5,11 +5,10 @@
  * The request/response frame layouts match the auto-generated codecs from
  * https://github.com/hazelcast/hazelcast-client-protocol.
  */
-import { ClientMessage, ClientMessageFrame } from '../ClientMessage';
 import type { Address } from '@zenystx/helios-core/cluster/Address';
-import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { ClientMessage, ClientMessageFrame } from '../ClientMessage';
 import { CodecUtil } from './builtin/CodecUtil';
-import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { ListMultiFrameCodec } from './builtin/ListMultiFrameCodec';
 import { StringCodec } from './builtin/StringCodec';
 import { AddressCodec } from './custom/AddressCodec';

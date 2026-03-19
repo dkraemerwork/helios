@@ -3,8 +3,8 @@
  *
  * Port of Hazelcast {@code CompositeMessageTaskFactory} + execution routing.
  */
-import { ClientMessage } from "../../client/impl/protocol/ClientMessage";
 import type { ClientSession } from "@zenystx/helios-core/server/clientprotocol/ClientSession";
+import { ClientMessage } from "../../client/impl/protocol/ClientMessage";
 
 export class ClientAuthenticationRequiredError extends Error {
     constructor(messageType: number) {

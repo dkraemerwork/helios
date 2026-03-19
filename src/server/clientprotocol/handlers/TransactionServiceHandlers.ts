@@ -46,16 +46,14 @@
  *   TransactionalQueue.Size            (0x120500)
  */
 
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type { TransactionServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
-import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
-import { FixedSizeTypesCodec } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import type { TransactionServiceOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 
@@ -110,8 +108,6 @@ const TXQ_POLL_REQUEST   = 0x120300; const TXQ_POLL_RESPONSE   = 0x120301;
 const TXQ_PEEK_REQUEST   = 0x120400; const TXQ_PEEK_RESPONSE   = 0x120401;
 const TXQ_SIZE_REQUEST   = 0x120500; const TXQ_SIZE_RESPONSE   = 0x120501;
 
-/** Request initial frame header: type(4) + correlationId(8) + partitionId(4) = 16 */
-const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 /** Response initial frame header: type(4) + correlationId(8) + backupAcks(1) = 13 */
 const RESP_H = CM.RESPONSE_BACKUP_ACKS_FIELD_OFFSET + BYTE_SIZE_IN_BYTES;
 

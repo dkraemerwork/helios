@@ -1,5 +1,4 @@
 import type { BlitzJobMetrics, JobExecutionTimestamps, SnapshotMetrics, VertexMetrics } from './BlitzJobMetrics.js';
-import { MetricUnit } from './MetricUnit.js';
 
 /**
  * MetricsCollector — aggregates per-member VertexMetrics into BlitzJobMetrics.

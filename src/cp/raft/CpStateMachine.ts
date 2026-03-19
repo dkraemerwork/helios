@@ -1,5 +1,5 @@
-import type { RaftCommand, RaftEndpoint } from './types.js';
 import type { RaftStateMachine } from './RaftStateMachine.js';
+import type { RaftCommand, RaftEndpoint } from './types.js';
 
 // ── Internal state types ────────────────────────────────────────────────────
 

@@ -5,11 +5,11 @@
  * returning them as an array.
  * The attributePaths do not support the [any] operator.
  */
-import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import type { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import type { IdentifiedDataSerializable } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
-import { PROJECTION_DS_FACTORY_ID, MULTI_ATTRIBUTE } from '@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook';
+import { MULTI_ATTRIBUTE, PROJECTION_DS_FACTORY_ID } from '@zenystx/helios-core/projection/impl/ProjectionDataSerializerHook';
+import type { Projection } from '@zenystx/helios-core/projection/Projection';
 
 /** Interface for objects that support attribute-path extraction. */
 interface Extractable {

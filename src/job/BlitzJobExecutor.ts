@@ -1,9 +1,9 @@
-import type { ExecutionPlan } from './ExecutionPlan.js';
-import type { JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
-import type { Source } from '@zenystx/helios-blitz/source/Source.js';
 import type { Sink } from '@zenystx/helios-blitz/sink/Sink.js';
+import type { Source } from '@zenystx/helios-blitz/source/Source.js';
+import type { ExecutionPlan } from './ExecutionPlan.js';
 import type { ProcessingGuarantee } from './JobConfig.js';
 import { JobExecution, type OperatorFnEntry } from './engine/JobExecution.js';
+import type { JobExecutionTimestamps, VertexMetrics } from './metrics/BlitzJobMetrics.js';
 
 export interface ExecutionResources {
   readonly sources: Map<string, Source<unknown>>;

@@ -10,10 +10,10 @@
 import type { Address } from '@zenystx/helios-core/cluster/Address';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 import type { OperationService } from '@zenystx/helios-core/spi/impl/operationservice/OperationService';
 import type { PartitionService } from '@zenystx/helios-core/spi/PartitionService';
 import type { HeliosProperties } from '@zenystx/helios-core/spi/properties/HeliosProperties';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 /** Minimal cluster service surface exposed through NodeEngine. */
 export interface ClusterServiceView {

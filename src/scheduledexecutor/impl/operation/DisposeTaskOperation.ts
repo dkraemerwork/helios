@@ -5,11 +5,11 @@
  * Hazelcast parity: com.hazelcast.scheduledexecutor.impl.operations.DisposeTaskOperation
  */
 
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { ScheduledTaskHandler } from '@zenystx/helios-core/scheduledexecutor/ScheduledTaskHandler';
 import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
-import { DisposeTaskBackupOperation } from './DisposeTaskBackupOperation.js';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { ScheduledExecutorContainerService } from '../ScheduledExecutorContainerService.js';
+import { DisposeTaskBackupOperation } from './DisposeTaskBackupOperation.js';
 import { validateHandler } from './handlerValidation.js';
 
 export class DisposeTaskOperation extends Operation implements BackupAwareOperation {

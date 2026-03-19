@@ -1,5 +1,4 @@
-import type { KV } from '@nats-io/kv';
-import type { Kvm } from '@nats-io/kv';
+import type { KV, Kvm } from '@nats-io/kv';
 
 const BUCKET_PREFIX = '__blitz.snapshots';
 const COMMIT_KEY_PREFIX = '_committed';

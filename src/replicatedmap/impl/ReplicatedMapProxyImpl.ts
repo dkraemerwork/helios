@@ -1,10 +1,10 @@
 /**
  * Typed proxy for a distributed ReplicatedMap backed by DistributedReplicatedMapService.
  */
-import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
-import { DistributedReplicatedMapService } from "@zenystx/helios-core/replicatedmap/impl/DistributedReplicatedMapService";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import type { ReplicatedMap } from "@zenystx/helios-core/replicatedmap/ReplicatedMap";
+import { DistributedReplicatedMapService } from "@zenystx/helios-core/replicatedmap/impl/DistributedReplicatedMapService";
 
 export class ReplicatedMapProxyImpl<K, V> implements ReplicatedMap<K, V> {
   constructor(

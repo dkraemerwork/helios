@@ -1,9 +1,9 @@
 import type { CPSubsystemConfig } from '../../config/CPSubsystemConfig.js';
-import { InMemoryRaftStateStore } from './InMemoryRaftStateStore.js';
-import { RaftNode, type RaftMessageSender, type RaftNodeConfig } from './RaftNode.js';
-import { RaftMessageRouter } from './RaftMessageRouter.js';
-import type { RaftEndpoint, RaftGroupId } from './types.js';
 import { CpStateMachine } from './CpStateMachine.js';
+import { InMemoryRaftStateStore } from './InMemoryRaftStateStore.js';
+import { RaftMessageRouter } from './RaftMessageRouter.js';
+import { RaftNode, type RaftMessageSender, type RaftNodeConfig } from './RaftNode.js';
+import type { RaftEndpoint, RaftGroupId } from './types.js';
 
 /**
  * Deterministic FNV-1a 32-bit hash of a string, returned as a BigInt.

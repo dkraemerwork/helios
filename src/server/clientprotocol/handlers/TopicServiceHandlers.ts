@@ -9,16 +9,16 @@
  *   Topic.PublishAll          (0x040200)
  */
 
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import { TopicPublishCodec } from '../../../client/impl/protocol/codec/TopicPublishCodec.js';
-import { TopicAddMessageListenerCodec } from '../../../client/impl/protocol/codec/TopicAddMessageListenerCodec.js';
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type { TopicServiceOperations } from './ServiceOperations.js';
+import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
 import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
-import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import { TopicAddMessageListenerCodec } from '../../../client/impl/protocol/codec/TopicAddMessageListenerCodec.js';
+import { TopicPublishCodec } from '../../../client/impl/protocol/codec/TopicPublishCodec.js';
+import type { TopicServiceOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 

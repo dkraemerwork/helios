@@ -1,10 +1,10 @@
 /**
  * Manages QueryCache instances for each map.
  */
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
 import type { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import { QueryCacheImpl } from '@zenystx/helios-core/map/impl/querycache/QueryCacheImpl';
+import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
 
 interface SerializationBridge {
     toData(obj: unknown): Data | null;

@@ -17,12 +17,12 @@
  */
 
 import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo.js';
-import { WrongTargetException, TargetNotMemberException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
-import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
-import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
+import { TargetNotMemberException, WrongTargetException } from '@zenystx/helios-core/core/errors/ClusterErrors.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 import type { ClientSessionRegistry } from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
+import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

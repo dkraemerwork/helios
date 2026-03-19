@@ -1,5 +1,5 @@
-import type { JobStatus } from './JobStatus.js';
 import type { ResolvedJobConfig } from './JobConfig.js';
+import type { JobStatus } from './JobStatus.js';
 import type { PipelineDescriptor } from './PipelineDescriptor.js';
 
 export interface JobRecordInit {

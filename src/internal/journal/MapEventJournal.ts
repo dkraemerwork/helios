@@ -5,11 +5,11 @@
  * Journal instances are keyed by `mapName:partitionId` to mirror
  * MapContainerService's per-partition RecordStore pattern.
  */
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EventJournalConfig } from '@zenystx/helios-core/config/EventJournalConfig';
 import { EventJournal } from '@zenystx/helios-core/internal/journal/EventJournal';
-import { EventJournalEventType } from '@zenystx/helios-core/internal/journal/EventJournalEvent';
 import type { EventJournalEvent } from '@zenystx/helios-core/internal/journal/EventJournalEvent';
+import { EventJournalEventType } from '@zenystx/helios-core/internal/journal/EventJournalEvent';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class MapEventJournal {
     /** Per (mapName:partitionId) journal instances. */

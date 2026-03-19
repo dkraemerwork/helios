@@ -1,5 +1,5 @@
-import type { RaftLogEntry, SnapshotEntry } from './types.js';
 import type { RaftStateStore } from './RaftStateStore.js';
+import type { RaftLogEntry, SnapshotEntry } from './types.js';
 
 /**
  * Non-durable in-memory implementation of RaftStateStore.

@@ -1,5 +1,5 @@
 import { type JobStatus, isTerminalStatus } from './JobStatus.js';
-import type { VertexMetrics, BlitzJobMetrics } from './metrics/BlitzJobMetrics.js';
+import type { BlitzJobMetrics, VertexMetrics } from './metrics/BlitzJobMetrics.js';
 
 export interface JobStatusEvent {
   readonly jobId: string;

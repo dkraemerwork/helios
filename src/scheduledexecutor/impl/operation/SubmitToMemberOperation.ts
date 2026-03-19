@@ -5,11 +5,11 @@
  * (member-targeted variant)
  */
 
-import { randomUUID } from 'crypto';
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import { ScheduledTaskHandler } from '@zenystx/helios-core/scheduledexecutor/ScheduledTaskHandler';
-import { ScheduledTaskDescriptor } from '../ScheduledTaskDescriptor.js';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
+import { randomUUID } from 'crypto';
 import type { ScheduledExecutorContainerService } from '../ScheduledExecutorContainerService.js';
+import { ScheduledTaskDescriptor } from '../ScheduledTaskDescriptor.js';
 import type { TaskDefinition } from '../TaskDefinition.js';
 
 export class SubmitToMemberOperation extends Operation {

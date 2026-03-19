@@ -1,8 +1,8 @@
+import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import { ClientMessage } from "../ClientMessage";
 import { DataCodec } from "./builtin/DataCodec";
 import { FixedSizeTypesCodec, LONG_SIZE_IN_BYTES } from "./builtin/FixedSizeTypesCodec";
 import { StringCodec } from "./builtin/StringCodec";
-import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 
 export class TopicAddMessageListenerCodec {
     static readonly REQUEST_MESSAGE_TYPE: number = 0x0b0a00;

@@ -4,8 +4,8 @@
  * Clears all entries in the partition's record store for the given map.
  * External store cleanup is handled by MapProxy after all ClearOperations complete.
  */
-import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
 import { ClearBackupOperation } from '@zenystx/helios-core/map/impl/operation/ClearBackupOperation';
+import { MapOperation } from '@zenystx/helios-core/map/impl/operation/MapOperation';
 import type { BackupAwareOperation } from '@zenystx/helios-core/spi/impl/operationservice/BackupAwareOperation';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 

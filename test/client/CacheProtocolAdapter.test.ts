@@ -338,7 +338,7 @@ describe('cache protocol adapter', () => {
             expect(registrationId).toBeTruthy();
 
             await dispatcher.dispatch(buildCachePutRequest(31, cacheName, key, value), session);
-            const cacheService = instance.getCache<string, string>(cacheName);
+            const cacheService = instance.getCache(cacheName);
             await cacheService.clear(cacheName);
 
             expect(session.events).toHaveLength(2);

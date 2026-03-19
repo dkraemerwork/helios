@@ -4,8 +4,8 @@
  * Hazelcast parity: combined from IsDoneOperation/IsCanceledOperation/GetStatisticsOperation
  */
 
-import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { ScheduledTaskHandler } from '@zenystx/helios-core/scheduledexecutor/ScheduledTaskHandler';
+import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { ScheduledExecutorContainerService } from '../ScheduledExecutorContainerService.js';
 import { validateHandler } from './handlerValidation.js';
 

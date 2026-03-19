@@ -23,13 +23,13 @@
  * NOTE: 0x0f0x00 is TransactionalMultiMap (service id=15) — DO NOT use for DurableExecutor.
  */
 
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type { ExecutorServiceOperations } from './ServiceOperations.js';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
-import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
 import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
+import type { ExecutorServiceOperations } from './ServiceOperations.js';
 
 // ── Message type constants ─────────────────────────────────────────────────────
 

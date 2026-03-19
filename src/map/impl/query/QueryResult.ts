@@ -5,13 +5,13 @@
  * Optionally applies a {@link Projection} to transform entries before adding them as rows.
  */
 import type { LocalMapStatsImpl } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
+import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
 import type { PartitionIdSet } from '@zenystx/helios-core/internal/util/collection/PartitionIdSet';
 import { IterationType } from '@zenystx/helios-core/internal/util/IterationType';
 import { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
 import { QueryResultSizeExceededException } from '@zenystx/helios-core/map/QueryResultSizeExceededException';
-import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import type { Projection } from '@zenystx/helios-core/projection/Projection';
-import type { SerializationService } from '@zenystx/helios-core/internal/serialization/SerializationService';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 
 export class QueryResult implements Iterable<QueryResultRow> {
     private _rows: QueryResultRow[] = [];

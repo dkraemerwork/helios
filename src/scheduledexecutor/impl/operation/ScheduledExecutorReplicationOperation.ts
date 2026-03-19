@@ -9,8 +9,7 @@
  */
 
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import type { ScheduledExecutorContainerService } from '../ScheduledExecutorContainerService.js';
-import type { ScheduledExecutorReplicationData } from '../ScheduledExecutorContainerService.js';
+import type { ScheduledExecutorContainerService, ScheduledExecutorReplicationData } from '../ScheduledExecutorContainerService.js';
 
 export class ScheduledExecutorReplicationOperation extends Operation {
     private readonly _replicationData: ScheduledExecutorReplicationData;

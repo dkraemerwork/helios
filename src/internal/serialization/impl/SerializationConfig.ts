@@ -4,11 +4,11 @@
  * Configuration for SerializationServiceImpl — byte order, factory registrations,
  * and hook-based subsystem registration.
  */
+import type { CompactSerializable } from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
+import { SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService';
 import type { ByteArrayObjectDataInput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import { BIG_ENDIAN, type ByteOrder } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
-import type { CompactSerializable } from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
-import { SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService';
 import type { DataSerializerHook } from '@zenystx/helios-core/internal/serialization/impl/DataSerializerHook';
 import type { ClassDefinition, PortableFactory } from '@zenystx/helios-core/internal/serialization/portable/PortableSerializer';
 

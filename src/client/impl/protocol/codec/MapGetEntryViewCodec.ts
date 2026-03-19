@@ -1,3 +1,5 @@
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 import { ClientMessage } from '../ClientMessage.js';
 import { CodecUtil } from './builtin/CodecUtil.js';
 import { DataCodec } from './builtin/DataCodec.js';
@@ -7,8 +9,6 @@ import {
     LONG_SIZE_IN_BYTES,
 } from './builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from './builtin/StringCodec.js';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
-import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
 import { SimpleEntryViewCodec } from './custom/SimpleEntryViewCodec.js';
 
 export class MapGetEntryViewCodec {

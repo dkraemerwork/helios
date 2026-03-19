@@ -5,11 +5,11 @@
  * and stored in the {@link MetricsRegistry} ring buffer.
  */
 
-export type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 export type { LocalQueueStats } from '@zenystx/helios-core/collection/LocalQueueStats';
-export type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
 export type { StoreLatencyMetrics } from '@zenystx/helios-core/diagnostics/StoreLatencyTracker';
 export type { SystemEvent } from '@zenystx/helios-core/diagnostics/SystemEventLog';
+export type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
+export type { LocalTopicStats } from '@zenystx/helios-core/topic/LocalTopicStats';
 
 /** Event loop latency percentiles (nanoseconds). */
 export interface EventLoopMetrics {

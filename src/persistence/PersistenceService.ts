@@ -8,30 +8,29 @@
  *  - Coordinated cluster restart via ClusterRestartCoordinator
  *  - Hot backup via HotBackupService
  */
-import * as path from 'path';
+import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import type { PersistenceConfig } from '@zenystx/helios-core/config/PersistenceConfig';
+import * as path from 'path';
 import { Checkpoint } from './impl/Checkpoint.js';
-import { WALEntryType, WriteAheadLog } from './impl/WriteAheadLog.js';
+import {
+    ClusterDataRecoveryPolicy,
+    ClusterRestartCoordinator,
+    type MemberRecoveryState,
+    type RestartValidationResult,
+} from './impl/ClusterRestartCoordinator.js';
 import { EncryptedWAL } from './impl/EncryptedWAL.js';
+import { HotBackupService } from './impl/HotBackupService.js';
 import {
     CachePersistenceAdapter,
     MapPersistenceAdapter,
     QueuePersistenceAdapter,
     RingbufferPersistenceAdapter,
-    StructureType,
-    decodeStructureKey,
+    decodeStructureKey
 } from './impl/StructurePersistenceAdapter.js';
-import { HotBackupService } from './impl/HotBackupService.js';
-import {
-    ClusterRestartCoordinator,
-    ClusterDataRecoveryPolicy,
-    type MemberRecoveryState,
-    type RestartValidationResult,
-} from './impl/ClusterRestartCoordinator.js';
-import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
+import { WALEntryType, WriteAheadLog } from './impl/WriteAheadLog.js';
 
-export type { MemberRecoveryState, RestartValidationResult };
 export { ClusterDataRecoveryPolicy };
+export type { MemberRecoveryState, RestartValidationResult };
 
 export interface PersistenceRecoveryResult {
     readonly success: boolean;

@@ -14,24 +14,24 @@ import type { ClusterPermission } from '../permission/ClusterPermission.js';
 import { ClusterPermissionCollection } from '../permission/ClusterPermissionCollection.js';
 
 // Permission class imports — resolved lazily in the factory to mirror ActionConstants pattern.
-import { MapPermission } from '../permission/MapPermission.js';
-import { QueuePermission } from '../permission/QueuePermission.js';
-import { TopicPermission } from '../permission/TopicPermission.js';
-import { ListPermission } from '../permission/ListPermission.js';
-import { SetPermission } from '../permission/SetPermission.js';
-import { MultiMapPermission } from '../permission/MultiMapPermission.js';
-import { LockPermission } from '../permission/LockPermission.js';
-import { SemaphorePermission } from '../permission/SemaphorePermission.js';
 import { AtomicLongPermission } from '../permission/AtomicLongPermission.js';
 import { AtomicReferencePermission } from '../permission/AtomicReferencePermission.js';
-import { CountDownLatchPermission } from '../permission/CountDownLatchPermission.js';
-import { ExecutorServicePermission } from '../permission/ExecutorServicePermission.js';
 import { CachePermission } from '../permission/CachePermission.js';
-import { ReplicatedMapPermission } from '../permission/ReplicatedMapPermission.js';
-import { FlakeIdGeneratorPermission } from '../permission/FlakeIdGeneratorPermission.js';
 import { CardinalityEstimatorPermission } from '../permission/CardinalityEstimatorPermission.js';
-import { ScheduledExecutorPermission } from '../permission/ScheduledExecutorPermission.js';
+import { CountDownLatchPermission } from '../permission/CountDownLatchPermission.js';
 import { CPMapPermission } from '../permission/CPMapPermission.js';
+import { ExecutorServicePermission } from '../permission/ExecutorServicePermission.js';
+import { FlakeIdGeneratorPermission } from '../permission/FlakeIdGeneratorPermission.js';
+import { ListPermission } from '../permission/ListPermission.js';
+import { LockPermission } from '../permission/LockPermission.js';
+import { MapPermission } from '../permission/MapPermission.js';
+import { MultiMapPermission } from '../permission/MultiMapPermission.js';
+import { QueuePermission } from '../permission/QueuePermission.js';
+import { ReplicatedMapPermission } from '../permission/ReplicatedMapPermission.js';
+import { ScheduledExecutorPermission } from '../permission/ScheduledExecutorPermission.js';
+import { SemaphorePermission } from '../permission/SemaphorePermission.js';
+import { SetPermission } from '../permission/SetPermission.js';
+import { TopicPermission } from '../permission/TopicPermission.js';
 
 // ── Factory helper ────────────────────────────────────────────────────────────
 

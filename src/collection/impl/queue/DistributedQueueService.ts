@@ -11,8 +11,8 @@ import {
   encodeData
 } from "@zenystx/helios-core/cluster/tcp/DataWireCodec";
 import { TcpClusterTransport } from "@zenystx/helios-core/cluster/tcp/TcpClusterTransport";
-import { ItemEvent } from "@zenystx/helios-core/collection/ItemEvent";
 import { QueueStoreWrapper } from "@zenystx/helios-core/collection/impl/queue/QueueStoreWrapper";
+import { ItemEvent } from "@zenystx/helios-core/collection/ItemEvent";
 import type { ItemListener } from "@zenystx/helios-core/collection/ItemListener";
 import {
   LocalQueueStatsImpl,

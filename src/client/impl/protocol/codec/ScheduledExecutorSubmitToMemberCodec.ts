@@ -4,7 +4,7 @@
  * Hazelcast parity: ScheduledExecutorSubmitToMemberCodec (0x1A0300)
  */
 import { ClientMessage } from '../ClientMessage';
-import { INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, BOOLEAN_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
+import { BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { StringCodec } from './builtin/StringCodec';
 
 export class ScheduledExecutorSubmitToMemberCodec {

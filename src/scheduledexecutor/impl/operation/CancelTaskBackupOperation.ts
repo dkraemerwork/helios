@@ -5,8 +5,8 @@
  */
 
 import { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
-import { ScheduledTaskState } from '../ScheduledTaskState.js';
 import type { ScheduledExecutorContainerService } from '../ScheduledExecutorContainerService.js';
+import { ScheduledTaskState } from '../ScheduledTaskState.js';
 
 export class CancelTaskBackupOperation extends Operation {
     private readonly _executorName: string;

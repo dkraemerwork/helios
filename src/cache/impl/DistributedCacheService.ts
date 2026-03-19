@@ -7,6 +7,7 @@
  *
  * Port of com.hazelcast.cache.impl.CacheService (distributed subset).
  */
+import { LocalCacheStatsImpl } from "@zenystx/helios-core/cache/impl/LocalCacheStats";
 import type {
   ClusterMessage,
 } from "@zenystx/helios-core/cluster/tcp/ClusterMessage";
@@ -20,7 +21,6 @@ import { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig";
 import type { HeliosClusterCoordinator } from "@zenystx/helios-core/instance/impl/HeliosClusterCoordinator";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
-import { LocalCacheStatsImpl } from "@zenystx/helios-core/cache/impl/LocalCacheStats";
 
 // ── Cache entry ───────────────────────────────────────────────────────
 

@@ -1,11 +1,10 @@
 /**
  * Typed proxy for a distributed MultiMap backed by DistributedMultiMapService.
  */
-import type { MultiMap } from "@zenystx/helios-core/multimap/MultiMap";
-import { DistributedMultiMapService } from "@zenystx/helios-core/multimap/impl/DistributedMultiMapService";
-import { ValueCollectionType } from "@zenystx/helios-core/multimap/MultiMapConfig";
 import type { Data } from "@zenystx/helios-core/internal/serialization/Data";
 import type { SerializationService } from "@zenystx/helios-core/internal/serialization/SerializationService";
+import { DistributedMultiMapService } from "@zenystx/helios-core/multimap/impl/DistributedMultiMapService";
+import { ValueCollectionType } from "@zenystx/helios-core/multimap/MultiMapConfig";
 
 export class MultiMapProxyImpl<K, V> {
   constructor(

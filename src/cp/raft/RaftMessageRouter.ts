@@ -1,5 +1,5 @@
 import type { ClusterMessage } from '../../cluster/tcp/ClusterMessage.js';
-import type { RaftNode, RaftMessageSender } from './RaftNode.js';
+import type { RaftMessageSender, RaftNode } from './RaftNode.js';
 import type { RaftEndpoint } from './types.js';
 
 /**

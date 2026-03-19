@@ -13,13 +13,21 @@
  * - Enhanced error codes (SqlErrorCode)
  */
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
+import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
+import {
+    MappingAlreadyExistsError,
+    MappingNotFoundError,
+    MappingRegistry,
+    type MappingConfig,
+} from '@zenystx/helios-core/sql/impl/MappingRegistry.js';
+import { SqlResult, type SqlRow } from '@zenystx/helios-core/sql/impl/SqlResult.js';
 import type { SqlColumnMetadata, SqlColumnType } from '@zenystx/helios-core/sql/impl/SqlRowMetadata.js';
 import { SqlRowMetadata } from '@zenystx/helios-core/sql/impl/SqlRowMetadata.js';
-import { SqlResult, type SqlRow } from '@zenystx/helios-core/sql/impl/SqlResult.js';
 import {
     SqlStatement,
     SqlStatementParseError,
     isWhereGroup,
+    type AggregateCall,
     type ParsedCreateMappingStatement,
     type ParsedDeleteStatement,
     type ParsedDropMappingStatement,
@@ -27,27 +35,18 @@ import {
     type ParsedSelectStatement,
     type ParsedUpdateStatement,
     type SelectItem,
-    type AggregateCall,
     type SqlConditionNode,
     type SqlWhereClause,
 } from '@zenystx/helios-core/sql/impl/SqlStatement.js';
-import {
-    MappingRegistry,
-    MappingAlreadyExistsError,
-    MappingNotFoundError,
-    type MappingConfig,
-} from '@zenystx/helios-core/sql/impl/MappingRegistry.js';
 import { SqlErrorCode } from '@zenystx/helios-core/sql/impl/SqlTypeSystem.js';
 import { AggregateExpression, type AggregateAccumulator } from '@zenystx/helios-core/sql/impl/expression/AggregateExpression.js';
 import {
     ColumnExpression,
-    LiteralExpression,
     FunctionExpression,
-    _equals,
+    LiteralExpression,
     _compare,
+    _equals,
 } from '@zenystx/helios-core/sql/impl/expression/Expression.js';
-import type { Expression } from '@zenystx/helios-core/sql/impl/expression/Expression.js';
-import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine.js';
 
 // ── Error types ───────────────────────────────────────────────────────────────
 

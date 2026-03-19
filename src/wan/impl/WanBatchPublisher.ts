@@ -5,8 +5,8 @@
  * Uses Bun.connect() to establish persistent TCP connections to each
  * configured target endpoint, with automatic reconnection on failure.
  */
-import { WanAcknowledgeType, type WanBatchPublisherConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 import type { WanConsistencyCheckRequestMsg, WanConsistencyCheckResponseMsg, WanReplicationEventBatchMsg } from '@zenystx/helios-core/cluster/tcp/ClusterMessage.js';
+import { WanAcknowledgeType, type WanBatchPublisherConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 import type { WanReplicationEvent } from '@zenystx/helios-core/wan/WanReplicationEvent.js';
 import { WanReplicationEventQueue } from '@zenystx/helios-core/wan/impl/WanReplicationEventQueue.js';
 

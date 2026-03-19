@@ -7,8 +7,8 @@
 import type { DataSerializerHook } from '@zenystx/helios-core/internal/serialization/impl/DataSerializerHook';
 import type { DataSerializableFactory } from '@zenystx/helios-core/internal/serialization/impl/SerializationConfig';
 import { IdentityProjection } from '@zenystx/helios-core/projection/impl/IdentityProjection';
-import { SingleAttributeProjection } from '@zenystx/helios-core/projection/impl/SingleAttributeProjection';
 import { MultiAttributeProjection } from '@zenystx/helios-core/projection/impl/MultiAttributeProjection';
+import { SingleAttributeProjection } from '@zenystx/helios-core/projection/impl/SingleAttributeProjection';
 
 export const PROJECTION_DS_FACTORY_ID = -30;
 

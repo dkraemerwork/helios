@@ -20,8 +20,8 @@ import {
 import type { ExecutorOperationResult } from '@zenystx/helios-core/executor/ExecutorOperationResult.js';
 import type { IExecutorService, LocalExecutorStats, TaskTypeRegistration } from '@zenystx/helios-core/executor/IExecutorService.js';
 import { CancellationOperation } from '@zenystx/helios-core/executor/impl/CancellationOperation.js';
-import type { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
 import { ExecuteCallableOperation, type TaskDescriptor } from '@zenystx/helios-core/executor/impl/ExecuteCallableOperation.js';
+import type { ExecutorContainerService } from '@zenystx/helios-core/executor/impl/ExecutorContainerService.js';
 import { MemberCallableOperation } from '@zenystx/helios-core/executor/impl/MemberCallableOperation.js';
 import { TaskTypeRegistry } from '@zenystx/helios-core/executor/impl/TaskTypeRegistry.js';
 import type { InlineTaskCallable, TaskCallable } from '@zenystx/helios-core/executor/TaskCallable.js';

@@ -8,14 +8,14 @@
  * Port of {@code com.hazelcast.wan.impl.WanReplicationService}.
  */
 import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage.js';
-import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 import type { MapConfig } from '@zenystx/helios-core/config/MapConfig.js';
+import type { WanReplicationConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
 import { MergePolicyProvider } from '@zenystx/helios-core/spi/merge/MergePolicyProvider.js';
+import { MerkleTree } from '@zenystx/helios-core/wan/impl/MerkleTree.js';
 import { WanBatchPublisher, WanPublisherState } from '@zenystx/helios-core/wan/impl/WanBatchPublisher.js';
 import { WanConsumerService } from '@zenystx/helios-core/wan/impl/WanConsumer.js';
 import { WanSyncManager } from '@zenystx/helios-core/wan/impl/WanSyncManager.js';
-import { MerkleTree } from '@zenystx/helios-core/wan/impl/MerkleTree.js';
 import type { WanReplicationEvent } from '@zenystx/helios-core/wan/WanReplicationEvent.js';
 
 export interface WanPublisherStatus {

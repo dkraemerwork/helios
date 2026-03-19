@@ -4,10 +4,10 @@
  * Maintains an in-memory subset of IMap entries matching a predicate.
  * Event-driven updates keep the cache synchronized.
  */
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import type { Predicate } from '@zenystx/helios-core/query/Predicate';
-import type { QueryCache, QueryCacheEntryListener } from '@zenystx/helios-core/map/QueryCache';
 import type { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { QueryCache, QueryCacheEntryListener } from '@zenystx/helios-core/map/QueryCache';
+import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 
 interface SerializationBridge {
     toData(obj: unknown): Data | null;

@@ -33,14 +33,8 @@
  */
 
 import { MetaDataGenerator } from '@zenystx/helios-core/internal/nearcache/impl/invalidation/MetaDataGenerator.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
-import {
-    makeBatchInvalidation,
-    makeClearInvalidation,
-    makeSingleInvalidation,
-    MutationTrigger,
-    NearCacheInvalidationKind,
-} from '@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent.js';
 import type {
     BatchNearCacheInvalidationEvent,
     ClearNearCacheInvalidationEvent,
@@ -48,7 +42,13 @@ import type {
     NearCacheInvalidationEvent,
     SingleNearCacheInvalidationEvent,
 } from '@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent.js';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+import {
+    makeBatchInvalidation,
+    makeClearInvalidation,
+    makeSingleInvalidation,
+    MutationTrigger,
+    NearCacheInvalidationKind,
+} from '@zenystx/helios-core/spi/impl/NearCacheInvalidationEvent.js';
 
 // ── Partition metadata snapshot ───────────────────────────────────────────────
 

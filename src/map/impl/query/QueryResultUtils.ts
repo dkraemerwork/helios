@@ -3,9 +3,9 @@
  *
  * Utility class for transforming QueryResult objects into result sets.
  */
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { QueryResult } from '@zenystx/helios-core/map/impl/query/QueryResult';
 import type { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class QueryResultUtils {
     private constructor() {

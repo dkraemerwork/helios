@@ -48,19 +48,12 @@
  *   CPSession.GenerateThreadId    (0x1f0400)
  */
 
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type {
-    AtomicLongOperations,
-    AtomicRefOperations,
-    CpGroupOperations,
-    CpSessionOperations,
-    CountDownLatchOperations,
-    CPMapOperations,
-    FencedLockOperations,
-    SemaphoreOperations,
-} from './ServiceOperations.js';
+import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
+import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
 import {
     BOOLEAN_SIZE_IN_BYTES,
     FixedSizeTypesCodec,
@@ -69,9 +62,16 @@ import {
     UUID_SIZE_IN_BYTES,
 } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
-import { DataCodec } from '../../../client/impl/protocol/codec/builtin/DataCodec.js';
-import { CodecUtil } from '../../../client/impl/protocol/codec/builtin/CodecUtil.js';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import type {
+    AtomicLongOperations,
+    AtomicRefOperations,
+    CountDownLatchOperations,
+    CpGroupOperations,
+    CPMapOperations,
+    CpSessionOperations,
+    FencedLockOperations,
+    SemaphoreOperations,
+} from './ServiceOperations.js';
 
 // ── AtomicLong message type constants ──────────────────────────────────────────
 // AtomicLong service ID = 9 (0x09). Opcodes: (serviceId << 16) | (methodId << 8)

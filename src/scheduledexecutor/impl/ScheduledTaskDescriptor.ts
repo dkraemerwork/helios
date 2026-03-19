@@ -1,5 +1,5 @@
-import { ScheduledTaskState } from './ScheduledTaskState.js';
 import type { RunHistoryEntry } from './RunHistoryEntry.js';
+import { ScheduledTaskState } from './ScheduledTaskState.js';
 import { ScheduledTaskStatisticsImpl } from './ScheduledTaskStatisticsImpl.js';
 
 /**

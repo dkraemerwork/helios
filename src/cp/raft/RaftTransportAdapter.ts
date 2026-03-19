@@ -1,8 +1,8 @@
-import type { RaftEndpoint } from './types.js';
+import type { ClusterMessage } from '../../cluster/tcp/ClusterMessage.js';
+import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
 import type { RaftMessage } from './messages.js';
 import type { RaftMessageSender } from './RaftNode.js';
-import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
-import type { ClusterMessage } from '../../cluster/tcp/ClusterMessage.js';
+import type { RaftEndpoint } from './types.js';
 
 /**
  * Adapts RaftNode's message-sending interface to TcpClusterTransport.

@@ -3,10 +3,10 @@
  *
  * OutboundHandler<Supplier<ClientMessage>, ByteBuffer>
  */
-import { ClientMessage } from '../ClientMessage';
-import { ClientMessageWriter } from '../ClientMessageWriter';
 import { ByteBuffer } from '@zenystx/helios-core/internal/networking/ByteBuffer';
 import { HandlerStatus } from '@zenystx/helios-core/internal/networking/HandlerStatus';
+import { ClientMessage } from '../ClientMessage';
+import { ClientMessageWriter } from '../ClientMessageWriter';
 
 export class ClientMessageEncoder {
     private readonly _writer: ClientMessageWriter = new ClientMessageWriter();

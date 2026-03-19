@@ -8,8 +8,8 @@
  */
 import type { WanConsistencyCheckRequestMsg, WanConsistencyCheckResponseMsg } from '@zenystx/helios-core/cluster/tcp/ClusterMessage.js';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
-import type { WanBatchPublisher } from '@zenystx/helios-core/wan/impl/WanBatchPublisher.js';
 import { MerkleTree } from '@zenystx/helios-core/wan/impl/MerkleTree.js';
+import type { WanBatchPublisher } from '@zenystx/helios-core/wan/impl/WanBatchPublisher.js';
 
 export class WanSyncManager {
     private readonly _merkleTree: MerkleTree;

@@ -13,9 +13,9 @@
  *   GET  /hazelcast/rest/stats/diagnostics         — latest diagnostic snapshot from DiagnosticsService
  */
 
-import type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 import type { LocalQueueStats } from '@zenystx/helios-core/collection/LocalQueueStats';
 import type { DiagnosticData } from '@zenystx/helios-core/diagnostics/DiagnosticsService';
+import type { LocalMapStats } from '@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 

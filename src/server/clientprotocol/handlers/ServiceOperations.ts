@@ -14,9 +14,9 @@
  *   MultiMapService, ReplicatedMapService, RingbufferService, etc.
  */
 
+import type { EventJournalEvent } from '@zenystx/helios-core/internal/journal/EventJournalEvent.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
 import type { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView.js';
-import type { EventJournalEvent } from '@zenystx/helios-core/internal/journal/EventJournalEvent.js';
 import type { ClientSession } from '@zenystx/helios-core/server/clientprotocol/ClientSession.js';
 
 // ── Map ───────────────────────────────────────────────────────────────────────

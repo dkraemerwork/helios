@@ -13,26 +13,25 @@
  * Port of com.hazelcast.client.impl.protocol.task.*MessageTask permission checks.
  */
 import type { SecurityConfig } from '../../config/SecurityConfig.js';
-import type { ClusterPermission } from '../permission/ClusterPermission.js';
-import { MapPermission } from '../permission/MapPermission.js';
-import { QueuePermission } from '../permission/QueuePermission.js';
-import { TopicPermission } from '../permission/TopicPermission.js';
-import { ListPermission } from '../permission/ListPermission.js';
-import { SetPermission } from '../permission/SetPermission.js';
-import { MultiMapPermission } from '../permission/MultiMapPermission.js';
-import { ReplicatedMapPermission } from '../permission/ReplicatedMapPermission.js';
-import { CachePermission } from '../permission/CachePermission.js';
-import { FlakeIdGeneratorPermission } from '../permission/FlakeIdGeneratorPermission.js';
-import { CardinalityEstimatorPermission } from '../permission/CardinalityEstimatorPermission.js';
-import { ScheduledExecutorPermission } from '../permission/ScheduledExecutorPermission.js';
-import { ExecutorServicePermission } from '../permission/ExecutorServicePermission.js';
-import { CPMapPermission } from '../permission/CPMapPermission.js';
-import { AtomicLongPermission } from '../permission/AtomicLongPermission.js';
-import { AtomicReferencePermission } from '../permission/AtomicReferencePermission.js';
-import { SemaphorePermission } from '../permission/SemaphorePermission.js';
-import { CountDownLatchPermission } from '../permission/CountDownLatchPermission.js';
-import { LockPermission } from '../permission/LockPermission.js';
 import { ActionConstants } from '../permission/ActionConstants.js';
+import { AtomicLongPermission } from '../permission/AtomicLongPermission.js';
+import { CachePermission } from '../permission/CachePermission.js';
+import { CardinalityEstimatorPermission } from '../permission/CardinalityEstimatorPermission.js';
+import type { ClusterPermission } from '../permission/ClusterPermission.js';
+import { CountDownLatchPermission } from '../permission/CountDownLatchPermission.js';
+import { CPMapPermission } from '../permission/CPMapPermission.js';
+import { ExecutorServicePermission } from '../permission/ExecutorServicePermission.js';
+import { FlakeIdGeneratorPermission } from '../permission/FlakeIdGeneratorPermission.js';
+import { ListPermission } from '../permission/ListPermission.js';
+import { LockPermission } from '../permission/LockPermission.js';
+import { MapPermission } from '../permission/MapPermission.js';
+import { MultiMapPermission } from '../permission/MultiMapPermission.js';
+import { QueuePermission } from '../permission/QueuePermission.js';
+import { ReplicatedMapPermission } from '../permission/ReplicatedMapPermission.js';
+import { ScheduledExecutorPermission } from '../permission/ScheduledExecutorPermission.js';
+import { SemaphorePermission } from '../permission/SemaphorePermission.js';
+import { SetPermission } from '../permission/SetPermission.js';
+import { TopicPermission } from '../permission/TopicPermission.js';
 import type { SecurityContext } from './SecurityContext.js';
 
 // ── Opcode range constants (service prefix from bits [23:16]) ─────────────────

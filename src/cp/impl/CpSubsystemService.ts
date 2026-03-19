@@ -5,15 +5,15 @@
  * In multi-node mode (cpMemberCount >= 3): uses full Raft consensus via RaftNode.
  */
 
-import type { RaftCommand } from '../raft/types.js';
+import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
 import type { CPSubsystemConfig } from '../../config/CPSubsystemConfig.js';
 import { CpGroupManager } from '../raft/CpGroupManager.js';
+import { CpStateMachine } from '../raft/CpStateMachine.js';
+import { NotLeaderException } from '../raft/errors.js';
 import { RaftMessageRouter } from '../raft/RaftMessageRouter.js';
 import { RaftTransportAdapter } from '../raft/RaftTransportAdapter.js';
-import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
-import { NotLeaderException } from '../raft/errors.js';
+import type { RaftCommand } from '../raft/types.js';
 import { SingleNodeRaftGroup, type RaftLogEntry as SingleNodeLogEntry } from './SingleNodeRaftGroup.js';
-import { CpStateMachine } from '../raft/CpStateMachine.js';
 
 // ── Exported types (backward compatible) ────────────────────────────────────
 

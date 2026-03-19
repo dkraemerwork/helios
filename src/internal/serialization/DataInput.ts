@@ -6,10 +6,7 @@
  * Block-E path without duplicating the implementation.
  */
 export {
-    ByteArrayObjectDataInput as DataInput,
-    BIG_ENDIAN,
-    LITTLE_ENDIAN,
+    BIG_ENDIAN, ByteArrayObjectDataInput as DataInput, EOFError, LITTLE_ENDIAN,
     NULL_ARRAY_LENGTH,
-    type ByteOrder,
-    EOFError,
+    type ByteOrder
 } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';

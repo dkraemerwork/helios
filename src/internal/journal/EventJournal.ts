@@ -4,9 +4,9 @@
  * Per-partition append-only ring buffer for recording map events.
  * Uses ArrayRingbuffer-style circular buffer with sequence-based access.
  */
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
-import { EventJournalEventType } from '@zenystx/helios-core/internal/journal/EventJournalEvent';
 import type { EventJournalEvent } from '@zenystx/helios-core/internal/journal/EventJournalEvent';
+import { EventJournalEventType } from '@zenystx/helios-core/internal/journal/EventJournalEvent';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 
 export class EventJournal {
     private readonly _capacity: number;

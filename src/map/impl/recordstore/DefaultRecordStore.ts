@@ -7,11 +7,11 @@
  *
  * Thread safety: Bun is single-threaded; no locking required.
  */
+import type { MergeEntryStats, MergeableRecordStore } from '@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryProcessor, MapEntry } from '@zenystx/helios-core/map/EntryProcessor';
 import { SimpleEntryView } from '@zenystx/helios-core/map/impl/SimpleEntryView';
 import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
-import type { MergeEntryStats, MergeableRecordStore } from '@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler';
 
 interface Entry {
     key: Data;

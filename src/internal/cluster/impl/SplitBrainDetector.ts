@@ -11,8 +11,8 @@
  */
 import type { HeliosLifecycleService } from '@zenystx/helios-core/instance/lifecycle/HeliosLifecycleService';
 import { LifecycleState } from '@zenystx/helios-core/instance/lifecycle/LifecycleEvent';
-import type { SplitBrainMergeHandler, MergeableMapStore } from './SplitBrainMergeHandler';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { MergeableMapStore, SplitBrainMergeHandler } from './SplitBrainMergeHandler';
 
 export interface SplitBrainMergeContext {
     /** The map store from the merging (smaller/rejoining) cluster side. */

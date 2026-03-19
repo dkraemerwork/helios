@@ -1,5 +1,5 @@
-import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import { serializeBinaryClusterMessage as serializeBinaryClusterMessageOnMain } from '@zenystx/helios-core/cluster/tcp/BinarySerializationStrategy';
+import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import type { OutboundBatcher } from '@zenystx/helios-core/cluster/tcp/OutboundBatcher';
 import type { SpawnContext, ThreadHandle } from '@zenystx/scatterjs';
 import { Channel, ChannelClosedError, scatter } from '@zenystx/scatterjs';

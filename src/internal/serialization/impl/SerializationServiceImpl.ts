@@ -6,7 +6,12 @@
  * BufferPool wiring, and DataSerializerHook registration.
  */
 import { Bits } from '@zenystx/helios-core/internal/nio/Bits';
+import {
+    CompactStreamSerializer,
+    type CompactSerializable,
+} from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import type { GenericRecord } from '@zenystx/helios-core/internal/serialization/GenericRecord';
 import { BufferPool } from '@zenystx/helios-core/internal/serialization/impl/bufferpool/BufferPool';
 import { ByteArrayObjectDataInput, type ByteOrder } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataInput';
 import { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
@@ -16,11 +21,6 @@ import { SerializationConfig } from '@zenystx/helios-core/internal/serialization
 import { SerializationConstants } from '@zenystx/helios-core/internal/serialization/impl/SerializationConstants';
 import type { SerializerAdapter } from '@zenystx/helios-core/internal/serialization/impl/SerializerAdapter';
 import type { InternalSerializationService } from '@zenystx/helios-core/internal/serialization/InternalSerializationService';
-import {
-    CompactStreamSerializer,
-    type CompactSerializable,
-} from '@zenystx/helios-core/internal/serialization/compact/CompactSerializer';
-import type { GenericRecord } from '@zenystx/helios-core/internal/serialization/GenericRecord';
 import {
     PortableRegistry,
     PortableSerializer,

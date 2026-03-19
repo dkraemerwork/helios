@@ -1,5 +1,5 @@
-import { ClientMessage } from '../ClientMessage.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import { ClientMessage } from '../ClientMessage.js';
 import { CodecUtil } from './builtin/CodecUtil.js';
 import { DataCodec } from './builtin/DataCodec.js';
 import {

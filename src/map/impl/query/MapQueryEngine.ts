@@ -13,9 +13,9 @@ import { IterationType } from '@zenystx/helios-core/internal/util/IterationType'
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
 import { QueryResult } from '@zenystx/helios-core/map/impl/query/QueryResult';
 import { QueryResultRow } from '@zenystx/helios-core/map/impl/query/QueryResultRow';
-import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import { MultiPartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl';
 import { PartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl';
+import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 

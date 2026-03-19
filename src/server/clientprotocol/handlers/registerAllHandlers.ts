@@ -10,56 +10,55 @@
  * Port of Hazelcast {@code CompositeMessageTaskFactory} registration.
  */
 
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type { ClientSessionRegistry }   from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';
-import type { TopologyPublisher }        from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
 import type { SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
+import type { ClientSessionRegistry } from '@zenystx/helios-core/server/clientprotocol/ClientSessionRegistry.js';
+import type { TopologyPublisher } from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
 import type { NearCacheInvalidationManager } from '@zenystx/helios-core/spi/impl/NearCacheInvalidationManager.js';
 
-import { registerClientServiceHandlers, DistributedObjectRegistry }
-    from './ClientServiceHandlers.js';
+import { registerCacheServiceHandlers } from './CacheServiceHandlers.js';
+import { registerCardinalityServiceHandlers } from './CardinalityServiceHandlers.js';
+import { DistributedObjectRegistry, registerClientServiceHandlers } from './ClientServiceHandlers.js';
+import { registerCpServiceHandlers } from './CpServiceHandlers.js';
+import { registerExecutorServiceHandlers } from './ExecutorServiceHandlers.js';
+import { registerFlakeIdServiceHandlers } from './FlakeIdServiceHandlers.js';
+import { registerListServiceHandlers } from './ListServiceHandlers.js';
+import { registerMapServiceHandlers } from './MapServiceHandlers.js';
+import { registerMultiMapServiceHandlers } from './MultiMapServiceHandlers.js';
 import { registerNearCacheInvalidationHandlers } from './NearCacheInvalidationHandler.js';
-import { registerMapServiceHandlers }          from './MapServiceHandlers.js';
-import { registerQueueServiceHandlers }        from './QueueServiceHandlers.js';
-import { registerTopicServiceHandlers }        from './TopicServiceHandlers.js';
-import { registerListServiceHandlers }         from './ListServiceHandlers.js';
-import { registerSetServiceHandlers }          from './SetServiceHandlers.js';
-import { registerMultiMapServiceHandlers }     from './MultiMapServiceHandlers.js';
+import { registerPnCounterServiceHandlers } from './PnCounterServiceHandlers.js';
+import { registerQueueServiceHandlers } from './QueueServiceHandlers.js';
 import { registerReplicatedMapServiceHandlers } from './ReplicatedMapServiceHandlers.js';
-import { registerRingbufferServiceHandlers }   from './RingbufferServiceHandlers.js';
-import { registerCacheServiceHandlers }        from './CacheServiceHandlers.js';
-import { registerTransactionServiceHandlers }  from './TransactionServiceHandlers.js';
-import { registerSqlServiceHandlers }          from './SqlServiceHandlers.js';
-import { registerExecutorServiceHandlers }     from './ExecutorServiceHandlers.js';
-import { registerCpServiceHandlers }           from './CpServiceHandlers.js';
-import { registerFlakeIdServiceHandlers }      from './FlakeIdServiceHandlers.js';
-import { registerPnCounterServiceHandlers }    from './PnCounterServiceHandlers.js';
-import { registerCardinalityServiceHandlers }  from './CardinalityServiceHandlers.js';
+import { registerRingbufferServiceHandlers } from './RingbufferServiceHandlers.js';
+import { registerSetServiceHandlers } from './SetServiceHandlers.js';
+import { registerSqlServiceHandlers } from './SqlServiceHandlers.js';
+import { registerTopicServiceHandlers } from './TopicServiceHandlers.js';
+import { registerTransactionServiceHandlers } from './TransactionServiceHandlers.js';
 
 import type {
-    MapServiceOperations,
-    QueueServiceOperations,
-    TopicServiceOperations,
-    ListServiceOperations,
-    SetServiceOperations,
-    MultiMapServiceOperations,
-    ReplicatedMapServiceOperations,
-    RingbufferServiceOperations,
-    CacheServiceOperations,
-    TransactionServiceOperations,
-    SqlServiceOperations,
-    ExecutorServiceOperations,
-    CpGroupOperations,
-    CpSessionOperations,
     AtomicLongOperations,
     AtomicRefOperations,
+    CacheServiceOperations,
+    CardinalityEstimatorOperations,
     CountDownLatchOperations,
+    CpGroupOperations,
     CPMapOperations,
-    SemaphoreOperations,
+    CpSessionOperations,
+    ExecutorServiceOperations,
     FencedLockOperations,
     FlakeIdGeneratorOperations,
+    ListServiceOperations,
+    MapServiceOperations,
+    MultiMapServiceOperations,
     PnCounterOperations,
-    CardinalityEstimatorOperations,
+    QueueServiceOperations,
+    ReplicatedMapServiceOperations,
+    RingbufferServiceOperations,
+    SemaphoreOperations,
+    SetServiceOperations,
+    SqlServiceOperations,
+    TopicServiceOperations,
+    TransactionServiceOperations,
 } from './ServiceOperations.js';
 
 // ── Options ───────────────────────────────────────────────────────────────────

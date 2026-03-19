@@ -1,8 +1,8 @@
 /**
  * Port of {@code com.hazelcast.client.impl.protocol.codec.QueueOfferCodec}.
  */
-import { ClientMessage } from '../ClientMessage';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { ClientMessage } from '../ClientMessage';
 import { DataCodec } from './builtin/DataCodec';
 import { BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from './builtin/FixedSizeTypesCodec';
 import { StringCodec } from './builtin/StringCodec';

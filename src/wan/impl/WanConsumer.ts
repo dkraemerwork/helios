@@ -6,11 +6,11 @@
  */
 import type { WanReplicationEventBatchMsg } from '@zenystx/helios-core/cluster/tcp/ClusterMessage.js';
 import type { WanConsumerConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
-import type { SplitBrainMergeData } from '@zenystx/helios-core/spi/merge/MergingValue.js';
-import type { MergePolicyProvider } from '@zenystx/helios-core/spi/merge/MergePolicyProvider.js';
-import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
-import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData.js';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
+import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData.js';
+import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService.js';
+import type { MergePolicyProvider } from '@zenystx/helios-core/spi/merge/MergePolicyProvider.js';
+import type { SplitBrainMergeData } from '@zenystx/helios-core/spi/merge/MergingValue.js';
 
 // ── SplitBrainMergeData adapter for WAN events ────────────────────────────────
 

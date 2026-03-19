@@ -20,18 +20,15 @@
 import type { Aggregator } from '@zenystx/helios-core/aggregation/Aggregator';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig';
 import type { MapConfig } from '@zenystx/helios-core/config/MapConfig';
-import { SplitBrainProtectionOn } from '@zenystx/helios-core/config/SplitBrainProtectionConfig';
 import type { MapStoreConfig } from '@zenystx/helios-core/config/MapStoreConfig';
 import { QueryCacheConfig } from '@zenystx/helios-core/config/QueryCacheConfig';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { SplitBrainProtectionOn } from '@zenystx/helios-core/config/SplitBrainProtectionConfig';
 import type { MapEventJournal } from '@zenystx/helios-core/internal/journal/MapEventJournal';
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { EntryListener } from '@zenystx/helios-core/map/EntryListener';
 import { EntryEventImpl } from '@zenystx/helios-core/map/EntryListener';
 import type { IMap } from '@zenystx/helios-core/map/IMap';
-import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
-import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import type { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerService';
-import { QueryCacheManager } from '@zenystx/helios-core/map/impl/querycache/QueryCacheManager';
 import { MapService } from '@zenystx/helios-core/map/impl/MapService';
 import { EmptyMapDataStore } from '@zenystx/helios-core/map/impl/mapstore/EmptyMapDataStore';
 import type { MapDataStore } from '@zenystx/helios-core/map/impl/mapstore/MapDataStore';
@@ -43,15 +40,18 @@ import { PutIfAbsentOperation } from '@zenystx/helios-core/map/impl/operation/Pu
 import { PutOperation } from '@zenystx/helios-core/map/impl/operation/PutOperation';
 import { RemoveOperation } from '@zenystx/helios-core/map/impl/operation/RemoveOperation';
 import { SetOperation } from '@zenystx/helios-core/map/impl/operation/SetOperation';
+import { QueryCacheManager } from '@zenystx/helios-core/map/impl/querycache/QueryCacheManager';
 import type { RecordStore } from '@zenystx/helios-core/map/impl/recordstore/RecordStore';
+import type { QueryCache } from '@zenystx/helios-core/map/QueryCache';
+import type { Projection } from '@zenystx/helios-core/projection/Projection';
 import { IndexRegistryImpl } from '@zenystx/helios-core/query/impl/IndexRegistryImpl';
 import { canonicalizeAttribute } from '@zenystx/helios-core/query/impl/IndexUtils';
+import { MultiPartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl';
+import { PartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl';
 import type { QueryableEntry } from '@zenystx/helios-core/query/impl/QueryableEntry';
 import { IndexMatchHint } from '@zenystx/helios-core/query/impl/QueryContext';
 import type { SortedIndex } from '@zenystx/helios-core/query/impl/SortedIndex';
 import type { Predicate } from '@zenystx/helios-core/query/Predicate';
-import { PartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/PartitionPredicateImpl';
-import { MultiPartitionPredicateImpl } from '@zenystx/helios-core/query/impl/predicates/MultiPartitionPredicateImpl';
 import type { Operation } from '@zenystx/helios-core/spi/impl/operationservice/Operation';
 import type { NodeEngine } from '@zenystx/helios-core/spi/NodeEngine';
 
@@ -758,12 +758,6 @@ export class MapProxy<K, V> implements IMap<K, V> {
         this._addToIndex(key, newValue);
     }
 
-    /** Read the current value for a key without going through get() (no load-on-miss). */
-    private async _readCurrentValue(key: K): Promise<V | null> {
-        const kd = this._toData(key);
-        const partitionId = this._partitionIdForKeyData(kd);
-        return this._readCurrentValueByData(kd, partitionId);
-    }
 
     private async _readCurrentValueByData(keyData: Data, partitionId: number): Promise<V | null> {
         const store = this._containerService.getOrCreateRecordStore(this._name, partitionId);

@@ -3,8 +3,8 @@
  *
  * Wire format: BEGIN_FRAME + initial frame (4-byte LE port) + string frame (host) + END_FRAME
  */
-import { ClientMessage } from '../../ClientMessage';
 import { Address } from '@zenystx/helios-core/cluster/Address';
+import { ClientMessage } from '../../ClientMessage';
 import { CodecUtil } from '../builtin/CodecUtil';
 import { INT_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
 import { StringCodec } from '../builtin/StringCodec';

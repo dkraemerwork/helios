@@ -1,14 +1,12 @@
+import { EventJournalConfig } from '@zenystx/helios-core/config/EventJournalConfig.js';
 import { EvictionConfig } from '@zenystx/helios-core/config/EvictionConfig.js';
 import { EvictionPolicy } from '@zenystx/helios-core/config/EvictionPolicy.js';
-import { EventJournalConfig } from '@zenystx/helios-core/config/EventJournalConfig.js';
 import {
     DEFAULT_MAP_ASYNC_BACKUP_COUNT,
     DEFAULT_MAP_BACKUP_COUNT,
-    DEFAULT_MAP_EVICTION_POLICY,
     DEFAULT_MAP_MAX_IDLE_SECONDS,
     DEFAULT_MAP_MAX_SIZE,
-    DEFAULT_MAP_MAX_SIZE_POLICY,
-    DEFAULT_MAP_TTL_SECONDS,
+    DEFAULT_MAP_TTL_SECONDS
 } from '@zenystx/helios-core/config/HazelcastDefaults.js';
 import type { IndexConfig } from '@zenystx/helios-core/config/IndexConfig.js';
 import { InMemoryFormat } from '@zenystx/helios-core/config/InMemoryFormat.js';

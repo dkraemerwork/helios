@@ -1,9 +1,9 @@
 import { jetstream, jetstreamManager, type ConsumerMessages } from '@nats-io/jetstream';
 import { type NatsConnection, type Subscription } from '@nats-io/transport-node';
+import { ProcessingGuarantee } from '../JobConfig.js';
+import type { EdgeType } from '../PipelineDescriptor.js';
 import type { AsyncChannel } from './AsyncChannel.js';
 import type { ProcessorItem } from './ProcessorItem.js';
-import type { EdgeType } from '../PipelineDescriptor.js';
-import { ProcessingGuarantee } from '../JobConfig.js';
 
 const BARRIER_HEADER = 'blitz-barrier';
 const SNAPSHOT_ID_HEADER = 'blitz-snapshot-id';

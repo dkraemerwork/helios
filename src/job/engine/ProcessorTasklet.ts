@@ -1,10 +1,10 @@
-import type { AsyncChannel } from './AsyncChannel.js';
-import type { ProcessorItem } from './ProcessorItem.js';
+import { ProcessingGuarantee } from '../JobConfig.js';
 import type { VertexMetrics } from '../metrics/BlitzJobMetrics.js';
-import type { SnapshotStore } from '../snapshot/SnapshotStore.js';
 import { LatencyTracker } from '../metrics/LatencyTracker.js';
 import { WatermarkTracker } from '../metrics/WatermarkTracker.js';
-import { ProcessingGuarantee } from '../JobConfig.js';
+import type { SnapshotStore } from '../snapshot/SnapshotStore.js';
+import type { AsyncChannel } from './AsyncChannel.js';
+import type { ProcessorItem } from './ProcessorItem.js';
 
 const ABORTED = Symbol('aborted');
 

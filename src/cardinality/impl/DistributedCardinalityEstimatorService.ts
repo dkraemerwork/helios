@@ -17,8 +17,8 @@
  *   At p=14: error ≈ ±0.81%
  */
 
-import { HyperLogLogImpl } from './HyperLogLogImpl.js';
 import type { HyperLogLog } from '../HyperLogLog.js';
+import { HyperLogLogImpl } from './HyperLogLogImpl.js';
 
 /** Wire representation for backup/migration. */
 export interface HllSnapshot {

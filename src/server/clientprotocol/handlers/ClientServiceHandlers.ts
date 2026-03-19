@@ -26,6 +26,14 @@
  * CreateProxyTask, DestroyProxyTask, etc.).
  */
 
+import type { MigrationListener } from '@zenystx/helios-core/internal/partition/MigrationListener.js';
+import { compactFieldKindFromWire, compactFieldKindToWire, Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
+import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
+import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
+import type { TopologyPublisher } from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
+import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
+import { ClientAddMigrationListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddMigrationListenerCodec.js';
+import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
 import type { ClientMessage } from '../../../client/impl/protocol/ClientMessage.js';
 import { ClientCreateProxyCodec } from '../../../client/impl/protocol/codec/ClientCreateProxyCodec.js';
 import { ClientDestroyProxyCodec } from '../../../client/impl/protocol/codec/ClientDestroyProxyCodec.js';
@@ -34,14 +42,6 @@ import { EntryListCodec } from '../../../client/impl/protocol/codec/builtin/Entr
 import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
 import { ListUUIDCodec } from '../../../client/impl/protocol/codec/builtin/ListUUIDCodec.js';
 import { StringCodec } from '../../../client/impl/protocol/codec/builtin/StringCodec.js';
-import { ClientAddClusterViewListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddClusterViewListenerCodec.js';
-import { ClientAddMigrationListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddMigrationListenerCodec.js';
-import { ClientAddPartitionLostListenerCodec } from '@zenystx/helios-core/server/clientprotocol/codec/ClientAddPartitionLostListenerCodec.js';
-import { compactFieldKindFromWire, compactFieldKindToWire, Schema, type SchemaField, type SchemaService } from '@zenystx/helios-core/internal/serialization/compact/SchemaService.js';
-import type { ClientMessageDispatcher } from '@zenystx/helios-core/server/clientprotocol/ClientMessageDispatcher.js';
-import type { TopologyPublisher } from '@zenystx/helios-core/server/clientprotocol/TopologyPublisher.js';
-import type { MigrationListener } from '@zenystx/helios-core/internal/partition/MigrationListener.js';
-import type { ILogger } from '@zenystx/helios-core/logging/Logger.js';
 
 // ── Message type constants not covered by existing codecs ─────────────────────
 
@@ -351,7 +351,7 @@ export function registerClientServiceHandlers(opts: ClientServiceHandlersOptions
 // ── Inline response encoders ──────────────────────────────────────────────────
 
 import { ClientMessage as CM } from '../../../client/impl/protocol/ClientMessage.js';
-import { FixedSizeTypesCodec, BOOLEAN_SIZE_IN_BYTES, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
+import { BOOLEAN_SIZE_IN_BYTES, BYTE_SIZE_IN_BYTES, FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, UUID_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 
 /** Request initial frame header: type(4) + correlationId(8) + partitionId(4) = 16 */
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES; // 16

@@ -12,10 +12,10 @@
  *   END_FRAME (addressMap list end)
  *   END_FRAME
  */
-import { ClientMessage } from '../../ClientMessage';
 import { Address } from '@zenystx/helios-core/cluster/Address';
 import { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo';
 import { EndpointQualifier } from '@zenystx/helios-core/instance/EndpointQualifier';
+import { ClientMessage } from '../../ClientMessage';
 import { CodecUtil } from '../builtin/CodecUtil';
 import { BOOLEAN_SIZE_IN_BYTES, FixedSizeTypesCodec, UUID_SIZE_IN_BYTES } from '../builtin/FixedSizeTypesCodec';
 import { MapCodec } from '../builtin/MapCodec';

@@ -11,11 +11,11 @@
  *   0x000303 — PARTITIONS_VIEW event (partition table update)
  */
 
+import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo.js';
 import { ClientMessage, ClientMessageFrame } from '../../../client/impl/protocol/ClientMessage.js';
 import { FixedSizeTypesCodec, INT_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES } from '../../../client/impl/protocol/codec/builtin/FixedSizeTypesCodec.js';
 import { ListMultiFrameCodec } from '../../../client/impl/protocol/codec/builtin/ListMultiFrameCodec.js';
 import { MemberInfoCodec } from '../../../client/impl/protocol/codec/custom/MemberInfoCodec.js';
-import type { MemberInfo } from '@zenystx/helios-core/cluster/MemberInfo.js';
 
 // ── Message type constants ────────────────────────────────────────────────────
 // These MUST match the official hazelcast-client-protocol definitions.

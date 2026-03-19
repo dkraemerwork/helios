@@ -8,11 +8,11 @@
  *
  * Message type: 0x013C00 (request), 0x013C01 (response)
  */
+import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { ClientMessage } from '../ClientMessage';
 import { ClientMessage as CM } from '../ClientMessage';
-import { StringCodec } from './builtin/StringCodec';
 import { DataCodec } from './builtin/DataCodec';
-import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
+import { StringCodec } from './builtin/StringCodec';
 
 export class MapProjectWithPredicateCodec {
     static readonly REQUEST_MESSAGE_TYPE = 0x013C00;

@@ -16,11 +16,11 @@
  * Block 16.A5: Added SerializationStrategy support, new message types,
  * send()/disconnectPeer()/onMessage, membership-driven connection management.
  */
-import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import { BinarySerializationStrategy } from '@zenystx/helios-core/cluster/tcp/BinarySerializationStrategy';
+import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import { OutboundBatcher } from '@zenystx/helios-core/cluster/tcp/OutboundBatcher';
 import { ScatterOutboundEncoder, type ScatterOutboundEncoderOptions } from '@zenystx/helios-core/cluster/tcp/ScatterOutboundEncoder';
-import { JsonSerializationStrategy, type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
+import { type SerializationStrategy } from '@zenystx/helios-core/cluster/tcp/SerializationStrategy';
 import { Eventloop, type EventloopChannel, type EventloopServer } from '@zenystx/helios-core/internal/eventloop/Eventloop';
 import { wireBufferPool } from '@zenystx/helios-core/internal/util/WireBufferPool';
 

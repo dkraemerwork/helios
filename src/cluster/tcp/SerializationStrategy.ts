@@ -1,7 +1,7 @@
+import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data';
 import type { ByteArrayObjectDataOutput } from '@zenystx/helios-core/internal/serialization/impl/ByteArrayObjectDataOutput';
 import { HeapData } from '@zenystx/helios-core/internal/serialization/impl/HeapData';
-import type { ClusterMessage } from '@zenystx/helios-core/cluster/tcp/ClusterMessage';
 
 export interface SerializationStrategy {
     serialize(message: ClusterMessage): Uint8Array;

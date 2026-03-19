@@ -7,7 +7,6 @@
  *
  * Port of {@code com.hazelcast.config.ConfigValidator} (Hazelcast OSS 5.5.x).
  */
-import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig.js";
 import {
     DEFAULT_CLUSTER_NAME,
     DEFAULT_MAP_BACKUP_COUNT,
@@ -16,6 +15,7 @@ import {
     DEFAULT_PORT,
     DEFAULT_QUEUE_BACKUP_COUNT,
 } from "@zenystx/helios-core/config/HazelcastDefaults.js";
+import type { HeliosConfig } from "@zenystx/helios-core/config/HeliosConfig.js";
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
