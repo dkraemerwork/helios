@@ -6,7 +6,7 @@
  * configured target endpoint, with automatic reconnection on failure.
  */
 import { WanAcknowledgeType, type WanBatchPublisherConfig } from '@zenystx/helios-core/config/WanReplicationConfig.js';
-import type { WanReplicationEventBatchMsg } from '@zenystx/helios-core/cluster/tcp/ClusterMessage.js';
+import type { WanConsistencyCheckRequestMsg, WanConsistencyCheckResponseMsg, WanReplicationEventBatchMsg } from '@zenystx/helios-core/cluster/tcp/ClusterMessage.js';
 import type { WanReplicationEvent } from '@zenystx/helios-core/wan/WanReplicationEvent.js';
 import { WanReplicationEventQueue } from '@zenystx/helios-core/wan/impl/WanReplicationEventQueue.js';
 
@@ -83,6 +83,13 @@ export class WanBatchPublisher {
     /** Pending ACKs awaiting resolution: batchId → { resolve, reject, timer }. */
     private readonly _pendingAcks = new Map<string, {
         resolve: () => void;
+        reject: (err: Error) => void;
+        timer: ReturnType<typeof setTimeout>;
+    }>();
+
+    /** Pending consistency-check responses: requestId → { resolve, reject, timer }. */
+    private readonly _pendingConsistencyChecks = new Map<string, {
+        resolve: (msg: WanConsistencyCheckResponseMsg) => void;
         reject: (err: Error) => void;
         timer: ReturnType<typeof setTimeout>;
     }>();
@@ -174,6 +181,13 @@ export class WanBatchPublisher {
             pending.reject(new Error(`WAN publisher stopped (batchId=${batchId})`));
         }
         this._pendingAcks.clear();
+
+        // Reject all pending consistency checks
+        for (const [requestId, pending] of this._pendingConsistencyChecks) {
+            clearTimeout(pending.timer);
+            pending.reject(new Error(`WAN publisher stopped (requestId=${requestId})`));
+        }
+        this._pendingConsistencyChecks.clear();
     }
 
     /**
@@ -242,6 +256,49 @@ export class WanBatchPublisher {
                 }
             }
         }
+    }
+
+    /**
+     * Send a {@code WAN_CONSISTENCY_CHECK_REQUEST} to the target cluster and
+     * return the response. The response includes the remote leaf hashes so the
+     * caller can reconstruct the remote Merkle tree and compute exact diffs.
+     *
+     * Rejects if the publisher is not connected, stopped, or the request times out.
+     */
+    async sendConsistencyCheckRequest(
+        mapName: string,
+        localRootHex: string,
+        timeoutMs = 30_000,
+    ): Promise<WanConsistencyCheckResponseMsg> {
+        if (this._state === WanPublisherState.STOPPED || this._socket === null) {
+            return Promise.reject(new Error('WAN publisher is not connected'));
+        }
+
+        const requestId = `wan-cc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const request: WanConsistencyCheckRequestMsg = {
+            type: 'WAN_CONSISTENCY_CHECK_REQUEST',
+            requestId,
+            sourceClusterName: this._sourceClusterName,
+            mapName,
+            merkleRootHex: localRootHex,
+        };
+
+        return new Promise<WanConsistencyCheckResponseMsg>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this._pendingConsistencyChecks.delete(requestId);
+                reject(new Error(`WAN consistency check timeout (requestId=${requestId})`));
+            }, timeoutMs);
+
+            this._pendingConsistencyChecks.set(requestId, { resolve, reject, timer });
+
+            if (this._socket !== null) {
+                this._socket.write(encodeMessage(request));
+            } else {
+                clearTimeout(timer);
+                this._pendingConsistencyChecks.delete(requestId);
+                reject(new Error('WAN publisher socket disconnected before send'));
+            }
+        });
     }
 
     // ── Connection management ─────────────────────────────────────────────────
@@ -337,7 +394,8 @@ export class WanBatchPublisher {
 
     private _handleIncomingMessage(msg: unknown): void {
         if (typeof msg !== 'object' || msg === null) return;
-        const typed = msg as { type?: string; batchId?: string; success?: boolean; error?: string };
+        const typed = msg as { type?: string; batchId?: string; requestId?: string; success?: boolean; error?: string };
+
         if (typed.type === 'WAN_REPLICATION_ACK' && typeof typed.batchId === 'string') {
             const pending = this._pendingAcks.get(typed.batchId);
             if (pending !== undefined) {
@@ -348,6 +406,16 @@ export class WanBatchPublisher {
                 } else {
                     pending.reject(new Error(typed.error ?? 'WAN ACK failure'));
                 }
+            }
+            return;
+        }
+
+        if (typed.type === 'WAN_CONSISTENCY_CHECK_RESPONSE' && typeof typed.requestId === 'string') {
+            const pending = this._pendingConsistencyChecks.get(typed.requestId);
+            if (pending !== undefined) {
+                clearTimeout(pending.timer);
+                this._pendingConsistencyChecks.delete(typed.requestId);
+                pending.resolve(msg as WanConsistencyCheckResponseMsg);
             }
         }
     }

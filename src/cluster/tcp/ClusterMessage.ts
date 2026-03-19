@@ -840,14 +840,21 @@ export interface WanConsistencyCheckRequestMsg {
   readonly merkleRootHex: string;
 }
 
-/** Response to a consistency check — reports diverging leaf count. */
+/** Response to a consistency check — reports diverging leaf count and leaf hashes. */
 export interface WanConsistencyCheckResponseMsg {
   readonly type: 'WAN_CONSISTENCY_CHECK_RESPONSE';
   readonly requestId: string;
   /** true if the remote Merkle root matches the local root exactly. */
   readonly consistent: boolean;
-  /** Number of differing leaves when not consistent. */
+  /** Number of differing leaves when not consistent; 0 when consistent. */
   readonly differingLeafCount: number;
+  /**
+   * Hex-encoded SHA-256 hashes for every leaf in the responder's Merkle tree,
+   * ordered by leaf index (0 … leafCount-1). Included so the requester can
+   * reconstruct the remote tree and compute the exact set of differing leaves
+   * without a second round-trip.
+   */
+  readonly leafHashes: readonly string[];
 }
 
 export type ClusterMessage =

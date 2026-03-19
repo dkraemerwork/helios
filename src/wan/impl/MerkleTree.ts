@@ -99,6 +99,34 @@ export class MerkleTree {
     }
 
     /**
+     * Returns the hex-encoded SHA-256 hash for each leaf, ordered by leaf index
+     * (0 … leafCount-1). Used to serialize the local tree state for wire transfer
+     * so a remote peer can reconstruct an equivalent tree for comparison.
+     */
+    getLeafHashes(): string[] {
+        return this._leafNodes.map((node) => node.hash.toString('hex'));
+    }
+
+    /**
+     * Build a MerkleTree whose leaf hashes are set directly from the supplied
+     * hex strings rather than being computed from entry buckets. The resulting
+     * tree has the correct root hash and leaf hashes for Merkle comparison, but
+     * its internal entry buckets are empty — it is suitable only for structural
+     * comparison via {@link getDifferingLeaves}.
+     */
+    static fromLeafHashes(leafHashes: readonly string[]): MerkleTree {
+        const leafCount = leafHashes.length;
+        // depth = log2(leafCount); fall back to 8 if the count is not a power of two
+        const depth = leafCount > 0 ? Math.round(Math.log2(leafCount)) : 8;
+        const tree = new MerkleTree(depth);
+        for (let i = 0; i < Math.min(leafCount, tree._leafNodes.length); i++) {
+            tree._leafNodes[i].hash = Buffer.from(leafHashes[i], 'hex');
+        }
+        tree.root = tree._buildTree(0, tree._leafCount - 1);
+        return tree;
+    }
+
+    /**
      * Update a single entry and recompute affected hashes up the tree.
      */
     updateEntry(key: string, value: Buffer): void {

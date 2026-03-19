@@ -621,6 +621,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.requestId);
                 out.writeBoolean(message.consistent);
                 out.writeInt(message.differingLeafCount);
+                out.writeStringArray([...message.leafHashes]);
                 return;
         }
     }
@@ -1079,6 +1080,7 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                     requestId: readRequiredString(inp),
                     consistent: inp.readBoolean(),
                     differingLeafCount: inp.readInt(),
+                    leafHashes: inp.readStringArray() ?? [],
                 };
         }
         throw new Error(`Unknown message type ID: ${messageTypeId}`);
