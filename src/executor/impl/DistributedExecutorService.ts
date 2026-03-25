@@ -246,7 +246,6 @@ export class DistributedExecutorService implements IExecutorService {
     private _submitToPartition<T>(task: TaskCallable<T>, partitionId: number): InvocationFuture<T> {
         // Route to the partition owner — in single-node always local
         const ownerAddress = this._nodeEngine.getPartitionService().getPartitionOwner(partitionId);
-        const _ = ownerAddress; // In single-node, all partitions are local
         return this._submitToContainer(task, this._localMemberUuid);
     }
 

@@ -363,7 +363,7 @@ export class NearCacheInvalidationManager {
      * @param sessionId  The reconnecting session.
      * @param mapNames   Maps the session has a near-cache for.
      */
-    pushMetadataToSession(sessionId: string, mapNames: string[]): MapInvalidationMetadata[] {
+    pushMetadataToSession(mapNames: string[]): MapInvalidationMetadata[] {
         return this.fetchMetadata(mapNames);
     }
 

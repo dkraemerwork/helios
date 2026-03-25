@@ -63,26 +63,6 @@ import {
 
 // ── Field size classification ─────────────────────────────────────────────────
 
-/** Returns the fixed byte width of a kind, or 0 for variable-size fields. */
-function fixedSizeInBytes(kind: FieldKind): number {
-    switch (kind) {
-        case FieldKind.BOOLEAN:          return 0; // bit-packed, handled separately
-        case FieldKind.INT8:             return 1;
-        case FieldKind.INT16:            return 2;
-        case FieldKind.INT32:            return 4;
-        case FieldKind.INT64:            return 8;
-        case FieldKind.FLOAT32:          return 4;
-        case FieldKind.FLOAT64:          return 8;
-        case FieldKind.NULLABLE_BOOLEAN: return 0; // variable (null flag + 1 byte)
-        case FieldKind.NULLABLE_INT8:    return 0; // variable
-        case FieldKind.NULLABLE_INT16:   return 0; // variable
-        case FieldKind.NULLABLE_INT32:   return 0; // variable
-        case FieldKind.NULLABLE_INT64:   return 0; // variable
-        case FieldKind.NULLABLE_FLOAT32: return 0; // variable
-        case FieldKind.NULLABLE_FLOAT64: return 0; // variable
-        default:                         return 0; // variable
-    }
-}
 
 function isFixedSize(kind: FieldKind): boolean {
     switch (kind) {
@@ -98,9 +78,6 @@ function isFixedSize(kind: FieldKind): boolean {
     }
 }
 
-function isBooleanKind(kind: FieldKind): boolean {
-    return kind === FieldKind.BOOLEAN;
-}
 
 const BYTE_OFFSET_READER_RANGE = 255;
 const SHORT_OFFSET_READER_RANGE = 65535;
@@ -1132,105 +1109,6 @@ function writeVarField(
     }
 }
 
-function skipVarField(inp: ByteArrayObjectDataInput, field: SchemaField, serializer: CompactStreamSerializer): void {
-    switch (field.kind) {
-        case FieldKind.STRING: {
-            const len = inp.readInt();
-            if (len > 0) inp.skipBytes(len);
-            break;
-        }
-        case FieldKind.DECIMAL: {
-            const scale = inp.readInt();
-            if (scale !== -1) {
-                const unscaledLen = inp.readInt();
-                if (unscaledLen > 0) inp.skipBytes(unscaledLen);
-            }
-            break;
-        }
-        case FieldKind.TIME: {
-            const h = inp.readByte();
-            if (h !== -1) inp.skipBytes(3); // minute + second + nano(4 bytes)
-            break;
-        }
-        case FieldKind.DATE: {
-            const year = inp.readInt();
-            if (year !== (0x80000000 | 0)) inp.skipBytes(2);
-            break;
-        }
-        case FieldKind.TIMESTAMP: {
-            readDateFromInput(inp);
-            readTimeFromInput(inp);
-            break;
-        }
-        case FieldKind.TIMESTAMP_WITH_TIMEZONE: {
-            readTimestampFromInput(inp);
-            inp.skipBytes(4);
-            break;
-        }
-        case FieldKind.COMPACT: {
-            serializer.readNestedCompact(inp);
-            break;
-        }
-        case FieldKind.NULLABLE_BOOLEAN:
-        case FieldKind.NULLABLE_INT8: {
-            const flag = inp.readByte();
-            if (flag !== 0) inp.skipBytes(1);
-            break;
-        }
-        case FieldKind.NULLABLE_INT16: {
-            const flag = inp.readByte();
-            if (flag !== 0) inp.skipBytes(2);
-            break;
-        }
-        case FieldKind.NULLABLE_INT32:
-        case FieldKind.NULLABLE_FLOAT32: {
-            const flag = inp.readByte();
-            if (flag !== 0) inp.skipBytes(4);
-            break;
-        }
-        case FieldKind.NULLABLE_INT64:
-        case FieldKind.NULLABLE_FLOAT64: {
-            const flag = inp.readByte();
-            if (flag !== 0) inp.skipBytes(8);
-            break;
-        }
-        case FieldKind.ARRAY_OF_BOOLEAN: {
-            const bitCount = inp.readInt();
-            if (bitCount > 0) inp.skipBytes(Math.ceil(bitCount / 8));
-            break;
-        }
-        case FieldKind.ARRAY_OF_INT8: {
-            const len = inp.readInt();
-            if (len > 0) inp.skipBytes(len);
-            break;
-        }
-        case FieldKind.ARRAY_OF_INT16: {
-            const len = inp.readInt();
-            if (len > 0) inp.skipBytes(len * 2);
-            break;
-        }
-        case FieldKind.ARRAY_OF_INT32:
-        case FieldKind.ARRAY_OF_FLOAT32: {
-            const len = inp.readInt();
-            if (len > 0) inp.skipBytes(len * 4);
-            break;
-        }
-        case FieldKind.ARRAY_OF_INT64:
-        case FieldKind.ARRAY_OF_FLOAT64: {
-            const len = inp.readInt();
-            if (len > 0) inp.skipBytes(len * 8);
-            break;
-        }
-        default: {
-            // For arrays of complex types: read count + skip each
-            const len = inp.readInt();
-            if (len > 0) {
-                for (let i = 0; i < len; i++) skipVarField(inp, { fieldName: '', kind: elementKindOf(field.kind) }, serializer);
-            }
-            break;
-        }
-    }
-}
 
 function elementKindOf(arrayKind: FieldKind): FieldKind {
     switch (arrayKind) {
@@ -1390,39 +1268,6 @@ function writeGenericRecordToWriter(writer: CompactWriter, schema: Schema, recor
     }
 }
 
-function readVarFieldValue(inp: ByteArrayObjectDataInput, field: SchemaField, serializer: CompactStreamSerializer): unknown {
-    switch (field.kind) {
-        case FieldKind.STRING:               return inp.readString();
-        case FieldKind.DECIMAL:              return readDecimalFromInput(inp);
-        case FieldKind.TIME:                 return readTimeFromInput(inp);
-        case FieldKind.DATE:                 return readDateFromInput(inp);
-        case FieldKind.TIMESTAMP:            return readTimestampFromInput(inp);
-        case FieldKind.TIMESTAMP_WITH_TIMEZONE: return readTimestampWithTimezoneFromInput(inp);
-        case FieldKind.COMPACT:              return serializer.readNestedCompact(inp);
-        case FieldKind.NULLABLE_BOOLEAN:     return readNullable(inp, () => inp.readBoolean());
-        case FieldKind.NULLABLE_INT8:        return readNullable(inp, () => inp.readByte());
-        case FieldKind.NULLABLE_INT16:       return readNullable(inp, () => inp.readShort());
-        case FieldKind.NULLABLE_INT32:       return readNullable(inp, () => inp.readInt());
-        case FieldKind.NULLABLE_INT64:       return readNullable(inp, () => inp.readLong());
-        case FieldKind.NULLABLE_FLOAT32:     return readNullable(inp, () => inp.readFloat());
-        case FieldKind.NULLABLE_FLOAT64:     return readNullable(inp, () => inp.readDouble());
-        case FieldKind.ARRAY_OF_BOOLEAN:     return readBooleanArray(inp);
-        case FieldKind.ARRAY_OF_INT8:        return inp.readByteArray();
-        case FieldKind.ARRAY_OF_INT16:       return inp.readShortArray();
-        case FieldKind.ARRAY_OF_INT32:       return inp.readIntArray();
-        case FieldKind.ARRAY_OF_INT64:       return inp.readLongArray();
-        case FieldKind.ARRAY_OF_FLOAT32:     return inp.readFloatArray();
-        case FieldKind.ARRAY_OF_FLOAT64:     return inp.readDoubleArray();
-        case FieldKind.ARRAY_OF_STRING:      return readNullableArray(inp, () => inp.readString());
-        case FieldKind.ARRAY_OF_DECIMAL:     return readNullableArray(inp, () => readDecimalFromInput(inp));
-        case FieldKind.ARRAY_OF_TIME:        return readNullableArray(inp, () => readTimeFromInput(inp));
-        case FieldKind.ARRAY_OF_DATE:        return readNullableArray(inp, () => readDateFromInput(inp));
-        case FieldKind.ARRAY_OF_TIMESTAMP:   return readNullableArray(inp, () => readTimestampFromInput(inp));
-        case FieldKind.ARRAY_OF_TIMESTAMP_WITH_TIMEZONE: return readNullableArray(inp, () => readTimestampWithTimezoneFromInput(inp));
-        case FieldKind.ARRAY_OF_COMPACT:     return readNullableArray(inp, () => serializer.readNestedCompact(inp));
-        default: return null;
-    }
-}
 
 // ── Nullable encoding: [flag:byte=0(null)|1(non-null)][value?] ────────────────
 
