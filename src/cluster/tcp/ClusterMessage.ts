@@ -517,6 +517,10 @@ export interface ReplicatedMapPutMsg {
   readonly sourceNodeId: string;
   readonly keyData: EncodedData;
   readonly valueData: EncodedData;
+  /** TTL in milliseconds; 0 = never expire. Optional for wire backward-compat. */
+  readonly ttlMillis?: number;
+  /** Wall-clock ms when the entry was written (for expiry computation). */
+  readonly writtenAt?: number;
 }
 
 export interface ReplicatedMapRemoveMsg {

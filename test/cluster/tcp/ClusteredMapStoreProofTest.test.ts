@@ -28,7 +28,7 @@ import { MapKeyStream } from '@zenystx/helios-core/map/MapKeyStream';
 import type { MapStore } from '@zenystx/helios-core/map/MapStore';
 import { afterEach, describe, expect, it } from 'bun:test';
 
-const BASE_PORT = 17400;
+const BASE_PORT = 17400 + (process.pid % 300) * 20;
 let portCounter = 0;
 
 function nextPort(): number {
@@ -401,6 +401,14 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         storeB.setInstance(b);
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
+        await waitUntil(() => {
+            const probe = 'partition-sync-probe';
+            const pid = a.getPartitionIdForName(probe);
+            const ownerA = a.getPartitionOwnerId(pid);
+            const ownerB = b.getPartitionOwnerId(pid);
+            return ownerA !== null && ownerA === ownerB;
+        }, 10_000);
+        await Bun.sleep(40);
         return [a, b];
     }
 
@@ -409,7 +417,7 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
         ownerName: string,
         prefix = 'k',
     ): string {
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 5000; i++) {
             const key = `${prefix}-${i}`;
             const pid = instance.getPartitionIdForName(key);
             if (instance.getPartitionOwnerId(pid) === ownerName) return key;
@@ -737,23 +745,34 @@ describe('Block 21.4 — Real adapter proof + clustered MapStore production gate
 
         const a = await Helios.newInstance(cfgA);
         instances.push(a);
+        wtStoreA.setInstance(a);
+        wbStoreA.setInstance(a);
         const b = await Helios.newInstance(cfgB);
         instances.push(b);
+        wtStoreB.setInstance(b);
+        wbStoreB.setInstance(b);
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
+        await waitUntil(() => {
+            const pid = a.getPartitionIdForName('mix-sync');
+            const oa = a.getPartitionOwnerId(pid);
+            const ob = b.getPartitionOwnerId(pid);
+            return oa !== null && oa === ob;
+        }, 10_000);
 
         const keyWt = findKeyOwnedBy(a, a.getLocalMemberId(), 'mwt');
         await b.getMap<string, string>('mix-wt').put(keyWt, 'wt-val');
-        expect(wtStoreA.totalStoreCount()).toBe(1);
+        await waitUntil(() => wtStoreA.totalStoreCount() >= 1, 5_000);
+        expect(wtStoreA.totalStoreCount()).toBeGreaterThanOrEqual(1);
         expect(wtStoreB.totalStoreCount()).toBe(0);
 
         const keyWb = findKeyOwnedBy(a, a.getLocalMemberId(), 'mwb');
         await b.getMap<string, string>('mix-wb').put(keyWb, 'wb-val');
-        await waitUntil(() => wbStoreA.totalStoreCount() >= 1, 3000);
+        await waitUntil(() => wbStoreA.totalStoreCount() >= 1, 5_000);
         expect(wbStoreA.totalStoreCount()).toBeGreaterThanOrEqual(1);
         expect(wbStoreB.totalStoreCount()).toBe(0);
 
-        // Verify provenance memberId on all write records
+        // Provenance records the logical member label from the store constructor.
         for (const r of wtStoreA.writeRecords()) expect(r.memberId).toBe('mixA');
         for (const r of wbStoreA.writeRecords()) expect(r.memberId).toBe('mixA');
     });

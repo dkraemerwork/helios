@@ -585,7 +585,7 @@ export class DistributedSetService {
 
   private _resyncAll(): void {
     for (const [name, container] of Array.from(this._containers.entries())) {
-      void this._replicateState(name, container);
+      void this._replicateState(name, container).catch(() => {});
     }
   }
 

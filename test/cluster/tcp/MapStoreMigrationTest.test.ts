@@ -24,7 +24,8 @@ import { MapContainerService } from '@zenystx/helios-core/map/impl/MapContainerS
 import { WriteBehindStateHolder } from '@zenystx/helios-core/map/impl/operation/WriteBehindStateHolder';
 import { afterEach, describe, expect, it } from 'bun:test';
 
-const BASE_PORT = 17300;
+// High base + process entropy avoids collisions when the full suite runs in parallel.
+const BASE_PORT = 27300 + (process.pid % 1000) * 20;
 let portCounter = 0;
 
 function nextPort(): number {
@@ -33,7 +34,7 @@ function nextPort(): number {
 
 async function waitUntil(
     predicate: () => boolean | Promise<boolean>,
-    timeoutMs = 5000,
+    timeoutMs = 15_000,
 ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (!(await predicate())) {
@@ -48,7 +49,7 @@ async function waitForClusterSize(
     instance: HeliosInstanceImpl,
     count: number,
 ): Promise<void> {
-    await waitUntil(() => instance.getCluster().getMembers().length === count);
+    await waitUntil(() => instance.getCluster().getMembers().length === count, 15_000);
 }
 
 /**
@@ -193,6 +194,23 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         instances.push(b);
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
+        // Full partition-table agreement (not just one probe key) under parallel load.
+        await waitUntil(() => {
+            let ownerHasPartition = false;
+            const ownerId = a.getLocalMemberId();
+            for (let pid = 0; pid < 271; pid++) {
+                const oa = a.getPartitionOwnerId(pid);
+                const ob = b.getPartitionOwnerId(pid);
+                if (oa == null || ob == null || oa !== ob) {
+                    return false;
+                }
+                if (oa === ownerId) {
+                    ownerHasPartition = true;
+                }
+            }
+            return ownerHasPartition;
+        }, 15_000);
+        await Bun.sleep(50);
         return [a, b];
     }
 
@@ -201,7 +219,7 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
         ownerName: string,
         prefix = 'k',
     ): string {
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 20_000; i++) {
             const key = `${prefix}-${i}`;
             const pid = instance.getPartitionIdForName(key);
             if (instance.getPartitionOwnerId(pid) === ownerName) {
@@ -602,10 +620,11 @@ describe('Block 21.3 — Migration, failover, shutdown handoff, and coordinated 
 
         // Graceful shutdown of A
         await (a as any).shutdownAsync();
-        await waitForClusterSize(b, 1);
+        // Membership update can be slow under suite load — allow more time.
+        await waitUntil(() => b.getCluster().getMembers().length === 1, 15_000);
 
         // Wait for any handoff writes
-        await Bun.sleep(3000);
+        await Bun.sleep(2000);
 
         // Each key should have at least 1 total write across both stores (at-least-once)
         // Write-behind uses batch storeAll, so count both stores and storeAlls

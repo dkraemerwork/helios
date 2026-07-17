@@ -185,6 +185,8 @@ describe("ReliableTopicService - distributed path", () => {
       async () => survivor.getRingbufferService().getContainerOrNull(partitionId, ns)?.size() ?? 0,
       (size) => size === 1,
     );
+    // Listener fan-out is async relative to backup apply — wait for delivery.
+    await waitFor(async () => received, (msgs) => msgs.includes("before-loss"));
 
     owner.shutdown();
     await waitForClusterSize(survivor, 1);
@@ -194,6 +196,7 @@ describe("ReliableTopicService - distributed path", () => {
       async () => survivor.getRingbufferService().getContainerOrNull(partitionId, ns)?.size() ?? 0,
       (size) => size === 2,
     );
+    await waitFor(async () => received, (msgs) => msgs.includes("after-loss"));
 
     expect(backupSize).toBe(2);
     expect(received).toEqual(["before-loss", "after-loss"]);

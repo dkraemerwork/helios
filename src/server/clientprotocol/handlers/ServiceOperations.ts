@@ -288,6 +288,16 @@ export interface CacheServiceOperations {
         processorData: Data,
         args: Data[],
     ): Promise<Array<[Data, Data | null]>>;
+    /** ICache event journal subscribe — returns oldest/newest sequences for partition. */
+    eventJournalSubscribe(name: string, partitionId: number): Promise<{ oldest: bigint; newest: bigint }>;
+    /** ICache event journal read — returns events from startSequence. */
+    eventJournalRead(
+        name: string,
+        partitionId: number,
+        startSequence: bigint,
+        minCount: number,
+        maxCount: number,
+    ): Promise<EventJournalEvent[]>;
 }
 
 // ── Transaction ───────────────────────────────────────────────────────────────

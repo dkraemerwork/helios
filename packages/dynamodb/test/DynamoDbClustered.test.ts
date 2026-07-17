@@ -31,7 +31,7 @@ import { DynamoDbMapStore } from '../src/DynamoDbMapStore.js';
 //  Port management
 // ═══════════════════════════════════════════════════════════
 
-const BASE_PORT = 17500;
+const BASE_PORT = 17500 + (process.pid % 200) * 20;
 let portCounter = 0;
 
 function nextPort(): number {
@@ -174,7 +174,8 @@ interface ProvenanceRecord {
 class ProvenanceDynamoDbStore implements MapStore<string, string> {
     readonly records: ProvenanceRecord[] = [];
     private readonly _inner: DynamoDbMapStore<string>;
-    private readonly _memberId: string;
+    /** Cluster member UUID once bound; falls back to logical label before bind. */
+    private _memberId: string;
     private _instance: HeliosInstanceImpl | null = null;
 
     constructor(memberId: string, client: any) {
@@ -195,6 +196,8 @@ class ProvenanceDynamoDbStore implements MapStore<string, string> {
 
     setInstance(instance: HeliosInstanceImpl): void {
         this._instance = instance;
+        // Provenance must use the same UUID that partition ownership uses.
+        this._memberId = instance.getLocalMemberId();
     }
 
     /** Initialize the underlying DynamoDbMapStore (called by Helios lifecycle). */
@@ -320,15 +323,17 @@ async function waitForClusterSize(
 
 function findKeyOwnedBy(
     instance: HeliosInstanceImpl,
-    ownerName: string,
+    ownerId: string,
     prefix = 'k',
 ): string {
-    for (let i = 0; i < 1000; i++) {
+    // Partition owners are identified by member UUID (transport/cluster id),
+    // not by HeliosConfig instance name.
+    for (let i = 0; i < 5000; i++) {
         const key = `${prefix}-${i}`;
         const pid = instance.getPartitionIdForName(key);
-        if (instance.getPartitionOwnerId(pid) === ownerName) return key;
+        if (instance.getPartitionOwnerId(pid) === ownerId) return key;
     }
-    throw new Error(`Could not find key owned by ${ownerName}`);
+    throw new Error(`Could not find key owned by ${ownerId}`);
 }
 
 /**
@@ -455,6 +460,12 @@ async function startTwoNodeWriteThrough(
     storeB.setInstance(b);
     await waitForClusterSize(a, 2);
     await waitForClusterSize(b, 2);
+    await waitUntil(() => {
+        const pid = a.getPartitionIdForName('ddb-sync');
+        const oa = a.getPartitionOwnerId(pid);
+        const ob = b.getPartitionOwnerId(pid);
+        return oa !== null && oa === ob;
+    }, 10_000);
     return [a, b];
 }
 
@@ -481,6 +492,12 @@ async function startTwoNodeWriteBehind(
     storeB.setInstance(b);
     await waitForClusterSize(a, 2);
     await waitForClusterSize(b, 2);
+    await waitUntil(() => {
+        const pid = a.getPartitionIdForName('ddb-sync-wb');
+        const oa = a.getPartitionOwnerId(pid);
+        const ob = b.getPartitionOwnerId(pid);
+        return oa !== null && oa === ob;
+    }, 10_000);
     return [a, b];
 }
 
@@ -512,7 +529,7 @@ describe('DynamoDbMapStore — clustered owner-only proof (Step 10)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteThrough(instances, 'ddb-wt-put', sA, sB);
 
-        const key = findKeyOwnedBy(a, a.getName(), 'dwt');
+        const key = findKeyOwnedBy(a, a.getLocalMemberId(), 'dwt');
         await b.getMap<string, string>('ddb-wt-put').put(key, 'v1');
 
         expect(sA.totalStoreCount()).toBe(1);
@@ -538,7 +555,7 @@ describe('DynamoDbMapStore — clustered owner-only proof (Step 10)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteBehind(instances, 'ddb-wb-put', sA, sB);
 
-        const key = findKeyOwnedBy(a, a.getName(), 'dwb');
+        const key = findKeyOwnedBy(a, a.getLocalMemberId(), 'dwb');
         await b.getMap<string, string>('ddb-wb-put').put(key, 'wb-v1');
 
         await waitUntil(() => sA.totalStoreCount() >= 1, 3000);
@@ -561,7 +578,7 @@ describe('DynamoDbMapStore — clustered owner-only proof (Step 10)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteThrough(instances, 'ddb-wt-rm', sA, sB);
 
-        const key = findKeyOwnedBy(a, a.getName(), 'drm');
+        const key = findKeyOwnedBy(a, a.getLocalMemberId(), 'drm');
         await a.getMap<string, string>('ddb-wt-rm').put(key, 'to-delete');
         sA.reset();
         sB.reset();
@@ -586,7 +603,7 @@ describe('DynamoDbMapStore — clustered owner-only proof (Step 10)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteThrough(instances, 'ddb-wt-load', sA, sB);
 
-        const key = findKeyOwnedBy(a, a.getName(), 'dld');
+        const key = findKeyOwnedBy(a, a.getLocalMemberId(), 'dld');
         // Seed directly into shared DynamoDB storage (bypassing provenance)
         const mapName = 'ddb-wt-load';
         const bucket = djb2Hash(key) % 4;
@@ -605,7 +622,7 @@ describe('DynamoDbMapStore — clustered owner-only proof (Step 10)', () => {
 
         const aLoads = sA.records.filter((r) => r.operationKind === 'load');
         expect(aLoads.length).toBe(1);
-        expect(aLoads[0]!.memberId).toBe('dynA');
+        expect(aLoads[0]!.memberId).toBe(a.getLocalMemberId());
         expect(sB.records.filter((r) => r.operationKind === 'load').length).toBe(0);
     });
 
@@ -707,7 +724,7 @@ describe('DynamoDbMapStore — failover & migration (Step 11)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteBehind(instances, 'ddb-wb-sd', sA, sB, 5);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'wbsd');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'wbsd');
         const mapA = a.getMap<string, string>('ddb-wb-sd');
 
         await mapA.put(keyOwnedByA, 'pending-value');
@@ -738,7 +755,7 @@ describe('DynamoDbMapStore — failover & migration (Step 11)', () => {
         // Write keys owned by A
         const keys: string[] = [];
         for (let i = 0; i < 10; i++) {
-            const key = findKeyOwnedBy(a, a.getName(), `prom-${i}`);
+            const key = findKeyOwnedBy(a, a.getLocalMemberId(), `prom-${i}`);
             await a.getMap<string, string>('ddb-promo').put(key, `v-${i}`);
             keys.push(key);
         }
@@ -775,7 +792,7 @@ describe('DynamoDbMapStore — failover & migration (Step 11)', () => {
         const mapA = a.getMap<string, string>('ddb-wb-handoff');
         const keys: string[] = [];
         for (let i = 0; i < 5; i++) {
-            const key = findKeyOwnedBy(a, a.getName(), `wbho-${i}`);
+            const key = findKeyOwnedBy(a, a.getLocalMemberId(), `wbho-${i}`);
             await mapA.put(key, `val-${i}`);
             keys.push(key);
         }
@@ -810,7 +827,7 @@ describe('DynamoDbMapStore — failover & migration (Step 11)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteThrough(instances, 'ddb-replay', sA, sB);
 
-        const key = findKeyOwnedBy(a, a.getName(), 'rpl');
+        const key = findKeyOwnedBy(a, a.getLocalMemberId(), 'rpl');
 
         // Update the same key twice through the cluster
         await a.getMap<string, string>('ddb-replay').put(key, 'first');
@@ -850,8 +867,8 @@ describe('DynamoDbMapStore — failover & migration (Step 11)', () => {
         const [a, b] = await startTwoNodeWriteThrough(instances, 'ddb-bidir', sA, sB);
 
         const mapA = a.getMap<string, string>('ddb-bidir');
-        const keyA = findKeyOwnedBy(a, a.getName(), 'bdA');
-        const keyB = findKeyOwnedBy(a, b.getName(), 'bdB');
+        const keyA = findKeyOwnedBy(a, a.getLocalMemberId(), 'bdA');
+        const keyB = findKeyOwnedBy(a, b.getLocalMemberId(), 'bdB');
 
         await mapA.put(keyA, 'val-A');
         await mapA.put(keyB, 'val-B');
@@ -897,7 +914,7 @@ describe('DynamoDbMapStore — failover & migration (Step 11)', () => {
         const sB = new ProvenanceDynamoDbStore('dynB', clientB);
         const [a, b] = await startTwoNodeWriteBehind(instances, 'ddb-wb-fo', sA, sB, 2);
 
-        const keyOwnedByA = findKeyOwnedBy(a, a.getName(), 'wbfo');
+        const keyOwnedByA = findKeyOwnedBy(a, a.getLocalMemberId(), 'wbfo');
         await a.getMap<string, string>('ddb-wb-fo').put(keyOwnedByA, 'pre-failover');
 
         // Graceful shutdown flushes pending

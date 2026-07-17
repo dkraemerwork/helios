@@ -17,7 +17,7 @@ import {
     BackpressureRegulator,
     OverloadError,
 } from '@zenystx/helios-core/spi/impl/operationservice/BackpressureRegulator';
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 function makeConfig(overrides?: {
     enabled?: boolean;
@@ -36,14 +36,31 @@ function makeConfig(overrides?: {
 /** Small partition count for deterministic tests. */
 const TEST_PARTITIONS = 3;
 
+/** Track regulators so afterEach can cancel pending timeout waiters. */
+const liveRegulators: BackpressureRegulator[] = [];
+
+function createRegulator(config: BackpressureConfig, partitions = TEST_PARTITIONS): BackpressureRegulator {
+    const regulator = new BackpressureRegulator(config, partitions);
+    liveRegulators.push(regulator);
+    return regulator;
+}
+
 describe('BackpressureRegulator', () => {
+    afterEach(() => {
+        // Cancel any queued waiters so their setTimeout rejections never leak into
+        // parallel tests (e.g. Blitz 3-node under full suite concurrency).
+        for (const r of liveRegulators) {
+            r.reset();
+        }
+        liveRegulators.length = 0;
+    });
+
     // ── Basic admission ────────────────────────────────────────────────
 
     describe('admission control', () => {
         test('admits invocations when below capacity', () => {
-            const regulator = new BackpressureRegulator(
+            const regulator = createRegulator(
                 makeConfig({ perPartition: 10 }),
-                TEST_PARTITIONS,
             );
             // capacity = (3 + 1) * 10 = 40
             expect(regulator.maxConcurrentInvocations).toBe(40);
@@ -55,10 +72,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('admits multiple invocations up to capacity', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 2 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 2 }));
             // capacity = (3 + 1) * 2 = 8
             const ids: number[] = [];
             for (let i = 0; i < 8; i++) {
@@ -73,24 +87,28 @@ describe('BackpressureRegulator', () => {
             }
         });
 
-        test('returns Promise when at capacity with backoff > 0', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }),
-                TEST_PARTITIONS,
-            );
+        test('returns Promise when at capacity with backoff > 0', async () => {
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }));
             // capacity = (3+1) * 1 = 4
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
             expect(regulator.inFlightCount).toBe(4);
 
             const result = regulator.tryAcquire();
             expect(result).toBeInstanceOf(Promise);
+            // Cancel waiter so its timeout cannot fire after the test ends.
+            let caught: unknown;
+            const settled = (result as Promise<number>).then(
+                () => { throw new Error('expected rejection'); },
+                (e) => { caught = e; },
+            );
+            regulator.reset();
+            await settled;
+            expect(caught).toBeInstanceOf(Error);
+            expect(String(caught)).toMatch(/reset/i);
         });
 
         test('throws OverloadError immediately when at capacity with backoff = 0', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 0 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 0 }));
             // capacity = 4
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
@@ -102,10 +120,7 @@ describe('BackpressureRegulator', () => {
 
     describe('release and waiter draining', () => {
         test('release decrements in-flight count', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 10 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 10 }));
             regulator.tryAcquire();
             expect(regulator.inFlightCount).toBe(1);
             regulator.release();
@@ -113,10 +128,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('release admits a queued waiter FIFO', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }));
             // Fill capacity
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
@@ -135,10 +147,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('multiple waiters are drained in FIFO order', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }));
             // Fill capacity
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
@@ -165,10 +174,7 @@ describe('BackpressureRegulator', () => {
 
     describe('backoff timeout', () => {
         test('rejects waiter after backoff timeout', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 50 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 50 }));
             // Fill capacity
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
@@ -185,10 +191,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('rejected invocations are counted in stats', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 30 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 30 }));
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
             try {
@@ -207,10 +210,7 @@ describe('BackpressureRegulator', () => {
 
     describe('disabled mode', () => {
         test('disabled regulator always admits immediately', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ enabled: false, perPartition: 1 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ enabled: false, perPartition: 1 }));
             expect(regulator.enabled).toBe(false);
             expect(regulator.maxConcurrentInvocations).toBe(Number.MAX_SAFE_INTEGER);
 
@@ -222,19 +222,13 @@ describe('BackpressureRegulator', () => {
         });
 
         test('disabled regulator release is a no-op', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ enabled: false }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ enabled: false }));
             regulator.tryAcquire();
             regulator.release(); // should not throw or decrement below 0
         });
 
         test('disabled regulator isSyncForced is always false', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ enabled: false, syncWindow: 1 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ enabled: false, syncWindow: 1 }));
             for (let i = 0; i < 100; i++) {
                 expect(regulator.isSyncForced(true)).toBe(false);
             }
@@ -245,10 +239,7 @@ describe('BackpressureRegulator', () => {
 
     describe('sync window / forced sync', () => {
         test('forces sync after sync window operations', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ syncWindow: 5 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ syncWindow: 5 }));
             let forcedCount = 0;
             for (let i = 0; i < 20; i++) {
                 if (regulator.isSyncForced(true)) forcedCount++;
@@ -260,20 +251,14 @@ describe('BackpressureRegulator', () => {
         });
 
         test('does not force sync when hasAsyncBackups is false', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ syncWindow: 1 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ syncWindow: 1 }));
             for (let i = 0; i < 100; i++) {
                 expect(regulator.isSyncForced(false)).toBe(false);
             }
         });
 
         test('forced syncs are tracked in stats', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ syncWindow: 1 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ syncWindow: 1 }));
             // syncWindow=1 means every call is forced
             regulator.isSyncForced(true);
             regulator.isSyncForced(true);
@@ -287,10 +272,7 @@ describe('BackpressureRegulator', () => {
 
     describe('stats', () => {
         test('initial stats are zeroed', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 10 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 10 }));
             const stats = regulator.getStats();
             expect(stats.enabled).toBe(true);
             expect(stats.maxConcurrentInvocations).toBe(40);
@@ -302,10 +284,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('stats reflect admission and release', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 10 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 10 }));
             regulator.tryAcquire();
             regulator.tryAcquire();
             regulator.tryAcquire();
@@ -317,10 +296,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('admittedAfterWait is incremented for waited admissions', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 5_000 }));
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
             const waiterPromise = regulator.tryAcquire() as Promise<number>;
@@ -337,10 +313,7 @@ describe('BackpressureRegulator', () => {
 
     describe('reset and shutdown', () => {
         test('rejectAll rejects all queued waiters', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 60_000 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 60_000 }));
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
 
             const w1 = regulator.tryAcquire() as Promise<number>;
@@ -353,10 +326,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('reset clears in-flight count and rejects waiters', async () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1, backoffTimeoutMs: 60_000 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1, backoffTimeoutMs: 60_000 }));
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
             const waiter = regulator.tryAcquire() as Promise<number>;
 
@@ -371,29 +341,20 @@ describe('BackpressureRegulator', () => {
 
     describe('hasSpace', () => {
         test('returns true when below capacity', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 2 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 2 }));
             expect(regulator.hasSpace()).toBe(true);
             for (let i = 0; i < 7; i++) regulator.tryAcquire();
             expect(regulator.hasSpace()).toBe(true);
         });
 
         test('returns false when at capacity', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1 }));
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
             expect(regulator.hasSpace()).toBe(false);
         });
 
         test('returns true after release from capacity', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 1 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 1 }));
             for (let i = 0; i < 4; i++) regulator.tryAcquire();
             expect(regulator.hasSpace()).toBe(false);
             regulator.release();
@@ -401,10 +362,7 @@ describe('BackpressureRegulator', () => {
         });
 
         test('always true when disabled', () => {
-            const regulator = new BackpressureRegulator(
-                makeConfig({ enabled: false }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ enabled: false }));
             expect(regulator.hasSpace()).toBe(true);
         });
     });
@@ -414,10 +372,7 @@ describe('BackpressureRegulator', () => {
     describe('stress: bounded in-flight', () => {
         test('in-flight count never exceeds capacity under concurrent pressure', async () => {
             const capacity = 8; // (3+1) * 2
-            const regulator = new BackpressureRegulator(
-                makeConfig({ perPartition: 2, backoffTimeoutMs: 2_000 }),
-                TEST_PARTITIONS,
-            );
+            const regulator = createRegulator(makeConfig({ perPartition: 2, backoffTimeoutMs: 2_000 }));
             expect(regulator.maxConcurrentInvocations).toBe(capacity);
 
             let maxObserved = 0;

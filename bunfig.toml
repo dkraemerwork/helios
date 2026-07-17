@@ -2,6 +2,14 @@
 # Match both Java-convention *Test.ts files and standard *.test.ts files
 include = ["**/*.test.ts", "**/*.spec.ts", "**/*Test.ts"]
 
+# Apps are separate monorepo packages (own deps/tests). Exclude so root
+# `bun test` stays on Helios core (test/ + packages/*) and does not pull
+# apps/**/node_modules test trees or long-running app cluster suites.
+# Interop suites are run only via ./test/interop/run-interop.sh (sequential
+# official-client harness); running them under root parallel bun test causes
+# port collisions and member-boot races.
+pathIgnorePatterns = ["**/apps/**", "**/node_modules/**", "**/test/interop/**"]
+
 # Timeout per test (ms)
 timeout = 30000
 

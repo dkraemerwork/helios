@@ -24,6 +24,8 @@
  *   Cache.RemoveEntryListener     (0x131300)  — deregister JCache entry listener
  *   Cache.Invoke                  (0x131400)  — single-key entry processor
  *   Cache.InvokeAll               (0x131500)  — multi-key entry processor
+ *   Cache.EventJournalSubscribe   (0x131F00)  — hazelcast-client CacheEventJournalSubscribeCodec
+ *   Cache.EventJournalRead        (0x132000)  — hazelcast-client CacheEventJournalReadCodec
  */
 
 import type { Data } from '@zenystx/helios-core/internal/serialization/Data.js';
@@ -65,7 +67,16 @@ const CACHE_INVOKE_REQUEST    = 0x131400; const CACHE_INVOKE_RESPONSE    = 0x131
 // Cache.InvokeAll — multi-key entry processor
 const CACHE_INVOKE_ALL_REQUEST = 0x131500; const CACHE_INVOKE_ALL_RESPONSE = 0x131501;
 
+// Cache.EventJournalSubscribe / Read — official hazelcast-client@5.6.0 message types
+// Subscribe: 1253120 / 1253121 → 0x131F00 / 0x131F01
+// Read:      1253376 / 1253377 → 0x132000 / 0x132001
+const CACHE_EVENT_JOURNAL_SUBSCRIBE_REQUEST  = 0x131F00;
+const CACHE_EVENT_JOURNAL_SUBSCRIBE_RESPONSE = 0x131F01;
+const CACHE_EVENT_JOURNAL_READ_REQUEST       = 0x132000;
+const CACHE_EVENT_JOURNAL_READ_RESPONSE      = 0x132001;
+
 const RH = INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + BOOLEAN_SIZE_IN_BYTES;
+const RESPONSE_HEADER_SIZE = RH;
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
@@ -295,6 +306,71 @@ export function registerCacheServiceHandlers(
         const args = _decodeDataList(iter);
         const resultPairs = await operations.invokeEntryProcessorAll(name, keys, processorData, args);
         return _nullableEntryList(CACHE_INVOKE_ALL_RESPONSE, resultPairs);
+    });
+
+    // Cache.EventJournalSubscribe (0x131F00)
+    // Request: partitionId (int after header) + name (string)
+    // Response: oldestSequence (long), newestSequence (long)
+    dispatcher.register(CACHE_EVENT_JOURNAL_SUBSCRIBE_REQUEST, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const partitionId = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET);
+        const name = StringCodec.decode(iter);
+        const { oldest, newest } = await operations.eventJournalSubscribe(name, partitionId);
+        const buf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        buf.fill(0);
+        buf.writeUInt32LE(CACHE_EVENT_JOURNAL_SUBSCRIBE_RESPONSE >>> 0, 0);
+        buf.writeBigInt64LE(oldest, RESPONSE_HEADER_SIZE);
+        buf.writeBigInt64LE(newest, RESPONSE_HEADER_SIZE + LONG_SIZE_IN_BYTES);
+        const response = CM.createForEncode();
+        response.add(new CM.Frame(buf, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+        response.setFinal();
+        return response;
+    });
+
+    // Cache.EventJournalRead (0x132000)
+    // Request: startSequence (long), minCount (int), maxCount (int) + name
+    // Response: readCount (int) + nextSeq (long) + item list
+    dispatcher.register(CACHE_EVENT_JOURNAL_READ_REQUEST, async (msg, _session) => {
+        const iter = msg.forwardFrameIterator();
+        const initialFrame = iter.next();
+        const startSequence = initialFrame.content.readBigInt64LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES);
+        const minCount = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        const maxCount = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES + INT_SIZE_IN_BYTES);
+        const partitionId = initialFrame.content.readInt32LE(CM.PARTITION_ID_FIELD_OFFSET);
+        const name = StringCodec.decode(iter);
+        const events = await operations.eventJournalRead(name, partitionId, startSequence, minCount, maxCount);
+        const nextSeq = startSequence + BigInt(events.length);
+        const headerBuf = Buffer.allocUnsafe(RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+        headerBuf.fill(0);
+        headerBuf.writeUInt32LE(CACHE_EVENT_JOURNAL_READ_RESPONSE >>> 0, 0);
+        headerBuf.writeInt32LE(events.length, RESPONSE_HEADER_SIZE);
+        headerBuf.writeBigInt64LE(nextSeq, RESPONSE_HEADER_SIZE + INT_SIZE_IN_BYTES);
+        const response = CM.createForEncode();
+        response.add(new CM.Frame(headerBuf, CM.BEGIN_FRAGMENT_FLAG | CM.END_FRAGMENT_FLAG));
+        response.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+        for (const event of events) {
+            response.add(new CM.Frame(Buffer.alloc(0), CM.BEGIN_DATA_STRUCTURE_FLAG));
+            const eventFrameBuf = Buffer.allocUnsafe(INT_SIZE_IN_BYTES + LONG_SIZE_IN_BYTES);
+            eventFrameBuf.writeInt32LE(event.eventType, 0);
+            eventFrameBuf.writeBigInt64LE(BigInt(event.timestamp), INT_SIZE_IN_BYTES);
+            response.add(new CM.Frame(eventFrameBuf, 0));
+            DataCodec.encode(response, event.key);
+            if (event.newValue !== null) {
+                DataCodec.encode(response, event.newValue);
+            } else {
+                response.add(CM.NULL_FRAME);
+            }
+            if (event.oldValue !== null) {
+                DataCodec.encode(response, event.oldValue);
+            } else {
+                response.add(CM.NULL_FRAME);
+            }
+            response.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+        }
+        response.add(new CM.Frame(Buffer.alloc(0), CM.END_DATA_STRUCTURE_FLAG));
+        response.setFinal();
+        return response;
     });
 }
 

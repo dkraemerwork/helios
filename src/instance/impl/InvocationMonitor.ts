@@ -222,7 +222,18 @@ export class InvocationMonitor {
     private _failEntry(entry: PendingResponseEntry, error: Error, now: number): void {
         this._active.delete(entry.callId);
         this._terminal.set(entry.callId, { outcome: 'failed', completedAt: now });
-        entry.reject?.(error);
+        const rejectFn = entry.reject;
+        // Defer rejection so membership-disconnect handlers never throw synchronously
+        // into the event loop mid-suite (poisoning unrelated parallel tests).
+        if (rejectFn != null) {
+            queueMicrotask(() => {
+                try {
+                    rejectFn(error);
+                } catch {
+                    // Caller already settled or abandoned the invocation.
+                }
+            });
+        }
         this._pool.release(entry);
     }
 

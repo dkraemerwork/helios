@@ -55,6 +55,16 @@ interface ReplicatedEntry {
   version: number;
   /** -1 means removed (tombstone). */
   tombstone: boolean;
+  /**
+   * TTL in milliseconds. 0 means never expire.
+   * Matches Hazelcast ReplicatedMap put(key, value, ttl, unit) semantics.
+   */
+  ttlMillis: number;
+  /**
+   * Absolute expiry timestamp (ms since epoch). 0 means never expire.
+   * Computed as creationTime + ttlMillis when ttlMillis > 0.
+   */
+  expiresAt: number;
 }
 
 interface ReplicatedMapContainer {
@@ -126,21 +136,33 @@ export class DistributedReplicatedMapService {
 
   // ── Public API ───────────────────────────────────────────────────────
 
-  put(name: string, keyData: Data, valueData: Data): Data | null {
+  /**
+   * @param ttlMillis TTL in milliseconds; 0 or negative means no expiry.
+   *                  Matches client-protocol `ttl` (nanoseconds in Hazelcast wire
+   *                  protocol are converted by the adapter before calling this).
+   */
+  put(name: string, keyData: Data, valueData: Data, ttlMillis: number = 0): Data | null {
     const container = this._getOrCreate(name);
     const fp = dataFp(keyData);
     const existing = container.entries.get(fp);
-    const old = existing && !existing.tombstone ? existing.value : null;
+    const old =
+      existing && !existing.tombstone && !this._isExpired(existing)
+        ? existing.value
+        : null;
 
     const version = ++container.localVersion;
+    const normalizedTtl = ttlMillis > 0 ? ttlMillis : 0;
+    const now = Date.now();
     container.entries.set(fp, {
       key: keyData,
       value: valueData,
       version,
       tombstone: false,
+      ttlMillis: normalizedTtl,
+      expiresAt: normalizedTtl > 0 ? now + normalizedTtl : 0,
     });
 
-    this._broadcastPut(name, keyData, valueData, version);
+    this._broadcastPut(name, keyData, valueData, version, normalizedTtl, now);
     this._dispatchEntryEvent(
       name,
       old === null ? "ADDED" : "UPDATED",
@@ -153,8 +175,10 @@ export class DistributedReplicatedMapService {
 
   get(name: string, keyData: Data): Data | null {
     const container = this._getOrCreate(name);
-    const entry = container.entries.get(dataFp(keyData));
+    const fp = dataFp(keyData);
+    const entry = container.entries.get(fp);
     if (entry === undefined || entry.tombstone) return null;
+    if (this._evictIfExpired(name, container, fp, entry)) return null;
     return entry.value;
   }
 
@@ -176,22 +200,32 @@ export class DistributedReplicatedMapService {
   }
 
   containsKey(name: string, keyData: Data): boolean {
-    const entry = this._getOrCreate(name).entries.get(dataFp(keyData));
-    return entry !== undefined && !entry.tombstone;
+    const container = this._getOrCreate(name);
+    const fp = dataFp(keyData);
+    const entry = container.entries.get(fp);
+    if (entry === undefined || entry.tombstone) return false;
+    if (this._evictIfExpired(name, container, fp, entry)) return false;
+    return true;
   }
 
   containsValue(name: string, valueData: Data): boolean {
+    const container = this._getOrCreate(name);
     const vFp = dataFp(valueData);
-    for (const entry of Array.from(this._getOrCreate(name).entries.values())) {
-      if (!entry.tombstone && dataFp(entry.value) === vFp) return true;
+    for (const [fp, entry] of Array.from(container.entries.entries())) {
+      if (entry.tombstone) continue;
+      if (this._evictIfExpired(name, container, fp, entry)) continue;
+      if (dataFp(entry.value) === vFp) return true;
     }
     return false;
   }
 
   size(name: string): number {
+    const container = this._getOrCreate(name);
     let count = 0;
-    for (const entry of Array.from(this._getOrCreate(name).entries.values())) {
-      if (!entry.tombstone) count++;
+    for (const [fp, entry] of Array.from(container.entries.entries())) {
+      if (entry.tombstone) continue;
+      if (this._evictIfExpired(name, container, fp, entry)) continue;
+      count++;
     }
     return count;
   }
@@ -215,32 +249,41 @@ export class DistributedReplicatedMapService {
   }
 
   keySet(name: string): Data[] {
+    const container = this._getOrCreate(name);
     const result: Data[] = [];
-    for (const entry of Array.from(this._getOrCreate(name).entries.values())) {
-      if (!entry.tombstone) result.push(entry.key);
+    for (const [fp, entry] of Array.from(container.entries.entries())) {
+      if (entry.tombstone) continue;
+      if (this._evictIfExpired(name, container, fp, entry)) continue;
+      result.push(entry.key);
     }
     return result;
   }
 
   values(name: string): Data[] {
+    const container = this._getOrCreate(name);
     const result: Data[] = [];
-    for (const entry of Array.from(this._getOrCreate(name).entries.values())) {
-      if (!entry.tombstone) result.push(entry.value);
+    for (const [fp, entry] of Array.from(container.entries.entries())) {
+      if (entry.tombstone) continue;
+      if (this._evictIfExpired(name, container, fp, entry)) continue;
+      result.push(entry.value);
     }
     return result;
   }
 
   entrySet(name: string): [Data, Data][] {
+    const container = this._getOrCreate(name);
     const result: [Data, Data][] = [];
-    for (const entry of Array.from(this._getOrCreate(name).entries.values())) {
-      if (!entry.tombstone) result.push([entry.key, entry.value]);
+    for (const [fp, entry] of Array.from(container.entries.entries())) {
+      if (entry.tombstone) continue;
+      if (this._evictIfExpired(name, container, fp, entry)) continue;
+      result.push([entry.key, entry.value]);
     }
     return result;
   }
 
   putAll(name: string, pairs: [Data, Data][]): void {
     for (const [k, v] of pairs) {
-      this.put(name, k, v);
+      this.put(name, k, v, 0);
     }
   }
 
@@ -268,6 +311,8 @@ export class DistributedReplicatedMapService {
     keyData: Data,
     valueData: Data,
     version: number,
+    ttlMillis: number,
+    writtenAt: number,
   ): void {
     this._transport?.broadcast({
       type: "REPLICATED_MAP_PUT",
@@ -276,6 +321,8 @@ export class DistributedReplicatedMapService {
       sourceNodeId: this._instanceName,
       keyData: encodeData(keyData),
       valueData: encodeData(valueData),
+      ttlMillis,
+      writtenAt,
     });
   }
 
@@ -316,11 +363,15 @@ export class DistributedReplicatedMapService {
     // Last-writer-wins: only apply if incoming version is newer
     if (existing !== undefined && existing.version >= message.version) return;
 
+    const ttlMillis = message.ttlMillis ?? 0;
+    const writtenAt = message.writtenAt ?? Date.now();
     container.entries.set(fp, {
       key,
       value,
       version: message.version,
       tombstone: false,
+      ttlMillis,
+      expiresAt: ttlMillis > 0 ? writtenAt + ttlMillis : 0,
     });
     this._dispatchEntryEvent(
       message.mapName,
@@ -345,7 +396,14 @@ export class DistributedReplicatedMapService {
 
     if (existing !== undefined && existing.version >= message.version) return;
 
-    const entry = existing ?? { key, value: key, version: 0, tombstone: false };
+    const entry = existing ?? {
+      key,
+      value: key,
+      version: 0,
+      tombstone: false,
+      ttlMillis: 0,
+      expiresAt: 0,
+    };
     const oldValue = existing !== undefined && !existing.tombstone ? existing.value : null;
     entry.tombstone = true;
     entry.version = message.version;
@@ -435,6 +493,8 @@ export class DistributedReplicatedMapService {
           value,
           version: message.version,
           tombstone: false,
+          ttlMillis: existing?.ttlMillis ?? 0,
+          expiresAt: existing?.expiresAt ?? 0,
         });
       }
     }
@@ -497,6 +557,29 @@ export class DistributedReplicatedMapService {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────
+
+  private _isExpired(entry: ReplicatedEntry, now: number = Date.now()): boolean {
+    return entry.expiresAt > 0 && now >= entry.expiresAt;
+  }
+
+  /**
+   * Lazy TTL eviction: if the entry has expired, convert it to a tombstone and
+   * return true. Mirrors Hazelcast ReplicatedMap TTL semantics (expire on access).
+   */
+  private _evictIfExpired(
+    name: string,
+    container: ReplicatedMapContainer,
+    fp: string,
+    entry: ReplicatedEntry,
+  ): boolean {
+    if (!this._isExpired(entry)) return false;
+    const oldValue = entry.value;
+    entry.tombstone = true;
+    entry.version = ++container.localVersion;
+    container.entries.set(fp, entry);
+    this._dispatchEntryEvent(name, "REMOVED", entry.key, null, oldValue);
+    return true;
+  }
 
   private _getOrCreate(name: string): ReplicatedMapContainer {
     let container = this._maps.get(name);

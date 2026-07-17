@@ -159,6 +159,14 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         instances.push(b);
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
+        await waitUntil(() => {
+            const probe = 'partition-sync-probe';
+            const pid = a.getPartitionIdForName(probe);
+            const ownerA = a.getPartitionOwnerId(pid);
+            const ownerB = b.getPartitionOwnerId(pid);
+            return ownerA !== null && ownerA === ownerB;
+        }, 10_000);
+        await Bun.sleep(40);
         return [a, b];
     }
 
@@ -167,7 +175,7 @@ describe('Block 21.2 — Partition-scoped MapStore runtime + owner-only persiste
         ownerName: string,
         prefix = 'k',
     ): string {
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 5000; i++) {
             const key = `${prefix}-${i}`;
             const pid = instance.getPartitionIdForName(key);
             if (instance.getPartitionOwnerId(pid) === ownerName) {

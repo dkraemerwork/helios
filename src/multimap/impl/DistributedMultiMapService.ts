@@ -793,7 +793,18 @@ export class DistributedMultiMapService {
 
   private _resyncAll(): void {
     for (const [name, container] of Array.from(this._containers.entries())) {
-      void this._replicateState(name, container);
+      // Best-effort: membership churn can leave backups unreachable; never
+      // surface as an unhandled rejection into unrelated parallel tests.
+      void this._replicateState(name, container).catch(() => {});
+    }
+  }
+
+  /** Cancel in-flight backup ACKs (call on instance shutdown). */
+  shutdown(): void {
+    for (const [id, pending] of this._pendingRemoteRequests) {
+      if (pending.timeoutHandle !== null) clearTimeout(pending.timeoutHandle);
+      pending.reject(new Error('MultiMap service shutting down'));
+      this._pendingRemoteRequests.delete(id);
     }
   }
 

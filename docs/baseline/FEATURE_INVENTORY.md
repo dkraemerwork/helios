@@ -1,12 +1,17 @@
 # Helios Feature Inventory — hazelcast-client@5.6.x Compatibility
 
-> **Updated: 2026-03-17 — reflects post-parity-plan state**
+> **SUPERSEDED (2026-07-17).** This file is a historical baseline audit (March 2026).
+> **Authoritative in-scope feature status is [`docs/PARITY_MATRIX.md`](../PARITY_MATRIX.md)**
+> (0 PARTIAL / 0 MISSING in-scope; 100% of tracked COMPLETE rows).
+> Do not treat PARTIAL/MISSING labels below as current gaps without re-auditing code.
+
+> **Updated: 2026-03-17 — historical post-parity-plan snapshot**
 
 **Target:** `hazelcast-client@5.6.0` / Hazelcast OSS `5.5.0`  
 **Protocol:** Client Protocol 2.8  
 **Audit date:** 2026-03-08  
 
-Gap status legend:
+Gap status legend (historical):
 - **DONE** — Feature is fully implemented and tested
 - **PARTIAL** — Core functionality exists but edge cases / sub-features are missing
 - **MISSING** — Not implemented at all

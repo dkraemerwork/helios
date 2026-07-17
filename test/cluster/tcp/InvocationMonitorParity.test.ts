@@ -3,7 +3,7 @@ import { HeliosConfig } from '@zenystx/helios-core/config/HeliosConfig';
 import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/HeliosInstanceImpl';
 import { afterEach, describe, expect, test } from 'bun:test';
 
-const BASE_PORT = 17040;
+const BASE_PORT = 17040 + (process.pid % 200) * 10;
 let portCounter = 0;
 
 function nextPort(): number {
@@ -24,7 +24,29 @@ async function waitUntil(
 }
 
 async function waitForClusterSize(instance: HeliosInstanceImpl, count: number): Promise<void> {
-    await waitUntil(() => instance.getCluster().getMembers().length === count, 10_000);
+    await waitUntil(() => instance.getCluster().getMembers().length === count, 15_000);
+}
+
+/** Wait until both nodes agree on partition owners and `ownerId` owns at least one partition. */
+async function waitForPartitionTable(
+    left: HeliosInstanceImpl,
+    right: HeliosInstanceImpl,
+    ownerId: string,
+): Promise<void> {
+    await waitUntil(() => {
+        let ownerHasPartition = false;
+        for (let pid = 0; pid < 271; pid++) {
+            const leftOwner = left.getPartitionOwnerId(pid);
+            const rightOwner = right.getPartitionOwnerId(pid);
+            if (leftOwner == null || rightOwner == null || leftOwner !== rightOwner) {
+                return false;
+            }
+            if (leftOwner === ownerId) {
+                ownerHasPartition = true;
+            }
+        }
+        return ownerHasPartition;
+    }, 15_000);
 }
 
 async function startNode(
@@ -35,6 +57,7 @@ async function startNode(
     const cfg = new HeliosConfig(name);
     cfg.getNetworkConfig()
         .setPort(port)
+        .setClientProtocolPort(0)
         .getJoin()
         .getTcpIpConfig()
         .setEnabled(true);
@@ -45,7 +68,7 @@ async function startNode(
 }
 
 function findKeyOwnedBy(instance: HeliosInstanceImpl, ownerId: string): string {
-    for (let i = 0; i < 5000; i++) {
+    for (let i = 0; i < 20_000; i++) {
         const key = `invocation-monitor-${i}`;
         const partitionId = instance.getPartitionIdForName(key);
         if (instance.getPartitionOwnerId(partitionId) === ownerId) {
@@ -79,6 +102,7 @@ describe('Invocation monitor parity', () => {
         await waitForClusterSize(caller, 2);
 
         const ownerMemberId = owner.getCluster().getLocalMember().getUuid();
+        await waitForPartitionTable(owner, caller, ownerMemberId);
         const key = findKeyOwnedBy(caller, ownerMemberId);
         await owner.getMap<string, string>('invocation-monitor-map').put(key, 'value');
 

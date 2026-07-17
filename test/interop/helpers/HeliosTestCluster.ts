@@ -60,11 +60,32 @@ export interface HeliosTestClusterOptions {
   configureMember?: (config: HeliosConfig, index: number) => void;
 }
 
+/**
+ * Reserve an OS-assigned free TCP port on 127.0.0.1 (bind port 0, then close).
+ * Avoids EADDRINUSE from fixed/random ranges under suite load or TIME_WAIT.
+ */
+function reserveFreePort(): number {
+  const server = Bun.listen({
+    hostname: "127.0.0.1",
+    port: 0,
+    socket: {
+      data() {},
+      open() {},
+      close() {},
+      error() {},
+    },
+  });
+  const port = server.port;
+  server.stop(true);
+  if (port == null || port <= 0) {
+    throw new Error("HeliosTestCluster: failed to reserve a free TCP port");
+  }
+  return port;
+}
+
 export class HeliosTestCluster {
   private readonly _clusterName: string;
   private readonly _instances: HeliosInstanceImpl[] = [];
-  private readonly _memberBasePort: number;
-  private readonly _clientBasePort: number;
   private readonly _configureMember: ((config: HeliosConfig, index: number) => void) | null;
   private _memberSlots: MemberSlot[] = [];
   private _connectionInfo: ClusterConnectionInfo | null = null;
@@ -82,8 +103,6 @@ export class HeliosTestCluster {
     this._clusterName = clusterName ?? `interop-${++clusterCounter}-${Date.now()}`;
     this._configureMember = typeof options === 'string' ? null : options?.configureMember ?? null;
     this._multicastPort = 40000 + Math.floor(Math.random() * 10000);
-    this._memberBasePort = 17000 + Math.floor(Math.random() * 1000) * 3;
-    this._clientBasePort = 22000 + Math.floor(Math.random() * 1000) * 3;
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -188,8 +207,8 @@ export class HeliosTestCluster {
     const slot: MemberSlot = {
       name: `node-${index}`,
       host: "127.0.0.1",
-      memberPort: this._memberBasePort + index,
-      clientPort: this._clientBasePort + index,
+      memberPort: reserveFreePort(),
+      clientPort: reserveFreePort(),
       instance: null,
     };
     this._memberSlots.push(slot);
@@ -208,8 +227,8 @@ export class HeliosTestCluster {
       throw new Error(`HeliosTestCluster: member ${index} must be stopped before reassigning ports`);
     }
 
-    slot.memberPort = this._memberBasePort + this._memberSlots.length + index;
-    slot.clientPort = this._clientBasePort + this._memberSlots.length + index;
+    slot.memberPort = reserveFreePort();
+    slot.clientPort = reserveFreePort();
     this._refreshConnectionInfo();
     return this.getMemberConnectionInfo(index);
   }
@@ -337,28 +356,44 @@ export class HeliosTestCluster {
     useTcpSeedJoin: boolean,
   ): Promise<HeliosInstanceImpl> {
     const seedSlots = this._memberSlots.filter((memberSlot) => memberSlot.instance !== null);
-    const instance = await Helios.newInstance(
-      this._buildConfig(
-        slot.name,
-        this._memberSlots.indexOf(slot),
-        slot.memberPort,
-        slot.clientPort,
-        nodeCount,
-        seedSlots,
-        useTcpSeedJoin,
-      ),
-    );
-    await instance.waitForClientProtocolReady();
+    // Retry on rare races where another process binds between reserve and listen.
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const instance = await Helios.newInstance(
+          this._buildConfig(
+            slot.name,
+            this._memberSlots.indexOf(slot),
+            slot.memberPort,
+            slot.clientPort,
+            nodeCount,
+            seedSlots,
+            useTcpSeedJoin,
+          ),
+        );
+        await instance.waitForClientProtocolReady();
 
-    if (instance.getClientProtocolPort() !== slot.clientPort) {
-      await this._shutdownInstance(instance);
-      throw new Error(
-        `HeliosTestCluster: expected client port ${slot.clientPort} for ${slot.name}, `
-        + `got ${instance.getClientProtocolPort()}`,
-      );
+        if (instance.getClientProtocolPort() !== slot.clientPort) {
+          await this._shutdownInstance(instance);
+          throw new Error(
+            `HeliosTestCluster: expected client port ${slot.clientPort} for ${slot.name}, `
+            + `got ${instance.getClientProtocolPort()}`,
+          );
+        }
+        return instance;
+      } catch (err) {
+        lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("EADDRINUSE") && !msg.includes("Failed to listen")) {
+          throw err;
+        }
+        slot.memberPort = reserveFreePort();
+        slot.clientPort = reserveFreePort();
+      }
     }
-
-    return instance;
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`HeliosTestCluster: failed to start member after retries: ${String(lastError)}`);
   }
 
   private _buildConfig(
@@ -407,8 +442,8 @@ export class HeliosTestCluster {
     return Array.from({ length: nodeCount }, (_, index) => ({
       name: `node-${index}`,
       host: "127.0.0.1",
-      memberPort: this._memberBasePort + index,
-      clientPort: this._clientBasePort + index,
+      memberPort: reserveFreePort(),
+      clientPort: reserveFreePort(),
       instance: null,
     }));
   }

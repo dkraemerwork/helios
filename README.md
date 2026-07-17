@@ -2,11 +2,12 @@
 
 **Helios** is a distributed in-memory data platform written in TypeScript for [Bun](https://bun.sh). It brings Hazelcast-style distributed data structures, clustering, and stream processing to the JavaScript ecosystem — no JVM required.
 
-- **5400+ automated tests** — 32,000+ assertions across core, NestJS, and Blitz
+- **5300+ automated tests** — 32,000+ assertions across core, NestJS, and Blitz
+- **100% in-scope Hazelcast OSS parity** — see [`docs/PARITY_MATRIX.md`](docs/PARITY_MATRIX.md) (0 PARTIAL / 0 MISSING)
 - **Production serialization** — full binary wire format compatible with Hazelcast clients
-- **Multi-node TCP clustering** — partition replication, anti-entropy repair, split-brain merge, vector clock conflict resolution
-- **300+ client protocol opcodes** — direct interop with `hazelcast-client@5.6.0`
-- **Embedded NATS** — stream processing without a separate NATS server
+- **Multi-node TCP clustering** — partition replication, anti-entropy repair, split-brain merge, multi-node CP Raft over TCP
+- **Client protocol interop** — official `hazelcast-client@5.6.0` suites under `test/interop`
+- **Embedded NATS** — Blitz stream processing without a separate NATS server
 
 ---
 
@@ -620,17 +621,21 @@ All five implement the same `MapStore` interface — swap backends without chang
 git clone <repo-url>
 cd helios
 bun install
-bun test              # run the full test suite (~5400 tests)
+bun test              # full root suite (~5300 tests; excludes apps/ and test/interop/)
 bun run build         # compile to dist/
 bun run tsc --noEmit  # type-check only
 ```
 
-### Per-package tests
+### Per-package and interop tests
 
 ```bash
-bun test packages/nestjs/   # NestJS integration tests
-bun test packages/blitz/    # Blitz stream processing tests
+bun test packages/nestjs/          # NestJS integration tests
+bun test packages/blitz/           # Blitz stream processing tests
+./test/interop/run-interop.sh      # official hazelcast-client@5.6.0 suites (17)
+./test/interop/run-interop.sh map  # single interop suite
 ```
+
+Root `bun test` ignores `apps/**` and `test/interop/**` (configured in `bunfig.toml`). Interop is meant to run via the sequential harness above.
 
 ---
 
@@ -647,17 +652,22 @@ helios/
 │   ├── ringbuffer/         # Ringbuffer with optional RingbufferStore persistence
 │   ├── executor/           # Distributed executor service (IExecutorService)
 │   ├── scheduledexecutor/  # Scheduled executor with crash recovery
-│   ├── cp/                 # CP Subsystem — AtomicLong, FencedLock, Semaphore, CPMap
-│   ├── spi/merge/          # Split-brain merge policies (8 implementations)
+│   ├── cache/              # Distributed ICache (JCache-compatible ops, event journal)
+│   ├── cp/                 # CP Subsystem — Raft, AtomicLong, FencedLock, Semaphore, CPMap
+│   ├── sql/                # SQL engine — joins, planner, IMap queries
+│   ├── wan/                # WAN replication
+│   ├── spi/merge/          # Split-brain merge policies
 │   ├── persistence/        # Hot Restart — WAL, checkpoints, recovery
 │   ├── projection/         # Projection SPI — identity, single/multi-attribute
 │   ├── query/              # Predicate engine — includes PartitionPredicate
-│   ├── sql/                # SQL engine for IMap queries
 │   ├── rest/               # Built-in REST API server
 │   ├── logging/            # Production logger with level filtering
 │   ├── diagnostics/        # SlowOperationDetector, latency tracking, event log
 │   └── instance/           # HeliosInstance lifecycle
-├── test/                   # Core tests
+├── test/                   # Core + cluster + interop helpers
+│   └── interop/            # Official hazelcast-client@5.6.0 harness
+├── docs/
+│   └── PARITY_MATRIX.md    # Authoritative in-scope parity inventory
 ├── packages/
 │   ├── nestjs/             # @zenystx/helios-nestjs — NestJS integration
 │   ├── blitz/              # @zenystx/helios-blitz — stream processing
@@ -688,17 +698,26 @@ helios/
 
 ## Hazelcast Feature Parity
 
-Helios targets full feature parity with Hazelcast Java (open-source edition). The following are intentionally out of scope:
+Helios aims at **100% in-scope Hazelcast OSS feature parity** for the Node/Bun rewrite. Status is tracked in **[`docs/PARITY_MATRIX.md`](docs/PARITY_MATRIX.md)** (single source of truth: **0 PARTIAL / 0 MISSING** in-scope rows).
 
-| Item                    | Reason                                                           |
-| ----------------------- | ---------------------------------------------------------------- |
-| **Blitz (Jet)**         | Replaced by `@zenystx/helios-blitz` with NATS JetStream backend |
-| **JCache (JSR-107)**    | Java-specific API — Helios provides its own Cache API            |
-| **Dynamic Config**      | Deferred — config is set at startup                              |
-| **Vector Search**       | Deferred                                                         |
-| **Multi-node Raft**     | CP atomics are fully implemented; multi-node Raft consensus is deferred to v2 |
-| **OSGi**                | Java-specific module system                                      |
-| **WAN Replication**     | Enterprise feature                                               |
+### Included (shipped)
+
+Distributed data structures (IMap, MultiMap, ReplicatedMap, Queue, List, Set, Ringbuffer, Topic/ReliableTopic, ICache), near cache, query cache, MapStore backends, multi-node TCP clustering, partition backups/migration, split-brain protection, CP subsystem with **multi-node Raft over TCP**, SQL (including JOINs + planner), transactions (including coordinator durability), discovery, WAN, executors / scheduled executors (`scheduleOnAllMembers*`), security surfaces in OSS scope, and official-client protocol interop.
+
+### Intentional exceptions (not gaps)
+
+| Item | Reason |
+| ---- | ------ |
+| **Jet / JetStream engine** | Replaced by **Blitz** + embedded **`nats-server`** (NATS JetStream client against nats-server) |
+| **Java threading model** | Helios uses Node/Bun async concurrency (not a Java `Thread` port) |
+| **JCache / JSR-107 API** | Java `javax.cache` surface; Helios ships distributed cache ops without that API |
+| **JMX beans** | Java-only; metrics via REST / metrics registry |
+| **XA / JTA** | Java-specific transaction infrastructure |
+| **User Code Deployment** | Java class deployment; not applicable on TypeScript/Bun |
+| **Vector Collections** | Out of current release scope |
+| **OSGi / Enterprise-only** | Java module system; Kerberos/LDAP, tiered storage, etc. excluded |
+
+Historical baselines under `docs/baseline/` (feature/opcode inventories) may lag code — prefer the parity matrix for claims.
 
 ---
 

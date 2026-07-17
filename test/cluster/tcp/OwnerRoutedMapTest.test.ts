@@ -16,16 +16,24 @@ import type { HeliosInstanceImpl } from '@zenystx/helios-core/instance/impl/Heli
 import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState';
 import { afterEach, describe, expect, it } from 'bun:test';
 
-const BASE_PORT = 16900;
-let portCounter = 0;
-
+/** OS-assigned free port — avoids EADDRINUSE under parallel suite load. */
 function nextPort(): number {
-    return BASE_PORT + (portCounter++);
+    const server = Bun.listen({
+        hostname: '127.0.0.1',
+        port: 0,
+        socket: { data() {}, open() {}, close() {}, error() {} },
+    });
+    const port = server.port;
+    server.stop(true);
+    if (port == null || port <= 0) {
+        throw new Error('nextPort: failed to reserve free port');
+    }
+    return port;
 }
 
 async function waitUntil(
     predicate: () => boolean | Promise<boolean>,
-    timeoutMs = 5000,
+    timeoutMs = 15_000,
 ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (!(await predicate())) {
@@ -40,7 +48,7 @@ async function waitForClusterSize(
     instance: HeliosInstanceImpl,
     count: number,
 ): Promise<void> {
-    await waitUntil(() => instance.getCluster().getMembers().length === count);
+    await waitUntil(() => instance.getCluster().getMembers().length === count, 15_000);
 }
 
 describe('Block 21.1 — Owner-routed map execution substrate', () => {
@@ -48,10 +56,18 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
 
     afterEach(async () => {
         for (const inst of instances) {
-            if (inst.isRunning()) inst.shutdown();
+            if (inst.isRunning()) {
+                try {
+                    inst.shutdown();
+                } catch {
+                    // ignore shutdown races
+                }
+            }
         }
         instances.length = 0;
-        await Bun.sleep(30);
+        // Allow pending remote invocations / peer-disconnect handlers to settle
+        // so they cannot surface as unhandled errors in the next test.
+        await Bun.sleep(250);
     });
 
     async function startNode(
@@ -80,6 +96,18 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         const b = await startNode('ownerB', portB, [portA]);
         await waitForClusterSize(a, 2);
         await waitForClusterSize(b, 2);
+        // Wait until both nodes agree on ownership for a probe key's partition.
+        // Without this, early set/put can land on a stale owner view and flake.
+        await waitUntil(() => {
+            const probe = 'partition-sync-probe';
+            const pidA = a.getPartitionIdForName(probe);
+            const pidB = b.getPartitionIdForName(probe);
+            if (pidA !== pidB) return false;
+            const ownerA = a.getPartitionOwnerId(pidA);
+            const ownerB = b.getPartitionOwnerId(pidB);
+            return ownerA !== null && ownerA === ownerB;
+        }, 10_000);
+        await Bun.sleep(50);
         return [a, b];
     }
 
@@ -212,8 +240,9 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
         }
 
         await mapB.set(key, 'set-value');
-        const val = await mapA.get(key);
-        expect(val).toBe('set-value');
+        // Allow async OPERATION_RESPONSE / owner apply to settle under load.
+        await waitUntil(async () => (await mapA.get(key)) === 'set-value', 5_000);
+        expect(await mapA.get(key)).toBe('set-value');
     });
 
     // ── Test 6: delete from non-owner routes to owner ──
@@ -475,21 +504,43 @@ describe('Block 21.1 — Owner-routed map execution substrate', () => {
     // ── Test 17: three-node cluster routes correctly ──
 
     it('three-node cluster routes operations to correct partition owners', async () => {
+        // Sequential join (A seed → B → C) is the stable path under suite load.
         const portA = nextPort();
         const portB = nextPort();
         const portC = nextPort();
         const a = await startNode('tri-A', portA);
         const b = await startNode('tri-B', portB, [portA]);
         await waitForClusterSize(a, 2);
-        const c = await startNode('tri-C', portC, [portA]);
+        await waitForClusterSize(b, 2);
+        const c = await startNode('tri-C', portC, [portA, portB]);
         await waitForClusterSize(a, 3);
         await waitForClusterSize(b, 3);
         await waitForClusterSize(c, 3);
 
+        // Wait for partition tables to converge across all three members
+        await waitUntil(() => {
+            const probe = 'tri-key';
+            const pid = a.getPartitionIdForName(probe);
+            const oa = a.getPartitionOwnerId(pid);
+            const ob = b.getPartitionOwnerId(pid);
+            const oc = c.getPartitionOwnerId(pid);
+            return oa !== null && oa === ob && ob === oc;
+        }, 15_000);
+
+        // Put from C; verify get from each node routes to the partition owner.
         const mapC = c.getMap<string, string>('tri-map');
         await mapC.put('tri-key', 'tri-value');
 
-        // Should be readable from all nodes
+        await waitUntil(async () => {
+            try {
+                const va = await a.getMap<string, string>('tri-map').get('tri-key');
+                const vb = await b.getMap<string, string>('tri-map').get('tri-key');
+                const vc = await c.getMap<string, string>('tri-map').get('tri-key');
+                return va === 'tri-value' && vb === 'tri-value' && vc === 'tri-value';
+            } catch {
+                return false;
+            }
+        }, 15_000);
         expect(await a.getMap<string, string>('tri-map').get('tri-key')).toBe('tri-value');
         expect(await b.getMap<string, string>('tri-map').get('tri-key')).toBe('tri-value');
         expect(await c.getMap<string, string>('tri-map').get('tri-key')).toBe('tri-value');

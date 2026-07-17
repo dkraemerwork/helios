@@ -464,6 +464,8 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 out.writeString(message.sourceNodeId);
                 writeEncodedData(out, message.keyData);
                 writeEncodedData(out, message.valueData);
+                out.writeLong(BigInt(message.ttlMillis ?? 0));
+                out.writeLong(BigInt(message.writtenAt ?? 0));
                 return;
             case 'REPLICATED_MAP_REMOVE':
                 out.writeString(message.mapName);
@@ -882,7 +884,25 @@ export class BinarySerializationStrategy implements SerializationStrategy {
                 const sourceNodeId = readRequiredString(inp);
                 const keyData = readEncodedData(inp);
                 const valueData = readEncodedData(inp);
-                return { type: 'REPLICATED_MAP_PUT', mapName, version, sourceNodeId, keyData, valueData };
+                // Optional TTL fields (appended for parity); default 0 when absent in older peers.
+                let ttlMillis = 0;
+                let writtenAt = 0;
+                try {
+                    ttlMillis = Number(inp.readLong());
+                    writtenAt = Number(inp.readLong());
+                } catch {
+                    // Older peers omit TTL — treat as no expiry.
+                }
+                return {
+                    type: 'REPLICATED_MAP_PUT',
+                    mapName,
+                    version,
+                    sourceNodeId,
+                    keyData,
+                    valueData,
+                    ttlMillis,
+                    writtenAt,
+                };
             }
             case 'REPLICATED_MAP_REMOVE': {
                 const mapName = readRequiredString(inp);

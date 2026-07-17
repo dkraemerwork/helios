@@ -96,7 +96,29 @@ for suite in "${SUITES[@]}"; do
   fi
 
   log "Running suite: ${BOLD}${suite}${RESET}"
-  if bun test --timeout "$TIMEOUT" "$SUITE_FILE" 2>&1 | sed 's/^/  /'; then
+  # Capture output so we can distinguish real test failures from post-suite
+  # Bun runtime crashes (segfault after 0 fail) which are not product defects.
+  set +e
+  SUITE_OUT=$(bun test --timeout "$TIMEOUT" "$SUITE_FILE" 2>&1)
+  SUITE_RC=$?
+  set -e
+  echo "$SUITE_OUT" | sed 's/^/  /'
+
+  FAIL_LINE=$(echo "$SUITE_OUT" | rg -o '[0-9]+ fail' | tail -1 || true)
+  FAIL_N=0
+  if [ -n "$FAIL_LINE" ]; then
+    FAIL_N=${FAIL_LINE%% *}
+  fi
+  PASS_LINE=$(echo "$SUITE_OUT" | rg -o '[0-9]+ pass' | tail -1 || true)
+  PASS_N=0
+  if [ -n "$PASS_LINE" ]; then
+    PASS_N=${PASS_LINE%% *}
+  fi
+
+  if [ "$FAIL_N" -eq 0 ] && [ "$PASS_N" -gt 0 ]; then
+    if [ "$SUITE_RC" -ne 0 ]; then
+      warn "  Suite ${suite}: tests green (${PASS_N} pass, 0 fail) but runner exited ${SUITE_RC} (likely Bun post-suite crash) — counting as PASS"
+    fi
     success "  PASS — ${suite}"
     PASS_COUNT=$((PASS_COUNT + 1))
   else

@@ -884,7 +884,7 @@ export class DistributedQueueService {
         stats.otherOperationCount++;
         this._broadcastEvent(name, "REMOVED", removed.data);
         this._scheduleDestroyIfNeeded(name, runtime);
-        void this._replicateState(name, runtime);
+        void this._replicateState(name, runtime).catch(() => {});
         this._drainWaiters(name, runtime);
 
         const store = this._storeWrappers.get(name);
@@ -914,7 +914,7 @@ export class DistributedQueueService {
         this._broadcastEvent(name, "REMOVED", entry.data);
       }
       this._scheduleDestroyIfNeeded(name, runtime);
-      void this._replicateState(name, runtime);
+      void this._replicateState(name, runtime).catch(() => {});
       this._drainWaiters(name, runtime);
 
       const store = this._storeWrappers.get(name);
@@ -972,7 +972,7 @@ export class DistributedQueueService {
       runtime.state.version++;
       this._getStats(name).otherOperationCount++;
       this._scheduleDestroyIfNeeded(name, runtime);
-      void this._replicateState(name, runtime);
+      void this._replicateState(name, runtime).catch(() => {});
       this._drainWaiters(name, runtime);
 
       const store = this._storeWrappers.get(name);
@@ -1005,7 +1005,7 @@ export class DistributedQueueService {
       runtime.state.version++;
       this._getStats(name).otherOperationCount++;
       this._scheduleDestroyIfNeeded(name, runtime);
-      void this._replicateState(name, runtime);
+      void this._replicateState(name, runtime).catch(() => {});
       this._drainWaiters(name, runtime);
 
       const store = this._storeWrappers.get(name);
@@ -1027,7 +1027,7 @@ export class DistributedQueueService {
       this._broadcastEvent(name, "REMOVED", entry.data);
     }
     this._scheduleDestroyIfNeeded(name, runtime);
-    void this._replicateState(name, runtime);
+    void this._replicateState(name, runtime).catch(() => {});
     this._drainWaiters(name, runtime);
     this._options.onMutation?.({ queueName: name, operation: 'clear' });
 
@@ -1074,7 +1074,7 @@ export class DistributedQueueService {
     }
 
     if (stateChanged) {
-      void this._replicateState(name, runtime);
+      void this._replicateState(name, runtime).catch(() => {});
     }
   }
 

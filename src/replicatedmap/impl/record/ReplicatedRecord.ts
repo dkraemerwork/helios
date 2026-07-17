@@ -39,6 +39,15 @@ export class ReplicatedRecord<K, V> {
     return this._ttlMillis;
   }
 
+  /**
+   * Returns true when a positive TTL has elapsed since last update.
+   * ttlMillis <= 0 means the entry never expires.
+   */
+  isExpired(now: number = Date.now()): boolean {
+    if (this._ttlMillis <= 0) return false;
+    return now >= this._updateTime + this._ttlMillis;
+  }
+
   setValue(value: V, ttlMillis: number): V {
     this._access();
     return this.setValueInternal(value, ttlMillis);

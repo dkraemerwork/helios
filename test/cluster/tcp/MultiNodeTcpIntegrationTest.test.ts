@@ -19,13 +19,13 @@ import type { HeliosInstanceImpl } from "@zenystx/helios-core/instance/impl/Heli
 import { RingbufferService } from "@zenystx/helios-core/ringbuffer/impl/RingbufferService";
 import { afterEach, describe, expect, it } from "bun:test";
 
-// Ports in the 15780+ range — unlikely to conflict with other tests.
-const BASE_PORT = 15780;
+// Pid-offset ports avoid collisions under parallel full-suite load.
+const BASE_PORT = 15780 + (process.pid % 200) * 20;
 
 /** Wait (poll) until `predicate()` returns true or timeout is reached. */
 async function waitUntil(
   predicate: () => boolean | Promise<boolean>,
-  timeoutMs = 3000,
+  timeoutMs = 10_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!(await predicate())) {
@@ -208,6 +208,18 @@ describe("Multi-node TCP integration", () => {
     return { owner: right, backup: left };
   }
 
+  /** Wait until the backup container has the expected item count (replication complete). */
+  async function waitForRingbufferReplicaState(
+    backup: HeliosInstanceImpl,
+    ringbufferName: string,
+    itemCount: number,
+  ): Promise<void> {
+    await waitUntil(
+      () => getRingbufferState(backup, ringbufferName).size === itemCount,
+      15_000,
+    );
+  }
+
   async function readRingbufferItems(
     instance: HeliosInstanceImpl,
     ringbufferName: string,
@@ -226,14 +238,33 @@ describe("Multi-node TCP integration", () => {
     const nodeB = await startNodeB(1, BASE_PORT + 0);
 
     await waitForPeers(nodeA, 1);
+    // Cluster membership + partition table must agree before map routing works.
+    await waitUntil(
+      () =>
+        nodeA.getCluster().getMembers().length === 2 &&
+        nodeB.getCluster().getMembers().length === 2,
+      10_000,
+    );
+    await waitUntil(() => {
+      const pid = nodeA.getPartitionIdForName("hello");
+      const oa = nodeA.getPartitionOwnerId(pid);
+      const ob = nodeB.getPartitionOwnerId(pid);
+      return oa !== null && oa === ob;
+    }, 10_000);
 
     const mapB = nodeB.getMap<string, string>("shared");
     await mapB.put("hello", "world");
 
-    // Allow replication to propagate
+    // Allow routing / backup apply to settle
     await waitUntil(
-      async () =>
-        (await nodeA.getMap<string, string>("shared").get("hello")) === "world",
+      async () => {
+        try {
+          return (await nodeA.getMap<string, string>("shared").get("hello")) === "world";
+        } catch {
+          return false;
+        }
+      },
+      10_000,
     );
 
     expect(await nodeA.getMap<string, string>("shared").get("hello")).toBe(
@@ -246,6 +277,12 @@ describe("Multi-node TCP integration", () => {
     const nodeB = await startNodeB(3, BASE_PORT + 2);
 
     await waitForPeers(nodeA, 1);
+    await waitUntil(
+      () =>
+        nodeA.getCluster().getMembers().length === 2 &&
+        nodeB.getCluster().getMembers().length === 2,
+      10_000,
+    );
 
     const mapA = nodeA.getMap<string, string>("shared");
     await mapA.put("foo", "bar");
@@ -497,6 +534,7 @@ describe("Multi-node TCP integration", () => {
     );
 
     await waitForPeers(nodeA, 1);
+    await waitForPeers(nodeB, 1);
     await waitForClusterSize(nodeA, 2);
     await waitForClusterSize(nodeB, 2);
 
@@ -512,15 +550,14 @@ describe("Multi-node TCP integration", () => {
     for (const item of items) {
       await ownerService.add(ringbufferName, owner.getNodeEngine().toData(item)!);
     }
+    // Ensure backups are fully replicated before owner death (parallel-suite load).
+    await waitForRingbufferReplicaState(backup, ringbufferName, items.length);
 
     owner.shutdown();
 
     await waitUntil(() => !owner.isRunning());
     await waitForClusterSize(backup, 1);
-    await waitUntil(
-      () => getRingbufferState(backup, ringbufferName).size === items.length,
-      10_000,
-    );
+    await waitForRingbufferReplicaState(backup, ringbufferName, items.length);
     const recoveredItems = await readRingbufferItems(backup, ringbufferName);
     const state = getRingbufferState(backup, ringbufferName);
 
@@ -545,6 +582,7 @@ describe("Multi-node TCP integration", () => {
     );
 
     await waitForPeers(nodeA, 1);
+    await waitForPeers(nodeB, 1);
     await waitForClusterSize(nodeA, 2);
     await waitForClusterSize(nodeB, 2);
 
@@ -559,6 +597,7 @@ describe("Multi-node TCP integration", () => {
     for (const item of items) {
       await ownerService.add(ringbufferName, owner.getNodeEngine().toData(item)!);
     }
+    await waitForRingbufferReplicaState(backup, ringbufferName, items.length);
     const restartPort = owner === nodeA ? BASE_PORT + 25 : BASE_PORT + 26;
 
     owner.shutdown();
@@ -575,10 +614,7 @@ describe("Multi-node TCP integration", () => {
     await waitForPeers(backup, 1);
     await waitForClusterSize(backup, 2);
     await waitForClusterSize(restarted, 2);
-    await waitUntil(
-      () => getRingbufferState(backup, ringbufferName).size === items.length,
-      10_000,
-    );
+    await waitForRingbufferReplicaState(backup, ringbufferName, items.length);
 
     const survivorState = getRingbufferState(backup, ringbufferName);
 

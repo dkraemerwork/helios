@@ -20,8 +20,8 @@ interface CountDownLatchState {
   invocationUuids: string[];
 }
 
-function stateKey(name: string): string {
-  return KEY_PREFIX + name;
+function stateKey(groupId: string, objectName: string): string {
+  return `${KEY_PREFIX}${groupId}:${objectName}`;
 }
 
 function defaultState(): CountDownLatchState {
@@ -67,7 +67,7 @@ export class CountDownLatchService {
     const result = await this._cp.executeRaftCommand(name, {
       type: 'CDL_TRY_SET_COUNT',
       groupId,
-      key: `cdl:${objectName}`,
+      key: stateKey(groupId, objectName),
       payload: { count },
     });
     return result as boolean;
@@ -83,7 +83,7 @@ export class CountDownLatchService {
     const result = await this._cp.executeRaftCommand(name, {
       type: 'CDL_COUNT_DOWN',
       groupId,
-      key: `cdl:${objectName}`,
+      key: stateKey(groupId, objectName),
       payload: { expectedRound, invocationUuid },
     });
     const newCount = result as number;
@@ -158,7 +158,7 @@ export class CountDownLatchService {
     await this._cp.executeRaftCommand(name, {
       type: 'CDL_DESTROY',
       groupId,
-      key: `cdl:${objectName}`,
+      key: stateKey(groupId, objectName),
       payload: null,
     });
   }
@@ -166,15 +166,20 @@ export class CountDownLatchService {
   // ── Internal ───────────────────────────────────────────────────────────
 
   private async _readState(name: string): Promise<CountDownLatchState> {
-    const raw = await this._cp.linearizableRead(CP_GROUP_DEFAULT, stateKey(name));
+    const groupId = this._cp.resolveGroupId(name);
+    const objectName = this._cp.resolveObjectName(name);
+    // Use the same group-scoped key as mutations so group isolation holds.
+    const raw = await this._cp.linearizableRead(groupId, stateKey(groupId, objectName));
     return deserializeState(raw);
   }
 
   private async _writeState(name: string, state: CountDownLatchState): Promise<void> {
+    const groupId = this._cp.resolveGroupId(name);
+    const objectName = this._cp.resolveObjectName(name);
     await this._cp.executeRaftCommand(name, {
       type: 'CDL_SET',
-      groupId: CP_GROUP_DEFAULT,
-      key: stateKey(name),
+      groupId,
+      key: stateKey(groupId, objectName),
       payload: state,
     });
   }

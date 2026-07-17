@@ -1,8 +1,15 @@
 # Helios Opcode Inventory — hazelcast-client@5.6.x / Protocol 2.8
 
+> **PARTIALLY STALE (2026-07-17).** Many rows still say `MISSING`/`CODEC` from the March 2026
+> audit even though handlers are registered under `src/server/clientprotocol/handlers/*`
+> (~320 `dispatcher.register` sites). **Feature-level parity is tracked in
+> [`docs/PARITY_MATRIX.md`](../PARITY_MATRIX.md)** (100% in-scope COMPLETE).
+> Rows that were re-verified recently (e.g. ICache EventJournal `0x131F00` / `0x132000`)
+> are marked DONE; other DONE/MISSING cells may lag code.
+
 **Target:** `hazelcast-client@5.6.0` / Hazelcast OSS `5.5.0`  
 **Client Protocol Version:** 2.8  
-**Audit date:** 2026-03-08  
+**Audit date:** 2026-03-08 (spot-updates through 2026-07-17)
 
 ## Opcode Encoding
 
@@ -11,7 +18,7 @@ Each message type is a 24-bit integer encoded as `serviceId (8 bits) | methodId 
 Handler status legend:
 - **DONE** — Codec implemented + server-side handler registered in `HeliosInstanceImpl` or `ScheduledExecutorMessageHandlers`
 - **CODEC** — Codec exists but no server-side handler is wired
-- **MISSING** — No codec and no handler
+- **MISSING** — No codec and no handler *(row may be stale — prefer code + PARITY_MATRIX)*
 
 ---
 
@@ -335,8 +342,8 @@ Handler registration: `src/instance/impl/HeliosInstanceImpl.ts`
 | 0x151800 | 1382400 | CacheRemovePartitionLostListener | MISSING |
 | 0x151900 | 1382656 | CachePutAll | MISSING |
 | 0x151A00 | 1382912 | CacheFetchNearCacheInvalidationMetadata | PARTIAL (task exists) |
-| 0x151B00 | 1383168 | CacheEventJournalSubscribe | MISSING |
-| 0x151C00 | 1383424 | CacheEventJournalRead | MISSING |
+| 0x131F00 | 1253120 | CacheEventJournalSubscribe | DONE (`CacheServiceHandlers` 0x131F00/0x131F01) |
+| 0x132000 | 1253376 | CacheEventJournalRead | DONE (`CacheServiceHandlers` 0x132000/0x132001) |
 | 0x151D00 | 1383680 | CacheSetExpiryPolicy | MISSING |
 
 ---

@@ -2,7 +2,7 @@ import { InvocationMonitor } from '@zenystx/helios-core/instance/impl/Invocation
 import { describe, expect, test } from 'bun:test';
 
 describe('InvocationMonitor', () => {
-    test('times out through the sweeper and ignores a late response', () => {
+    test('times out through the sweeper and ignores a late response', async () => {
         const monitor = new InvocationMonitor(undefined, 10_000);
         const outcomes: string[] = [];
 
@@ -16,6 +16,7 @@ describe('InvocationMonitor', () => {
         });
 
         monitor.sweep(151);
+        await Promise.resolve(); // flush deferred reject microtask
         monitor.handleResponse({ callId: 1, backupAcks: 0, backupMemberIds: [], payload: 'late', error: null }, 152);
 
         expect(outcomes).toEqual(['Operation timed out (callId=1)']);
@@ -43,7 +44,7 @@ describe('InvocationMonitor', () => {
         expect(monitor.getStats().duplicateResponsesIgnored).toBe(1);
     });
 
-    test('fails member-targeted invocations immediately and ignores late backup acks', () => {
+    test('fails member-targeted invocations immediately and ignores late backup acks', async () => {
         const monitor = new InvocationMonitor(undefined, 10_000);
         const outcomes: string[] = [];
 
@@ -57,6 +58,7 @@ describe('InvocationMonitor', () => {
         });
 
         monitor.failInvocationsForMember('member-b', 140);
+        await Promise.resolve(); // flush deferred reject microtask
         monitor.handleBackupAck({ callId: 3, senderId: 'backup-b' }, 141);
 
         expect(outcomes).toEqual(['Target member member-b left before invocation completed (callId=3)']);
@@ -120,7 +122,7 @@ describe('InvocationMonitor', () => {
         expect(outcomes).toEqual(['ok']);
     });
 
-    test('fails on backup ack timeout with explicit error', () => {
+    test('fails on backup ack timeout with explicit error', async () => {
         const monitor = new InvocationMonitor(undefined, 10_000);
         const outcomes: string[] = [];
 
@@ -142,12 +144,13 @@ describe('InvocationMonitor', () => {
             error: null,
         }, 110);
         monitor.sweep(136);
+        await Promise.resolve(); // flush deferred reject microtask
 
         expect(outcomes).toEqual(['Backup ack timed out (callId=5, required=1, received=0)']);
         expect(monitor.getStats().backupAckTimeoutFailures).toBe(1);
     });
 
-    test('fails promptly when a pending backup member leaves before ack', () => {
+    test('fails promptly when a pending backup member leaves before ack', async () => {
         const monitor = new InvocationMonitor(undefined, 10_000);
         const outcomes: string[] = [];
 
@@ -169,6 +172,7 @@ describe('InvocationMonitor', () => {
             error: null,
         }, 110);
         monitor.failInvocationsForMember('backup-1', 115);
+        await Promise.resolve(); // flush deferred reject microtask
 
         expect(outcomes).toEqual(['Backup member backup-1 left before acknowledgement completed (callId=6)']);
     });

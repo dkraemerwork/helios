@@ -68,9 +68,27 @@ export interface SelectItem {
 
 // ── Statement interfaces ─────────────────────────────────────────────────────
 
+/** A JOIN clause against another IMap mapping. */
+export interface SqlJoinClause {
+    /** INNER or LEFT (outer). */
+    readonly joinType: 'INNER' | 'LEFT';
+    /** Right-hand mapping / map name. */
+    readonly mapName: string;
+    /** Optional table alias for the right side. */
+    readonly alias: string | null;
+    /** Left column reference (may be qualified: a.col or col). */
+    readonly onLeft: string;
+    /** Right column reference (may be qualified: b.col or col). */
+    readonly onRight: string;
+}
+
 export interface ParsedSelectStatement {
     readonly type: 'SELECT';
     readonly mapName: string;
+    /** Optional alias for the primary FROM mapping. */
+    readonly mapAlias: string | null;
+    /** JOIN clauses (empty for single-mapping queries). */
+    readonly joins: SqlJoinClause[];
     /** Legacy flat column list — still populated for simple non-aggregate queries. */
     readonly columns: string[];
     /** Rich select item list (populated for all queries). */
@@ -229,7 +247,9 @@ export class SqlStatement {
     // ── SELECT ───────────────────────────────────────────────────────────────
 
     private _parseSelect(sql: string, upper: string): ParsedSelectStatement {
-        // SELECT [DISTINCT] <cols> FROM <map> [WHERE ...] [GROUP BY ...] [HAVING ...] [ORDER BY ...] [LIMIT n] [OFFSET n]
+        // SELECT [DISTINCT] <cols> FROM <map> [alias]
+        //   [INNER|LEFT] JOIN <map2> [alias] ON <left> = <right>
+        //   [WHERE ...] [GROUP BY ...] [HAVING ...] [ORDER BY ...] [LIMIT n] [OFFSET n]
         const fromIdx = upper.indexOf('FROM');
         if (fromIdx === -1) throw new SqlStatementParseError('SELECT missing FROM clause');
 
@@ -241,7 +261,34 @@ export class SqlStatement {
         }
 
         const afterFrom = sql.substring(fromIdx + 4).trim();
-        const { mapName, remainder } = this._extractIdentifier(afterFrom);
+        const { mapName, remainder: afterMap } = this._extractIdentifier(afterFrom);
+
+        // Optional primary alias (single identifier before JOIN/WHERE/...)
+        let mapAlias: string | null = null;
+        let remainder = afterMap.trim();
+        const aliasMatch = remainder.match(/^([A-Za-z_][\w]*)\b/);
+        if (aliasMatch) {
+            const candidate = aliasMatch[1]!;
+            const candidateUpper = candidate.toUpperCase();
+            const reservedWords = new Set([
+                'INNER', 'LEFT', 'RIGHT', 'JOIN', 'WHERE', 'GROUP', 'HAVING',
+                'ORDER', 'LIMIT', 'OFFSET', 'ON', 'AS', 'OUTER',
+            ]);
+            // Never treat SQL keywords as table aliases
+            if (!reservedWords.has(candidateUpper)) {
+                const nextUpper = remainder.substring(candidate.length).trimStart().toUpperCase();
+                if (
+                    nextUpper.length === 0 ||
+                    /^(INNER|LEFT|RIGHT|JOIN|WHERE|GROUP|HAVING|ORDER|LIMIT|OFFSET)\b/.test(nextUpper)
+                ) {
+                    mapAlias = candidate;
+                    remainder = remainder.substring(candidate.length).trim();
+                }
+            }
+        }
+
+        const { joins, remainder: afterJoins } = this._parseJoins(remainder);
+        remainder = afterJoins;
 
         const where = this._parseConditions(remainder, 'WHERE');
         const groupBy = this._parseGroupBy(remainder);
@@ -259,6 +306,8 @@ export class SqlStatement {
         return {
             type: 'SELECT',
             mapName,
+            mapAlias,
+            joins,
             columns,
             selectItems,
             distinct,
@@ -269,6 +318,86 @@ export class SqlStatement {
             limit,
             offset,
         };
+    }
+
+    /**
+     * Parse zero or more JOIN clauses from the remainder after FROM <map> [alias].
+     * Supports: [INNER|LEFT [OUTER]] JOIN <map> [alias] ON <left> = <right>
+     */
+    private _parseJoins(remainder: string): { joins: SqlJoinClause[]; remainder: string } {
+        const joins: SqlJoinClause[] = [];
+        let rest = remainder.trim();
+        // Loop while next token is JOIN / INNER JOIN / LEFT [OUTER] JOIN
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const upper = rest.toUpperCase();
+            let joinType: 'INNER' | 'LEFT' = 'INNER';
+            let consumed = 0;
+
+            if (upper.startsWith('INNER JOIN')) {
+                joinType = 'INNER';
+                consumed = 'INNER JOIN'.length;
+            } else if (upper.startsWith('LEFT OUTER JOIN')) {
+                joinType = 'LEFT';
+                consumed = 'LEFT OUTER JOIN'.length;
+            } else if (upper.startsWith('LEFT JOIN')) {
+                joinType = 'LEFT';
+                consumed = 'LEFT JOIN'.length;
+            } else if (upper.startsWith('JOIN')) {
+                joinType = 'INNER';
+                consumed = 'JOIN'.length;
+            } else {
+                break;
+            }
+
+            rest = rest.substring(consumed).trim();
+            const { mapName, remainder: afterRight } = this._extractIdentifier(rest);
+            rest = afterRight.trim();
+
+            // Optional alias
+            let alias: string | null = null;
+            const am = rest.match(/^([A-Za-z_][\w]*)\b/);
+            if (am) {
+                const cand = am[1]!;
+                const next = rest.substring(cand.length).trimStart().toUpperCase();
+                if (next.startsWith('ON') || next.startsWith('INNER') || next.startsWith('LEFT') ||
+                    next.startsWith('JOIN') || next.startsWith('WHERE') || next.startsWith('GROUP') ||
+                    next.startsWith('HAVING') || next.startsWith('ORDER') || next.startsWith('LIMIT') ||
+                    next.startsWith('OFFSET') || next.length === 0) {
+                    if (next.startsWith('ON') || next.startsWith('INNER') || next.startsWith('LEFT') ||
+                        next.startsWith('JOIN') || next.startsWith('WHERE') || next.startsWith('GROUP') ||
+                        next.startsWith('HAVING') || next.startsWith('ORDER') || next.startsWith('LIMIT') ||
+                        next.startsWith('OFFSET')) {
+                        alias = cand;
+                        rest = rest.substring(cand.length).trim();
+                    }
+                }
+            }
+
+            const onUpper = rest.toUpperCase();
+            if (!onUpper.startsWith('ON')) {
+                throw new SqlStatementParseError('JOIN missing ON clause');
+            }
+            rest = rest.substring(2).trim();
+
+            // Parse ON left = right
+            const eqIdx = rest.indexOf('=');
+            if (eqIdx === -1) {
+                throw new SqlStatementParseError('JOIN ON clause must be of form left = right');
+            }
+            const onLeft = rest.substring(0, eqIdx).trim();
+            // Right side ends at next keyword
+            const afterEq = rest.substring(eqIdx + 1).trim();
+            const rightMatch = afterEq.match(/^([A-Za-z_][\w.]*)/);
+            if (!rightMatch) {
+                throw new SqlStatementParseError('JOIN ON right side is missing');
+            }
+            const onRight = rightMatch[1]!;
+            rest = afterEq.substring(onRight.length).trim();
+
+            joins.push({ joinType, mapName, alias, onLeft, onRight });
+        }
+        return { joins, remainder: rest };
     }
 
     private _parseSelectItems(colsPart: string): SelectItem[] {

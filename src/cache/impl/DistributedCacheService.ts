@@ -705,7 +705,7 @@ export class DistributedCacheService {
 
   private _resyncAll(): void {
     for (const [name, container] of Array.from(this._caches.entries())) {
-      void this._replicateState(name, container);
+      void this._replicateState(name, container).catch(() => {});
     }
   }
 

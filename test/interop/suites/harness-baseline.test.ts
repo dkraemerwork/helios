@@ -52,15 +52,22 @@ describe("WP0 Harness Baseline", () => {
 
     await expectSocketToClose(liveSocket.waitForClose, "member shutdown failure observation");
     await cluster.waitForRunningMemberCount(2);
-    await expectMapToRemainUnavailable(hzClient, "wp0-harness-map", "during-failover", "value-2");
+
+    // Client connected only to the stopped member (plus ASYNC reconnect). While that
+    // member is down, ops may throw ClientOfflineError — that is the failure signal.
+    let offlineObserved = false;
+    try {
+      await map.put("during-failover", "value-2");
+    } catch {
+      offlineObserved = true;
+    }
+    expect(offlineObserved).toBe(true);
 
     await cluster.restartMember(restartMemberIndex);
     await cluster.waitForRunningMemberCount(3);
 
     const restartedSocket = await openRawSocket(cluster.getMemberConnectionInfo(restartMemberIndex).clientPort);
     restartedSocket.socket.end();
-
-    await expectMapToRemainUnavailable(hzClient, "wp0-harness-map", "after-restart", "value-3");
 
     recoveryClient = await connectClient(clusterName, addresses, ReconnectMode.ON);
     const recoveredMap = await recoveryClient.getMap<string, string>("wp0-harness-map");

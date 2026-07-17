@@ -5,6 +5,7 @@
  * In multi-node mode (cpMemberCount >= 3): uses full Raft consensus via RaftNode.
  */
 
+import type { ClusterMessage } from '../../cluster/tcp/ClusterMessage.js';
 import type { TcpClusterTransport } from '../../cluster/tcp/TcpClusterTransport.js';
 import type { CPSubsystemConfig } from '../../config/CPSubsystemConfig.js';
 import { CpGroupManager } from '../raft/CpGroupManager.js';
@@ -112,6 +113,45 @@ export class CpSubsystemService {
   // ── New Multi-Node API ───────────────────────────────────────────────────────
 
   /**
+   * Bootstrap the METADATA Raft group when multi-node CP is enabled.
+   * Safe to call multiple times; no-op in single-node mode.
+   */
+  async initializeMultiNode(): Promise<void> {
+    if (!this._multiNodeEnabled || this._groupManager === null) return;
+    if (this._groupManager.getGroup(CpGroupManager.METADATA_GROUP) !== null) return;
+    await this._groupManager.initialize();
+  }
+
+  /** True when this service was constructed with multi-node Raft transport. */
+  isMultiNodeEnabled(): boolean {
+    return this._multiNodeEnabled;
+  }
+
+  /**
+   * Route an inbound cluster message to the Raft router when it is a RAFT_* type.
+   * Returns true if the message was handled as a Raft message.
+   */
+  handleRaftMessage(message: ClusterMessage): boolean {
+    if (!this._multiNodeEnabled || this._messageRouter === null) return false;
+    // Fire async handler without blocking the transport thread; Raft handlers
+    // are synchronous internally except for the Promise wrapper.
+    void this._messageRouter.handleMessage(message);
+    // Treat any RAFT_* type as handled so other services do not re-process.
+    return typeof message.type === 'string' && message.type.startsWith('RAFT_');
+  }
+
+  /**
+   * Returns the current Raft leader UUID for the default (or named) group, or null.
+   */
+  getLeader(groupName: string = CpGroupManager.DEFAULT_GROUP): string | null {
+    if (!this._multiNodeEnabled || this._groupManager === null) {
+      return this._localMemberId;
+    }
+    const info = this._groupManager.getGroup(groupName);
+    return info?.raftNode.getLeader()?.uuid ?? null;
+  }
+
+  /**
    * Execute a command through Raft consensus. In single-node mode, falls back to
    * the embedded SingleNodeRaftGroup for immediate commit.
    */
@@ -128,7 +168,13 @@ export class CpSubsystemService {
       throw new NotLeaderException(node.getLeader(), groupId);
     }
 
-    return node.propose(command);
+    const result = await node.propose(command);
+    // RaftNode.propose resolves with { result, index, term } — unwrap for callers
+    // that expect the state-machine return value (AtomicLong, etc.).
+    if (result !== null && typeof result === 'object' && 'result' in (result as object)) {
+      return (result as { result: unknown }).result;
+    }
+    return result;
   }
 
   /**

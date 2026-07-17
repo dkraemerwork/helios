@@ -90,7 +90,9 @@ import { ClusterState } from '@zenystx/helios-core/internal/cluster/ClusterState
 import { ClusterServiceImpl } from "@zenystx/helios-core/internal/cluster/impl/ClusterServiceImpl";
 import { SplitBrainDetector } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainDetector";
 import { SplitBrainMergeHandler } from "@zenystx/helios-core/internal/cluster/impl/SplitBrainMergeHandler";
+import { CacheEventJournal } from "@zenystx/helios-core/internal/journal/CacheEventJournal";
 import { MapEventJournal } from "@zenystx/helios-core/internal/journal/MapEventJournal";
+import { EventJournalConfig } from "@zenystx/helios-core/config/EventJournalConfig";
 import type { LocalMapStats } from "@zenystx/helios-core/internal/monitor/impl/LocalMapStatsImpl";
 import { DefaultNearCacheManager } from "@zenystx/helios-core/internal/nearcache/impl/DefaultNearCacheManager";
 import { BunTaskScheduler } from "@zenystx/helios-core/internal/nearcache/impl/TaskScheduler";
@@ -484,6 +486,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
   private _nodeEngine!: NodeEngineImpl;
   private readonly _mapService: MapContainerService;
   private readonly _mapEventJournal = new MapEventJournal();
+  private readonly _cacheEventJournal = new CacheEventJournal();
   private readonly _mapInterceptorSupport = new MapInterceptorSupport();
   private readonly _lifecycleService: HeliosLifecycleService;
   private _cluster: Cluster;
@@ -1367,6 +1370,9 @@ export class HeliosInstanceImpl implements HeliosInstance {
       if (this._distributedRingbufferService?.handleMessage(message) === true) {
         return;
       }
+      if (this._cpSubsystemService?.handleRaftMessage(message) === true) {
+        return;
+      }
       this._distributedTopicService?.handleMessage(message);
     };
 
@@ -2203,9 +2209,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
     if (this._transport.hasPeer(memberId)) {
       return true;
     }
-    this._transport.connectToPeer(target.getHost(), target.getPort()).catch(() => {});
+    const transport = this._transport;
+    if (transport === null) {
+      return false;
+    }
+    transport.connectToPeer(target.getHost(), target.getPort()).catch(() => {});
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
+      if (this._transport === null) {
+        return false;
+      }
       if (this._transport.hasPeer(memberId)) {
         return true;
       }
@@ -3614,9 +3627,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
     };
 
     const replicatedMapOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').ReplicatedMapServiceOperations = {
-      put: async (name, key, value) => {
+      put: async (name, key, value, ttl) => {
         this._ensureReplicatedMapService();
-        return this._distributedReplicatedMapService!.put(name, key, value);
+        // Client protocol encodes TTL as nanoseconds (Hazelcast wire); convert to ms.
+        // 0 / negative / MAX_SAFE means no expiry.
+        const ttlNs = typeof ttl === 'bigint' ? Number(ttl) : Number(ttl ?? 0);
+        const ttlMillis =
+          !Number.isFinite(ttlNs) || ttlNs <= 0 || ttlNs >= Number.MAX_SAFE_INTEGER
+            ? 0
+            : Math.max(1, Math.ceil(ttlNs / 1_000_000));
+        return this._distributedReplicatedMapService!.put(name, key, value, ttlMillis);
       },
       get: async (name, key) => {
         this._ensureReplicatedMapService();
@@ -3771,26 +3791,44 @@ export class HeliosInstanceImpl implements HeliosInstance {
     const cacheOps: import('@zenystx/helios-core/server/clientprotocol/handlers/ServiceOperations').CacheServiceOperations = {
       get: async (name, key) => {
         this._ensureCacheService();
+        this._ensureCacheEventJournal(name);
         return this._distributedCacheService!.get(name, key);
       },
       put: async (name, key, value, _expiryPolicy, isGet) => {
         this._ensureCacheService();
+        this._ensureCacheEventJournal(name);
+        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(key);
         if (isGet) {
-          return this._distributedCacheService!.getAndPut(name, key, value);
+          const previous = await this._distributedCacheService!.getAndPut(name, key, value);
+          this._cacheEventJournal.writeAddEvent(name, partitionId, key, previous, value);
+          return previous;
         }
+        const previous = await this._distributedCacheService!.get(name, key);
         await this._distributedCacheService!.put(name, key, value);
+        this._cacheEventJournal.writeAddEvent(name, partitionId, key, previous, value);
         return null;
       },
       remove: async (name, key, currentValue) => {
         this._ensureCacheService();
+        this._ensureCacheEventJournal(name);
+        const partitionId = this._nodeEngine.getPartitionService().getPartitionId(key);
         if (currentValue === null) {
-          return this._distributedCacheService!.remove(name, key);
+          const previous = await this._distributedCacheService!.get(name, key);
+          const removed = await this._distributedCacheService!.remove(name, key);
+          if (removed) {
+            this._cacheEventJournal.writeRemoveEvent(name, partitionId, key, previous);
+          }
+          return removed;
         }
         const existing = await this._distributedCacheService!.get(name, key);
         if (existing === null || !existing.equals(currentValue)) {
           return false;
         }
-        return this._distributedCacheService!.remove(name, key);
+        const removed = await this._distributedCacheService!.remove(name, key);
+        if (removed) {
+          this._cacheEventJournal.writeRemoveEvent(name, partitionId, key, existing);
+        }
+        return removed;
       },
       size: async (name) => {
         this._ensureCacheService();
@@ -3876,6 +3914,16 @@ export class HeliosInstanceImpl implements HeliosInstance {
         const executor = new CacheEntryProcessorExecutor(this._ss, this._distributedCacheService!);
         const resultMap = await executor.invokeAll(name, keys, processorData, args);
         return Array.from(resultMap.entries());
+      },
+      eventJournalSubscribe: async (name, partitionId) => {
+        this._ensureCacheEventJournal(name);
+        const oldest = this._cacheEventJournal.getHeadSequence(name, partitionId);
+        const newest = this._cacheEventJournal.getTailSequence(name, partitionId);
+        return { oldest, newest };
+      },
+      eventJournalRead: async (name, partitionId, startSequence, minCount, maxCount) => {
+        this._ensureCacheEventJournal(name);
+        return this._cacheEventJournal.readMany(name, partitionId, startSequence, minCount, maxCount);
       },
     };
 
@@ -4279,10 +4327,59 @@ export class HeliosInstanceImpl implements HeliosInstance {
 
   private _getOrCreateCpSubsystemService(): CpSubsystemService {
     if (this._cpSubsystemService === null) {
-      this._cpSubsystemService = new CpSubsystemService(this.getLocalMemberId());
+      this._cpSubsystemService = this._createCpSubsystemService();
       this._nodeEngine.registerService(CpSubsystemService.SERVICE_NAME, this._cpSubsystemService);
+      // Fire-and-forget METADATA group bootstrap for multi-node CP.
+      void this._cpSubsystemService.initializeMultiNode();
     }
     return this._cpSubsystemService;
+  }
+
+  /**
+   * Builds CpSubsystemService in single-node or multi-node mode.
+   * Multi-node requires cpMemberCount >= 3, a live TCP transport, and a
+   * cluster membership view so Raft messages can cross real member links.
+   */
+  private _createCpSubsystemService(): CpSubsystemService {
+    const cpConfig = this._config.getCpSubsystemConfig();
+    if (
+      cpConfig.isEnabled() &&
+      this._transport !== null &&
+      this._clusterCoordinator !== null
+    ) {
+      const members = this._cluster.getMembers();
+      const cpMembers = members.map((m) => ({
+        uuid: m.getUuid(),
+        address: {
+          host: m.getAddress().getHost(),
+          port: m.getAddress().getPort(),
+        },
+      }));
+      // Prefer configured count, but require at least 3 live members to form a group.
+      if (cpMembers.length >= 3) {
+        return new CpSubsystemService(
+          this.getLocalMemberId(),
+          cpConfig,
+          this._transport,
+          cpMembers,
+        );
+      }
+    }
+    return new CpSubsystemService(this.getLocalMemberId());
+  }
+
+  /**
+   * Ensure the cache event journal is enabled for the given cache name.
+   * Auto-enables a default journal config on first use so protocol handlers
+   * can subscribe/read without requiring explicit CacheConfig (Helios has no
+   * separate CacheConfig event-journal surface yet).
+   */
+  private _ensureCacheEventJournal(cacheName: string): void {
+    if (!this._cacheEventJournal.isEnabled(cacheName)) {
+      const cfg = new EventJournalConfig();
+      cfg.setEnabled(true);
+      this._cacheEventJournal.registerConfig(cacheName, cfg);
+    }
   }
 
   private _getOrCreatePnCounterService(): PNCounterService {
@@ -6152,6 +6249,7 @@ export class HeliosInstanceImpl implements HeliosInstance {
     for (const topic of Array.from(this._topics.values())) topic.destroy();
     this._reliableTopicService.shutdown();
     this._distributedReplicatedMapService?.shutdown();
+    this._distributedMultiMapService?.shutdown();
     this._cpSubsystemService?.shutdown();
     for (const rm of Array.from(this._replicatedMaps.values())) rm.destroy();
     this._nearCachedMaps.clear();

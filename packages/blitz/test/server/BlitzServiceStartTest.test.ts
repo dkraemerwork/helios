@@ -13,11 +13,30 @@
 import { connect } from '@nats-io/transport-node';
 import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BlitzService } from '../../src/BlitzService.ts';
 
 setDefaultTimeout(30_000);
+
+/** Allocate a free TCP port to avoid collisions under parallel `bun test`. */
+async function allocatePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const s = createServer();
+        s.listen(0, '127.0.0.1', () => {
+            const addr = s.address();
+            if (addr === null || typeof addr === 'string') {
+                s.close();
+                reject(new Error('failed to allocate port'));
+                return;
+            }
+            const port = addr.port;
+            s.close((err) => (err ? reject(err) : resolve(port)));
+        });
+        s.on('error', reject);
+    });
+}
 
 describe('BlitzService.start() — embedded server lifecycle', () => {
     const instances: BlitzService[] = [];
@@ -28,6 +47,8 @@ describe('BlitzService.start() — embedded server lifecycle', () => {
             try { await blitz.shutdown(); } catch { /* ignore */ }
         }
         instances.length = 0;
+        // Brief pause so nats-server ports fully release under parallel load
+        await Bun.sleep(50);
     });
 
     it('start_noConfig_connectsToEmbeddedInMemoryServer', async () => {
@@ -108,8 +129,12 @@ describe('BlitzService.start() — embedded server lifecycle', () => {
     });
 
     it('start_cluster_3nodes_allReachable', async () => {
+        // Unique non-overlapping client/cluster port ranges (3 nodes each, gap of 10).
+        // Fixed ports collide under parallel suite load.
+        const basePort = await allocatePort();
+        const baseClusterPort = basePort + 10;
         const blitz = await BlitzService.start({
-            cluster: { nodes: 3, basePort: 24230, baseClusterPort: 26230, startTimeoutMs: 25_000 },
+            cluster: { nodes: 3, basePort, baseClusterPort, startTimeoutMs: 25_000 },
         });
         instances.push(blitz);
 
@@ -117,14 +142,16 @@ describe('BlitzService.start() — embedded server lifecycle', () => {
 
         // Verify all 3 nodes are connectable
         for (let i = 0; i < 3; i++) {
-            const nc = await connect({ servers: `nats://127.0.0.1:${24230 + i}`, timeout: 2000 });
+            const nc = await connect({ servers: `nats://127.0.0.1:${basePort + i}`, timeout: 2000 });
             await nc.close();
         }
     });
 
     it('start_cluster_leaderElected_jetstreamOperational', async () => {
+        const basePort = await allocatePort();
+        const baseClusterPort = basePort + 10;
         const blitz = await BlitzService.start({
-            cluster: { nodes: 3, basePort: 24240, baseClusterPort: 26240, startTimeoutMs: 25_000 },
+            cluster: { nodes: 3, basePort, baseClusterPort, startTimeoutMs: 25_000 },
         });
         instances.push(blitz);
 

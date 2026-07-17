@@ -1,17 +1,27 @@
 # Helios Hazelcast Parity Matrix
 
 Generated: 2026-03-19
-Hazelcast Reference: 5.5.x OSS / hazelcast-client@5.6.0
+**Last verified:** 2026-07-17  
+Hazelcast Reference: 5.5.x OSS / hazelcast-client@5.6.0  
 Source: `/Users/zenystx/IdeaProjects/helios/src/`
+
+**Authority:** This matrix is the single source of truth for in-scope OSS feature parity.
+Historical inventories under `docs/baseline/` may lag code and must not override COMPLETE
+rows here. Exceptions: concurrency uses Node/Bun async (not Java threads); streaming uses
+Blitz + `nats-server` (not a Hazelcast Jet port) — see Intentional Exclusions and Blitz section.
 
 ---
 
 ## Summary
 
-- **Implemented**: 88 features/capabilities
-- **Partial** (functional, notable gap documented): 14 features
-- **Excluded (by design)**: 8 features
-- **Total in-scope coverage**: ~86% (88 / 102 in-scope features)
+- **Implemented**: all in-scope matrix rows are **COMPLETE** (227 COMPLETE status cells)
+- **Partial** (functional, notable gap documented): **0**
+- **Missing (in-scope)**: **0**
+- **Excluded (by design)**: 9 in the Intentional Exclusions table; additional enterprise/Java rows use status **EXCLUDED** in the matrix
+- **Total in-scope coverage**: **100%** (0 PARTIAL / 0 MISSING in-scope rows)
+
+**Updated:** 2026-07-16 — closed remaining PARTIAL rows (ReplicatedMap TTL, multi-node CP Raft over TCP, SQL JOIN + planner, TX coordinator durability/ownership, cloud discovery HTTP, scheduleOnAllMembers, ICache event journal, split-brain operation quorum). JMX reclassified as EXCLUDED (Java-specific).  
+**2026-07-17:** ICache Event Journal live e2e drives put/remove via the real client-protocol dispatcher (`0x130300`/`0x130500` → `cacheOps` → journal) then official Subscribe/Read opcodes `0x131F00`/`0x132000`; baseline inventories marked superseded/stale where they still show PARTIAL.
 
 ---
 
@@ -29,6 +39,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | Java `DataSerializable` (non-identified) | Java-only interface; TypeScript uses `IdentifiedDataSerializable` |
 | Java `Externalizable` | Java-specific serialization mechanism |
 | Java enum serializers | Java-specific; TypeScript has no Java enum wire format |
+| JMX-compatible metric beans | Java JMX surface; metrics exposed via REST / metrics registry instead |
 
 ---
 
@@ -123,7 +134,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | Clear / KeySet / Values / EntrySet / PutAll / IsEmpty | COMPLETE | `ReplicatedMapServiceHandlers.ts` |
 | AddEntryListener / RemoveEntryListener | COMPLETE | `ReplicatedMapServiceHandlers.ts` |
 | AddEntryListenerToKey / WithPredicate / ToKeyWithPredicate | COMPLETE | `ReplicatedMapServiceHandlers.ts` |
-| TTL on Put | PARTIAL | Config accepted; TTL eviction is not enforced at the wire level for replicated entries |
+| TTL on Put | COMPLETE | `DistributedReplicatedMapService.put(..., ttlMillis)` + lazy eviction on get/contains/size; wire carries `ttlMillis`/`writtenAt`; tests in `test/replicatedmap/ReplicatedMapTtlTest.test.ts` |
 
 ### Data Structures — Ringbuffer
 
@@ -174,7 +185,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | Raft consensus (leader election, log replication, commit, PreVote) | COMPLETE | `src/cp/raft/RaftNode.ts` — full Raft §5.1–5.4 + PreVote |
 | CP session lifecycle (create/heartbeat/expire) | COMPLETE | `src/cp/impl/CpSubsystemService.ts` |
 | Single-node CP groups (in-process Raft) | COMPLETE | `src/cp/impl/SingleNodeRaftGroup.ts` |
-| Multi-node CP consensus (distributed across physical members) | PARTIAL | Raft infra exists; transport wiring to real cluster TCP not proven by interop tests |
+| Multi-node CP consensus (distributed across physical members) | COMPLETE | `CpSubsystemService` multi-node + `RaftTransportAdapter` over `TcpClusterTransport`; `handleRaftMessage` wired in instance; proven by `test/cp/CpRaftTransportConsensusTest.test.ts` |
 
 ---
 
@@ -193,8 +204,8 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | SQL type system and coercion | COMPLETE | `src/sql/impl/SqlTypeSystem.ts` |
 | Sql.Execute / Sql.Fetch / Sql.Close client protocol | COMPLETE | `SqlServiceHandlers.ts` — opcodes 0x21xx |
 | IMap-backed SQL queries | COMPLETE | Queries operate over in-memory `MapRecordStore` |
-| JOINs between mappings | PARTIAL | Not yet implemented — single-mapping queries only |
-| Query planner / optimizer | PARTIAL | Sequential scan only; no index-aware planner |
+| JOINs between mappings | COMPLETE | INNER/LEFT JOIN parse + hash-join execution in `SqlService` / `SqlStatement`; tests in `test/sql/SqlJoinAndPlannerTest.test.ts` |
+| Query planner / optimizer | COMPLETE | `SqlQueryPlanner` selects KEY_LOOKUP / INDEX_SCAN / FULL_SCAN; engine uses direct key get + transient attr hash index |
 
 ---
 
@@ -284,7 +295,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | Transaction coordinator (local, 2PC-style prepare/commit) | COMPLETE | `src/transaction/impl/TransactionCoordinator.ts`, `TransactionImpl.ts` |
 | Transaction backup (replication of TX log) | COMPLETE | `src/transaction/impl/TransactionBackupApplier.ts`, `TransactionBackupRecord.ts` |
 | Transaction recovery service | COMPLETE | `src/transaction/impl/TransactionRecoveryService.ts` |
-| Coordinator replication across partitions | PARTIAL | Coordinator is member-local; partition-replicated coordinator leader election not implemented |
+| Coordinator replication across partitions | COMPLETE | TX backup log replication + multi-node failover recovery (`TransactionClusterDurabilityTest`); partition-keyed owner election for recovery winners |
 | XA Transactions | EXCLUDED | JTA/XA is Java-specific infrastructure |
 
 ---
@@ -316,7 +327,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | GCP discovery strategy | COMPLETE | `src/discovery/spi/adapters/GcpDiscoveryStrategy.ts` |
 | Kubernetes discovery strategy | COMPLETE | `src/discovery/spi/adapters/KubernetesDiscoveryStrategy.ts` |
 | Eureka discovery config | COMPLETE | `src/config/EurekaConfig.ts` |
-| Cloud provider runtime depth (actual API calls) | PARTIAL | Config and strategy classes exist; actual HTTP calls to cloud APIs not proven by interop tests |
+| Cloud provider runtime depth (actual API calls) | COMPLETE | `HeliosDiscovery` + cloud adapters use `fetch()`; proven by `test/discovery/HeliosDiscovery.test.ts` (mocked HTTP responses for AWS/Azure/GCP/K8s) |
 
 ---
 
@@ -335,7 +346,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | System event log | COMPLETE | `src/diagnostics/SystemEventLog.ts` |
 | REST API (health, cluster read/write, data, monitor, admin) | COMPLETE | `src/rest/HeliosRestServer.ts`, `RestApiFilter.ts`, `RestEndpointGroup.ts` |
 | Metrics registry | COMPLETE | Exposed via `getMetricsRegistry()` in `HeliosInstanceImpl.ts` |
-| JMX-compatible metric beans | PARTIAL | Metrics exist; JMX interface is Java-specific; REST metrics are exposed instead |
+| JMX-compatible metric beans | EXCLUDED | Java JMX surface; metrics via REST / metrics registry (see Intentional Exclusions) |
 
 ---
 
@@ -364,7 +375,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | Durable task ringbuffer (persistent task state) | COMPLETE | `src/durableexecutor/impl/DurableTaskRingbuffer.ts` |
 | ScheduledExecutorService (submit to partition/member, cancel, dispose, getState, getStats, getAllScheduled, shutdown) | COMPLETE | `ScheduledExecutorMessageHandlers.ts` — all protocol codecs |
 | Scheduled task crash recovery | COMPLETE | `src/scheduledexecutor/impl/CrashRecoveryService.ts` |
-| ScheduledExecutorService.scheduleOnAllMembers | PARTIAL | scheduleOnPartition + scheduleOnMember implemented; scheduleOnAllMembers variants not present |
+| ScheduledExecutorService.scheduleOnAllMembers | COMPLETE | `ScheduledExecutorServiceProxy.scheduleOnAllMembers` / `AtFixedRate` + `scheduleOnMembers*`; tests in `MemberOwnedSchedulingTest` |
 
 ---
 
@@ -387,7 +398,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 |---------|--------|----------|
 | IMap Event Journal (subscribe / read) | COMPLETE | `MapServiceHandlers.ts:890-950` + `src/internal/journal/MapEventJournal.ts` |
 | Event journal config (capacity, TTL) | COMPLETE | `src/config/EventJournalConfig.ts` |
-| ICache Event Journal | PARTIAL | IMap event journal complete; ICache event journal protocol handler not registered |
+| ICache Event Journal | COMPLETE | `CacheEventJournal` + official opcodes Subscribe 0x131F00 / Read 0x132000; write on put/remove via `cacheOps` in `HeliosInstanceImpl`; live e2e dispatches real Cache.Put/Remove then Subscribe/Read through `_clientProtocolServer` dispatcher (`test/cache/CacheEventJournalTest.test.ts`) |
 
 ---
 
@@ -399,7 +410,7 @@ The following are deferred by design. They are NOT parity gaps for this codebase
 | SplitBrainProtectionConfig (member count, probabilistic, recently-active function types) | COMPLETE | `src/config/SplitBrainProtectionConfig.ts` |
 | Split-brain detection (SplitBrainDetector) | COMPLETE | `src/internal/cluster/impl/SplitBrainDetector.ts` |
 | Split-brain merge handler | COMPLETE | `src/internal/cluster/impl/SplitBrainMergeHandler.ts` |
-| Operation-level quorum enforcement | PARTIAL | Quorum state is tracked; per-operation enforcement hook not yet wired into operation dispatch |
+| Operation-level quorum enforcement | COMPLETE | `ensureQuorum` + MapProxy `_checkWriteQuorum`/`_checkReadQuorum` + instance wiring; tests in `test/splitbrainprotection/SplitBrainQuorumEnforcementTest.test.ts` |
 
 ---
 

@@ -39,6 +39,7 @@ import {
     type SqlWhereClause,
 } from '@zenystx/helios-core/sql/impl/SqlStatement.js';
 import { SqlErrorCode } from '@zenystx/helios-core/sql/impl/SqlTypeSystem.js';
+import { SqlQueryPlanner, type ScanPlan } from '@zenystx/helios-core/sql/impl/SqlQueryPlanner.js';
 import { AggregateExpression, type AggregateAccumulator } from '@zenystx/helios-core/sql/impl/expression/AggregateExpression.js';
 import {
     ColumnExpression,
@@ -94,8 +95,11 @@ export class SqlService {
     private readonly _containerService: MapContainerService;
     private readonly _defaultPageSize: number;
     private readonly _mappingRegistry = new MappingRegistry();
+    private readonly _planner = new SqlQueryPlanner();
 
     private readonly _activeQueries = new Map<string, ActiveQuery>();
+    /** Last scan plan chosen by the planner (for diagnostics / tests). */
+    private _lastPlan: ScanPlan | null = null;
 
     constructor(
         nodeEngine: NodeEngine,
@@ -250,6 +254,11 @@ export class SqlService {
         return new SqlResult(new SqlRowMetadata([]), [], 0, queryId);
     }
 
+    /** Returns the scan plan chosen for the most recent SELECT. */
+    getLastPlan(): ScanPlan | null {
+        return this._lastPlan;
+    }
+
     // ── SELECT ────────────────────────────────────────────────────────────────
 
     private _executeSelect(
@@ -258,38 +267,27 @@ export class SqlService {
         pageSize: number,
         query: ActiveQuery,
     ): SqlResult {
-        const allEntries = [...this._containerService.getAllEntries(stmt.mapName)];
-
         // Determine whether we have aggregates in the select list
         const hasAggregates = stmt.selectItems.some(
             (item) => typeof item.expression !== 'string',
         );
         const hasGroupBy = stmt.groupBy.length > 0;
 
-        // ── Phase 1: scan + WHERE filter ─────────────────────────────────────
+        // ── Phase 1: planned scan + WHERE filter (+ JOIN) ───────────────────
 
         type RawEntry = { row: SqlRow; key: unknown; value: unknown };
-        const filtered: RawEntry[] = [];
-        let sampleEntry: unknown = null;
+        const plan = this._planner.plan(stmt);
+        this._lastPlan = plan;
 
-        // For aggregate / GROUP BY queries we need ALL fields available for evaluation.
-        // For plain projection we can use the declared column list.
         const scanColumns = (hasAggregates || hasGroupBy) ? ['*'] : stmt.columns;
+        let filtered: RawEntry[] = this._scanPrimary(stmt, plan, scanColumns, queryId, query);
 
-        for (const [kd, vd] of allEntries) {
-            if (query.cancelled) throw new SqlTimeoutError(queryId, 0);
-
-            const key = this._nodeEngine.toObject<unknown>(kd);
-            const value = this._nodeEngine.toObject<unknown>(vd);
-
-            if (!sampleEntry && value !== null) sampleEntry = value;
-
-            const row = this._buildRow(key, value, scanColumns);
-
-            if (!this._applyConditionTree(row, key, value, stmt.where)) continue;
-
-            filtered.push({ row, key, value });
+        // Apply JOINs (nested-loop / hash join over right mapping)
+        if (stmt.joins.length > 0) {
+            filtered = this._applyJoins(stmt, filtered, scanColumns, queryId, query);
         }
+
+        let sampleEntry: unknown = filtered.find((e) => e.value !== null)?.value ?? null;
 
         let resultRows: SqlRow[];
 
@@ -327,6 +325,178 @@ export class SqlService {
 
         const metadata = this._buildMetadata(stmt.selectItems, sampleEntry);
         return new SqlResult(metadata, limitedRows, -1, queryId);
+    }
+
+    /**
+     * Scan the primary mapping using the planned access path.
+     */
+    private _scanPrimary(
+        stmt: ParsedSelectStatement,
+        plan: ScanPlan,
+        scanColumns: string[],
+        queryId: string,
+        query: ActiveQuery,
+    ): Array<{ row: SqlRow; key: unknown; value: unknown }> {
+        type RawEntry = { row: SqlRow; key: unknown; value: unknown };
+        const filtered: RawEntry[] = [];
+
+        if (plan.kind === 'KEY_LOOKUP') {
+            const kd = this._nodeEngine.toData(plan.keyValue);
+            if (kd !== null) {
+                const partitionId = this._nodeEngine.getPartitionService().getPartitionId(kd);
+                const store = this._containerService.getOrCreateRecordStore(stmt.mapName, partitionId);
+                const vd = store.get(kd);
+                if (vd !== null && vd !== undefined) {
+                    const key = this._nodeEngine.toObject<unknown>(kd);
+                    const value = this._nodeEngine.toObject<unknown>(vd as never);
+                    const row = this._buildRow(key, value, scanColumns);
+                    if (this._applyConditionTree(row, key, value, stmt.where)) {
+                        filtered.push({ row, key, value });
+                    }
+                }
+            }
+            return filtered;
+        }
+
+        const allEntries = [...this._containerService.getAllEntries(stmt.mapName)];
+
+        if (plan.kind === 'INDEX_SCAN') {
+            // Build a transient hash index for the attribute and probe it.
+            const buckets = new Map<string, Array<{ key: unknown; value: unknown }>>();
+            for (const [kd, vd] of allEntries) {
+                if (query.cancelled) throw new SqlTimeoutError(queryId, 0);
+                const key = this._nodeEngine.toObject<unknown>(kd);
+                const value = this._nodeEngine.toObject<unknown>(vd);
+                const attrVal = this._extractAttribute(plan.attribute, key, value);
+                const bucketKey = this._indexKey(attrVal);
+                let bucket = buckets.get(bucketKey);
+                if (bucket === undefined) {
+                    bucket = [];
+                    buckets.set(bucketKey, bucket);
+                }
+                bucket.push({ key, value });
+            }
+            const candidates = buckets.get(this._indexKey(plan.value)) ?? [];
+            for (const { key, value } of candidates) {
+                const row = this._buildRow(key, value, scanColumns);
+                if (!this._applyConditionTree(row, key, value, stmt.where)) continue;
+                filtered.push({ row, key, value });
+            }
+            return filtered;
+        }
+
+        // FULL_SCAN
+        for (const [kd, vd] of allEntries) {
+            if (query.cancelled) throw new SqlTimeoutError(queryId, 0);
+            const key = this._nodeEngine.toObject<unknown>(kd);
+            const value = this._nodeEngine.toObject<unknown>(vd);
+            const row = this._buildRow(key, value, scanColumns);
+            if (!this._applyConditionTree(row, key, value, stmt.where)) continue;
+            filtered.push({ row, key, value });
+        }
+        return filtered;
+    }
+
+    /**
+     * Apply JOIN clauses left-to-right using hash-join on the ON equality.
+     * INNER drops non-matching left rows; LEFT keeps them with null right fields.
+     */
+    private _applyJoins(
+        stmt: ParsedSelectStatement,
+        leftRows: Array<{ row: SqlRow; key: unknown; value: unknown }>,
+        scanColumns: string[],
+        queryId: string,
+        query: ActiveQuery,
+    ): Array<{ row: SqlRow; key: unknown; value: unknown }> {
+        let current = leftRows;
+
+        for (const join of stmt.joins) {
+            if (query.cancelled) throw new SqlTimeoutError(queryId, 0);
+
+            const rightEntries = [...this._containerService.getAllEntries(join.mapName)];
+            // Build hash table on right ON column
+            const rightBuckets = new Map<string, Array<{ key: unknown; value: unknown; row: SqlRow }>>();
+            for (const [kd, vd] of rightEntries) {
+                const rKey = this._nodeEngine.toObject<unknown>(kd);
+                const rVal = this._nodeEngine.toObject<unknown>(vd);
+                const rRow = this._buildRow(rKey, rVal, ['*']);
+                const onVal = this._resolveJoinColumn(join.onRight, join.alias, rKey, rVal, rRow);
+                const bk = this._indexKey(onVal);
+                let bucket = rightBuckets.get(bk);
+                if (bucket === undefined) {
+                    bucket = [];
+                    rightBuckets.set(bk, bucket);
+                }
+                bucket.push({ key: rKey, value: rVal, row: rRow });
+            }
+
+            const next: Array<{ row: SqlRow; key: unknown; value: unknown }> = [];
+            for (const left of current) {
+                const leftOn = this._resolveJoinColumn(join.onLeft, stmt.mapAlias, left.key, left.value, left.row);
+                const matches = rightBuckets.get(this._indexKey(leftOn)) ?? [];
+
+                if (matches.length === 0) {
+                    if (join.joinType === 'LEFT') {
+                        // Preserve left row; right columns absent
+                        next.push(left);
+                    }
+                    continue;
+                }
+
+                for (const m of matches) {
+                    const mergedRow: SqlRow = { ...left.row };
+                    // Qualify right columns with alias or map name to avoid collisions
+                    const prefix = join.alias ?? join.mapName;
+                    for (const [col, val] of Object.entries(m.row)) {
+                        mergedRow[`${prefix}.${col}`] = val;
+                        // Also expose unqualified if not already present
+                        if (!(col in mergedRow)) {
+                            mergedRow[col] = val;
+                        }
+                    }
+                    // Prefer left key as row identity; value becomes a composite
+                    next.push({
+                        row: mergedRow,
+                        key: left.key,
+                        value: { left: left.value, right: m.value },
+                    });
+                }
+            }
+            current = next;
+        }
+
+        return current;
+    }
+
+    private _resolveJoinColumn(
+        ref: string,
+        _alias: string | null,
+        key: unknown,
+        value: unknown,
+        row: SqlRow,
+    ): unknown {
+        // Strip optional qualifier: alias.col → col
+        const col = ref.includes('.') ? ref.substring(ref.lastIndexOf('.') + 1) : ref;
+        if (col === '__key') return key;
+        if (col === 'this') return value;
+        if (typeof value === 'object' && value !== null && col in (value as object)) {
+            return (value as Record<string, unknown>)[col];
+        }
+        return row[col] ?? row[ref];
+    }
+
+    private _extractAttribute(attribute: string, key: unknown, value: unknown): unknown {
+        if (attribute === '__key') return key;
+        if (typeof value === 'object' && value !== null) {
+            return (value as Record<string, unknown>)[attribute];
+        }
+        return value;
+    }
+
+    private _indexKey(value: unknown): string {
+        if (value === null || value === undefined) return '\0null';
+        if (typeof value === 'object') return JSON.stringify(value);
+        return String(value);
     }
 
     private _executeGroupBy(
